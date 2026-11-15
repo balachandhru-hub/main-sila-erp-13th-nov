@@ -159,9 +159,7 @@ namespace Buyer.Application.Features.Queries.GetSilaReceivingDashboard
                     Severity = "CRITICAL",
                     Exception = "GRN reversal failed",
                     Document = receipt.GrnNumber,
-                    SupplierName = supplierByPo.TryGetValue(receipt.PurchaseOrderId, out string? receiptSupplier)
-                        ? receiptSupplier
-                        : null,
+                    SupplierName = supplierByPo.TryGetValue(receipt.PurchaseOrderId, out string? reversalSupplier) ? reversalSupplier : null,
                     Age = AgeText(receipt.DateCreated, DateTime.UtcNow),
                     Status = receipt.ReversalStatus,
                     Action = "REVIEW",
