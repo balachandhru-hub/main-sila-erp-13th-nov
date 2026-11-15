@@ -1,0 +1,31 @@
+/* Slim public header for the sign-in and registration pages. */
+
+.vx-header {
+    position: sticky;
+    top: 0;
+    z-index: var(--sila-z-sticky);
+    background: var(--sila-surface);
+    border-bottom: 0.0625rem solid var(--sila-border);
+}
+
+.vx-header-inner {
+    display: flex;
+    align-items: center;
+    max-width: 75rem;
+    height: var(--sila-topbar-height);
+    margin: 0 auto;
+    padding: 0 var(--sila-page-padding-x);
+}
+
+.vx-header-brand {
+    display: inline-flex;
+    align-items: center;
+    overflow: hidden;
+}
+
+.vx-logo-img {
+    display: block;
+    height: 2rem;
+    width: auto;
+    object-fit: contain;
+}

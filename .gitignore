@@ -1,0 +1,24 @@
+# Dependencies
+**/node_modules/
+**/.nuget/
+**/bin/
+**/obj/
+**/.vs/
+**/__pycache__/
+**/*.pyc
+**/.pytest_cache/
+**/.venv/
+**/venv/
+
+# Local secrets / env overrides
+**/.env.local
+**/.env.*.local
+
+# Generated TLS for Vite
+**/localhost.pem
+**/localhost-key.pem
+
+# Logs / OS
+**/*.log
+.DS_Store
+Frontend/.data/

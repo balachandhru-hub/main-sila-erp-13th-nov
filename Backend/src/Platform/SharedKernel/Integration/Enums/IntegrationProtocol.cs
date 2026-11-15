@@ -1,0 +1,16 @@
+using System.Text.Json.Serialization;
+
+namespace SharedKernel.Integration.Enums
+{
+    /// <summary>
+    /// Protocol of an external API. Sent and read as its name.
+    /// </summary>
+    [JsonConverter(typeof(IntegrationProtocolJsonConverter))]
+    public enum IntegrationProtocol
+    {
+        REST,
+        ODATA_V2,
+        ODATA_V4,
+        SOAP
+    }
+}
