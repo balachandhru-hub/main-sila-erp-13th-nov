@@ -22,7 +22,8 @@ namespace SharedKernel.Integration.Rules
                 MappingArea = "Stock",
                 RequiredTargets = new[] { "Stock.MaterialCode", "Stock.Quantity" }
             },
-            // Read by the SILA ME material pull (per company code), not by the scheduled pull: it has its own upsert.
+            // Read by the SILA ME material pull (per company code → ALL), not by the scheduled Hub pull: it has its own upsert
+            // (PullSilaMaterialsFromErp → SilaMaterialErpSync). Typical S/4 resource: API_PRODUCT_SRV/A_Product.
             [IntegrationProcessType.GET_MATERIAL] = new IntegrationProcessInfo
             {
                 MappingArea = "Material",
