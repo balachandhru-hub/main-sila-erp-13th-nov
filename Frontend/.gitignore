@@ -1,0 +1,27 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+
+node_modules
+dist
+dist-ssr
+# Environment and Security
+*.local
+*.pem
+.env.local
+.data/
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.sw?
+.github
+
+localhost.pem
+localhost-key.pem
+**/localhost.pem
+**/localhost-key.pem
