@@ -201,9 +201,9 @@ const SilaRecipeCanvas: React.FC<SilaRecipeCanvasProps> = ({
     <section className="srec-builder-panel srec-canvas" aria-label="Recipe canvas">
       <header className="srec-builder-panel__head">
         <h2 className="srec-builder-panel__title">
-          {mode === "DIRECT" ? "Direct consumption canvas" : "Visual recipe canvas"}
+          {mode === "DIRECT" ? "My Recipe · Direct" : "My Recipe"}
         </h2>
-        <p className="sila-help">{lines.length} ingredient card(s). Drag to reorder. Drop from the shopping catalog to add.</p>
+        <p className="sila-help">{lines.length} ingredient(s). Drag from the catalog, reorder on the canvas, or use Add.</p>
       </header>
 
       <div

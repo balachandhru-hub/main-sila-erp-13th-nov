@@ -349,7 +349,7 @@
   }
 }
 
-/* Editor workspace polish */
+/* Editor workspace polish — ingredient-first two-panel */
 .rstudio-editor-shell {
   display: flex;
   flex-direction: column;
@@ -358,13 +358,194 @@
 
 .rstudio-editor-top {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 1rem;
   align-items: center;
   padding: 0.85rem 1rem;
   border-radius: 1.15rem;
-  background: linear-gradient(120deg, #eef6ff, #ffffff 60%);
+  background: linear-gradient(120deg, #eef6ff, #ffffff 55%, #f3fff8);
   border: 0.0625rem solid #d7e7f6;
+}
+
+.rstudio-editor-top__main {
+  min-width: 0;
+}
+
+.rstudio-name-input {
+  width: 100%;
+  margin: 0.2rem 0 0.45rem;
+  padding: 0.45rem 0.65rem;
+  border: 0.0625rem solid #c9dceb;
+  border-radius: 0.75rem;
+  font-size: 1.25rem;
+  font-weight: 650;
+  color: #12355b;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.rstudio-yield {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 12rem;
+}
+
+.rstudio-yield__row {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.rstudio-yield__row .sila-input {
+  min-width: 0;
+  width: 5.5rem;
+}
+
+.rstudio-live-cost {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.15rem 0.5rem;
+  font-size: 0.8rem;
+}
+
+.rstudio-catalog-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.rstudio-catalog-reason {
+  margin: 0;
+}
+
+.rstudio-catalog-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+@media (min-width: 90rem) {
+  .rstudio-catalog-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.rstudio-catalog-grid .srec-builder-panel__subtitle {
+  grid-column: 1 / -1;
+}
+
+.srec-lib-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin: 0.2rem 0;
+}
+
+.srec-lib-drag {
+  align-self: center;
+  color: #7a93ad;
+  cursor: grab;
+  user-select: none;
+}
+
+.rstudio-smart-chips,
+.rstudio-suggest-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.rstudio-smart-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.rstudio-smart-block {
+  padding: 0.65rem 0.75rem;
+  border-radius: 0.9rem;
+  background: linear-gradient(180deg, #f7fbff, #ffffff);
+  border: 0.0625rem solid #e2eef8;
+}
+
+.rstudio-pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.rstudio-pricing-grid > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.rstudio-cost-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  padding: 0.7rem 0.9rem;
+  border-radius: 0.95rem;
+  background: linear-gradient(100deg, #eaf6ff, #f3fff8 50%, #fff6e8);
+  border: 0.0625rem solid #d7e7f6;
+}
+
+.rstudio-cost-strip span {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.rstudio-cost-strip em {
+  font-style: normal;
+  font-size: 0.72rem;
+  color: #5b7a99;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.rstudio-review {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  background: rgba(18, 53, 91, 0.35);
+  padding: 1rem;
+}
+
+.rstudio-review__panel {
+  width: min(32rem, 100%);
+  padding: 1.1rem 1.2rem;
+  border-radius: 1rem;
+  background: #fff;
+  border: 0.0625rem solid #d7e3f0;
+  box-shadow: 0 1rem 2.5rem rgba(18, 53, 91, 0.18);
+}
+
+.rstudio-review__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.85rem;
+}
+
+@media (max-width: 56rem) {
+  .rstudio-editor-top {
+    grid-template-columns: auto 1fr;
+  }
+
+  .rstudio-yield {
+    grid-column: 1 / -1;
+  }
+
+  .rstudio-pricing-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .rstudio-catalog-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .rstudio-sticky-bar {

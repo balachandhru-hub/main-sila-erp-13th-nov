@@ -10,6 +10,8 @@ import { conversionSummary, priceStatusBadgeClass, priceStatusLabel, unitPriceTe
 import { loadRecentMaterials, rememberMaterial } from "./recipeBuilderState";
 import { resolveStudioKind, StudioCover } from "./recipeStudioVisuals";
 
+type CatalogTab = "recommended" | "all" | "recent";
+
 interface SilaRecipeMaterialLibraryProps {
   addedIds: string[];
   onAdd: (material: SilaIngredientOption) => void;
@@ -17,19 +19,25 @@ interface SilaRecipeMaterialLibraryProps {
   /** When set, Add replaces the target line instead of appending. */
   replaceTargetKey?: string | null;
   onReplacePick?: (material: SilaIngredientOption) => void;
+  /** Rule-based / recent recommendations from the editor. */
+  recommended?: SilaIngredientOption[];
+  recommendReason?: string;
 }
 
 const EMPTY_FACETS: SilaIngredientFacets = { materialGroups: [], categories: [], suppliers: [], materialTypes: [], supplierOptions: [] };
 const RESULT_LIMIT = 30;
 
-/** Left-panel Material Master library: search, filter, multi-select, drag source. */
+/** Right-panel Recommended Material Catalog: grocery-style cards with Recommended / All / Recent. */
 const SilaRecipeMaterialLibrary: React.FC<SilaRecipeMaterialLibraryProps> = ({
   addedIds,
   onAdd,
   onAddMany,
   replaceTargetKey,
   onReplacePick,
+  recommended = [],
+  recommendReason = "Browse Material Master to begin.",
 }) => {
+  const [tab, setTab] = useState<CatalogTab>("recommended");
   const [facets, setFacets] = useState<SilaIngredientFacets>(EMPTY_FACETS);
   const [search, setSearch] = useState("");
   const [materialGroup, setMaterialGroup] = useState("");
@@ -41,20 +49,63 @@ const SilaRecipeMaterialLibrary: React.FC<SilaRecipeMaterialLibraryProps> = ({
   const [searchError, setSearchError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [recentIds] = useState(() => loadRecentMaterials());
+  const [recentItems, setRecentItems] = useState<SilaIngredientOption[]>([]);
 
   useEffect(() => {
     getIngredientFacets().then(setFacets).catch(() => setFacets(EMPTY_FACETS));
   }, []);
 
+  // Resolve recent material IDs via server search (do not invent catalog rows).
+  useEffect(() => {
+    if (tab !== "recent" || recentIds.length === 0) {
+      setRecentItems([]);
+      return undefined;
+    }
+    let current = true;
+    searchIngredients({ search: "", limit: RESULT_LIMIT })
+      .then((page) => {
+        if (!current) return;
+        const byId = new Map(page.items.map((item) => [item.id.toLowerCase(), item]));
+        // Also merge recommended + all results already loaded for better hit rate
+        recommended.forEach((item) => byId.set(item.id.toLowerCase(), item));
+        results.forEach((item) => byId.set(item.id.toLowerCase(), item));
+        const matched = recentIds.map((id) => byId.get(id.toLowerCase())).filter((item): item is SilaIngredientOption => Boolean(item));
+        setRecentItems(matched);
+      })
+      .catch(() => {
+        if (current) setRecentItems([]);
+      });
+    return () => {
+      current = false;
+    };
+  }, [tab, recentIds, recommended, results]);
+
   const term = search.trim();
-  const active = term.length >= 2 || Boolean(materialGroup || category || materialType);
+  const filtersOn = Boolean(materialGroup || category || materialType);
+  const active = tab === "all" && (term.length >= 2 || filtersOn);
 
   useEffect(() => {
+    if (tab !== "all") return undefined;
     if (!active) {
-      setResults([]);
-      setTotal(0);
-      setSearchError(null);
-      return undefined;
+      // Soft browse first page when opening All without a filter so the catalog is never empty.
+      let current = true;
+      setSearching(true);
+      searchIngredients({ search: "", limit: RESULT_LIMIT })
+        .then((page) => {
+          if (!current) return;
+          setResults(page.items);
+          setTotal(page.total);
+          setSearchError(null);
+        })
+        .catch((err: unknown) => {
+          if (current) setSearchError(err instanceof Error ? err.message : "Could not search the materials.");
+        })
+        .finally(() => {
+          if (current) setSearching(false);
+        });
+      return () => {
+        current = false;
+      };
     }
     let current = true;
     const timer = window.setTimeout(async () => {
@@ -82,14 +133,12 @@ const SilaRecipeMaterialLibrary: React.FC<SilaRecipeMaterialLibraryProps> = ({
       current = false;
       window.clearTimeout(timer);
     };
-  }, [active, term, materialGroup, category, materialType]);
+  }, [tab, active, term, materialGroup, category, materialType]);
 
   const added = useMemo(() => new Set(addedIds.map((id) => id.toLowerCase())), [addedIds]);
-  const selectedItems = results.filter((item) => selected[item.id]);
-  const recentInResults = useMemo(() => {
-    const byId = new Map(results.map((item) => [item.id.toLowerCase(), item]));
-    return recentIds.map((id) => byId.get(id.toLowerCase())).filter((item): item is SilaIngredientOption => Boolean(item));
-  }, [recentIds, results]);
+
+  const displayItems = tab === "recommended" ? recommended : tab === "recent" ? recentItems : results;
+  const selectedItems = displayItems.filter((item) => selected[item.id]);
 
   const pick = (material: SilaIngredientOption) => {
     rememberMaterial(material.id);
@@ -110,6 +159,8 @@ const SilaRecipeMaterialLibrary: React.FC<SilaRecipeMaterialLibraryProps> = ({
   const renderCard = (material: SilaIngredientOption) => {
     const isAdded = added.has(material.id.toLowerCase());
     const kind = resolveStudioKind(material.materialGroup, material.category, material.description, material.materialCode);
+    const familyLabel = material.materialGroup?.trim() || "Not Classified";
+    const categoryLabel = material.category?.trim() || "Not Classified";
     return (
       <article
         key={material.id}
@@ -120,6 +171,7 @@ const SilaRecipeMaterialLibrary: React.FC<SilaRecipeMaterialLibraryProps> = ({
         <label className="srec-lib-check">
           <input type="checkbox" checked={Boolean(selected[material.id])} onChange={() => toggle(material.id)} aria-label={`Select ${material.materialCode}`} />
         </label>
+        <span className="srec-lib-drag" aria-hidden="true" title="Drag to recipe">⠿</span>
         <StudioCover compact kind={kind} title={material.description || material.materialCode} />
         <div className="srec-lib-body">
           <div className="srec-lib-title">
@@ -127,9 +179,12 @@ const SilaRecipeMaterialLibrary: React.FC<SilaRecipeMaterialLibraryProps> = ({
             <span className={priceStatusBadgeClass(material.priceStatus)}>{priceStatusLabel(material.priceStatus)}</span>
           </div>
           <div className="srec-lib-desc">{material.materialCode}</div>
+          <div className="srec-lib-chips">
+            <span className={`rstudio-chip is-${kind}`}>{familyLabel}</span>
+            <span className="rstudio-chip">{categoryLabel}</span>
+          </div>
           <div className="srec-lib-meta">
             <span>{material.baseUom}</span>
-            {material.materialGroup && <span>{material.materialGroup}</span>}
             <span>{unitPriceText(material.priceStatus, material.unitCost, material.currency, material.baseUom)}</span>
           </div>
           <div className="srec-sub">{conversionSummary(material) || "Base UOM only"}</div>
@@ -147,45 +202,99 @@ const SilaRecipeMaterialLibrary: React.FC<SilaRecipeMaterialLibraryProps> = ({
   };
 
   return (
-    <section className="srec-builder-panel srec-lib" aria-label="Ingredient shopping catalog">
+    <section className="srec-builder-panel srec-lib rstudio-catalog" aria-label="Recommended Material Catalog">
       <header className="srec-builder-panel__head">
-        <h2 className="srec-builder-panel__title">Ingredient catalog</h2>
-        <p className="sila-help">Grocery-style Material Master. Drag to the canvas or add selected.</p>
+        <div>
+          <h2 className="srec-builder-panel__title">Recommended Material Catalog</h2>
+          <p className="sila-help">Drag into My Recipe or multi-select and Add.</p>
+        </div>
       </header>
-      <div className="srec-lib-filters">
-        <div className="sila-field srec-grow">
-          <label className="sila-label" htmlFor="srec-lib-search">Search</label>
-          <input
-            id="srec-lib-search"
-            className="sila-input"
-            type="search"
-            placeholder="Code or name"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-          />
-        </div>
-        <div className="sila-field">
-          <label className="sila-label" htmlFor="srec-lib-group">Group</label>
-          <select id="srec-lib-group" className="sila-select" value={materialGroup} onChange={(event) => setMaterialGroup(event.target.value)}>
-            <option value="">All</option>
-            {facets.materialGroups.map((value) => <option key={value} value={value}>{value}</option>)}
-          </select>
-        </div>
-        <div className="sila-field">
-          <label className="sila-label" htmlFor="srec-lib-category">Category</label>
-          <select id="srec-lib-category" className="sila-select" value={category} onChange={(event) => setCategory(event.target.value)}>
-            <option value="">All</option>
-            {facets.categories.map((value) => <option key={value} value={value}>{value}</option>)}
-          </select>
-        </div>
-        <div className="sila-field">
-          <label className="sila-label" htmlFor="srec-lib-type">Type</label>
-          <select id="srec-lib-type" className="sila-select" value={materialType} onChange={(event) => setMaterialType(event.target.value)}>
-            <option value="">All</option>
-            {facets.materialTypes.map((value) => <option key={value} value={value}>{value}</option>)}
-          </select>
-        </div>
+
+      <div className="rstudio-catalog-tabs" role="tablist" aria-label="Catalog views">
+        {([
+          ["recommended", "Recommended"],
+          ["all", "All Materials"],
+          ["recent", "Recently Used"],
+        ] as const).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={tab === id}
+            className={`rstudio-chip${tab === id ? " is-active" : ""}`}
+            onClick={() => setTab(id)}
+          >
+            {label}
+          </button>
+        ))}
       </div>
+
+      {tab === "recommended" && <p className="sila-help rstudio-catalog-reason">{recommendReason}</p>}
+
+      {(tab === "all" || tab === "recommended") && (
+        <div className="srec-lib-filters">
+          <div className="sila-field srec-grow">
+            <label className="sila-label" htmlFor="srec-lib-search">Search</label>
+            <input
+              id="srec-lib-search"
+              className="sila-input"
+              type="search"
+              placeholder="Code or name"
+              value={search}
+              onChange={(event) => {
+                setSearch(event.target.value);
+                if (tab !== "all") setTab("all");
+              }}
+            />
+          </div>
+          <div className="sila-field">
+            <label className="sila-label" htmlFor="srec-lib-group">Family</label>
+            <select
+              id="srec-lib-group"
+              className="sila-select"
+              value={materialGroup}
+              onChange={(event) => {
+                setMaterialGroup(event.target.value);
+                setTab("all");
+              }}
+            >
+              <option value="">All</option>
+              {facets.materialGroups.map((value) => <option key={value} value={value}>{value}</option>)}
+            </select>
+          </div>
+          <div className="sila-field">
+            <label className="sila-label" htmlFor="srec-lib-category">Category</label>
+            <select
+              id="srec-lib-category"
+              className="sila-select"
+              value={category}
+              onChange={(event) => {
+                setCategory(event.target.value);
+                setTab("all");
+              }}
+            >
+              <option value="">All</option>
+              {facets.categories.map((value) => <option key={value} value={value}>{value}</option>)}
+            </select>
+          </div>
+          <div className="sila-field">
+            <label className="sila-label" htmlFor="srec-lib-type">Type</label>
+            <select
+              id="srec-lib-type"
+              className="sila-select"
+              value={materialType}
+              onChange={(event) => {
+                setMaterialType(event.target.value);
+                setTab("all");
+              }}
+            >
+              <option value="">All</option>
+              {facets.materialTypes.map((value) => <option key={value} value={value}>{value}</option>)}
+            </select>
+          </div>
+        </div>
+      )}
+
       {selectedItems.length > 0 && (
         <div className="srec-lib-bulk">
           <span className="sila-help">{selectedItems.length} selected</span>
@@ -202,26 +311,25 @@ const SilaRecipeMaterialLibrary: React.FC<SilaRecipeMaterialLibraryProps> = ({
           </button>
         </div>
       )}
-      {!active ? (
-        <span className="sila-help">Type at least two characters or choose a filter.</span>
-      ) : searching ? (
+
+      {tab === "all" && searching ? (
         <Loader size={20} message="Searching..." />
-      ) : searchError ? (
+      ) : tab === "all" && searchError ? (
         <div className="sila-alert sila-alert--danger" role="alert">{searchError}</div>
-      ) : results.length === 0 ? (
-        <span className="sila-help">No materials matched.</span>
+      ) : displayItems.length === 0 ? (
+        <span className="sila-help">
+          {tab === "recent"
+            ? "No recently used materials in this session yet."
+            : tab === "recommended"
+              ? "No recommendations yet — open All Materials or add ingredients to refresh suggestions."
+              : "No materials matched."}
+        </span>
       ) : (
-        <div className="srec-lib-list">
-          {recentInResults.length > 0 && (
-            <div className="srec-lib-section">
-              <h3 className="srec-builder-panel__subtitle">Recent in results</h3>
-              {recentInResults.map(renderCard)}
-            </div>
-          )}
-          <div className="srec-lib-section">
+        <div className="srec-lib-list rstudio-catalog-grid">
+          {tab === "all" && (
             <h3 className="srec-builder-panel__subtitle">Materials ({Math.min(results.length, total)} of {total})</h3>
-            {results.map(renderCard)}
-          </div>
+          )}
+          {displayItems.map(renderCard)}
         </div>
       )}
     </section>

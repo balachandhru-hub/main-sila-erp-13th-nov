@@ -3,12 +3,19 @@ import { useParams } from 'react-router-dom';
 import {
   createRecipe,
   getRecipe,
+  getRecipes,
   submitRecipe,
   updateRecipe,
   type SilaRecipeDetail,
+  type SilaRecipeListItem,
   type SilaRecipeWrite,
 } from '../../../../remote-buyer/src/api/silaMe/silaRecipeApi';
-import { searchIngredients, type SilaIngredientOption } from '../../../../remote-buyer/src/api/silaMe/silaRecipeToolsApi';
+import {
+  getRecipeMasters,
+  searchIngredients,
+  type SilaIngredientOption,
+  type SilaRecipeMaster,
+} from '../../../../remote-buyer/src/api/silaMe/silaRecipeToolsApi';
 import {
   headerFrom,
   lineCost,
@@ -30,6 +37,14 @@ import {
   type BuilderSnapshot,
 } from '../../../../remote-buyer/src/components/silaMe/recipes/recipeBuilderState';
 import { formatCost, formatQty, materialUoms } from '../../../../remote-buyer/src/components/silaMe/recipes/recipeFormat';
+import {
+  loadTargetFoodCostPercent,
+  recommendMaterials,
+  saveTargetFoodCostPercent,
+  suggestClassification,
+  suggestRecipeNames,
+  suggestSellingPrice,
+} from '../../../../remote-buyer/src/components/silaMe/recipes/recipeStudioSuggestions';
 import { resolveStudioKind, StudioCover } from '../../../../remote-buyer/src/components/silaMe/recipes/recipeStudioVisuals';
 import ScreenHeader from '../../components/ScreenHeader';
 import StatusBadge from '../../components/StatusBadge';
@@ -38,7 +53,9 @@ import { useAccess } from '../../access';
 import { useGo } from '../../navigation';
 import { errorText } from '../../useLoad';
 
-/** Mobile Smart Recipe Builder — same APIs/costing as Cloud, touch-friendly controls. */
+type CatalogTab = 'recommended' | 'all';
+
+/** Mobile/tablet ingredient-first Recipe Studio — same APIs/costing as Cloud. */
 const RecipeBuilderScreen: React.FC = () => {
   const { recipeId = '' } = useParams();
   const go = useGo();
@@ -55,7 +72,15 @@ const RecipeBuilderScreen: React.FC = () => {
   const [replaceKey, setReplaceKey] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [results, setResults] = useState<SilaIngredientOption[]>([]);
+  const [catalogPool, setCatalogPool] = useState<SilaIngredientOption[]>([]);
+  const [approvedRecipes, setApprovedRecipes] = useState<SilaRecipeListItem[]>([]);
+  const [families, setFamilies] = useState<SilaRecipeMaster[]>([]);
+  const [categories, setCategories] = useState<SilaRecipeMaster[]>([]);
+  const [catalogTab, setCatalogTab] = useState<CatalogTab>('recommended');
   const [scaleTo, setScaleTo] = useState('1');
+  const [nameConfirmed, setNameConfirmed] = useState(false);
+  const [classConfirmed, setClassConfirmed] = useState(false);
+  const [targetFoodCostPercent, setTargetFoodCostPercent] = useState(() => loadTargetFoodCostPercent());
 
   useEffect(() => {
     let active = true;
@@ -63,14 +88,26 @@ const RecipeBuilderScreen: React.FC = () => {
       setLoading(true);
       setError(null);
       try {
+        const [browse, approved, loadedFamilies, loadedCategories] = await Promise.all([
+          searchIngredients({ search: '', limit: 40 }),
+          getRecipes({ active: true, limit: 100 }).catch(() => ({ items: [] as SilaRecipeListItem[] })),
+          getRecipeMasters('families').catch(() => [] as SilaRecipeMaster[]),
+          getRecipeMasters('categories').catch(() => [] as SilaRecipeMaster[]),
+        ]);
+        if (!active) return;
+        setCatalogPool(browse.items);
+        setApprovedRecipes(approved.items);
+        setFamilies(loadedFamilies);
+        setCategories(loadedCategories);
+
         if (!recipeId) {
-          if (active) {
-            setRecipe(null);
-            setHeader(headerFrom(null));
-            setLines([]);
-            setBaseline(snapshotOf([], '1'));
-            setScaleTo('1');
-          }
+          setRecipe(null);
+          setHeader(headerFrom(null));
+          setLines([]);
+          setBaseline(snapshotOf([], '1'));
+          setScaleTo('1');
+          setNameConfirmed(false);
+          setClassConfirmed(false);
           return;
         }
         const detail = await getRecipe(recipeId);
@@ -83,6 +120,8 @@ const RecipeBuilderScreen: React.FC = () => {
         setBaseline(snap);
         setScaleTo(String(detail.servingQty));
         setUndoStack([]);
+        setNameConfirmed(Boolean(detail.name?.trim()));
+        setClassConfirmed(Boolean(detail.familyId || detail.categoryId));
       } catch (caught: unknown) {
         if (active) setError(errorText(caught, 'Could not load the recipe.'));
       } finally {
@@ -96,15 +135,11 @@ const RecipeBuilderScreen: React.FC = () => {
   }, [recipeId]);
 
   useEffect(() => {
-    if (!pickerOpen) return undefined;
+    if (!pickerOpen || catalogTab !== 'all') return undefined;
     const term = search.trim();
-    if (term.length < 2) {
-      setResults([]);
-      return undefined;
-    }
     let active = true;
     const timer = window.setTimeout(() => {
-      searchIngredients({ search: term, limit: 20 })
+      searchIngredients({ search: term, limit: 24 })
         .then((page) => {
           if (active) setResults(page.items);
         })
@@ -116,12 +151,23 @@ const RecipeBuilderScreen: React.FC = () => {
       active = false;
       window.clearTimeout(timer);
     };
-  }, [pickerOpen, search]);
+  }, [pickerOpen, search, catalogTab]);
 
   const costs = useMemo(() => lines.map((line) => lineCost(line, '')), [lines]);
   const totalCost = totalCostAt(lines, '');
   const dirty = !snapshotsEqual(baseline, snapshotOf(lines, header.servingQty));
   const currency = header.currency || recipe?.currency || '';
+  const pricing = useMemo(
+    () => suggestSellingPrice(totalCost, toNumber(header.servingQty), targetFoodCostPercent, costs),
+    [totalCost, header.servingQty, targetFoodCostPercent, costs],
+  );
+  const nameSuggestions = useMemo(() => (nameConfirmed ? [] : suggestRecipeNames(lines)), [lines, nameConfirmed]);
+  const classification = useMemo(() => suggestClassification(lines, families, categories), [lines, families, categories]);
+  const materialRecs = useMemo(
+    () => recommendMaterials(lines, approvedRecipes, catalogPool, 20),
+    [lines, approvedRecipes, catalogPool],
+  );
+  const sheetItems = catalogTab === 'recommended' ? materialRecs.items : results;
 
   if (!can.manageRecipe) {
     return (
@@ -186,7 +232,11 @@ const RecipeBuilderScreen: React.FC = () => {
 
   const save = async (submit: boolean) => {
     if (!header.name.trim() && !recipe?.name) {
-      window.alert('Enter a recipe name on Cloud first for new recipes, or open an existing recipe.');
+      window.alert('Enter a recipe name before saving.');
+      return;
+    }
+    if (lines.length === 0) {
+      window.alert('Add at least one ingredient.');
       return;
     }
     if (lines.some((line) => !(toNumber(line.quantity) > 0))) {
@@ -224,171 +274,281 @@ const RecipeBuilderScreen: React.FC = () => {
         back
         backTo={recipeId ? `recipes/${recipeId}` : 'recipes'}
       />
-      <div className="sm-screen sm-recipe-builder sm-rstudio">
+      <div className="sm-screen sm-recipe-builder sm-rstudio sm-rstudio-builder">
         {loading && <Loading text="Loading recipe…" />}
         {error && <ErrorNotice message={error} />}
         {!loading && !error && (
-          <>
-            <div className="sm-row">
-              <StatusBadge status={recipe?.status || 'DRAFT'} />
-              {dirty && <span className="sm-meta">Unsaved changes</span>}
-            </div>
-            {recipe && (recipe.status === 'APPROVED' || recipe.status === 'REJECTED') && (
-              <p className="sm-meta">Saving creates draft version {(recipe.version ?? 0) + 1}. Active approved version stays until approval.</p>
-            )}
+          <div className="sm-rstudio-workspace">
+            <div className="sm-rstudio-main">
+              <div className="sm-row">
+                <StatusBadge status={recipe?.status || 'DRAFT'} />
+                {!recipe && <span className="sm-meta">Local draft</span>}
+                {dirty && <span className="sm-meta">Unsaved changes</span>}
+              </div>
+              {recipe && (recipe.status === 'APPROVED' || recipe.status === 'REJECTED') && (
+                <p className="sm-meta">Saving creates draft version {(recipe.version ?? 0) + 1}. Active approved version stays until approval.</p>
+              )}
 
-            <section className="sm-section">
-              <h2>Yield</h2>
-              <label className="sm-field">
-                Portions
-                <input
-                  className="sm-input"
-                  type="number"
-                  min="0"
-                  step="any"
-                  value={header.servingQty}
-                  onChange={(event) => {
-                    setUndoStack((stack) => pushUndo(stack, snapshotOf(lines, header.servingQty)));
-                    setHeader((current) => ({ ...current, servingQty: event.target.value }));
-                    setScaleTo(event.target.value);
-                  }}
-                />
-              </label>
-              <label className="sm-field">
-                Scale ingredients to
+              <section className="sm-section">
+                <h2>My Recipe</h2>
+                <label className="sm-field">
+                  Recipe name
+                  <input
+                    className="sm-input"
+                    value={header.name}
+                    placeholder="Optional while building — required on save"
+                    onChange={(event) => {
+                      setNameConfirmed(true);
+                      setHeader((current) => ({ ...current, name: event.target.value }));
+                    }}
+                  />
+                </label>
+                {nameSuggestions.length > 0 && (
+                  <div className="sm-chip-row">
+                    {nameSuggestions.map((item) => (
+                      <button
+                        key={item.name}
+                        type="button"
+                        className="sm-chip"
+                        onClick={() => {
+                          setNameConfirmed(true);
+                          setHeader((current) => ({ ...current, name: item.name }));
+                        }}
+                      >
+                        {item.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <label className="sm-field">
+                  Portions
+                  <input
+                    className="sm-input"
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={header.servingQty}
+                    onChange={(event) => {
+                      setUndoStack((stack) => pushUndo(stack, snapshotOf(lines, header.servingQty)));
+                      setHeader((current) => ({ ...current, servingQty: event.target.value }));
+                      setScaleTo(event.target.value);
+                    }}
+                  />
+                </label>
+                <label className="sm-field">
+                  Scale ingredients to
+                  <div className="sm-row">
+                    <input className="sm-input" type="number" min="0" step="any" value={scaleTo} onChange={(event) => setScaleTo(event.target.value)} />
+                    <button
+                      type="button"
+                      className="sm-btn sm-btn--secondary"
+                      onClick={() => {
+                        const from = toNumber(header.servingQty);
+                        const to = toNumber(scaleTo);
+                        if (!(from > 0) || !(to > 0)) return;
+                        setUndoStack((stack) => pushUndo(stack, snapshotOf(lines, header.servingQty)));
+                        setLines(scaleLines(lines, from, to));
+                        setHeader((current) => ({ ...current, servingQty: String(to) }));
+                      }}
+                    >
+                      Apply
+                    </button>
+                  </div>
+                </label>
+              </section>
+
+              <section className="sm-section">
                 <div className="sm-row">
-                  <input className="sm-input" type="number" min="0" step="any" value={scaleTo} onChange={(event) => setScaleTo(event.target.value)} />
+                  <h2>Ingredients ({lines.length})</h2>
+                  <button
+                    type="button"
+                    className="sm-btn"
+                    onClick={() => {
+                      setReplaceKey(null);
+                      setCatalogTab('recommended');
+                      setPickerOpen(true);
+                    }}
+                  >
+                    Add materials
+                  </button>
+                </div>
+                {lines.length === 0 && (
+                  <p className="sm-meta">Start with ingredients — drag is desktop-only; on mobile use Add materials.</p>
+                )}
+                <ul className="sm-rstudio-ingredients">
+                  {lines.map((line, index) => {
+                    const cost = costs[index];
+                    const name = line.material?.description ?? line.subRecipe?.name ?? '';
+                    const code = line.material?.materialCode ?? line.subRecipe?.recipeCode ?? '';
+                    return (
+                      <li key={line.key} className="sm-rstudio-ingredient sm-card">
+                        <StudioCover compact kind={resolveStudioKind(name, code)} title={name || code} />
+                        <div>
+                          <div className="sm-row">
+                            <strong>{name || code}</strong>
+                            <span className="sm-meta">{cost.cost == null ? 'COST PENDING' : formatCost(cost.cost, currency)}</span>
+                          </div>
+                          <p className="sm-meta">{code}</p>
+                          <div className="sm-row">
+                            <input
+                              className="sm-input"
+                              type="number"
+                              min="0"
+                              step="any"
+                              value={line.quantity}
+                              aria-label="Quantity"
+                              onChange={(event) => commit(lines.map((row) => (row.key === line.key ? { ...row, quantity: event.target.value } : row)))}
+                            />
+                            {line.material ? (
+                              <select
+                                className="sm-input"
+                                value={line.uom}
+                                aria-label="UOM"
+                                onChange={(event) => commit(lines.map((row) => (row.key === line.key ? { ...row, uom: event.target.value } : row)))}
+                              >
+                                {Array.from(new Set([line.uom.toUpperCase(), ...materialUoms(line.material)])).map((unit) => (
+                                  <option key={unit} value={unit}>{unit}</option>
+                                ))}
+                              </select>
+                            ) : (
+                              <span className="sm-meta">{line.uom}</span>
+                            )}
+                          </div>
+                          <div className="sm-row sm-recipe-builder__actions">
+                            <button type="button" className="sm-btn sm-btn--secondary" onClick={() => move(index, -1)} disabled={index === 0}>Up</button>
+                            <button type="button" className="sm-btn sm-btn--secondary" onClick={() => move(index, 1)} disabled={index === lines.length - 1}>Down</button>
+                            {line.material && (
+                              <button type="button" className="sm-btn sm-btn--secondary" onClick={() => { setReplaceKey(line.key); setPickerOpen(true); }}>Replace</button>
+                            )}
+                            <button
+                              type="button"
+                              className="sm-btn sm-btn--secondary"
+                              onClick={() => {
+                                const copy = duplicateLine(line);
+                                const next = [...lines];
+                                next.splice(index + 1, 0, copy);
+                                commit(next);
+                              }}
+                            >
+                              Dup
+                            </button>
+                            <button type="button" className="sm-btn sm-btn--secondary" onClick={() => commit(lines.filter((row) => row.key !== line.key))}>Remove</button>
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+
+              <section className="sm-section">
+                <h2>Live costing</h2>
+                <p className="sm-meta">
+                  Total {pricing.incomplete || totalCost == null ? 'COST PENDING' : formatCost(totalCost, currency)}
+                  {' · '}
+                  /portion {pricing.incomplete || pricing.costPerPortion == null ? 'COST PENDING' : formatCost(pricing.costPerPortion, currency)}
+                  {' · '}
+                  Suggest sell {pricing.incomplete || pricing.suggestedSellingPrice == null ? 'COST PENDING' : formatCost(pricing.suggestedSellingPrice, currency)}
+                  {' · '}
+                  {formatQty(toNumber(header.servingQty))} {header.servingUom}
+                </p>
+                <label className="sm-field">
+                  Target food cost %
+                  <input
+                    className="sm-input"
+                    type="number"
+                    min={1}
+                    max={99}
+                    value={targetFoodCostPercent}
+                    onChange={(event) => {
+                      const next = Number(event.target.value);
+                      const safe = Number.isFinite(next) && next > 0 && next < 100 ? next : 30;
+                      setTargetFoodCostPercent(safe);
+                      saveTargetFoodCostPercent(safe);
+                    }}
+                  />
+                </label>
+              </section>
+
+              {classification && !classConfirmed && (
+                <section className="sm-section">
+                  <h2>Suggested classification</h2>
+                  <p className="sm-meta">{classification.reason}</p>
                   <button
                     type="button"
                     className="sm-btn sm-btn--secondary"
                     onClick={() => {
-                      const from = toNumber(header.servingQty);
-                      const to = toNumber(scaleTo);
-                      if (!(from > 0) || !(to > 0)) return;
-                      setUndoStack((stack) => pushUndo(stack, snapshotOf(lines, header.servingQty)));
-                      setLines(scaleLines(lines, from, to));
-                      setHeader((current) => ({ ...current, servingQty: String(to) }));
+                      setClassConfirmed(true);
+                      setHeader((current) => ({
+                        ...current,
+                        familyId: classification.familyId || current.familyId,
+                        categoryId: classification.categoryId || current.categoryId,
+                      }));
                     }}
                   >
-                    Apply
+                    Apply {classification.familyName} / {classification.categoryName}
                   </button>
-                </div>
-              </label>
-            </section>
+                </section>
+              )}
 
-            <section className="sm-section">
-              <div className="sm-row">
-                <h2>Ingredients ({lines.length})</h2>
-                <button type="button" className="sm-btn" onClick={() => { setReplaceKey(null); setPickerOpen(true); }}>Add</button>
+              <div className="sm-row sm-recipe-builder__footer">
+                <button type="button" className="sm-btn sm-btn--secondary" disabled={undoStack.length === 0 || saving} onClick={undo}>Undo</button>
+                <button type="button" className="sm-btn sm-btn--secondary" disabled={!dirty || saving} onClick={() => { setLines(baseline.lines); setHeader((c) => ({ ...c, servingQty: baseline.servingQty })); setUndoStack([]); }}>Cancel changes</button>
+                <button type="button" className="sm-btn sm-btn--secondary" disabled={saving} onClick={() => save(false)}>{saving ? 'Saving…' : 'Save draft'}</button>
+                <button type="button" className="sm-btn" disabled={saving} onClick={() => save(true)}>Submit</button>
               </div>
-              <ul className="sm-rstudio-ingredients">
-                {lines.map((line, index) => {
-                  const cost = costs[index];
-                  const name = line.material?.description ?? line.subRecipe?.name ?? '';
-                  const code = line.material?.materialCode ?? line.subRecipe?.recipeCode ?? '';
-                  return (
-                    <li key={line.key} className="sm-rstudio-ingredient sm-card">
-                      <StudioCover compact kind={resolveStudioKind(name, code)} title={name || code} />
-                      <div>
-                      <div className="sm-row">
-                        <strong>{name || code}</strong>
-                        <span className="sm-meta">{cost.cost == null ? 'COST PENDING' : formatCost(cost.cost, currency)}</span>
-                      </div>
-                      <p className="sm-meta">{code}</p>
-                      <div className="sm-row">
-                        <input
-                          className="sm-input"
-                          type="number"
-                          min="0"
-                          step="any"
-                          value={line.quantity}
-                          aria-label="Quantity"
-                          onChange={(event) => commit(lines.map((row) => (row.key === line.key ? { ...row, quantity: event.target.value } : row)))}
-                        />
-                        {line.material ? (
-                          <select
-                            className="sm-input"
-                            value={line.uom}
-                            aria-label="UOM"
-                            onChange={(event) => commit(lines.map((row) => (row.key === line.key ? { ...row, uom: event.target.value } : row)))}
-                          >
-                            {Array.from(new Set([line.uom.toUpperCase(), ...materialUoms(line.material)])).map((unit) => (
-                              <option key={unit} value={unit}>{unit}</option>
-                            ))}
-                          </select>
-                        ) : (
-                          <span className="sm-meta">{line.uom}</span>
-                        )}
-                      </div>
-                      <div className="sm-row sm-recipe-builder__actions">
-                        <button type="button" className="sm-btn sm-btn--secondary" onClick={() => move(index, -1)} disabled={index === 0}>Up</button>
-                        <button type="button" className="sm-btn sm-btn--secondary" onClick={() => move(index, 1)} disabled={index === lines.length - 1}>Down</button>
-                        {line.material && (
-                          <button type="button" className="sm-btn sm-btn--secondary" onClick={() => { setReplaceKey(line.key); setPickerOpen(true); }}>Replace</button>
-                        )}
-                        <button
-                          type="button"
-                          className="sm-btn sm-btn--secondary"
-                          onClick={() => {
-                            const copy = duplicateLine(line);
-                            const next = [...lines];
-                            next.splice(index + 1, 0, copy);
-                            commit(next);
-                          }}
-                        >
-                          Dup
-                        </button>
-                        <button type="button" className="sm-btn sm-btn--secondary" onClick={() => commit(lines.filter((row) => row.key !== line.key))}>Remove</button>
-                      </div>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            </section>
-
-            <section className="sm-section">
-              <h2>Cost summary</h2>
-              <p className="sm-meta">
-                Total {totalCost == null ? 'COST PENDING' : formatCost(totalCost, currency)}
-                {' · '}
-                /portion {totalCost == null || !(toNumber(header.servingQty) > 0)
-                  ? 'COST PENDING'
-                  : formatCost(totalCost / toNumber(header.servingQty), currency)}
-                {' · '}
-                {formatQty(toNumber(header.servingQty))} {header.servingUom}
-              </p>
-            </section>
-
-            <div className="sm-row sm-recipe-builder__footer">
-              <button type="button" className="sm-btn sm-btn--secondary" disabled={undoStack.length === 0 || saving} onClick={undo}>Undo</button>
-              <button type="button" className="sm-btn sm-btn--secondary" disabled={!dirty || saving} onClick={() => { setLines(baseline.lines); setHeader((c) => ({ ...c, servingQty: baseline.servingQty })); setUndoStack([]); }}>Cancel changes</button>
-              <button type="button" className="sm-btn sm-btn--secondary" disabled={saving} onClick={() => save(false)}>{saving ? 'Saving…' : 'Save draft'}</button>
-              <button type="button" className="sm-btn" disabled={saving} onClick={() => save(true)}>Submit</button>
             </div>
-          </>
+
+            <aside className="sm-rstudio-aside" aria-label="Recommended materials">
+              <h2>Recommended</h2>
+              <p className="sm-meta">{materialRecs.reason}</p>
+              <ul className="sm-rstudio-shop">
+                {materialRecs.items.slice(0, 8).map((item) => (
+                  <li key={item.id}>
+                    <button type="button" className="sm-rstudio-shop__item" onClick={() => pickMaterial(item)}>
+                      <StudioCover compact kind={resolveStudioKind(item.materialGroup, item.category, item.description)} title={item.description} />
+                      <span>
+                        <strong>{item.description}</strong>
+                        <span className="sm-meta">{item.materialCode} · {item.baseUom} · {item.materialGroup || 'Not Classified'}</span>
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <button type="button" className="sm-btn" onClick={() => { setCatalogTab('all'); setPickerOpen(true); }}>Browse all materials</button>
+            </aside>
+          </div>
         )}
       </div>
 
       {pickerOpen && (
-        <div className="sm-sheet" role="dialog" aria-label="Material picker">
+        <div className="sm-sheet" role="dialog" aria-label="Material catalog">
           <div className="sm-sheet__panel">
             <div className="sm-row">
-              <strong>{replaceKey ? 'Replace ingredient' : 'Add ingredient'}</strong>
+              <strong>{replaceKey ? 'Replace ingredient' : 'Material Catalog'}</strong>
               <button type="button" className="sm-btn sm-btn--secondary" onClick={() => { setPickerOpen(false); setReplaceKey(null); }}>Close</button>
             </div>
-            <label className="sm-field">
-              Search Material Master
-              <input className="sm-input" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Code or name" />
-            </label>
+            <div className="sm-chip-row">
+              <button type="button" className={`sm-chip${catalogTab === 'recommended' ? ' is-active' : ''}`} onClick={() => setCatalogTab('recommended')}>Recommended</button>
+              <button type="button" className={`sm-chip${catalogTab === 'all' ? ' is-active' : ''}`} onClick={() => setCatalogTab('all')}>All Materials</button>
+            </div>
+            {catalogTab === 'recommended' && <p className="sm-meta">{materialRecs.reason}</p>}
+            {catalogTab === 'all' && (
+              <label className="sm-field">
+                Search Material Master
+                <input className="sm-input" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Code or name" />
+              </label>
+            )}
             <ul className="sm-rstudio-shop">
-              {results.map((item) => (
+              {sheetItems.map((item) => (
                 <li key={item.id}>
                   <button type="button" className="sm-rstudio-shop__item" onClick={() => pickMaterial(item)}>
                     <StudioCover compact kind={resolveStudioKind(item.materialGroup, item.category, item.description)} title={item.description} />
                     <span>
                       <strong>{item.description}</strong>
-                      <span className="sm-meta">{item.materialCode} · {item.baseUom}</span>
+                      <span className="sm-meta">
+                        {item.materialCode} · {item.baseUom} · {item.materialGroup || 'Not Classified'} / {item.category || 'Not Classified'}
+                      </span>
                     </span>
                   </button>
                 </li>

@@ -209,18 +209,42 @@
   min-width: 0;
 }
 
-/* Smart Recipe Builder — three-panel desktop layout */
+/* Recipe Studio — two-panel: My Recipe (~55%) + Material Catalog (~45%) */
 .srec-builder {
   display: grid;
-  grid-template-columns: minmax(16rem, 0.9fr) minmax(0, 1.35fr) minmax(15rem, 0.85fr);
+  grid-template-columns: minmax(0, 1.2fr) minmax(18rem, 1fr);
   gap: var(--sila-space-3);
   align-items: start;
-  background: #fff;
+  background: transparent;
+}
+
+.srec-builder--studio {
+  min-height: 28rem;
+}
+
+.rstudio-my-recipe {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sila-space-3);
+  min-width: 0;
+  max-height: calc(100vh - 14rem);
+  overflow: auto;
+  padding-right: 0.15rem;
+}
+
+.rstudio-catalog {
+  max-height: calc(100vh - 14rem);
+  overflow: auto;
 }
 
 @media (max-width: 72rem) {
   .srec-builder {
     grid-template-columns: 1fr;
+  }
+
+  .rstudio-my-recipe,
+  .rstudio-catalog {
+    max-height: none;
   }
 }
 
@@ -291,9 +315,22 @@
   gap: var(--sila-space-2);
 }
 
+.srec-lib-list.rstudio-catalog-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sila-space-2);
+  max-height: none;
+}
+
+@media (min-width: 90rem) {
+  .srec-lib-list.rstudio-catalog-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 .srec-lib-card {
   display: grid;
-  grid-template-columns: auto auto 1fr auto;
+  grid-template-columns: auto auto auto 1fr auto;
   gap: var(--sila-space-2);
   align-items: start;
   padding: var(--sila-space-2);
