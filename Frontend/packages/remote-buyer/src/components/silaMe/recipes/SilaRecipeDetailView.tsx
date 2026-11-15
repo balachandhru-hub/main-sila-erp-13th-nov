@@ -12,8 +12,10 @@ import { formatDateTime } from "../../cart/lineFormat";
 import SilaRecipeApprovalTrail from "./SilaRecipeApprovalTrail";
 import SilaRecipeCosting from "./SilaRecipeCosting";
 import SilaRecipeReadinessPanel from "./SilaRecipeReadinessPanel";
-import { formatQty, readinessStatusBadgeClass, readinessText, recipeBadgeClass, recipeLabel, versionsSummary } from "./recipeFormat";
+import { formatCost, formatQty, readinessStatusBadgeClass, readinessText, recipeBadgeClass, recipeLabel, versionsSummary } from "./recipeFormat";
 import SilaRecipeCostSummary from "./SilaRecipeCostSummary";
+import { resolveStudioKind, StudioCover } from "./recipeStudioVisuals";
+import "./SilaRecipeStudio.css";
 
 interface SilaRecipeDetailViewProps {
   recipeId: string;
@@ -101,15 +103,22 @@ const SilaRecipeDetailView: React.FC<SilaRecipeDetailViewProps> = ({ recipeId, c
   const deactivatable = canManage && recipe.status !== "INACTIVE";
   const showReadiness = latest && (recipe.status === "DRAFT" || recipe.status === "REJECTED");
 
+  const coverKind = resolveStudioKind(recipe.categoryName || recipe.category, recipe.familyName, recipe.name);
+  const menuPrice = recipe.outletPrices.length === 0
+    ? null
+    : Math.min(...recipe.outletPrices.map((price) => price.menuPrice));
+  const portionCost = recipe.readiness.costComplete ? (recipe.costPerServing ?? (recipe.servingQty > 0 ? recipe.totalCost / recipe.servingQty : recipe.totalCost)) : null;
+
   return (
-    <div className="sila-me srec-page">
-      <PageHeader
-        className="pud-page-header"
-        title={`${recipe.recipeCode} ${recipe.name}`}
-        onBack={onBack}
-        backLabel="Back"
-        meta={
-          <span className="srec-badges">
+    <div className="sila-me srec-page rstudio-page">
+      <button type="button" className="sila-btn sila-btn--ghost sila-btn--sm rstudio-back" onClick={onBack}>← Back to catalog</button>
+
+      <header className="rstudio-detail-hero">
+        <StudioCover kind={coverKind} title={recipe.name} subtitle={recipe.categoryName || recipe.category || undefined} className="rstudio-detail-hero__cover" />
+        <div className="rstudio-detail-hero__copy">
+          <p className="rstudio-kicker">{recipe.recipeCode}</p>
+          <h1>{recipe.name}</h1>
+          <div className="srec-badges">
             <span className={recipeBadgeClass(recipe.viewStatus)}>{recipeLabel(recipe.viewStatus)}</span>
             {latest && recipe.status !== "INACTIVE" && (
               <span className={readinessStatusBadgeClass(recipe.readiness.status, recipe.readiness.issues.length)}>
@@ -132,19 +141,21 @@ const SilaRecipeDetailView: React.FC<SilaRecipeDetailViewProps> = ({ recipeId, c
             ) : (
               <span className="sila-badge sila-badge--neutral">V{recipe.viewVersion}</span>
             )}
-          </span>
-        }
-        actions={
+          </div>
+          <p className="rstudio-detail-hero__meta">
+            {recipe.familyName || "—"} · {recipe.categoryName || recipe.category || "—"} · {recipeLabel(recipe.itemMode)} · Yield {formatQty(recipe.servingQty)} {recipe.servingUom}
+          </p>
+          {recipe.description && <p className="rstudio-detail-hero__desc">{recipe.description}</p>}
           <div className="srec-actions">
             {editable && (
-              <button type="button" className="sila-btn sila-btn--secondary" onClick={() => onEdit(recipe)} disabled={busy !== null}>
-                {recipe.status === "DRAFT" ? "Edit" : `Edit as version ${recipe.version + 1}`}
+              <button type="button" className="sila-btn sila-btn--primary" onClick={() => onEdit(recipe)} disabled={busy !== null}>
+                {recipe.status === "DRAFT" ? "Edit in Recipe Studio" : `Create revision v${recipe.version + 1}`}
               </button>
             )}
             {submittable && (
               <button
                 type="button"
-                className="sila-btn sila-btn--primary"
+                className="sila-btn sila-btn--secondary"
                 disabled={busy !== null || !recipe.readiness.ready}
                 title={recipe.readiness.ready ? undefined : "Fix the readiness issues first."}
                 onClick={() => run("submit", () => submitRecipe(recipe.id), "Recipe sent for approval.")}
@@ -158,8 +169,42 @@ const SilaRecipeDetailView: React.FC<SilaRecipeDetailViewProps> = ({ recipeId, c
               </button>
             )}
           </div>
-        }
-      />
+        </div>
+      </header>
+
+      <div className="rstudio-kpis">
+        <div className="rstudio-kpi rstudio-kpi--blue"><span>Total recipe cost</span><strong>{recipe.readiness.costComplete ? formatCost(recipe.totalCost, recipe.currency) : "COST PENDING"}</strong></div>
+        <div className="rstudio-kpi rstudio-kpi--mint"><span>Cost / portion</span><strong>{portionCost == null ? "COST PENDING" : formatCost(portionCost, recipe.currency)}</strong></div>
+        <div className="rstudio-kpi rstudio-kpi--lavender"><span>Ingredients</span><strong>{recipe.ingredients.length}</strong></div>
+        <div className="rstudio-kpi rstudio-kpi--amber"><span>Yield</span><strong>{formatQty(recipe.servingQty)} {recipe.servingUom}</strong></div>
+        <div className="rstudio-kpi rstudio-kpi--sky"><span>Food cost %</span><strong>{portionCost != null && menuPrice ? `${((portionCost / menuPrice) * 100).toFixed(1)}%` : "—"}</strong></div>
+        <div className="rstudio-kpi rstudio-kpi--blue"><span>Margin</span><strong>{portionCost != null && menuPrice ? formatCost(menuPrice - portionCost, recipe.currency) : "—"}</strong></div>
+      </div>
+
+      <section className="rstudio-cookbook-section">
+        <h2>Ingredients</h2>
+        <div className="rstudio-ingredient-grid">
+          {recipe.ingredients.map((ingredient) => (
+            <article key={ingredient.id} className="rstudio-ingredient-card">
+              <StudioCover
+                compact
+                kind={resolveStudioKind(ingredient.itemName, ingredient.itemCode, ingredient.uom)}
+                title={ingredient.itemName}
+              />
+              <div>
+                <strong>{ingredient.itemName}</strong>
+                <p className="srec-sub">{ingredient.itemCode} · {ingredient.ingredientCode}</p>
+                <p>{formatQty(ingredient.quantity)} {ingredient.uom}</p>
+                <p className="rstudio-ingredient-card__cost">
+                  {ingredient.priceStatus === "MISSING" || ingredient.cost == null
+                    ? "COST PENDING"
+                    : formatCost(ingredient.cost, ingredient.currency || recipe.currency)}
+                </p>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
 
       <section className="sila-card">
         <div className="sila-card-body">
@@ -183,7 +228,6 @@ const SilaRecipeDetailView: React.FC<SilaRecipeDetailViewProps> = ({ recipeId, c
               </div>
             ))}
           </div>
-          {recipe.description && <p className="sila-modal-text">{recipe.description}</p>}
         </div>
       </section>
 

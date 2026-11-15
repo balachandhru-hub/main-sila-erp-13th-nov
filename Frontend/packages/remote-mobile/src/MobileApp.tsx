@@ -42,6 +42,7 @@ import TransferDetailScreen from './screens/inventory/TransferDetailScreen';
 import CountListScreen from './screens/count/CountListScreen';
 import RecipesScreen from './screens/recipes/RecipesScreen';
 import RecipeDetailScreen from './screens/recipes/RecipeDetailScreen';
+import RecipeBuilderScreen from './screens/recipes/RecipeBuilderScreen';
 import MenuDashboardScreen from './screens/menu/MenuDashboardScreen';
 import MenuItemsScreen from './screens/menu/MenuItemsScreen';
 import MenuItemEditorScreen from './screens/menu/MenuItemEditorScreen';
@@ -143,6 +144,8 @@ const MobileSurface: React.FC<{ base: string }> = ({ base }) => {
                 <Route path="inventory/transfers/new" element={<TransferFormScreen />} />
                 <Route path="inventory/transfers/:transferId" element={<TransferDetailScreen />} />
                 <Route path="recipes" element={<RecipesScreen />} />
+                <Route path="recipes/new" element={<RecipeBuilderScreen />} />
+                <Route path="recipes/:recipeId/edit" element={<RecipeBuilderScreen />} />
                 <Route path="recipes/:recipeId" element={<RecipeDetailScreen />} />
                 <Route path="menu" element={<MenuDashboardScreen />} />
                 <Route path="menu/items" element={<MenuItemsScreen />} />

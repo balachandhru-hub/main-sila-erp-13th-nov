@@ -1,0 +1,417 @@
+/* SILA Recipe Studio — premium culinary visual identity */
+
+.rstudio-page {
+  gap: 1.25rem;
+  background:
+    radial-gradient(circle at top right, rgba(77, 163, 255, 0.08), transparent 28%),
+    radial-gradient(circle at 10% 20%, rgba(120, 210, 170, 0.1), transparent 26%),
+    #ffffff;
+}
+
+.rstudio-kicker {
+  margin: 0 0 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #2f7cc4;
+}
+
+.rstudio-hero {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem;
+  border-radius: 1.25rem;
+  background: linear-gradient(135deg, #f4f9ff 0%, #ffffff 55%, #f7fff9 100%);
+  border: 0.0625rem solid #d9e8f7;
+  box-shadow: 0 0.5rem 1.5rem rgba(24, 72, 120, 0.06);
+}
+
+.rstudio-hero__title {
+  margin: 0;
+  font-size: clamp(1.6rem, 2.4vw, 2.2rem);
+  line-height: 1.15;
+  color: #12355b;
+}
+
+.rstudio-hero__sub {
+  margin: 0.5rem 0 0;
+  max-width: 40rem;
+  color: #5b7a99;
+}
+
+.rstudio-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+
+.rstudio-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  gap: 0.75rem;
+}
+
+.rstudio-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.9rem 1rem;
+  border-radius: 1rem;
+  border: 0.0625rem solid transparent;
+  box-shadow: 0 0.25rem 0.75rem rgba(18, 53, 91, 0.05);
+}
+
+.rstudio-kpi span {
+  font-size: 0.75rem;
+  color: #5b7a99;
+}
+
+.rstudio-kpi strong {
+  font-size: 1.25rem;
+  color: #12355b;
+}
+
+.rstudio-kpi--sky { background: #eaf6ff; border-color: #cfe8fb; }
+.rstudio-kpi--mint { background: #eafaf0; border-color: #cdead8; }
+.rstudio-kpi--lavender { background: #f3efff; border-color: #ddd4ff; }
+.rstudio-kpi--amber { background: #fff6e8; border-color: #ffe0b5; }
+.rstudio-kpi--blue { background: #eef4ff; border-color: #d4e2ff; }
+
+.rstudio-cats {
+  display: flex;
+  gap: 0.6rem;
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+}
+
+.rstudio-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.35rem 0.75rem 0.35rem 0.35rem;
+  border-radius: 999px;
+  border: 0.0625rem solid #d7e3f0;
+  background: #fff;
+  color: #243447;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.rstudio-chip:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0.35rem 0.9rem rgba(24, 72, 120, 0.08);
+}
+
+.rstudio-chip.is-active {
+  border-color: #4d8fd6;
+  background: #eef6fc;
+  color: #12355b;
+  font-weight: 600;
+}
+
+.rstudio-toolbar {
+  padding: 0.85rem 1rem;
+  border-radius: 1rem;
+  border: 0.0625rem solid #e1ebf5;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.rstudio-view-toggle {
+  display: inline-flex;
+  gap: 0.35rem;
+  align-items: flex-end;
+  padding-bottom: 0.15rem;
+}
+
+.rstudio-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+@media (max-width: 75rem) {
+  .rstudio-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 56rem) {
+  .rstudio-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 34rem) {
+  .rstudio-grid { grid-template-columns: 1fr; }
+}
+
+.rstudio-card {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 1.15rem;
+  border: 0.0625rem solid #dce8f4;
+  background: #fff;
+  box-shadow: 0 0.45rem 1.25rem rgba(18, 53, 91, 0.06);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.rstudio-card:hover {
+  transform: translateY(-0.2rem);
+  box-shadow: 0 0.85rem 1.75rem rgba(18, 53, 91, 0.1);
+}
+
+.rstudio-card__media {
+  position: relative;
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.rstudio-card__status {
+  position: absolute;
+  top: 0.65rem;
+  right: 0.65rem;
+}
+
+.rstudio-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.9rem 1rem 1rem;
+}
+
+.rstudio-card__title {
+  margin: 0;
+  font-size: 1.05rem;
+  color: #12355b;
+}
+
+.rstudio-card__link {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rstudio-card__meta,
+.rstudio-card__stats {
+  margin: 0;
+  color: #5b7a99;
+  font-size: 0.8rem;
+}
+
+.rstudio-card__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.rstudio-card__costs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.rstudio-card__costs em {
+  display: block;
+  font-style: normal;
+  font-size: 0.7rem;
+  color: #7a93ab;
+}
+
+.rstudio-card__costs strong {
+  color: #12355b;
+  font-size: 0.92rem;
+}
+
+.rstudio-card__actions {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.25rem;
+}
+
+.rstudio-cover {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: 9.5rem;
+  padding: 0.75rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.rstudio-cover.is-compact {
+  min-height: 0;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  border-radius: 999px;
+  justify-content: center;
+  align-items: center;
+}
+
+.rstudio-cover__art {
+  width: 4.5rem;
+  height: 4.5rem;
+  align-self: flex-start;
+}
+
+.rstudio-cover.is-compact .rstudio-cover__art {
+  width: 2.25rem;
+  height: 2.25rem;
+}
+
+.rstudio-cover__caption {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  margin-top: 0.35rem;
+  color: #34506d;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.rstudio-cover__caption em {
+  font-style: normal;
+  font-weight: 500;
+  color: #6d87a2;
+}
+
+.rstudio-back {
+  align-self: flex-start;
+}
+
+.rstudio-detail-hero {
+  display: grid;
+  grid-template-columns: minmax(12rem, 18rem) 1fr;
+  gap: 1.25rem;
+  padding: 1rem;
+  border-radius: 1.35rem;
+  background: linear-gradient(140deg, #f5faff, #ffffff 55%, #f8fff9);
+  border: 0.0625rem solid #d9e8f7;
+  box-shadow: 0 0.55rem 1.5rem rgba(24, 72, 120, 0.07);
+}
+
+.rstudio-detail-hero__cover {
+  min-height: 14rem;
+  border-radius: 1rem;
+}
+
+.rstudio-detail-hero__copy h1 {
+  margin: 0.15rem 0 0.55rem;
+  color: #12355b;
+  font-size: clamp(1.6rem, 2.5vw, 2.3rem);
+}
+
+.rstudio-detail-hero__meta,
+.rstudio-detail-hero__desc {
+  color: #5b7a99;
+}
+
+.rstudio-cookbook-section h2 {
+  margin: 0 0 0.75rem;
+  color: #12355b;
+}
+
+.rstudio-ingredient-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  gap: 0.75rem;
+}
+
+.rstudio-ingredient-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.65rem;
+  align-items: center;
+  padding: 0.75rem;
+  border-radius: 1rem;
+  background: #fff;
+  border: 0.0625rem solid #e1ebf5;
+  box-shadow: 0 0.25rem 0.75rem rgba(18, 53, 91, 0.04);
+}
+
+.rstudio-ingredient-card__cost {
+  margin: 0.2rem 0 0;
+  font-weight: 600;
+  color: #1f5f96;
+}
+
+@media (max-width: 48rem) {
+  .rstudio-detail-hero {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Editor workspace polish */
+.rstudio-editor-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.rstudio-editor-top {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1rem;
+  align-items: center;
+  padding: 0.85rem 1rem;
+  border-radius: 1.15rem;
+  background: linear-gradient(120deg, #eef6ff, #ffffff 60%);
+  border: 0.0625rem solid #d7e7f6;
+}
+
+.rstudio-sticky-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  padding: 0.75rem 1rem;
+  border-radius: 1rem 1rem 0 0;
+  background: rgba(255, 255, 255, 0.94);
+  border: 0.0625rem solid #d7e3f0;
+  box-shadow: 0 -0.35rem 1rem rgba(18, 53, 91, 0.08);
+  backdrop-filter: blur(8px);
+}
+
+.srec-builder-panel {
+  border-radius: 1.1rem !important;
+  border-color: #dce8f4 !important;
+  background: #fff !important;
+  box-shadow: 0 0.4rem 1.1rem rgba(18, 53, 91, 0.05) !important;
+}
+
+.srec-lib-card,
+.srec-canvas-card {
+  border-radius: 0.9rem !important;
+  background: linear-gradient(180deg, #f8fbfe 0%, #ffffff 70%) !important;
+  border-color: #d9e7f4 !important;
+}
+
+.srec-canvas-drop {
+  border-radius: 1rem !important;
+  border-style: dashed !important;
+  border-color: #8eb8e3 !important;
+  background: linear-gradient(180deg, #f3f9ff, #ffffff) !important;
+  color: #2f6699 !important;
+  font-weight: 600;
+}
+
+.srec-intel {
+  background: linear-gradient(180deg, #f7fbff, #ffffff 35%) !important;
+}
+
+.srec-replace {
+  border-radius: 1.1rem !important;
+  border-color: #d7e7f6 !important;
+  background: #fff !important;
+}

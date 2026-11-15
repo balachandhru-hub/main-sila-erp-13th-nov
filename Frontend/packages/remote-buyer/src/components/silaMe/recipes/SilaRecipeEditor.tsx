@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { EmptyState, Loader, PageHeader, toastService } from "@vosox/shared-ui";
-import { getLocations, saveMaterialConversion, type SilaLocation, type SilaMaterial } from "../../../api/silaMe/silaInventoryApi";
+import { getLocations, type SilaLocation, type SilaMaterial } from "../../../api/silaMe/silaInventoryApi";
 import {
   createRecipe,
   getRecipeUoms,
@@ -19,7 +19,6 @@ import {
   headerFrom,
   lineCost,
   linesFrom,
-  materialFromOption,
   nextKey,
   toNumber,
   totalCostAt,
@@ -27,13 +26,27 @@ import {
   type IngredientLine,
   type IngredientMaterial,
 } from "./recipeEditorModel";
+import {
+  duplicateLine,
+  materialLine,
+  pushUndo,
+  rememberMaterial,
+  replaceMaterialOnLine,
+  snapshotOf,
+  snapshotsEqual,
+  type BuilderSnapshot,
+} from "./recipeBuilderState";
 import { formatQty, readinessBadgeClass, readinessLabel, recipeBadgeClass, recipeLabel, versionsSummary } from "./recipeFormat";
+import SilaRecipeCanvas from "./SilaRecipeCanvas";
 import SilaRecipeCostSummary from "./SilaRecipeCostSummary";
 import SilaRecipeHeaderForm from "./SilaRecipeHeaderForm";
-import SilaRecipeIngredientSearch from "./SilaRecipeIngredientSearch";
-import SilaRecipeIngredientTable from "./SilaRecipeIngredientTable";
+import SilaRecipeIntelligence from "./SilaRecipeIntelligence";
+import SilaRecipeMaterialLibrary from "./SilaRecipeMaterialLibrary";
 import SilaRecipeOutletPrices from "./SilaRecipeOutletPrices";
 import SilaRecipeReadinessPanel from "./SilaRecipeReadinessPanel";
+import SilaRecipeReplacePanel from "./SilaRecipeReplacePanel";
+import { resolveStudioKind, StudioCover } from "./recipeStudioVisuals";
+import "./SilaRecipeStudio.css";
 
 interface SilaRecipeEditorProps {
   /** The recipe (latest version) to edit; a new recipe when absent. */
@@ -81,6 +94,10 @@ const SilaRecipeEditor: React.FC<SilaRecipeEditorProps> = ({ recipe, canRequestP
   const [menuMatches, setMenuMatches] = useState<MenuItemDetail[]>([]);
   const [linkedMenuItem, setLinkedMenuItem] = useState<MenuItemDetail | null>(null);
   const [linkingMenu, setLinkingMenu] = useState(false);
+  const [undoStack, setUndoStack] = useState<BuilderSnapshot[]>([]);
+  const [baseline, setBaseline] = useState<BuilderSnapshot>(() => snapshotOf([], headerFrom(recipe).servingQty));
+  const [replaceKey, setReplaceKey] = useState<string | null>(null);
+  const baselineReady = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -100,6 +117,10 @@ const SilaRecipeEditor: React.FC<SilaRecipeEditorProps> = ({ recipe, canRequestP
         const dropped = (recipe?.ingredients.length ?? 0) - loaded.length;
         if (dropped > 0) toastService.error(`${dropped} sub-recipe(s) are no longer approved and were removed from the editor.`);
         setLines(loaded);
+        const snap = snapshotOf(loaded, headerFrom(recipe).servingQty);
+        setBaseline(snap);
+        setUndoStack([]);
+        baselineReady.current = true;
         setOutlets(locations.filter((location) => location.locationType === "OUTLET"));
         setSubRecipes(approved.items.filter((x) => x.id !== recipe?.id));
         setFamilies(loadedFamilies);
@@ -174,43 +195,77 @@ const SilaRecipeEditor: React.FC<SilaRecipeEditorProps> = ({ recipe, canRequestP
   const costComplete = lines.length > 0 && costs.every((cost) => cost.cost != null);
   const totalCost = totalCostAt(lines, activeOutlet);
   const currency = header.currency.trim() || lines.find((line) => line.material?.currency)?.material?.currency || "";
+  const dirty = baselineReady.current && !snapshotsEqual(baseline, snapshotOf(lines, header.servingQty));
+  const replaceLine = replaceKey ? lines.find((line) => line.key === replaceKey) ?? null : null;
 
-  const saveLineConversion = async (material: IngredientMaterial, fromUom: string, toUom: string, factor: number) => {
-    try {
-      await saveMaterialConversion(material.id, { fromUom, toUom, factor });
-      setLines((current) => current.map((line) => (
-        line.material?.id === material.id
-          ? { ...line, material: { ...line.material, conversions: [...line.material.conversions, { fromUom, toUom, factor }] } }
-          : line
-      )));
-      toastService.success(`1 ${fromUom} = ${factor} ${toUom}. Sales will deduct that fraction of ${fromUom} at the outlet.`);
-    } catch (err: unknown) {
-      toastService.error(err instanceof Error ? err.message : "Could not save the conversion.");
-    }
+  const commitLines = (next: IngredientLine[] | ((current: IngredientLine[]) => IngredientLine[])) => {
+    setLines((current) => {
+      const resolved = typeof next === "function" ? next(current) : next;
+      return resolved;
+    });
+    setUndoStack((stack) => pushUndo(stack, snapshotOf(lines, header.servingQty)));
+  };
+
+  const commitServingQty = (value: string) => {
+    setUndoStack((stack) => pushUndo(stack, snapshotOf(lines, header.servingQty)));
+    setHeader((current) => ({ ...current, servingQty: value }));
+  };
+
+  const undo = () => {
+    setUndoStack((stack) => {
+      if (stack.length === 0) return stack;
+      const previous = stack[stack.length - 1];
+      setLines(previous.lines);
+      setHeader((current) => ({ ...current, servingQty: previous.servingQty }));
+      return stack.slice(0, -1);
+    });
+  };
+
+  const cancelChanges = () => {
+    setLines(baseline.lines);
+    setHeader((current) => ({ ...current, servingQty: baseline.servingQty }));
+    setUndoStack([]);
   };
 
   const addMaterial = (option: SilaIngredientOption) => {
-    const material = materialFromOption(option);
-    const line: IngredientLine = { key: nextKey(), material, quantity: "1", uom: material.baseUom.toUpperCase() };
+    rememberMaterial(option.id);
+    const line = materialLine(option);
     if (header.itemMode === "DIRECT") {
-      // A direct item has one material: a new one replaces it.
-      setLines([line]);
+      commitLines([line]);
       return;
     }
-    setLines((current) => (current.some((x) => x.material?.id === material.id) ? current : [...current, line]));
+    commitLines((current) => (current.some((x) => x.material?.id === line.material?.id) ? current : [...current, line]));
+  };
+
+  const addMaterials = (options: SilaIngredientOption[]) => {
+    options.forEach((option) => rememberMaterial(option.id));
+    if (header.itemMode === "DIRECT") {
+      if (options[0]) commitLines([materialLine(options[0])]);
+      return;
+    }
+    commitLines((current) => {
+      const next = [...current];
+      options.forEach((option) => {
+        if (!next.some((x) => x.material?.id === option.id)) next.push(materialLine(option));
+      });
+      return next;
+    });
   };
 
   const addSubRecipe = () => {
     const sub = subRecipes.find((x) => x.id === subRecipeId);
     if (!sub || lines.some((line) => line.subRecipe?.id === sub.id)) return;
-    setLines((current) => [...current, { key: nextKey(), subRecipe: sub, quantity: "1", uom: sub.servingUom }]);
+    commitLines((current) => [...current, { key: nextKey(), subRecipe: sub, quantity: "1", uom: sub.servingUom }]);
     setSubRecipeId("");
   };
 
   const changeHeader = (change: Partial<HeaderValues>) => {
+    if (change.servingQty != null && change.servingQty !== header.servingQty) {
+      setUndoStack((stack) => pushUndo(stack, snapshotOf(lines, header.servingQty)));
+    }
     setHeader((current) => ({ ...current, ...change }));
-    if (change.itemMode === "DIRECT") setLines((current) => current.filter((line) => line.material).slice(0, 1));
-    if (change.itemMode && change.itemMode !== "BATCH") setLines((current) => current.filter((line) => !line.subRecipe));
+    if (change.itemMode === "DIRECT") commitLines((current) => current.filter((line) => line.material).slice(0, 1));
+    if (change.itemMode && change.itemMode !== "BATCH") commitLines((current) => current.filter((line) => !line.subRecipe));
   };
 
   const validate = (): string | null => {
@@ -282,49 +337,33 @@ const SilaRecipeEditor: React.FC<SilaRecipeEditorProps> = ({ recipe, canRequestP
     if (recipeId) onSaved(recipeId);
   };
 
-  const title = recipe ? `Edit ${recipe.recipeCode} ${recipe.name}` : "New recipe";
+  const title = recipe ? `${recipe.recipeCode} ${header.name || recipe.name}` : (header.name || "New recipe");
+  const coverKind = resolveStudioKind(header.name, recipe?.category, recipe?.familyName);
 
   if (loading || loadError) {
     return (
-      <div className="sila-me srec-page">
+      <div className="sila-me srec-page rstudio-page">
         <PageHeader className="pud-page-header" title={title} onBack={onCancel} />
-        {loading ? <Loader size={24} message="Loading..." /> : <EmptyState variant="error" title="Couldn't open the editor" description={loadError ?? undefined} />}
+        {loading ? <Loader size={24} message="Loading Recipe Studio..." /> : <EmptyState variant="error" title="Couldn't open the editor" description={loadError ?? undefined} />}
       </div>
     );
   }
 
   return (
-    <div className="sila-me srec-page">
-      <PageHeader
-        className="pud-page-header"
-        title={title}
-        description="Define the menu item, then build the ingredients from Material Master."
-        meta={
-          <span className="srec-badges">
+    <div className="sila-me srec-page rstudio-page rstudio-editor-shell">
+      <div className="rstudio-editor-top">
+        <StudioCover compact kind={coverKind} title={title} />
+        <div>
+          <p className="rstudio-kicker">Recipe Studio workspace</p>
+          <h1 className="rstudio-hero__title" style={{ fontSize: "1.45rem" }}>{title}</h1>
+          <div className="srec-badges">
             <span className={recipeBadgeClass(recipe?.status ?? "DRAFT")}>{recipeLabel(recipe?.status ?? "DRAFT")}</span>
             <span className={readinessBadgeClass(issues.length)}>{readinessLabel(issues.length)}</span>
-          </span>
-        }
-        onBack={onCancel}
-        backLabel="Back to recipes"
-        actions={
-          <div className="srec-actions">
-            <button type="button" className="sila-btn sila-btn--secondary" onClick={onCancel} disabled={saving !== ""}>Cancel</button>
-            <button type="button" className="sila-btn sila-btn--secondary" onClick={() => handleSave(false)} disabled={saving !== ""}>
-              {saving === "draft" ? "Saving..." : "Save draft"}
-            </button>
-            <button
-              type="button"
-              className="sila-btn sila-btn--primary"
-              onClick={() => handleSave(true)}
-              disabled={saving !== "" || issues.length > 0}
-              title={issues.length > 0 ? "Fix the readiness issues first." : undefined}
-            >
-              {saving === "submit" ? "Submitting..." : recipe?.activeVersion ? "Submit POS / recipe change" : "Submit for approval"}
-            </button>
+            {recipe && <span className="sila-badge sila-badge--neutral">v{recipe.version}</span>}
+            {dirty && <span className="sila-badge sila-badge--warning">Unsaved changes</span>}
           </div>
-        }
-      />
+        </div>
+      </div>
 
       {recipe && recipe.activeVersion > 0 && (recipe.status === "APPROVED" || recipe.status === "REJECTED") && (
         <div className="sila-alert sila-alert--warning" role="status">
@@ -435,14 +474,9 @@ const SilaRecipeEditor: React.FC<SilaRecipeEditorProps> = ({ recipe, canRequestP
       />
       </div>
 
-      <section className="sila-card">
-        <div className="sila-card-header">
-          <h2 className="sila-card-title">{header.itemMode === "DIRECT" ? "Direct consumption" : "Ingredients / consumption"}</h2>
-        </div>
-        <div className="sila-card-body srec-stack">
-          <span className="sila-help">30 ML of a 750 ML bottle is 0.04 of the bottle. Approved sales multiply that and deduct it at the assigned outlet. Cost uses the material price of the first outlet that has a menu price, or the default price until then.</span>
-          <SilaRecipeIngredientSearch addedIds={lines.filter((x) => x.material).map((x) => x.material!.id)} onAdd={addMaterial} />
-          {header.itemMode === "BATCH" && (
+      {header.itemMode === "BATCH" && (
+        <section className="sila-card">
+          <div className="sila-card-body">
             <div className="srec-filters srec-filters--flush">
               <div className="sila-field srec-grow">
                 <label className="sila-label" htmlFor="srec-sub-recipe">Add an approved sub-recipe</label>
@@ -455,27 +489,97 @@ const SilaRecipeEditor: React.FC<SilaRecipeEditorProps> = ({ recipe, canRequestP
               </div>
               <button type="button" className="sila-btn sila-btn--secondary" onClick={addSubRecipe} disabled={!subRecipeId}>Add sub-recipe</button>
             </div>
-          )}
-          {lines.length === 0 ? (
-            <EmptyState
-              title="No ingredients yet"
-              description={`Search Material Master and add ${header.itemMode === "DIRECT" ? "the consumption material" : "an ingredient"}. A missing price does not block a draft.`}
-            />
-          ) : (
-            <SilaRecipeIngredientTable
-              lines={lines}
-              costs={costs}
-              mode={header.itemMode}
-              totalCost={totalCost}
-              currency={currency}
-              onChange={(key, change) => setLines((current) => current.map((line) => (line.key === key ? { ...line, ...change } : line)))}
-              onRemove={(key) => setLines((current) => current.filter((line) => line.key !== key))}
-              onUpdatePrice={canRequestPrice ? setPriceMaterial : undefined}
-              onSaveConversion={saveLineConversion}
-            />
-          )}
+          </div>
+        </section>
+      )}
+
+      {replaceLine ? (
+        <SilaRecipeReplacePanel
+          line={replaceLine}
+          outletId={activeOutlet}
+          currency={currency}
+          onCancel={() => setReplaceKey(null)}
+          onConfirm={(option, quantity, uom) => {
+            rememberMaterial(option.id);
+            commitLines((current) => current.map((line) => (line.key === replaceLine.key ? replaceMaterialOnLine(line, option, quantity, uom) : line)));
+            setReplaceKey(null);
+          }}
+        />
+      ) : (
+        <div className="srec-builder">
+          <SilaRecipeMaterialLibrary
+            addedIds={lines.filter((x) => x.material).map((x) => x.material!.id)}
+            onAdd={addMaterial}
+            onAddMany={addMaterials}
+          />
+          <SilaRecipeCanvas
+            lines={lines}
+            costs={costs}
+            mode={header.itemMode}
+            currency={currency}
+            onReorder={(next) => commitLines(next)}
+            onChange={(key, change) => commitLines((current) => current.map((line) => (line.key === key ? { ...line, ...change } : line)))}
+            onRemove={(key) => commitLines((current) => current.filter((line) => line.key !== key))}
+            onDuplicate={(key) => commitLines((current) => {
+              const index = current.findIndex((line) => line.key === key);
+              if (index < 0) return current;
+              const copy = duplicateLine(current[index]);
+              const next = [...current];
+              next.splice(index + 1, 0, copy);
+              return next;
+            })}
+            onReplace={setReplaceKey}
+            onAddMaterial={addMaterial}
+            onReplaceMaterial={(key, material) => {
+              rememberMaterial(material.id);
+              commitLines((current) => current.map((line) => (
+                line.key === key ? replaceMaterialOnLine(line, material, line.quantity, material.baseUom) : line
+              )));
+            }}
+            onUpdatePrice={canRequestPrice ? setPriceMaterial : undefined}
+          />
+          <SilaRecipeIntelligence
+            lines={lines}
+            costs={costs}
+            servingQty={header.servingQty}
+            servingUom={header.servingUom}
+            currency={currency}
+            menuPrice={menuPriceText}
+            pricedOutlets={pricedOutlets}
+            outletId={activeOutlet}
+            baseline={baseline}
+            dirty={dirty}
+            onServingQty={commitServingQty}
+            onApplyScale={(scaled, qty) => {
+              setUndoStack((stack) => pushUndo(stack, snapshotOf(lines, header.servingQty)));
+              setLines(scaled);
+              setHeader((current) => ({ ...current, servingQty: qty }));
+            }}
+          />
         </div>
-      </section>
+      )}
+      <span className="sila-help">
+        Draft edits stay local until Save draft / Submit. Approved recipes create a new draft version on save.
+        Ingredient order is persisted as Sequence on save. Preparation notes and ingredient groups are not in the recipe data model.
+      </span>
+      </div>
+
+      <div className="rstudio-sticky-bar" role="toolbar" aria-label="Recipe Studio actions">
+        <button type="button" className="sila-btn sila-btn--ghost" onClick={undo} disabled={saving !== "" || undoStack.length === 0}>Undo</button>
+        <button type="button" className="sila-btn sila-btn--ghost" onClick={cancelChanges} disabled={saving !== "" || !dirty}>Cancel changes</button>
+        <button type="button" className="sila-btn sila-btn--secondary" onClick={onCancel} disabled={saving !== ""}>Close</button>
+        <button type="button" className="sila-btn sila-btn--secondary" onClick={() => handleSave(false)} disabled={saving !== ""}>
+          {saving === "draft" ? "Saving..." : "Save draft"}
+        </button>
+        <button
+          type="button"
+          className="sila-btn sila-btn--primary"
+          onClick={() => handleSave(true)}
+          disabled={saving !== "" || issues.length > 0}
+          title={issues.length > 0 ? "Fix the readiness issues first." : undefined}
+        >
+          {saving === "submit" ? "Submitting..." : recipe?.activeVersion ? "Submit POS / recipe change" : "Submit for approval"}
+        </button>
       </div>
 
       {priceMaterial && (
