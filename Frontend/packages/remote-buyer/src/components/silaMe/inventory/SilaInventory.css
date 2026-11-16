@@ -119,6 +119,12 @@
   min-height: 3.9em;
 }
 
+.sinv-mat-card__description--missing {
+  font-weight: 500;
+  color: var(--sila-danger, #b42318);
+  font-style: italic;
+}
+
 .sinv-mat-card__badges {
   display: flex;
   flex-wrap: wrap;

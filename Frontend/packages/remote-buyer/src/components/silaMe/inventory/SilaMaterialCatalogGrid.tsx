@@ -1,7 +1,7 @@
 import React from "react";
 import type { SilaMaterial } from "../../../api/silaMe/silaInventoryApi";
 import SilaPriceStatusBadge from "../materials/SilaPriceStatusBadge";
-import { codeLabel, formatPrice } from "../materials/materialFormat";
+import { codeLabel, displayDescription, formatPrice } from "../materials/materialFormat";
 
 interface SilaMaterialCatalogGridProps {
   materials: SilaMaterial[];
@@ -42,7 +42,9 @@ const SilaMaterialCatalogGrid: React.FC<SilaMaterialCatalogGridProps> = ({
             aria-label={`Open ${material.materialCode} detail`}
           >
             <span className="sinv-mat-card__code">{material.materialCode}</span>
-            <span className="sinv-mat-card__description">{material.description || "No description"}</span>
+            <span className={`sinv-mat-card__description${displayDescription(material.description, material.materialCode) ? "" : " sinv-mat-card__description--missing"}`}>
+              {displayDescription(material.description, material.materialCode) || "Missing description"}
+            </span>
             <span className="sinv-mat-card__badges">
               <span className={`sila-badge ${material.isInventoryItem ? "sila-badge--success" : "sila-badge--neutral"}`}>
                 {inventoryLabel}

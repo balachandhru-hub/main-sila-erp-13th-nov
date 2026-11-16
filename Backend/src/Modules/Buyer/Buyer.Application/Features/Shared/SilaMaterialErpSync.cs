@@ -82,8 +82,17 @@ namespace Buyer.Application.Features.Shared
             {
                 result.Read++;
                 string code = IntegrationRecordReader.Read(mappings, "Material.Code", record)?.Trim().ToUpperInvariant() ?? string.Empty;
-                string? description = Clean(IntegrationRecordReader.Read(mappings, "Material.Description", record), 500)
-                    ?? Clean(IntegrationRecordReader.ReadSapProductDescription(record), 500);
+                // Ignore mapped values that are just the material number (common bad Hub map of Description → Product).
+                string? description = Clean(IntegrationRecordReader.Read(mappings, "Material.Description", record), 500);
+                if (IsBlankOrMaterialCode(description, code))
+                {
+                    description = Clean(IntegrationRecordReader.ReadSapProductDescription(record), 500);
+                }
+
+                if (IsBlankOrMaterialCode(description, code))
+                {
+                    description = null;
+                }
                 string? baseUom = Clean(IntegrationRecordReader.Read(mappings, "Material.BaseUom", record), 20)?.ToUpperInvariant();
                 string? group = Clean(IntegrationRecordReader.Read(mappings, "Material.MaterialGroup", record), 100);
                 string? materialType = Clean(IntegrationRecordReader.Read(mappings, "Material.MaterialType", record), 100);
@@ -539,6 +548,12 @@ namespace Buyer.Application.Features.Shared
             }
         }
 
+        private static bool IsBlankOrMaterialCode(string? value, string materialCode)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return true;
+            return value.Trim().Equals(materialCode, StringComparison.OrdinalIgnoreCase);
+        }
+
         private static ItemBuyerMaster NewMaterial(
             Guid buyerId, string code, string? description, string baseUom, string? group, string? currency, string? materialType)
         {
@@ -547,7 +562,7 @@ namespace Buyer.Application.Features.Shared
                 Id = Guid.NewGuid(),
                 BuyerId = buyerId,
                 MaterialCode = code,
-                Description = description ?? code,
+                Description = description ?? string.Empty,
                 MaterialGroup = group ?? string.Empty,
                 ProductType = materialType ?? string.Empty,
                 BaseUnitOfMeasure = baseUom,
@@ -564,7 +579,10 @@ namespace Buyer.Application.Features.Shared
         private static bool Update(ItemBuyerMaster material, string? description, string? group, string? materialType)
         {
             bool changed = false;
-            if (description != null && description != material.Description)
+            // Replace blank / material-number placeholders when a real description arrives.
+            if (!string.IsNullOrWhiteSpace(description)
+                && !IsBlankOrMaterialCode(description, material.MaterialCode ?? string.Empty)
+                && description != material.Description)
             {
                 material.Description = description;
                 changed = true;

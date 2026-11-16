@@ -9,7 +9,7 @@ import SilaMaterialExcelPanel from "../materials/SilaMaterialExcelPanel";
 import SilaMaterialErpPullPanel from "../materials/SilaMaterialErpPullPanel";
 import SilaMaterialDetailPanel from "../materials/SilaMaterialDetailPanel";
 import SilaPriceStatusBadge from "../materials/SilaPriceStatusBadge";
-import { codeLabel, formatPrice, priceStatusLabel } from "../materials/materialFormat";
+import { codeLabel, displayDescription, formatPrice, priceStatusLabel } from "../materials/materialFormat";
 import "../silaMeTheme.css";
 import "./SilaInventory.css";
 
@@ -273,13 +273,16 @@ const SilaMaterialInventory: React.FC<SilaMaterialInventoryProps> = ({ canManage
                 {materials.map((material) => {
                   const plantsList = material.plantCodes ?? [];
                   const valuationPlant = plantCode || (plantsList.length === 1 ? plantsList[0] : null);
+                  const description = displayDescription(material.description, material.materialCode);
                   return (
                     <tr key={material.id}>
                       <td>
                         <span className="sila-cell-strong">{material.materialCode}</span>
                       </td>
                       <td>
-                        <span className="sila-cell-strong">{material.description || "—"}</span>
+                        {description
+                          ? <span className="sila-cell-strong">{description}</span>
+                          : <span className="sila-me-flag sila-me-flag--bad">Missing description</span>}
                       </td>
                       <td>
                         {plantsList.length === 0
