@@ -3,6 +3,7 @@ import { EmptyState, Loader, PageHeader } from "@vosox/shared-ui";
 import { getProperties, type Property } from "../../../api/propertyApi";
 import { getMaterialsPage, SILA_PRICE_STATUSES, type SilaMaterial } from "../../../api/silaMe/silaInventoryApi";
 import SilaMaterialDialog from "./SilaMaterialDialog";
+import SilaMaterialCatalogGrid from "./SilaMaterialCatalogGrid";
 import SilaMaterialPricePanel from "../materials/SilaMaterialPricePanel";
 import SilaMaterialExcelPanel from "../materials/SilaMaterialExcelPanel";
 import SilaMaterialErpPullPanel from "../materials/SilaMaterialErpPullPanel";
@@ -19,7 +20,26 @@ interface SilaMaterialInventoryProps {
   canManageMasterData?: boolean;
 }
 
+type InventoryViewMode = "catalog" | "list";
+
 const PAGE_SIZE = 25;
+const VIEW_PREF_KEY = "sila.itemMaster.viewMode";
+
+const loadViewMode = (): InventoryViewMode => {
+  try {
+    return localStorage.getItem(VIEW_PREF_KEY) === "list" ? "list" : "catalog";
+  } catch {
+    return "catalog";
+  }
+};
+
+const saveViewMode = (mode: InventoryViewMode) => {
+  try {
+    localStorage.setItem(VIEW_PREF_KEY, mode);
+  } catch {
+    /* ignore */
+  }
+};
 
 const plantOptions = (properties: Property[]): { code: string; label: string }[] => {
   const byCode = new Map<string, string>();
@@ -33,13 +53,14 @@ const plantOptions = (properties: Property[]): { code: string; label: string }[]
     .map(([code, name]) => ({ code, label: name === code ? code : `${code} · ${name}` }));
 };
 
-/** Item Master materials with their inventory fields, approved price and price status, and UOM conversions. */
+/** Item Master materials with catalog (grid) and list views. */
 const SilaMaterialInventory: React.FC<SilaMaterialInventoryProps> = ({ canManage, canManageMasterData = false }) => {
   const [search, setSearch] = useState("");
   const [inventoryOnly, setInventoryOnly] = useState(false);
   const [priceStatus, setPriceStatus] = useState("");
   const [plantCode, setPlantCode] = useState("");
   const [properties, setProperties] = useState<Property[]>([]);
+  const [viewMode, setViewMode] = useState<InventoryViewMode>(() => loadViewMode());
   const [pricing, setPricing] = useState<SilaMaterial | null>(null);
   const [page, setPage] = useState(0);
   const [materials, setMaterials] = useState<SilaMaterial[]>([]);
@@ -65,7 +86,6 @@ const SilaMaterialInventory: React.FC<SilaMaterialInventoryProps> = ({ canManage
 
   const plants = useMemo(() => plantOptions(properties), [properties]);
 
-  // Searches on the server, shortly after the user stops typing.
   useEffect(() => {
     let active = true;
     setLoading(true);
@@ -86,6 +106,11 @@ const SilaMaterialInventory: React.FC<SilaMaterialInventoryProps> = ({ canManage
     };
   }, [search, inventoryOnly, priceStatus, plantCode, page, reloadKey]);
 
+  const setMode = useCallback((mode: InventoryViewMode) => {
+    setViewMode(mode);
+    saveViewMode(mode);
+  }, []);
+
   const reload = useCallback(() => setReloadKey((key) => key + 1), []);
   const closeDialog = useCallback(() => setEditing(null), []);
   const afterSave = useCallback(() => {
@@ -103,19 +128,39 @@ const SilaMaterialInventory: React.FC<SilaMaterialInventoryProps> = ({ canManage
       <PageHeader
         className="pud-page-header"
         title="Material Master"
-        description="Item Master materials with their inventory controls, plant valuation, approved unit price and UOM conversions. Price changes go through approval."
+        description="Item Master materials with their inventory controls, plant valuation, approved unit price and UOM conversions. Browse as a catalog grid or dense list."
       />
 
       <section className="sila-card">
         <div className="sila-card-header">
           <h2 className="sila-card-title">Item Master inventory</h2>
-          <SilaMaterialExcelPanel
-            canImport={canManageMasterData}
-            search={search}
-            priceStatus={priceStatus}
-            inventoryOnly={inventoryOnly}
-            onImported={reload}
-          />
+          <div className="sinv-header-actions">
+            <div className="sinv-view-toggle" role="group" aria-label="Item Master view">
+              <button
+                type="button"
+                className={`sila-btn sila-btn--sm ${viewMode === "catalog" ? "sila-btn--primary" : "sila-btn--secondary"}`}
+                aria-pressed={viewMode === "catalog"}
+                onClick={() => setMode("catalog")}
+              >
+                Catalog
+              </button>
+              <button
+                type="button"
+                className={`sila-btn sila-btn--sm ${viewMode === "list" ? "sila-btn--primary" : "sila-btn--secondary"}`}
+                aria-pressed={viewMode === "list"}
+                onClick={() => setMode("list")}
+              >
+                List
+              </button>
+            </div>
+            <SilaMaterialExcelPanel
+              canImport={canManageMasterData}
+              search={search}
+              priceStatus={priceStatus}
+              inventoryOnly={inventoryOnly}
+              onImported={reload}
+            />
+          </div>
         </div>
         <div className="sinv-filters">
           <div className="sila-field sinv-grow">
@@ -192,6 +237,18 @@ const SilaMaterialInventory: React.FC<SilaMaterialInventoryProps> = ({ canManage
           />
         ) : materials.length === 0 ? (
           <EmptyState title={page > 0 ? "No more materials" : "No materials found"} />
+        ) : viewMode === "catalog" ? (
+          <div className="sinv-catalog-wrap">
+            <SilaMaterialCatalogGrid
+              materials={materials}
+              plantCode={plantCode}
+              canManage={canManage}
+              canManageMasterData={canManageMasterData}
+              onDetail={setDetailId}
+              onPrice={setPricing}
+              onEdit={setEditing}
+            />
+          </div>
         ) : (
           <div className="sila-table-wrap">
             <table className="sila-table">
