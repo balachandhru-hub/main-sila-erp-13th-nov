@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { EmptyState, Loader, Pagination } from "@vosox/shared-ui";
-import { getRecipe, getRecipes, type SilaRecipeDetail, type SilaRecipeListItem } from "../../../api/silaMe/silaRecipeApi";
+import { EmptyState, Loader, Modal, Pagination, toastService } from "@vosox/shared-ui";
+import { deactivateRecipe, getRecipe, getRecipes, type SilaRecipeDetail, type SilaRecipeListItem } from "../../../api/silaMe/silaRecipeApi";
 import {
   confirmRecipeImport,
   downloadRecipeTemplate,
@@ -53,6 +53,8 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({ canManage, canRequestPrice = 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<StudioViewMode>(() => loadStudioViewMode());
+  const [deleteTarget, setDeleteTarget] = useState<SilaRecipeListItem | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -119,6 +121,21 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({ canManage, canRequestPrice = 
     saveStudioViewMode(mode);
   };
 
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await deactivateRecipe(deleteTarget.id);
+      toastService.success(`Deleted ${deleteTarget.recipeCode}.`);
+      setDeleteTarget(null);
+      await load();
+    } catch (err: unknown) {
+      toastService.error(err instanceof Error ? err.message : "Could not delete the recipe.");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   if (view.kind === "edit") {
     return (
       <SilaRecipeEditor
@@ -128,6 +145,10 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({ canManage, canRequestPrice = 
         onSaved={(recipeId) => {
           load();
           setView({ kind: "detail", recipeId });
+        }}
+        onDeleted={() => {
+          load();
+          setView({ kind: "list" });
         }}
       />
     );
@@ -289,10 +310,15 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({ canManage, canRequestPrice = 
               canManage={canManage}
               onOpen={(recipeId) => setView({ kind: "detail", recipeId })}
               onEdit={canManage ? openEdit : undefined}
+              onDelete={canManage ? setDeleteTarget : undefined}
             />
           ) : (
             <section className="sila-card">
-              <SilaRecipeTable rows={rows} onOpen={(recipeId) => setView({ kind: "detail", recipeId })} />
+              <SilaRecipeTable
+                rows={rows}
+                onOpen={(recipeId) => setView({ kind: "detail", recipeId })}
+                onDelete={canManage ? setDeleteTarget : undefined}
+              />
             </section>
           )}
           <Pagination
@@ -304,6 +330,26 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({ canManage, canRequestPrice = 
           />
         </>
       )}
+
+      <Modal
+        isOpen={Boolean(deleteTarget)}
+        onClose={() => setDeleteTarget(null)}
+        variant="danger"
+        headerProps={{ heading: `Delete ${deleteTarget?.recipeCode || "recipe"}` }}
+        footerProps={{
+          secondaryButton: { text: "Cancel", onClick: () => setDeleteTarget(null), disabled: deleting },
+          primaryButton: {
+            text: "Delete",
+            loading: deleting,
+            onClick: confirmDelete,
+          },
+        }}
+      >
+        <p className="sila-modal-text">
+          Delete {deleteTarget?.name}? This deactivates the recipe
+          {deleteTarget?.posCode ? ` and stops POS matching for ${deleteTarget.posCode}` : ""}.
+        </p>
+      </Modal>
     </div>
   );
 };

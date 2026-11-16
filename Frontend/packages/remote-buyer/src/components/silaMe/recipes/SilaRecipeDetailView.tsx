@@ -67,6 +67,10 @@ const SilaRecipeDetailView: React.FC<SilaRecipeDetailViewProps> = ({ recipeId, c
       setComment("");
       setConfirmDeactivate(false);
       onChanged();
+      if (kind === "deactivate") {
+        onBack();
+        return;
+      }
       if (version !== undefined) {
         setVersion(undefined);
       } else {
@@ -165,7 +169,7 @@ const SilaRecipeDetailView: React.FC<SilaRecipeDetailViewProps> = ({ recipeId, c
             )}
             {deactivatable && (
               <button type="button" className="sila-btn sila-btn--danger" onClick={() => setConfirmDeactivate(true)} disabled={busy !== null}>
-                Deactivate
+                Delete
               </button>
             )}
           </div>
@@ -304,17 +308,19 @@ const SilaRecipeDetailView: React.FC<SilaRecipeDetailViewProps> = ({ recipeId, c
         isOpen={confirmDeactivate}
         onClose={() => setConfirmDeactivate(false)}
         variant="danger"
-        headerProps={{ heading: `Deactivate ${recipe.recipeCode}` }}
+        headerProps={{ heading: `Delete ${recipe.recipeCode}` }}
         footerProps={{
           secondaryButton: { text: "Cancel", onClick: () => setConfirmDeactivate(false), disabled: busy !== null },
           primaryButton: {
-            text: "Deactivate",
+            text: "Delete",
             loading: busy === "deactivate",
-            onClick: () => run("deactivate", () => deactivateRecipe(recipe.id), "Recipe deactivated."),
+            onClick: () => run("deactivate", () => deactivateRecipe(recipe.id), "Recipe deleted (deactivated)."),
           },
         }}
       >
-        <p className="sila-modal-text">POS sales with POS code {recipe.posCode || "—"} will no longer be matched to this recipe.</p>
+        <p className="sila-modal-text">
+          This deletes (deactivates) the recipe. POS sales with POS ID {recipe.posCode || "—"} will no longer be matched to it.
+        </p>
       </Modal>
     </div>
   );

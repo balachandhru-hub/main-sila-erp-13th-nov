@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { EmptyState, Loader, toastService } from "@vosox/shared-ui";
+import { EmptyState, Loader, Modal, toastService } from "@vosox/shared-ui";
 import { getLocations, type SilaLocation, type SilaMaterial } from "../../../api/silaMe/silaInventoryApi";
 import {
   createRecipe,
+  deactivateRecipe,
   getRecipeUoms,
   getRecipes,
   submitRecipe,
@@ -18,6 +19,7 @@ import {
   type SilaRecipeMaster,
 } from "../../../api/silaMe/silaRecipeToolsApi";
 import { getMenuEngineering, saveMenuEngineering, type MenuItemDetail } from "../../../api/silaMe/silaMenuEngineeringApi";
+import { getItemMappings, getPosSources } from "../../../api/silaMe/silaPosMasterApi";
 import SilaMaterialPricePanel from "../materials/SilaMaterialPricePanel";
 import {
   editorIssues,
@@ -46,7 +48,7 @@ import SilaRecipeCanvas from "./SilaRecipeCanvas";
 import SilaRecipeMaterialLibrary from "./SilaRecipeMaterialLibrary";
 import SilaRecipeReadinessPanel from "./SilaRecipeReadinessPanel";
 import SilaRecipeReplacePanel from "./SilaRecipeReplacePanel";
-import SilaRecipeSmartSummary from "./SilaRecipeSmartSummary";
+import SilaRecipeSmartSummary, { type PosIdOption } from "./SilaRecipeSmartSummary";
 import {
   loadTargetFoodCostPercent,
   recommendMaterials,
@@ -69,6 +71,8 @@ interface SilaRecipeEditorProps {
   canRequestPrice?: boolean;
   onCancel: () => void;
   onSaved: (recipeId: string) => void;
+  /** Called after soft-delete (deactivate) so the catalog can refresh. */
+  onDeleted?: () => void;
 }
 
 type Saving = "" | "draft" | "submit";
@@ -86,7 +90,7 @@ const asPanelMaterial = (material: IngredientMaterial): SilaMaterial => ({
 });
 
 /** Ingredient-first Recipe Studio: My Recipe (left) + Recommended Material Catalog (right). */
-const SilaRecipeEditor: React.FC<SilaRecipeEditorProps> = ({ recipe, canRequestPrice = false, onCancel, onSaved }) => {
+const SilaRecipeEditor: React.FC<SilaRecipeEditorProps> = ({ recipe, canRequestPrice = false, onCancel, onSaved, onDeleted }) => {
   const [header, setHeader] = useState<HeaderValues>(() => headerFrom(recipe));
   const [lines, setLines] = useState<IngredientLine[]>([]);
   const [prices, setPrices] = useState<Record<string, string>>(() =>
@@ -110,6 +114,10 @@ const SilaRecipeEditor: React.FC<SilaRecipeEditorProps> = ({ recipe, canRequestP
   const [menuPool, setMenuPool] = useState<MenuItemDetail[]>([]);
   const [linkedMenuItem, setLinkedMenuItem] = useState<MenuItemDetail | null>(null);
   const [linkingMenu, setLinkingMenu] = useState(false);
+  const [updatingMenuPrice, setUpdatingMenuPrice] = useState(false);
+  const [posOptions, setPosOptions] = useState<PosIdOption[]>([]);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [undoStack, setUndoStack] = useState<BuilderSnapshot[]>([]);
   const [baseline, setBaseline] = useState<BuilderSnapshot>(() => snapshotOf([], headerFrom(recipe).servingQty));
   const [replaceKey, setReplaceKey] = useState<string | null>(null);
@@ -152,6 +160,39 @@ const SilaRecipeEditor: React.FC<SilaRecipeEditorProps> = ({ recipe, canRequestP
         setUoms(loadedUoms);
         setCatalogPool(browse.items);
         setMenuPool(menus?.items?.items ?? []);
+
+        // POS ID options from POS item mappings (best-effort; free-text still works).
+        try {
+          const sources = await getPosSources();
+          const pages = await Promise.all(
+            sources.slice(0, 8).map((source) => getItemMappings(source.id, "", 0, 100).catch(() => null)),
+          );
+          if (!active) return;
+          const map = new Map<string, PosIdOption>();
+          for (const page of pages) {
+            for (const row of page?.items ?? []) {
+              const code = row.posItemCode?.trim();
+              if (!code || map.has(code)) continue;
+              map.set(code, {
+                code,
+                label: row.posItemDescription?.trim()
+                  ? `${code} · ${row.posItemDescription.trim()}`
+                  : code,
+              });
+            }
+          }
+          for (const row of approved.items) {
+            const code = row.posCode?.trim();
+            if (!code || map.has(code)) continue;
+            map.set(code, {
+              code,
+              label: row.posItem?.trim() ? `${code} · ${row.posItem.trim()}` : code,
+            });
+          }
+          setPosOptions(Array.from(map.values()).sort((a, b) => a.code.localeCompare(b.code)));
+        } catch {
+          if (active) setPosOptions([]);
+        }
       } catch (err: unknown) {
         if (active) setLoadError(err instanceof Error ? err.message : "Could not load the recipe editor.");
       } finally {
@@ -200,7 +241,7 @@ const SilaRecipeEditor: React.FC<SilaRecipeEditorProps> = ({ recipe, canRequestP
       await saveMenuEngineering({ action: "LINK_RECIPE", menuItemId, recipeId: recipe.id });
       const envelope = await getMenuEngineering("item", { menuItemId });
       setLinkedMenuItem(envelope.item ?? null);
-      toastService.success("Menu item linked. Selling price stays on the menu item.");
+      toastService.success("Menu item linked. Selling price stays on the menu item until you update it.");
     } catch (err: unknown) {
       toastService.error(err instanceof Error ? err.message : "Could not link the menu item.");
     } finally {
@@ -230,6 +271,67 @@ const SilaRecipeEditor: React.FC<SilaRecipeEditorProps> = ({ recipe, canRequestP
     () => suggestSellingPrice(totalCost, toNumber(header.servingQty), targetFoodCostPercent, costs),
     [totalCost, header.servingQty, targetFoodCostPercent, costs],
   );
+
+  const addOutletById = (outletId: string) => {
+    const outlet = outlets.find((row) => row.id === outletId);
+    if (!outlet) return;
+    setPrices((current) => {
+      if (Object.prototype.hasOwnProperty.call(current, outlet.id)) return current;
+      return {
+        ...current,
+        [outlet.id]: draftMenuPrice.trim() || (pricing.suggestedSellingPrice != null ? String(pricing.suggestedSellingPrice) : ""),
+      };
+    });
+  };
+
+  const updateMenuItemPrice = async () => {
+    if (!linkedMenuItem?.id) {
+      toastService.error("Link a Menu Item before updating its selling price.");
+      return;
+    }
+    const amount = Number(menuPriceText);
+    if (!Number.isFinite(amount) || amount < 0) {
+      toastService.error("Enter a valid menu price to update the Menu Item.");
+      return;
+    }
+    setUpdatingMenuPrice(true);
+    try {
+      await saveMenuEngineering({
+        action: "UPSERT_ITEM",
+        item: {
+          ...linkedMenuItem,
+          id: linkedMenuItem.id,
+          sellingPrice: amount,
+          currency: header.currency.trim() || linkedMenuItem.currency || undefined,
+          outletLocationId: menuOutletId || linkedMenuItem.outletLocationId || undefined,
+          linkedRecipeId: recipe?.id ?? linkedMenuItem.linkedRecipeId,
+        },
+      });
+      const envelope = await getMenuEngineering("item", { menuItemId: linkedMenuItem.id });
+      setLinkedMenuItem(envelope.item ?? { ...linkedMenuItem, sellingPrice: amount });
+      toastService.success(`Menu Item selling price updated to ${formatCost(amount, currency)}.`);
+    } catch (err: unknown) {
+      toastService.error(err instanceof Error ? err.message : "Could not update the Menu Item price.");
+    } finally {
+      setUpdatingMenuPrice(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!recipe?.id) return;
+    setDeleting(true);
+    try {
+      await deactivateRecipe(recipe.id);
+      toastService.success("Recipe deleted (deactivated).");
+      setConfirmDelete(false);
+      onDeleted?.();
+      onCancel();
+    } catch (err: unknown) {
+      toastService.error(err instanceof Error ? err.message : "Could not delete the recipe.");
+    } finally {
+      setDeleting(false);
+    }
+  };
   const materialRecs = useMemo(
     () => recommendMaterials(lines, approvedRecipes, catalogPool, 24),
     [lines, approvedRecipes, catalogPool],
@@ -576,6 +678,8 @@ const SilaRecipeEditor: React.FC<SilaRecipeEditorProps> = ({ recipe, canRequestP
               menuRecommendations={menuRecommendations}
               canLinkMenu={Boolean(recipe?.id)}
               linkingMenu={linkingMenu}
+              updatingMenuPrice={updatingMenuPrice}
+              posOptions={posOptions}
               outlets={outlets}
               outletRecommendations={outletRecommendations}
               prices={prices}
@@ -590,6 +694,7 @@ const SilaRecipeEditor: React.FC<SilaRecipeEditorProps> = ({ recipe, canRequestP
               onMenuSearch={setMenuSearch}
               onSearchMenuItems={searchMenuItems}
               onLinkMenuItem={linkMenuItem}
+              onUpdateMenuItemPrice={updateMenuItemPrice}
               onMenuPrice={(value) => {
                 if (menuOutletId) setPrices((current) => ({ ...current, [menuOutletId]: value }));
                 else setDraftMenuPrice(value);
@@ -600,6 +705,7 @@ const SilaRecipeEditor: React.FC<SilaRecipeEditorProps> = ({ recipe, canRequestP
                 delete next[id];
                 return next;
               })}
+              onAddOutlet={addOutletById}
               onToggleOutlet={(outlet) => setPrices((current) => {
                 if (Object.prototype.hasOwnProperty.call(current, outlet.id)) {
                   const next = { ...current };
@@ -659,22 +765,51 @@ const SilaRecipeEditor: React.FC<SilaRecipeEditorProps> = ({ recipe, canRequestP
       </span>
 
       <div className="rstudio-sticky-bar" role="toolbar" aria-label="Recipe Studio actions">
-        <button type="button" className="sila-btn sila-btn--ghost" onClick={undo} disabled={saving !== "" || undoStack.length === 0}>Undo</button>
-        <button type="button" className="sila-btn sila-btn--ghost" onClick={cancelChanges} disabled={saving !== "" || !dirty}>Cancel changes</button>
-        <button type="button" className="sila-btn sila-btn--secondary" onClick={onCancel} disabled={saving !== ""}>Close</button>
-        <button type="button" className="sila-btn sila-btn--secondary" onClick={() => openReview(false)} disabled={saving !== ""}>
+        <button type="button" className="sila-btn sila-btn--ghost" onClick={undo} disabled={saving !== "" || deleting || undoStack.length === 0}>Undo</button>
+        <button type="button" className="sila-btn sila-btn--ghost" onClick={cancelChanges} disabled={saving !== "" || deleting || !dirty}>Cancel changes</button>
+        <button type="button" className="sila-btn sila-btn--secondary" onClick={onCancel} disabled={saving !== "" || deleting}>Close</button>
+        {recipe?.id && recipe.status !== "INACTIVE" && (
+          <button
+            type="button"
+            className="sila-btn sila-btn--danger"
+            onClick={() => setConfirmDelete(true)}
+            disabled={saving !== "" || deleting}
+          >
+            Delete recipe
+          </button>
+        )}
+        <button type="button" className="sila-btn sila-btn--secondary" onClick={() => openReview(false)} disabled={saving !== "" || deleting}>
           {saving === "draft" ? "Saving..." : "Save draft"}
         </button>
         <button
           type="button"
           className="sila-btn sila-btn--primary"
           onClick={() => openReview(true)}
-          disabled={saving !== ""}
+          disabled={saving !== "" || deleting}
           title={issues.length > 0 ? "Review readiness before submit." : undefined}
         >
           {saving === "submit" ? "Submitting..." : recipe?.activeVersion ? "Submit POS / recipe change" : "Submit for approval"}
         </button>
       </div>
+
+      <Modal
+        isOpen={confirmDelete}
+        onClose={() => setConfirmDelete(false)}
+        variant="danger"
+        headerProps={{ heading: `Delete ${recipe?.recipeCode || "recipe"}` }}
+        footerProps={{
+          secondaryButton: { text: "Cancel", onClick: () => setConfirmDelete(false), disabled: deleting },
+          primaryButton: {
+            text: "Delete",
+            loading: deleting,
+            onClick: handleDelete,
+          },
+        }}
+      >
+        <p className="sila-modal-text">
+          This deactivates the recipe. POS sales with POS ID {header.posCode.trim() || "—"} will no longer match it.
+        </p>
+      </Modal>
 
       {reviewOpen && (
         <div className="rstudio-review" role="dialog" aria-modal="true" aria-label="Save review">

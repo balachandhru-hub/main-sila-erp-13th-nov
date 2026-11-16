@@ -7,6 +7,11 @@ import type { HeaderValues } from "./recipeEditorModel";
 import { formatCost } from "./recipeFormat";
 import type { ClassificationSuggestion, NameSuggestion, PricingSuggestion } from "./recipeStudioSuggestions";
 
+export interface PosIdOption {
+  code: string;
+  label: string;
+}
+
 interface SilaRecipeSmartSummaryProps {
   header: HeaderValues;
   families: SilaRecipeMaster[];
@@ -28,6 +33,8 @@ interface SilaRecipeSmartSummaryProps {
   menuRecommendations: MenuItemDetail[];
   canLinkMenu: boolean;
   linkingMenu: boolean;
+  updatingMenuPrice: boolean;
+  posOptions: PosIdOption[];
   outlets: SilaLocation[];
   outletRecommendations: SilaLocation[];
   prices: Record<string, string>;
@@ -38,10 +45,12 @@ interface SilaRecipeSmartSummaryProps {
   onMenuSearch: (value: string) => void;
   onSearchMenuItems: () => void;
   onLinkMenuItem: (id: string) => void;
+  onUpdateMenuItemPrice: () => void;
   onMenuPrice: (value: string) => void;
   onOutletPrice: (outletId: string, value: string) => void;
   onRemoveOutlet: (outletId: string) => void;
   onToggleOutlet: (outlet: SilaLocation) => void;
+  onAddOutlet: (outletId: string) => void;
 }
 
 /** Expandable smart summary: suggestions, classification, menu/outlet, pricing — not a mandatory header form. */
@@ -66,6 +75,8 @@ const SilaRecipeSmartSummary: React.FC<SilaRecipeSmartSummaryProps> = ({
   menuRecommendations,
   canLinkMenu,
   linkingMenu,
+  updatingMenuPrice,
+  posOptions,
   outlets,
   outletRecommendations,
   prices,
@@ -76,12 +87,17 @@ const SilaRecipeSmartSummary: React.FC<SilaRecipeSmartSummaryProps> = ({
   onMenuSearch,
   onSearchMenuItems,
   onLinkMenuItem,
+  onUpdateMenuItemPrice,
   onMenuPrice,
   onOutletPrice,
   onRemoveOutlet,
   onToggleOutlet,
+  onAddOutlet,
 }) => {
   const [open, setOpen] = useState(true);
+  const [outletPick, setOutletPick] = useState("");
+  const assignedIds = Object.keys(prices);
+  const availableOutlets = outlets.filter((outlet) => !Object.prototype.hasOwnProperty.call(prices, outlet.id));
 
   return (
     <section className="srec-builder-panel rstudio-smart" aria-label="Smart Recipe Summary">
@@ -171,6 +187,57 @@ const SilaRecipeSmartSummary: React.FC<SilaRecipeSmartSummaryProps> = ({
                   {uoms.map((unit) => <option key={unit} value={unit} />)}
                 </datalist>
               </div>
+              <div className="sila-field">
+                <label className="sila-label" htmlFor="rstudio-pos-pick">POS ID</label>
+                <select
+                  id="rstudio-pos-pick"
+                  className="sila-select"
+                  value={posOptions.some((row) => row.code === header.posCode) ? header.posCode : ""}
+                  onChange={(e) => {
+                    const code = e.target.value;
+                    if (!code) {
+                      onHeaderChange({ posCode: "", posItem: "" });
+                      return;
+                    }
+                    const match = posOptions.find((row) => row.code === code);
+                    onHeaderChange({
+                      posCode: code,
+                      posItem: match?.label && match.label !== code ? match.label : header.posItem,
+                    });
+                  }}
+                >
+                  <option value="">Choose POS ID / enter below</option>
+                  {posOptions.map((row) => (
+                    <option key={row.code} value={row.code}>{row.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="sila-field">
+                <label className="sila-label" htmlFor="rstudio-pos-code">POS ID (manual)</label>
+                <input
+                  id="rstudio-pos-code"
+                  className="sila-input"
+                  maxLength={50}
+                  list="rstudio-pos-list"
+                  value={header.posCode}
+                  placeholder="POS item code"
+                  onChange={(e) => onHeaderChange({ posCode: e.target.value })}
+                />
+                <datalist id="rstudio-pos-list">
+                  {posOptions.map((row) => <option key={row.code} value={row.code}>{row.label}</option>)}
+                </datalist>
+              </div>
+              <div className="sila-field">
+                <label className="sila-label" htmlFor="rstudio-pos-item">POS item name</label>
+                <input
+                  id="rstudio-pos-item"
+                  className="sila-input"
+                  maxLength={200}
+                  value={header.posItem}
+                  placeholder="Optional POS description"
+                  onChange={(e) => onHeaderChange({ posItem: e.target.value })}
+                />
+              </div>
             </div>
             {nameSuggestions.length > 0 && !nameConfirmed && (
               <div className="rstudio-suggest-row">
@@ -230,10 +297,23 @@ const SilaRecipeSmartSummary: React.FC<SilaRecipeSmartSummaryProps> = ({
               </div>
               <div>
                 <span className="sila-help">Menu price {menuOutlet ? `(${menuOutlet})` : "(draft)"}</span>
-                <input className="sila-input" value={menuPrice} onChange={(e) => onMenuPrice(e.target.value)} placeholder="Not published automatically" />
+                <input className="sila-input" value={menuPrice} onChange={(e) => onMenuPrice(e.target.value)} placeholder="Enter menu price" />
               </div>
             </div>
-            <p className="sila-help">Suggested selling price is advisory. Menu Item price is not changed until you confirm with permission.</p>
+            <div className="rstudio-suggest-row">
+              <button
+                type="button"
+                className="sila-btn sila-btn--secondary sila-btn--sm"
+                disabled={!linkedMenuItem?.id || !menuPrice.trim() || updatingMenuPrice || linkingMenu}
+                onClick={onUpdateMenuItemPrice}
+                title={linkedMenuItem ? "Push this menu price to the linked Menu Item selling price" : "Link a Menu Item first"}
+              >
+                {updatingMenuPrice ? "Updating menu price..." : "Update Menu Item price"}
+              </button>
+              <span className="sila-help">
+                Outlet menu prices save with the recipe. Use Update Menu Item price to sync the commercial selling price.
+              </span>
+            </div>
           </div>
 
           <div className="rstudio-smart-block">
@@ -253,11 +333,11 @@ const SilaRecipeSmartSummary: React.FC<SilaRecipeSmartSummaryProps> = ({
                 <span className="sila-help">Recommended Menu Items</span>
                 {menuRecommendations.map((item) => (
                   <button
-                    key={item.id}
+                    key={item.id ?? item.menuItemCode}
                     type="button"
                     className="rstudio-chip"
-                    disabled={!canLinkMenu || linkingMenu}
-                    onClick={() => onLinkMenuItem(item.id)}
+                    disabled={!canLinkMenu || linkingMenu || !item.id}
+                    onClick={() => item.id && onLinkMenuItem(item.id)}
                   >
                     {item.name}
                   </button>
@@ -283,12 +363,17 @@ const SilaRecipeSmartSummary: React.FC<SilaRecipeSmartSummaryProps> = ({
             ) : (
               <ul className="srec-stack">
                 {menuMatches.map((row) => (
-                  <li key={row.id} className="srec-filters srec-filters--flush">
+                  <li key={row.id ?? row.menuItemCode} className="srec-filters srec-filters--flush">
                     <span>
                       <strong>{row.name}</strong>
                       <span className="sila-help"> {row.menuItemCode} · {row.recipeLinkStatus}</span>
                     </span>
-                    <button type="button" className="sila-btn sila-btn--primary sila-btn--sm" disabled={!canLinkMenu || linkingMenu} onClick={() => onLinkMenuItem(row.id)}>
+                    <button
+                      type="button"
+                      className="sila-btn sila-btn--primary sila-btn--sm"
+                      disabled={!canLinkMenu || linkingMenu || !row.id}
+                      onClick={() => row.id && onLinkMenuItem(row.id)}
+                    >
                       Link
                     </button>
                   </li>
@@ -298,36 +383,82 @@ const SilaRecipeSmartSummary: React.FC<SilaRecipeSmartSummaryProps> = ({
           </div>
 
           <div className="rstudio-smart-block">
-            <h3 className="srec-builder-panel__subtitle">Outlet recommendations</h3>
-            <p className="sila-help">Select authorized outlets. Assignments stay draft until Save.</p>
-            <div className="rstudio-suggest-row">
-              {outletRecommendations.map((outlet) => {
-                const assigned = Object.prototype.hasOwnProperty.call(prices, outlet.id);
-                return (
-                  <button
-                    key={outlet.id}
-                    type="button"
-                    className={`rstudio-chip${assigned ? " is-active" : ""}`}
-                    onClick={() => onToggleOutlet(outlet)}
-                  >
-                    {outlet.locationName}
-                  </button>
-                );
-              })}
+            <h3 className="srec-builder-panel__subtitle">Outlets &amp; menu prices</h3>
+            <p className="sila-help">Choose outlets from the dropdown (multi-select by adding one at a time). Set or update each outlet menu price, then Save.</p>
+            <div className="srec-filters srec-filters--flush">
+              <div className="sila-field srec-grow">
+                <label className="sila-label" htmlFor="rstudio-outlet-select">Add outlet</label>
+                <select
+                  id="rstudio-outlet-select"
+                  className="sila-select"
+                  value={outletPick}
+                  onChange={(e) => setOutletPick(e.target.value)}
+                  disabled={availableOutlets.length === 0}
+                >
+                  <option value="">
+                    {availableOutlets.length === 0
+                      ? (outlets.length === 0 ? "No outlet locations configured" : "All outlets already selected")
+                      : "Select an outlet…"}
+                  </option>
+                  {availableOutlets.map((outlet) => (
+                    <option key={outlet.id} value={outlet.id}>
+                      {outlet.locationName}
+                      {outlet.locationCode ? ` (${outlet.locationCode})` : ""}
+                      {outlet.propertyName ? ` · ${outlet.propertyName}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button
+                type="button"
+                className="sila-btn sila-btn--secondary"
+                disabled={!outletPick}
+                onClick={() => {
+                  if (!outletPick) return;
+                  onAddOutlet(outletPick);
+                  setOutletPick("");
+                }}
+              >
+                Add outlet
+              </button>
             </div>
-            {Object.keys(prices).length > 0 && (
+            {outletRecommendations.length > 0 && (
+              <div className="rstudio-suggest-row">
+                <span className="sila-help">Suggested</span>
+                {outletRecommendations.map((outlet) => {
+                  const assigned = Object.prototype.hasOwnProperty.call(prices, outlet.id);
+                  return (
+                    <button
+                      key={outlet.id}
+                      type="button"
+                      className={`rstudio-chip${assigned ? " is-active" : ""}`}
+                      onClick={() => onToggleOutlet(outlet)}
+                    >
+                      {outlet.locationName}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {assignedIds.length === 0 ? (
+              <EmptyState title="No outlets selected" description="Pick outlets from the dropdown to set menu prices." />
+            ) : (
               <div className="sila-form-grid">
-                {Object.keys(prices).map((id) => {
+                {assignedIds.map((id) => {
                   const outlet = outlets.find((row) => row.id === id);
                   return (
                     <div key={id} className="sila-field">
-                      <label className="sila-label" htmlFor={`rstudio-outlet-${id}`}>{outlet?.locationName ?? id}</label>
+                      <label className="sila-label" htmlFor={`rstudio-outlet-${id}`}>
+                        {outlet?.locationName ?? id}
+                        {outlet?.locationCode ? ` · ${outlet.locationCode}` : ""}
+                      </label>
                       <div className="srec-filters srec-filters--flush">
                         <input
                           id={`rstudio-outlet-${id}`}
                           className="sila-input"
                           value={prices[id]}
                           placeholder="Menu price"
+                          inputMode="decimal"
                           onChange={(e) => onOutletPrice(id, e.target.value)}
                         />
                         <button type="button" className="sila-btn sila-btn--ghost sila-btn--sm" onClick={() => onRemoveOutlet(id)}>Remove</button>
