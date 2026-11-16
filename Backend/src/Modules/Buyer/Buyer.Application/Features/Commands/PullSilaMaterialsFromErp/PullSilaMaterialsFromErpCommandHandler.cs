@@ -186,8 +186,9 @@ namespace Buyer.Application.Features.Commands.PullSilaMaterialsFromErp
                     configuration.ResourcePath = originalPath;
                 }
 
+                // Exact SAP Product IDs (leading zeros preserved) for A_ProductDescription filter.
                 List<string> productCodes = records
-                    .Select(record => IntegrationRecordReader.Read(mappings, "Material.Code", record)?.Trim().ToUpperInvariant())
+                    .Select(record => IntegrationRecordReader.Read(mappings, "Material.Code", record)?.Trim())
                     .Where(code => !string.IsNullOrEmpty(code))
                     .Select(code => code!)
                     .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -261,9 +262,9 @@ namespace Buyer.Application.Features.Commands.PullSilaMaterialsFromErp
         }
 
         /// <summary>
-        /// Loads EN product texts from
-        /// <c>API_PRODUCT_SRV/A_ProductDescription?$filter=Product eq '…' and Language eq 'EN'</c>
-        /// for the product codes just pulled from A_Product.
+        /// Batched EN product texts from
+        /// <c>API_PRODUCT_SRV/A_ProductDescription?$filter=Product eq '…' and Language eq 'EN'&amp;$format=json</c>.
+        /// Chunks Product IDs (leading zeros preserved) to avoid N+1 SAP calls; URL-encodes the OData filter.
         /// </summary>
         private async Task<Dictionary<string, string>> FetchEnProductDescriptionsAsync(
             ApiIntegrationConfiguration configuration,
@@ -292,19 +293,26 @@ namespace Buyer.Application.Features.Commands.PullSilaMaterialsFromErp
                 for (int offset = 0; offset < productCodes.Count; offset += chunkSize)
                 {
                     List<string> chunk = productCodes.Skip(offset).Take(chunkSize).ToList();
+                    // Exact Product IDs in filter (preserve leading zeros); Language = 'EN' exactly.
                     string productFilter = string.Join(
                         " or ",
                         chunk.Select(code => $"Product eq '{code.Replace("'", "''", StringComparison.Ordinal)}'"));
                     string filter = $"Language eq 'EN' and ({productFilter})";
-                    // Exact entity the operator named: A_ProductDescription with Product + Language EN.
-                    // Same shape as: GET .../A_ProductDescription?$filter=Product eq '…' and Language eq 'EN'&$format=json
                     configuration.ResourcePath =
                         $"{serviceRoot}A_ProductDescription?$filter={Uri.EscapeDataString(filter)}&$format=json";
 
                     List<JsonElement> rows = await _executor.PullRecordsAsync(configuration, true, cancellationToken);
                     foreach (JsonElement row in rows)
                     {
-                        string? product = ReadJsonText(row, "Product")?.Trim().ToUpperInvariant();
+                        string? language = ReadJsonText(row, "Language")?.Trim();
+                        if (!string.IsNullOrEmpty(language)
+                            && !language.Equals("EN", StringComparison.OrdinalIgnoreCase))
+                        {
+                            continue;
+                        }
+
+                        // Keep Product key with leading zeros; dictionary is case-insensitive for join.
+                        string? product = ReadJsonText(row, "Product")?.Trim();
                         string? text = ReadJsonText(row, "ProductDescription")?.Trim();
                         if (string.IsNullOrWhiteSpace(product) || string.IsNullOrWhiteSpace(text))
                         {
@@ -320,7 +328,7 @@ namespace Buyer.Application.Features.Commands.PullSilaMaterialsFromErp
                 if (map.Count == 0 && productCodes.Count > 0)
                 {
                     result.Failures.Add(
-                        "A_ProductDescription returned no EN ProductDescription rows. Check Language eq 'EN' and product authorization.");
+                        "A_ProductDescription returned no EN ProductDescription rows for the pulled Product IDs (Language eq 'EN').");
                 }
             }
             catch (Exception exception) when (exception is IntegrationException or JsonException or HttpRequestException)
@@ -328,7 +336,7 @@ namespace Buyer.Application.Features.Commands.PullSilaMaterialsFromErp
                 _logger.LogError(
                     $"A_ProductDescription fetch failed. ConfigurationId: {configuration.Id}, Error: {SilaLogText.Short(exception.Message)}");
                 result.Failures.Add(
-                    $"Could not load A_ProductDescription (Language EN): {SilaLogText.Short(exception.Message)}. Materials may show Missing description.");
+                    $"Could not load A_ProductDescription (Language EN): {SilaLogText.Short(exception.Message)}.");
             }
             finally
             {

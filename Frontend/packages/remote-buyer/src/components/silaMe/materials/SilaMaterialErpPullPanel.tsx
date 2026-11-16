@@ -480,9 +480,10 @@ const SilaMaterialErpPullPanel: React.FC<SilaMaterialErpPullPanelProps> = ({ onP
           </dl>
         ) : null}
         <span className="sila-help">
-          Pulled materials appear in Item Master inventory below (Catalog / List). Description is loaded from
-          API_PRODUCT_SRV/A_ProductDescription with Language EN (ProductDescription), not the material number.
-          Stock snapshots never overwrite the SILA inventory ledger.
+          Pulled materials appear in Item Master inventory below. Description comes from
+          API_PRODUCT_SRV/A_ProductDescription (Language eq EN → ProductDescription), matched by Product ID
+          (leading zeros preserved). New materials without an English description are rejected; existing
+          descriptions are kept when EN text is missing. Stock snapshots never overwrite the SILA inventory ledger.
         </span>
         {route?.lastError && !result && <span className="sila-help">Last error: {route.lastError}</span>}
         {result && (

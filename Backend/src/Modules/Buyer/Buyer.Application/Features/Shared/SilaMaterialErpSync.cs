@@ -39,10 +39,10 @@ namespace Buyer.Application.Features.Shared
             List<JsonElement> scoped = FilterByPlant(records, mappings, plants, result);
 
             List<string> codes = scoped
-                .Select(record => IntegrationRecordReader.Read(mappings, "Material.Code", record)?.Trim().ToUpperInvariant())
+                .Select(record => IntegrationRecordReader.Read(mappings, "Material.Code", record)?.Trim())
                 .Where(code => !string.IsNullOrEmpty(code))
                 .Select(code => code!)
-                .Distinct()
+                .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
             Dictionary<string, ItemBuyerMaster> materials = new Dictionary<string, ItemBuyerMaster>(StringComparer.OrdinalIgnoreCase);
             foreach (ItemBuyerMaster material in await repository.ItemBuyerMaster
@@ -79,27 +79,34 @@ namespace Buyer.Application.Features.Shared
             string? syncedCompanyCode = string.IsNullOrWhiteSpace(companyCode) || companyCode.Trim().ToUpperInvariant() == "ALL" ? null : companyCode.Trim();
             DateTime now = DateTime.UtcNow;
 
-            int missingDescriptionNotes = 0;
+            int missingEnglishDescriptionNotes = 0;
             foreach (JsonElement record in scoped)
             {
                 result.Read++;
-                string code = IntegrationRecordReader.Read(mappings, "Material.Code", record)?.Trim().ToUpperInvariant() ?? string.Empty;
-                // Ignore mapped values that are just the material number (common bad Hub map of Description → Product).
-                string? description = Clean(IntegrationRecordReader.Read(mappings, "Material.Description", record), 500);
-                if (IsBlankOrMaterialCode(description, code))
-                {
-                    description = Clean(IntegrationRecordReader.ReadSapProductDescription(record), 500);
-                }
+                // Preserve leading zeros on SAP Product / material codes (trim only; do not invent substitutes).
+                string code = IntegrationRecordReader.Read(mappings, "Material.Code", record)?.Trim() ?? string.Empty;
+                string codeKey = code.ToUpperInvariant();
 
-                // Authoritative EN text from A_ProductDescription?$filter=Product eq '…' and Language eq 'EN'
-                if (IsBlankOrMaterialCode(description, code)
-                    && descriptionsByProduct != null
-                    && descriptionsByProduct.TryGetValue(code, out string? fromDescriptionEntity))
+                // Description ownership: A_ProductDescription Language EN is authoritative for ERP-sourced text.
+                // Never substitute material code, material group or material type for description.
+                string? description = null;
+                if (descriptionsByProduct != null
+                    && descriptionsByProduct.TryGetValue(codeKey, out string? fromDescriptionEntity))
                 {
                     description = Clean(fromDescriptionEntity, 500);
                 }
 
-                if (IsBlankOrMaterialCode(description, code))
+                if (IsBlankOrMaterialCode(description, codeKey))
+                {
+                    description = Clean(IntegrationRecordReader.Read(mappings, "Material.Description", record), 500);
+                }
+
+                if (IsBlankOrMaterialCode(description, codeKey))
+                {
+                    description = Clean(IntegrationRecordReader.ReadSapProductDescription(record), 500);
+                }
+
+                if (IsBlankOrMaterialCode(description, codeKey))
                 {
                     description = null;
                 }
@@ -132,7 +139,7 @@ namespace Buyer.Application.Features.Shared
                     continue;
                 }
 
-                string dedupeKey = $"{code}|{plant ?? ""}|{storageLocation ?? ""}|{altUom ?? ""}";
+                string dedupeKey = $"{codeKey}|{plant ?? ""}|{storageLocation ?? ""}|{altUom ?? ""}";
                 if (!seen.Add(dedupeKey) && string.IsNullOrEmpty(plant) && string.IsNullOrEmpty(storageLocation) && string.IsNullOrEmpty(altUom))
                 {
                     Fail(result, $"{code}: appears more than once in the ERP response; only the first header record was used.");
@@ -145,7 +152,8 @@ namespace Buyer.Application.Features.Shared
                     continue;
                 }
 
-                bool isNew = !materials.TryGetValue(code, out ItemBuyerMaster? material);
+                bool isNew = !materials.TryGetValue(codeKey, out ItemBuyerMaster? material)
+                    && !materials.TryGetValue(code, out material);
                 bool changed = false;
                 if (material == null)
                 {
@@ -155,31 +163,37 @@ namespace Buyer.Application.Features.Shared
                         continue;
                     }
 
-                    // Create even when ERP description expand is missing — list shows "Missing description"
-                    // instead of blocking the whole pull. Do not store the material number as Description.
+                    // New ERP materials require a real ProductDescription (not code / group / type / placeholder).
                     if (string.IsNullOrWhiteSpace(description))
                     {
-                        if (missingDescriptionNotes < 3)
-                        {
-                            Note(result, $"{code}: saved without description (map Material.Description / $expand=to_Description).");
-                        }
-                        else if (missingDescriptionNotes == 3)
-                        {
-                            Note(result, "Further materials were also saved without description.");
-                        }
-
-                        missingDescriptionNotes++;
+                        Fail(result, $"{code}: English ProductDescription is missing from A_ProductDescription (Language eq 'EN'). Material was not created.");
+                        continue;
                     }
 
                     material = NewMaterial(buyerId, code, description, baseUom, group, currency, materialType);
                     material.CompanyCode = syncedCompanyCode;
                     ApplyValuation(material, valuationClass, priceControl, standardPrice, movingAverage, priceUnit, out _);
                     repository.ItemBuyerMaster.Create(material);
-                    materials[code] = material;
+                    materials[codeKey] = material;
                     conversionsByMaterial[material.Id] = new List<MaterialUomConversion>();
                 }
                 else
                 {
+                    if (string.IsNullOrWhiteSpace(description))
+                    {
+                        // Preserve existing valid description; never overwrite with null/blank.
+                        if (missingEnglishDescriptionNotes < 5)
+                        {
+                            Note(result, $"{code}: no English ProductDescription from A_ProductDescription; existing description preserved.");
+                        }
+                        else if (missingEnglishDescriptionNotes == 5)
+                        {
+                            Note(result, "Further materials also had no English ProductDescription; existing descriptions preserved.");
+                        }
+
+                        missingEnglishDescriptionNotes++;
+                    }
+
                     changed = Update(material, description, group, materialType);
                     if (syncedCompanyCode != null && material.CompanyCode != syncedCompanyCode)
                     {
@@ -581,7 +595,7 @@ namespace Buyer.Application.Features.Shared
             {
                 Id = Guid.NewGuid(),
                 BuyerId = buyerId,
-                MaterialCode = code,
+                MaterialCode = code, // keep leading zeros from SAP Product ID
                 Description = description ?? string.Empty,
                 MaterialGroup = group ?? string.Empty,
                 ProductType = materialType ?? string.Empty,
@@ -599,7 +613,7 @@ namespace Buyer.Application.Features.Shared
         private static bool Update(ItemBuyerMaster material, string? description, string? group, string? materialType)
         {
             bool changed = false;
-            // Replace blank / material-number placeholders when a real description arrives.
+            // SAP-owned description: apply EN ProductDescription when present; never clear with null/blank.
             if (!string.IsNullOrWhiteSpace(description)
                 && !IsBlankOrMaterialCode(description, material.MaterialCode ?? string.Empty)
                 && description != material.Description)
