@@ -134,13 +134,14 @@ const SilaRecipeEditor: React.FC<SilaRecipeEditorProps> = ({ recipe, canRequestP
       setLoading(true);
       setLoadError(null);
       try {
+        // Keep Edit/New unblocked: optional calls must not fail the whole editor open.
         const [locations, approved, loadedFamilies, loadedCategories, loadedUoms, browse, menus] = await Promise.all([
-          getLocations(),
-          getRecipes({ active: true, limit: 200 }),
-          getRecipeMasters("families"),
-          getRecipeMasters("categories"),
-          getRecipeUoms(),
-          searchIngredients({ search: "", limit: 60 }),
+          getLocations().catch(() => [] as SilaLocation[]),
+          getRecipes({ active: true, limit: 200 }).catch(() => ({ items: [] as SilaRecipeListItem[], total: 0, index: 0, limit: 200 })),
+          getRecipeMasters("families").catch(() => [] as SilaRecipeMaster[]),
+          getRecipeMasters("categories").catch(() => [] as SilaRecipeMaster[]),
+          getRecipeUoms().catch(() => [] as string[]),
+          searchIngredients({ search: "", limit: 60 }).catch(() => ({ items: [] as SilaIngredientOption[], total: 0, index: 0, limit: 60 })),
           getMenuEngineering("items", { search: "", limit: 80 }).catch(() => null),
         ]);
         if (!active) return;
@@ -160,39 +161,6 @@ const SilaRecipeEditor: React.FC<SilaRecipeEditorProps> = ({ recipe, canRequestP
         setUoms(loadedUoms);
         setCatalogPool(browse.items);
         setMenuPool(menus?.items?.items ?? []);
-
-        // POS ID options from POS item mappings (best-effort; free-text still works).
-        try {
-          const sources = await getPosSources();
-          const pages = await Promise.all(
-            sources.slice(0, 8).map((source) => getItemMappings(source.id, "", 0, 100).catch(() => null)),
-          );
-          if (!active) return;
-          const map = new Map<string, PosIdOption>();
-          for (const page of pages) {
-            for (const row of page?.items ?? []) {
-              const code = row.posItemCode?.trim();
-              if (!code || map.has(code)) continue;
-              map.set(code, {
-                code,
-                label: row.posItemDescription?.trim()
-                  ? `${code} · ${row.posItemDescription.trim()}`
-                  : code,
-              });
-            }
-          }
-          for (const row of approved.items) {
-            const code = row.posCode?.trim();
-            if (!code || map.has(code)) continue;
-            map.set(code, {
-              code,
-              label: row.posItem?.trim() ? `${code} · ${row.posItem.trim()}` : code,
-            });
-          }
-          setPosOptions(Array.from(map.values()).sort((a, b) => a.code.localeCompare(b.code)));
-        } catch {
-          if (active) setPosOptions([]);
-        }
       } catch (err: unknown) {
         if (active) setLoadError(err instanceof Error ? err.message : "Could not load the recipe editor.");
       } finally {
@@ -204,6 +172,59 @@ const SilaRecipeEditor: React.FC<SilaRecipeEditorProps> = ({ recipe, canRequestP
       active = false;
     };
   }, [recipe]);
+
+  // POS ID picker options — never block Edit/New open on POS master APIs.
+  useEffect(() => {
+    let active = true;
+    const loadPos = async () => {
+      try {
+        const [sources, approved] = await Promise.all([
+          getPosSources().catch(() => []),
+          getRecipes({ active: true, limit: 200 }).catch(() => ({ items: [] as SilaRecipeListItem[] })),
+        ]);
+        const pages = await Promise.all(
+          sources.slice(0, 8).map((source) => getItemMappings(source.id, "", 0, 100).catch(() => null)),
+        );
+        if (!active) return;
+        const map = new Map<string, PosIdOption>();
+        for (const page of pages) {
+          for (const row of page?.items ?? []) {
+            const code = row.posItemCode?.trim();
+            if (!code || map.has(code)) continue;
+            map.set(code, {
+              code,
+              label: row.posItemDescription?.trim()
+                ? `${code} · ${row.posItemDescription.trim()}`
+                : code,
+            });
+          }
+        }
+        for (const row of approved.items) {
+          const code = row.posCode?.trim();
+          if (!code || map.has(code)) continue;
+          map.set(code, {
+            code,
+            label: row.posItem?.trim() ? `${code} · ${row.posItem.trim()}` : code,
+          });
+        }
+        if (header.posCode.trim() && !map.has(header.posCode.trim())) {
+          const code = header.posCode.trim();
+          map.set(code, {
+            code,
+            label: header.posItem.trim() ? `${code} · ${header.posItem.trim()}` : code,
+          });
+        }
+        setPosOptions(Array.from(map.values()).sort((a, b) => a.code.localeCompare(b.code)));
+      } catch {
+        if (active) setPosOptions([]);
+      }
+    };
+    loadPos();
+    return () => {
+      active = false;
+    };
+    // Once per editor mount / recipe identity — not on every POS field keystroke.
+  }, [recipe?.id]);
 
   useEffect(() => {
     if (!recipe?.id) return;

@@ -153,6 +153,8 @@ const SilaMeWorkspace: React.FC<SilaMeWorkspaceProps> = ({ navKey, role, permiss
             canRequestPrice={can.manageMasterData}
             openRecipeId={recipeToOpen}
             startNew={newRecipe}
+            onOpenedNew={() => setNewRecipe(false)}
+            onOpenedRecipe={() => setRecipeToOpen(null)}
           />
         );
       case "silaRecipeApprovals":

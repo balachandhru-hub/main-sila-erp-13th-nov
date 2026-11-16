@@ -27,6 +27,10 @@ interface SilaRecipesProps {
   canRequestPrice?: boolean;
   openRecipeId?: string | null;
   startNew?: boolean;
+  /** Clears parent startNew after the editor has been opened. */
+  onOpenedNew?: () => void;
+  /** Clears parent openRecipeId after detail has been opened. */
+  onOpenedRecipe?: () => void;
 }
 
 type View = { kind: "list" } | { kind: "detail"; recipeId: string } | { kind: "edit"; recipe: SilaRecipeDetail | null };
@@ -34,7 +38,14 @@ type View = { kind: "list" } | { kind: "detail"; recipeId: string } | { kind: "e
 const PAGE_SIZE = 48;
 
 /** Recipe Studio — visual catalog landing that mounts detail/editor for the same recipes APIs. */
-const SilaRecipes: React.FC<SilaRecipesProps> = ({ canManage, canRequestPrice = false, openRecipeId, startNew = false }) => {
+const SilaRecipes: React.FC<SilaRecipesProps> = ({
+  canManage,
+  canRequestPrice = false,
+  openRecipeId,
+  startNew = false,
+  onOpenedNew,
+  onOpenedRecipe,
+}) => {
   const [view, setView] = useState<View>(() =>
     openRecipeId ? { kind: "detail", recipeId: openRecipeId } : startNew && canManage ? { kind: "edit", recipe: null } : { kind: "list" },
   );
@@ -107,13 +118,34 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({ canManage, canRequestPrice = 
     return priced.reduce((sum, row) => sum + row.totalCost, 0) / priced.length;
   }, [rows]);
 
+  useEffect(() => {
+    if (openRecipeId) {
+      setView({ kind: "detail", recipeId: openRecipeId });
+      onOpenedRecipe?.();
+      return;
+    }
+    if (startNew && canManage) {
+      setView({ kind: "edit", recipe: null });
+      onOpenedNew?.();
+    }
+  }, [openRecipeId, startNew, canManage, onOpenedNew, onOpenedRecipe]);
+
   const openEdit = async (recipeId: string) => {
     try {
       const detail = await getRecipe(recipeId);
       setView({ kind: "edit", recipe: detail });
-    } catch {
+    } catch (err: unknown) {
+      toastService.error(err instanceof Error ? err.message : "Could not open the recipe editor.");
       setView({ kind: "detail", recipeId });
     }
+  };
+
+  const openNew = () => {
+    if (!canManage) {
+      toastService.error("You do not have permission to create or edit recipes.");
+      return;
+    }
+    setView({ kind: "edit", recipe: null });
   };
 
   const setMode = (mode: StudioViewMode) => {
@@ -188,11 +220,15 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({ canManage, canRequestPrice = 
             onConfirm={confirmRecipeImport}
             onImported={load}
           />
-          {canManage && (
-            <button type="button" className="sila-btn sila-btn--primary" onClick={() => setView({ kind: "edit", recipe: null })}>
-              New recipe
-            </button>
-          )}
+          <button
+            type="button"
+            className="sila-btn sila-btn--primary"
+            onClick={openNew}
+            disabled={!canManage}
+            title={canManage ? undefined : "Requires MANAGE_SILA_RECIPE permission"}
+          >
+            New recipe
+          </button>
         </div>
       </header>
 
