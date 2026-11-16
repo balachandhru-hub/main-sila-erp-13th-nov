@@ -189,11 +189,15 @@ export const getMaterialErpRoute = (companyCode: string): Promise<SilaMaterialEr
     "Could not load the ERP material API.",
   );
 
-export const pullMaterialsFromErp = async (companyCode: string, plantCodes: string[] = []): Promise<SilaMaterialErpPullResult> => {
+/** Plant-first ERP pull; company code is optional and derived from selected plants when omitted. */
+export const pullMaterialsFromErp = async (
+  plantCodes: string[],
+  companyCode = "",
+): Promise<SilaMaterialErpPullResult> => {
   const result = await call(
     () => axiosInstance.post<SilaMaterialErpPullResult>(`${BASE}/materials/erp-pull`, {
-      companyCode: companyCode.trim(),
       plantCodes: plantCodes.map((code) => code.trim()).filter(Boolean),
+      companyCode: companyCode.trim() || undefined,
     }),
     "Could not pull the materials from the ERP.",
   );

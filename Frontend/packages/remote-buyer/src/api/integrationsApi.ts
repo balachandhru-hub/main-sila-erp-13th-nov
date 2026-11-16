@@ -22,7 +22,7 @@ export interface IntegrationProcessType {
 export const INTEGRATION_PROCESS_TYPES: IntegrationProcessType[] = [
   { value: "POST_PO", label: "Purchase order (create in ERP)", side: "buyer", hasMapping: false, pull: "none", calledWhen: "Called when a weekly bucket is fully approved, and when a purchase order is created from a contract." },
   { value: "GET_STOCK", label: "Material stock (stock in hand)", side: "buyer", hasMapping: true, pull: "check" },
-  { value: "GET_MATERIAL", label: "Material master (read from ERP)", side: "buyer", hasMapping: true, pull: "none", calledWhen: "Called from Material Inventory ERP pull for a company code (ResolveIntegration: company code then ALL). Mapping uses Material.* fields (Material.Code required). Suggested S/4 path: sap/opu/odata/sap/API_PRODUCT_SRV/A_Product. Not pulled by the Integration Hub scheduler." },
+  { value: "GET_MATERIAL", label: "Material master (read from ERP)", side: "buyer", hasMapping: true, pull: "none", calledWhen: "Called from Material Inventory ERP pull plant-first (ResolveIntegration: company derived from selected BuyerProperty plants, then ALL). Mapping uses Material.* fields (Material.Code required; Material.Description → to_Description/results/0/ProductDescription). Suggested S/4 path: sap/opu/odata/sap/API_PRODUCT_SRV/A_Product?$expand=to_Description. Not pulled by the Integration Hub scheduler." },
   { value: "GET_CONTRACT", label: "Contract (read from ERP)", side: "buyer", hasMapping: false, pull: "none" },
   { value: "POST_CONTRACT", label: "Contract (create in ERP)", side: "buyer", hasMapping: false, pull: "none", calledWhen: "Called when a contract is approved, signed by both parties and created. The id the ERP returns is kept as the contract's ERP contract ID." },
   { value: "POST_SUPPLIER", label: "Supplier onboarding (post to ERP)", side: "buyer", hasMapping: false, pull: "none", calledWhen: "Not called by the application yet." },
@@ -156,8 +156,8 @@ export const INVENTORY_INTEGRATION_DEFINITIONS: InventoryIntegrationDefinition[]
     kind: "erp",
     processType: "GET_MATERIAL",
     suggestedSystem: "SAP S/4",
-    mapping: "Material.Code (Product), Material.BaseUom (BaseUnit), Material.MaterialGroup (ProductGroup); optional Material.Description, Material.UnitPrice, Material.Currency. Endpoint: sap/opu/odata/sap/API_PRODUCT_SRV/A_Product. Related sets: A_ProductDescription, A_ProductUnitsOfMeasure, A_ProductPlant. Seed: scripts/load-sila-get-material-api.sql.",
-    usedFor: "Material Inventory Pull from ERP (company code → ALL). Upserts ItemBuyerMaster via SilaMaterialErpSync; does not create stock. Alternate UOMs use MaterialUomConversion / UomConverter, not this pull.",
+    mapping: "Material.Code (Product), Material.BaseUom (BaseUnit), Material.MaterialGroup (ProductGroup), Material.Description (to_Description/results/0/ProductDescription); optional Material.Plant, Material.UnitPrice, Material.Currency, Material.MaterialType (ProductType). Endpoint: sap/opu/odata/sap/API_PRODUCT_SRV/A_Product?$expand=to_Description. Related sets: A_ProductDescription, A_ProductUnitsOfMeasure, A_ProductPlant. Seed: scripts/load-sila-get-material-api.sql.",
+    usedFor: "Material Inventory Pull from ERP (plant-first → company from property → ALL). Upserts ItemBuyerMaster.Description into the Description column via SilaMaterialErpSync; does not create stock. Alternate UOMs use MaterialUomConversion / UomConverter, not this pull.",
   },
   {
     id: "opening-stock",

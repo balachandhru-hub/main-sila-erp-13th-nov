@@ -60,7 +60,7 @@ BEGIN
     (
         @MaterialId, @Buyer, N'ALL', N'FIVE S4 - GET MATERIAL', N'GET_MATERIAL', N'ODATA_V2', N'SAP S/4',
         @S4Base,
-        N'sap/opu/odata/sap/API_PRODUCT_SRV/A_Product',
+        N'sap/opu/odata/sap/API_PRODUCT_SRV/A_Product?$expand=to_Description',
         N'BASIC', @S4User, @S4Password,
         N'GET', N'JSON', NULL,
         N'{"Accept":"application/json","DataServiceVersion":"2.0","MaxDataServiceVersion":"2.0"}',
@@ -86,9 +86,10 @@ BEGIN
     THROW 50002, 'No ACTIVE GET_MATERIAL configuration available after insert.', 1;
 END;
 
--- Ensure the recovered SAP Product path on the chosen ACTIVE row when still blank or a placeholder.
+-- Ensure the recovered SAP Product path (with description expand) on the chosen ACTIVE row
+-- when still blank, a placeholder, or missing to_Description expand.
 UPDATE buyersystem.api_integration_configuration
-SET resource_path = N'sap/opu/odata/sap/API_PRODUCT_SRV/A_Product',
+SET resource_path = N'sap/opu/odata/sap/API_PRODUCT_SRV/A_Product?$expand=to_Description',
     protocol = N'ODATA_V2',
     system_name = N'SAP S/4',
     http_method = N'GET',
@@ -100,25 +101,33 @@ WHERE id = @Config
      OR LTRIM(RTRIM(resource_path)) = N''
      OR resource_path LIKE N'%example.invalid%'
      OR resource_path NOT LIKE N'%API_PRODUCT_SRV%'
+     OR (
+          resource_path LIKE N'%A_Product%'
+      AND resource_path NOT LIKE N'%to_Description%'
+        )
   );
 
 -- Header fields supported by SilaMaterialErpSync (Material.Code required).
--- Description language expand (to_Description) is left for operator mapping when needed;
--- IntegrationRecordReader walks object paths only (not OData results[] arrays).
+-- Description: map S/4 Product description expand (to_Description/results/0/ProductDescription).
+-- IntegrationRecordReader supports numeric array indexes on OData results[]; sync also falls back
+-- to ReadSapProductDescription (prefer EN) when the mapped value is empty.
+-- Prefer resource expand $expand=to_Description when the connection allows it.
 -- Optional plant / SLoc / UOM / valuation targets (map when A_ProductPlant / SLoc / UoM / valuation
 -- payloads are available on the configured connection — do not invent field paths):
 --   Material.Plant, Material.PlantStatus, Material.PurchasingGroup, Material.MrpType,
 --   Material.ProcurementType, Material.ReorderPoint, Material.SafetyStock,
 --   Material.StorageLocation, Material.AltUom, Material.AltUomNumerator, Material.AltUomDenominator,
 --   Material.ValuationClass, Material.PriceControl, Material.StandardPrice,
---   Material.MovingAveragePrice, Material.PriceUnit, Material.MaterialType, Material.Description
+--   Material.MovingAveragePrice, Material.PriceUnit, Material.MaterialType
 -- Candidate SAP entity sets (activation not assumed): A_ProductPlant, A_ProductStorageLocation,
 -- A_ProductUnitsOfMeasure, A_ProductValuation, API_MATERIAL_STOCK_SRV.
 ;WITH maps AS (
     SELECT * FROM (VALUES
         (N'Product', N'Material.Code', N'UPPER'),
         (N'BaseUnit', N'Material.BaseUom', N'UPPER'),
-        (N'ProductGroup', N'Material.MaterialGroup', N'TRIM')
+        (N'ProductGroup', N'Material.MaterialGroup', N'TRIM'),
+        (N'to_Description/results/0/ProductDescription', N'Material.Description', N'TRIM'),
+        (N'ProductType', N'Material.MaterialType', N'TRIM')
     ) AS v(source_field, target_field, transformation)
 )
 INSERT INTO buyersystem.api_field_mapping

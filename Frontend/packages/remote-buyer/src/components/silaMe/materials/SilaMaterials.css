@@ -113,6 +113,18 @@
   gap: var(--sila-space-2);
 }
 
+.smat-plant-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sila-space-2);
+}
+
+.smat-plant-meta__company {
+  font-size: var(--sila-text-sm, 0.875rem);
+}
+
 .smat-plant-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(12.5rem, 1fr));

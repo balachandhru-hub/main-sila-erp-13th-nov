@@ -16,8 +16,8 @@ using SharedKernel.LoggerServices;
 namespace Buyer.Application.Features.Commands.PullSilaMaterialsFromErp
 {
     /// <summary>
-    /// Pulls the materials of a company code through the GET_MATERIAL API of the integration engine (the company code's own
-    /// configuration, else the organization-wide one), records the run like any integration run and applies the records.
+    /// Plant-first Material Master pull through GET_MATERIAL (ResolveIntegration: company then ALL).
+    /// Company code is derived from BuyerProperty when only plants are supplied.
     /// </summary>
     public class PullSilaMaterialsFromErpCommandHandler : IRequestHandler<PullSilaMaterialsFromErpCommand, SilaMaterialErpPullResultDto>
     {
@@ -39,14 +39,65 @@ namespace Buyer.Application.Features.Commands.PullSilaMaterialsFromErp
 
         public async Task<SilaMaterialErpPullResultDto> Handle(PullSilaMaterialsFromErpCommand request, CancellationToken cancellationToken)
         {
-            _logger.LogInfo($"Pulling materials from the ERP. OrganizationId: {request.OrganizationId}, CompanyCode: {request.Request.CompanyCode}, UserId: {request.UserId}");
+            _logger.LogInfo(
+                $"Pulling materials from the ERP. OrganizationId: {request.OrganizationId}, CompanyCode: {request.Request.CompanyCode}, Plants: {(request.Request.PlantCodes == null ? 0 : request.Request.PlantCodes.Count)}, UserId: {request.UserId}");
 
             BuyerBusinessProfile buyer = await SilaAccess.GetBuyerAsync(_repository, _logger, request.OrganizationId);
-            string companyCode = request.Request.CompanyCode?.Trim().ToUpperInvariant() ?? string.Empty;
-            if (companyCode.Length == 0 || companyCode.Length > MAX_COMPANY_CODE_LENGTH)
+
+            List<BuyerProperty> properties = await _repository.BuyerProperty
+                .FindByCondition(x => x.BuyerId == buyer.Id && x.IsActive)
+                .ToListAsync(cancellationToken);
+
+            List<string> plantCodes = (request.Request.PlantCodes ?? new List<string>())
+                .Select(x => x.Trim().ToUpperInvariant())
+                .Where(x => x.Length > 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            Dictionary<string, List<BuyerProperty>> propertiesByPlant = properties
+                .Where(x => !string.IsNullOrWhiteSpace(x.PlantCode))
+                .GroupBy(x => x.PlantCode.Trim().ToUpperInvariant())
+                .ToDictionary(x => x.Key, x => x.ToList(), StringComparer.OrdinalIgnoreCase);
+
+            if (plantCodes.Count > 0)
             {
-                _logger.LogError($"ERP material pull without a valid company code. OrganizationId: {request.OrganizationId}");
-                throw new BadRequestCustomException("Company code is required.", $"Select the company code (at most {MAX_COMPANY_CODE_LENGTH} characters) whose materials to pull.");
+                List<string> unknown = plantCodes.Where(x => !propertiesByPlant.ContainsKey(x)).ToList();
+                if (unknown.Count > 0)
+                {
+                    throw new BadRequestCustomException(
+                        "Unknown plant code(s).",
+                        $"Plant(s) {string.Join(", ", unknown)} are not mapped on any property. Configure BuyerProperty.PlantCode under Properties first.");
+                }
+            }
+
+            string companyCode = request.Request.CompanyCode?.Trim().ToUpperInvariant() ?? string.Empty;
+            if (plantCodes.Count > 0 && companyCode.Length == 0)
+            {
+                List<string> companies = plantCodes
+                    .SelectMany(code => propertiesByPlant[code])
+                    .Select(x => x.CompanyCode?.Trim().ToUpperInvariant() ?? string.Empty)
+                    .Where(x => x.Length > 0)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                companyCode = companies.Count == 1 ? companies[0] : "ALL";
+            }
+
+            if (companyCode.Length == 0 && plantCodes.Count == 0)
+            {
+                _logger.LogError($"ERP material pull without plant or company. OrganizationId: {request.OrganizationId}");
+                throw new BadRequestCustomException(
+                    "Plant is required.",
+                    "Select one or more plants mapped on Properties (or provide a company code).");
+            }
+
+            if (companyCode.Length > MAX_COMPANY_CODE_LENGTH)
+            {
+                throw new BadRequestCustomException("Company code is invalid.", $"Company code must be at most {MAX_COMPANY_CODE_LENGTH} characters.");
+            }
+
+            if (companyCode.Length == 0)
+            {
+                companyCode = "ALL";
             }
 
             IntegrationApiDto api = await _mediator.Send(new ResolveIntegrationQuery
@@ -84,30 +135,20 @@ namespace Buyer.Application.Features.Commands.PullSilaMaterialsFromErp
                     throw new IntegrationException("MAPPING_REQUIRED", "Map the ERP field that holds the material code to Material.Code before pulling.");
                 }
 
-                List<string> plantCodes = (request.Request.PlantCodes ?? new List<string>())
-                    .Select(x => x.Trim().ToUpperInvariant())
-                    .Where(x => x.Length > 0)
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .ToList();
-                if (plantCodes.Count > 0)
+                EnsureDescriptionMapping(mappings, configuration.Id, request.UserId);
+
+                string? originalPath = configuration.ResourcePath;
+                configuration.ResourcePath = EnsureProductDescriptionExpand(configuration.ResourcePath);
+                List<JsonElement> records;
+                try
                 {
-                    // Only accept plants that exist in BuyerProperty mappings for this buyer (no invented plant numbers).
-                    HashSet<string> authorized = (await _repository.BuyerProperty
-                        .FindByCondition(x => x.BuyerId == buyer.Id && x.IsActive)
-                        .Select(x => x.PlantCode)
-                        .ToListAsync(cancellationToken))
-                        .Select(x => x.Trim().ToUpperInvariant())
-                        .ToHashSet(StringComparer.OrdinalIgnoreCase);
-                    List<string> unknown = plantCodes.Where(x => !authorized.Contains(x)).ToList();
-                    if (unknown.Count > 0)
-                    {
-                        throw new BadRequestCustomException(
-                            "Unknown plant code(s).",
-                            $"Plant(s) {string.Join(", ", unknown)} are not mapped on any property. Configure BuyerProperty.PlantCode first.");
-                    }
+                    records = await _executor.PullRecordsAsync(configuration, true, cancellationToken);
+                }
+                finally
+                {
+                    configuration.ResourcePath = originalPath;
                 }
 
-                List<JsonElement> records = await _executor.PullRecordsAsync(configuration, true, cancellationToken);
                 await SilaMaterialErpSync.ApplyAsync(
                     _repository, _logger, buyer.Id, request.UserId, companyCode, mappings, records, result, cancellationToken, plantCodes);
                 execution.RecordsRead = result.Read;
@@ -141,8 +182,71 @@ namespace Buyer.Application.Features.Commands.PullSilaMaterialsFromErp
             }
 
             _logger.LogInfo(
-                $"ERP materials pulled. ConfigurationId: {configuration.Id}, Read: {result.Read}, New: {result.New}, Changed: {result.Changed}, Unchanged: {result.Unchanged}, Failed: {result.Failed}, PriceChanges: {result.PriceChanges}");
+                $"ERP materials pulled. ConfigurationId: {configuration.Id}, Company: {companyCode}, Plants: {plantCodes.Count}, Read: {result.Read}, New: {result.New}, Changed: {result.Changed}, Unchanged: {result.Unchanged}, Failed: {result.Failed}, PriceChanges: {result.PriceChanges}");
             return result;
+        }
+
+        /// <summary>
+        /// Ensures Material.Description is mapped for S/4 Product description expand when the Hub row is missing.
+        /// Does not overwrite an operator-configured source path.
+        /// </summary>
+        private void EnsureDescriptionMapping(List<ApiFieldMapping> mappings, Guid configurationId, Guid userId)
+        {
+            if (mappings.Any(x => x.TargetField.Equals("Material.Description", StringComparison.OrdinalIgnoreCase) && x.IsActive))
+            {
+                return;
+            }
+
+            ApiFieldMapping mapping = new ApiFieldMapping
+            {
+                Id = Guid.NewGuid(),
+                ConfigurationId = configurationId,
+                SourceField = "to_Description/results/0/ProductDescription",
+                TargetField = "Material.Description",
+                Transformation = "TRIM",
+                NullPolicy = IntegrationNullPolicy.IGNORE_NULL,
+                IsValidated = true,
+                IsActive = true
+            };
+            _repository.ApiFieldMapping.Create(mapping);
+            mappings.Add(mapping);
+            _logger.LogInfo($"Added default Material.Description mapping for GET_MATERIAL. ConfigurationId: {configurationId}, UserId: {userId}");
+        }
+
+        /// <summary>
+        /// Adds $expand=to_Description on API_PRODUCT_SRV/A_Product so Description can map into Material Master.
+        /// </summary>
+        private static string EnsureProductDescriptionExpand(string? resourcePath)
+        {
+            string path = resourcePath?.Trim() ?? string.Empty;
+            if (path.Length == 0)
+            {
+                return path;
+            }
+
+            if (path.IndexOf("A_Product", StringComparison.OrdinalIgnoreCase) < 0)
+            {
+                return path;
+            }
+
+            if (path.IndexOf("to_Description", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return path;
+            }
+
+            if (path.IndexOf("$expand=", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                // Expand already present for other navigations — append to_Description.
+                int expandAt = path.IndexOf("$expand=", StringComparison.OrdinalIgnoreCase);
+                int valueStart = expandAt + "$expand=".Length;
+                int valueEnd = path.IndexOf('&', valueStart);
+                if (valueEnd < 0) valueEnd = path.Length;
+                string current = path[valueStart..valueEnd];
+                string merged = string.IsNullOrWhiteSpace(current) ? "to_Description" : $"{current},to_Description";
+                return path[..valueStart] + merged + path[valueEnd..];
+            }
+
+            return path + (path.Contains('?') ? "&" : "?") + "$expand=to_Description";
         }
     }
 }

@@ -82,7 +82,8 @@ namespace Buyer.Application.Features.Shared
             {
                 result.Read++;
                 string code = IntegrationRecordReader.Read(mappings, "Material.Code", record)?.Trim().ToUpperInvariant() ?? string.Empty;
-                string? description = Clean(IntegrationRecordReader.Read(mappings, "Material.Description", record), 500);
+                string? description = Clean(IntegrationRecordReader.Read(mappings, "Material.Description", record), 500)
+                    ?? Clean(IntegrationRecordReader.ReadSapProductDescription(record), 500);
                 string? baseUom = Clean(IntegrationRecordReader.Read(mappings, "Material.BaseUom", record), 20)?.ToUpperInvariant();
                 string? group = Clean(IntegrationRecordReader.Read(mappings, "Material.MaterialGroup", record), 100);
                 string? materialType = Clean(IntegrationRecordReader.Read(mappings, "Material.MaterialType", record), 100);
@@ -168,15 +169,24 @@ namespace Buyer.Application.Features.Shared
                     }
                 }
 
-                if (!string.IsNullOrEmpty(plant))
+                // When Material.Plant is unmapped (typical A_Product header), still assign the plants the operator selected.
+                List<string> plantsToAssign = !string.IsNullOrEmpty(plant)
+                    ? new List<string> { plant }
+                    : plants != null
+                        ? plants.OrderBy(x => x).ToList()
+                        : new List<string>();
+
+                foreach (string assignPlant in plantsToAssign)
                 {
-                    changed |= UpsertPlant(repository, buyerId, material.Id, plant, plantStatus, purchasingGroup, mrpType, procurementType, reorderPoint, safetyStock, plantIndex, now);
+                    changed |= UpsertPlant(
+                        repository, buyerId, material.Id, assignPlant, plantStatus, purchasingGroup, mrpType, procurementType, reorderPoint, safetyStock, plantIndex, now);
                 }
 
-                if (!string.IsNullOrEmpty(plant) && !string.IsNullOrEmpty(storageLocation))
+                string? slocPlant = plant ?? (plantsToAssign.Count == 1 ? plantsToAssign[0] : null);
+                if (!string.IsNullOrEmpty(slocPlant) && !string.IsNullOrEmpty(storageLocation))
                 {
                     changed |= await UpsertStorageLocationAsync(
-                        repository, buyerId, material, code, plant, storageLocation, locationByPlantSloc, slocIndex, now, result, cancellationToken);
+                        repository, buyerId, material, code, slocPlant, storageLocation, locationByPlantSloc, slocIndex, now, result, cancellationToken);
                 }
 
                 if (!string.IsNullOrEmpty(altUom) && !string.IsNullOrEmpty(baseUom ?? material.BaseUnitOfMeasure))

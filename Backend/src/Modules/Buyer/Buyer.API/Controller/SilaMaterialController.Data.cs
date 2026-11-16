@@ -77,7 +77,7 @@ namespace Buyer.API.Controllers
         [SwaggerResponse(200, type: typeof(SilaMaterialErpPullResultDto))]
         public async Task<IActionResult> ErpPull([FromBody] SilaMaterialErpPullWriteDto request)
         {
-            _logger.LogDebug($"Pulling materials from the ERP. CompanyCode: {request?.CompanyCode}");
+            _logger.LogDebug($"Pulling materials from the ERP. Plants: {request?.PlantCodes?.Count ?? 0}, CompanyCode: {request?.CompanyCode}");
             SilaMaterialErpPullResultDto result = await _mediator.Send(new PullSilaMaterialsFromErpCommand
             {
                 OrganizationId = GetOrganizationId(),
