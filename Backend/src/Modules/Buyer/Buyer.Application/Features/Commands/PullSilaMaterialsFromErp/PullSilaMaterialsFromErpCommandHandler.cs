@@ -186,8 +186,18 @@ namespace Buyer.Application.Features.Commands.PullSilaMaterialsFromErp
                     configuration.ResourcePath = originalPath;
                 }
 
+                List<string> productCodes = records
+                    .Select(record => IntegrationRecordReader.Read(mappings, "Material.Code", record)?.Trim().ToUpperInvariant())
+                    .Where(code => !string.IsNullOrEmpty(code))
+                    .Select(code => code!)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                Dictionary<string, string> descriptionsByProduct = await FetchEnProductDescriptionsAsync(
+                    configuration, originalPath, productCodes, result, cancellationToken);
+
                 await SilaMaterialErpSync.ApplyAsync(
-                    _repository, _logger, buyer.Id, request.UserId, companyCode, mappings, records, result, cancellationToken, plantCodes);
+                    _repository, _logger, buyer.Id, request.UserId, companyCode, mappings, records, result, cancellationToken, plantCodes, descriptionsByProduct);
                 execution.RecordsRead = result.Read;
                 execution.RecordsCreated = result.New;
                 execution.RecordsUpdated = result.Changed;
@@ -251,12 +261,139 @@ namespace Buyer.Application.Features.Commands.PullSilaMaterialsFromErp
         }
 
         /// <summary>
-        /// Adds $expand=to_Description on API_PRODUCT_SRV/A_Product so Description can map into Material Master.
+        /// Loads EN product texts from
+        /// <c>API_PRODUCT_SRV/A_ProductDescription?$filter=Product eq '…' and Language eq 'EN'</c>
+        /// for the product codes just pulled from A_Product.
+        /// </summary>
+        private async Task<Dictionary<string, string>> FetchEnProductDescriptionsAsync(
+            ApiIntegrationConfiguration configuration,
+            string? productResourcePath,
+            List<string> productCodes,
+            SilaMaterialErpPullResultDto result,
+            CancellationToken cancellationToken)
+        {
+            Dictionary<string, string> map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            if (productCodes.Count == 0)
+            {
+                return map;
+            }
+
+            string? serviceRoot = TryApiProductServiceRoot(productResourcePath ?? configuration.ResourcePath);
+            if (serviceRoot == null)
+            {
+                result.Failures.Add("Product description entity skipped: resource path is not API_PRODUCT_SRV/A_Product.");
+                return map;
+            }
+
+            string? originalPath = configuration.ResourcePath;
+            const int chunkSize = 20;
+            try
+            {
+                for (int offset = 0; offset < productCodes.Count; offset += chunkSize)
+                {
+                    List<string> chunk = productCodes.Skip(offset).Take(chunkSize).ToList();
+                    string productFilter = string.Join(
+                        " or ",
+                        chunk.Select(code => $"Product eq '{code.Replace("'", "''", StringComparison.Ordinal)}'"));
+                    string filter = $"Language eq 'EN' and ({productFilter})";
+                    // Exact entity the operator named: A_ProductDescription with Product + Language EN.
+                    // Same shape as: GET .../A_ProductDescription?$filter=Product eq '…' and Language eq 'EN'&$format=json
+                    configuration.ResourcePath =
+                        $"{serviceRoot}A_ProductDescription?$filter={Uri.EscapeDataString(filter)}&$format=json";
+
+                    List<JsonElement> rows = await _executor.PullRecordsAsync(configuration, true, cancellationToken);
+                    foreach (JsonElement row in rows)
+                    {
+                        string? product = ReadJsonText(row, "Product")?.Trim().ToUpperInvariant();
+                        string? text = ReadJsonText(row, "ProductDescription")?.Trim();
+                        if (string.IsNullOrWhiteSpace(product) || string.IsNullOrWhiteSpace(text))
+                        {
+                            continue;
+                        }
+
+                        map[product] = text;
+                    }
+                }
+
+                _logger.LogInfo(
+                    $"Loaded EN product descriptions from A_ProductDescription. Products: {productCodes.Count}, Descriptions: {map.Count}, ConfigurationId: {configuration.Id}");
+                if (map.Count == 0 && productCodes.Count > 0)
+                {
+                    result.Failures.Add(
+                        "A_ProductDescription returned no EN ProductDescription rows. Check Language eq 'EN' and product authorization.");
+                }
+            }
+            catch (Exception exception) when (exception is IntegrationException or JsonException or HttpRequestException)
+            {
+                _logger.LogError(
+                    $"A_ProductDescription fetch failed. ConfigurationId: {configuration.Id}, Error: {SilaLogText.Short(exception.Message)}");
+                result.Failures.Add(
+                    $"Could not load A_ProductDescription (Language EN): {SilaLogText.Short(exception.Message)}. Materials may show Missing description.");
+            }
+            finally
+            {
+                configuration.ResourcePath = originalPath;
+            }
+
+            return map;
+        }
+
+        private static string? TryApiProductServiceRoot(string? resourcePath)
+        {
+            string path = resourcePath?.Trim() ?? string.Empty;
+            if (path.Length == 0)
+            {
+                return null;
+            }
+
+            int marker = path.IndexOf("API_PRODUCT_SRV", StringComparison.OrdinalIgnoreCase);
+            if (marker < 0)
+            {
+                return null;
+            }
+
+            int end = marker + "API_PRODUCT_SRV".Length;
+            string root = path[..end].TrimEnd('/') + "/";
+            return root;
+        }
+
+        private static string? ReadJsonText(JsonElement row, string name)
+        {
+            if (row.ValueKind != JsonValueKind.Object)
+            {
+                return null;
+            }
+
+            if (row.TryGetProperty(name, out JsonElement value))
+            {
+                return value.ValueKind == JsonValueKind.String ? value.GetString() : value.ToString();
+            }
+
+            foreach (JsonProperty property in row.EnumerateObject())
+            {
+                if (property.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
+                {
+                    return property.Value.ValueKind == JsonValueKind.String ? property.Value.GetString() : property.Value.ToString();
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Adds $expand=to_Description on API_PRODUCT_SRV/A_Product as a first pass; EN text is then
+        /// filled from A_ProductDescription when expand is empty.
         /// </summary>
         private static string EnsureProductDescriptionExpand(string? resourcePath)
         {
             string path = resourcePath?.Trim() ?? string.Empty;
             if (path.Length == 0)
+            {
+                return path;
+            }
+
+            // Only expand the product header entity, never A_ProductDescription itself.
+            if (path.IndexOf("A_ProductDescription", StringComparison.OrdinalIgnoreCase) >= 0)
             {
                 return path;
             }
@@ -273,7 +410,6 @@ namespace Buyer.Application.Features.Commands.PullSilaMaterialsFromErp
 
             if (path.IndexOf("$expand=", StringComparison.OrdinalIgnoreCase) >= 0)
             {
-                // Expand already present for other navigations — append to_Description.
                 int expandAt = path.IndexOf("$expand=", StringComparison.OrdinalIgnoreCase);
                 int valueStart = expandAt + "$expand=".Length;
                 int valueEnd = path.IndexOf('&', valueStart);

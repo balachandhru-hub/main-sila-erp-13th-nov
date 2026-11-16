@@ -480,7 +480,8 @@ const SilaMaterialErpPullPanel: React.FC<SilaMaterialErpPullPanelProps> = ({ onP
           </dl>
         ) : null}
         <span className="sila-help">
-          Pulled materials appear in Item Master inventory below (Catalog / List). Description uses $expand=to_Description when available; otherwise rows show Missing description.
+          Pulled materials appear in Item Master inventory below (Catalog / List). Description is loaded from
+          API_PRODUCT_SRV/A_ProductDescription with Language EN (ProductDescription), not the material number.
           Stock snapshots never overwrite the SILA inventory ledger.
         </span>
         {route?.lastError && !result && <span className="sila-help">Last error: {route.lastError}</span>}

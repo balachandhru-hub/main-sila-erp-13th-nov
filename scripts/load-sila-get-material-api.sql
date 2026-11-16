@@ -108,10 +108,12 @@ WHERE id = @Config
   );
 
 -- Header fields supported by SilaMaterialErpSync (Material.Code required).
--- Description: map S/4 Product description expand (to_Description/results/0/ProductDescription).
--- IntegrationRecordReader supports numeric array indexes on OData results[]; sync also falls back
--- to ReadSapProductDescription (prefer EN) when the mapped value is empty.
--- Prefer resource expand $expand=to_Description when the connection allows it.
+-- Description:
+--   1) Optional expand on A_Product: to_Description/results/0/ProductDescription
+--   2) Authoritative pull (PullSilaMaterialsFromErp):
+--      GET .../API_PRODUCT_SRV/A_ProductDescription?$filter=Product eq '…' and Language eq 'EN'&$format=json
+--      → ProductDescription into ItemBuyerMaster.Description
+-- IntegrationRecordReader supports numeric array indexes on OData results[].
 -- Optional plant / SLoc / UOM / valuation targets (map when A_ProductPlant / SLoc / UoM / valuation
 -- payloads are available on the configured connection — do not invent field paths):
 --   Material.Plant, Material.PlantStatus, Material.PurchasingGroup, Material.MrpType,

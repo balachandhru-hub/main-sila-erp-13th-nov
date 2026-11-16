@@ -32,7 +32,8 @@ namespace Buyer.Application.Features.Shared
             List<JsonElement> records,
             SilaMaterialErpPullResultDto result,
             CancellationToken cancellationToken,
-            IReadOnlyCollection<string>? plantFilter = null)
+            IReadOnlyCollection<string>? plantFilter = null,
+            IReadOnlyDictionary<string, string>? descriptionsByProduct = null)
         {
             HashSet<string>? plants = NormalizePlantFilter(plantFilter);
             List<JsonElement> scoped = FilterByPlant(records, mappings, plants, result);
@@ -88,6 +89,14 @@ namespace Buyer.Application.Features.Shared
                 if (IsBlankOrMaterialCode(description, code))
                 {
                     description = Clean(IntegrationRecordReader.ReadSapProductDescription(record), 500);
+                }
+
+                // Authoritative EN text from A_ProductDescription?$filter=Product eq '…' and Language eq 'EN'
+                if (IsBlankOrMaterialCode(description, code)
+                    && descriptionsByProduct != null
+                    && descriptionsByProduct.TryGetValue(code, out string? fromDescriptionEntity))
+                {
+                    description = Clean(fromDescriptionEntity, 500);
                 }
 
                 if (IsBlankOrMaterialCode(description, code))
