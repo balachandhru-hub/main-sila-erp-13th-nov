@@ -12,8 +12,8 @@ import "../silaMeTheme.css";
 import "./SilaMaterials.css";
 
 interface SilaMaterialErpPullPanelProps {
-  /** Called after a pull changed the material master. */
-  onPulled: () => void;
+  /** Called after a pull finishes so Item Master inventory can reload and show materials. */
+  onPulled: (hint?: { plantCode?: string }) => void;
 }
 
 /** Plant-first GET_MATERIAL pull with inline property/plant create + mapping. */
@@ -206,8 +206,17 @@ const SilaMaterialErpPullPanel: React.FC<SilaMaterialErpPullPanelProps> = ({ onP
     try {
       const pulled = await pullMaterialsFromErp(plants, company);
       setResult(pulled);
-      toastService.success(`${pulled.read} record(s) read: ${pulled.new} new, ${pulled.changed} changed, ${pulled.failed} failed.`);
-      if (pulled.new > 0 || pulled.changed > 0) onPulled();
+      const saved = pulled.new + pulled.changed;
+      const summary = `${pulled.read} read · ${pulled.new} new · ${pulled.changed} changed · ${pulled.unchanged} unchanged · ${pulled.failed} failed`;
+      if (saved > 0) {
+        toastService.success(`Materials loaded into Item Master. ${summary}`);
+      } else if (pulled.failed > 0) {
+        toastService.error(`Nothing saved to Item Master. ${summary}. See messages below.`);
+      } else {
+        toastService.success(`Pull finished with no changes. ${summary}`);
+      }
+      // Always refresh the inventory list so operators can select/browse pulled materials.
+      onPulled({ plantCode: plants.length === 1 ? plants[0] : undefined });
       setReloadKey((key) => key + 1);
     } catch (err: unknown) {
       toastService.error(err instanceof Error ? err.message : "Could not pull the materials from the ERP.");
@@ -471,26 +480,45 @@ const SilaMaterialErpPullPanel: React.FC<SilaMaterialErpPullPanelProps> = ({ onP
           </dl>
         ) : null}
         <span className="sila-help">
-          Prefer $expand=to_Description on the Product path so Description fills the Description column (not the material number).
+          Pulled materials appear in Item Master inventory below (Catalog / List). Description uses $expand=to_Description when available; otherwise rows show Missing description.
           Stock snapshots never overwrite the SILA inventory ledger.
         </span>
         {route?.lastError && !result && <span className="sila-help">Last error: {route.lastError}</span>}
         {result && (
-          <>
+          <div className="smat-pull-result" role="status">
             <div className="smat-counts">
               <span className="sila-badge sila-badge--neutral">{result.read} read</span>
-              <span className="sila-badge sila-badge--success">{result.new} new</span>
+              <span className="sila-badge sila-badge--success">{result.new} new in Item Master</span>
               <span className="sila-badge sila-badge--info">{result.changed} changed</span>
               <span className="sila-badge sila-badge--neutral">{result.unchanged} unchanged</span>
               <span className={`sila-badge sila-badge--${result.failed > 0 ? "danger" : "neutral"}`}>{result.failed} failed</span>
               <span className="sila-badge sila-badge--warning">{result.priceChanges} price change(s) for approval</span>
             </div>
+            {(result.new > 0 || result.changed > 0) ? (
+              <p className="sila-help">
+                {result.new + result.changed} material(s) are ready in Item Master inventory below — use Catalog or List, or search by code/description.
+              </p>
+            ) : result.failed > 0 ? (
+              <p className="sila-help">
+                Records were read from ERP but none were saved. Check messages below (often missing Base UOM). Fix mapping and pull again.
+              </p>
+            ) : (
+              <p className="sila-help">No new or changed materials. Inventory list was refreshed.</p>
+            )}
+            <button
+              type="button"
+              className="sila-btn sila-btn--secondary sila-btn--sm"
+              onClick={() => onPulled({ plantCode: selectedPlantCodes[0] || quickPlant.trim().toUpperCase() || undefined })}
+            >
+              Open Item Master list
+            </button>
             {result.failures.length > 0 && (
               <ul className="smat-messages" aria-label="Pull messages">
-                {result.failures.map((message, index) => <li key={`${index}-${message}`}>{message}</li>)}
+                {result.failures.slice(0, 40).map((message, index) => <li key={`${index}-${message}`}>{message}</li>)}
+                {result.failures.length > 40 && <li>…and {result.failures.length - 40} more</li>}
               </ul>
             )}
-          </>
+          </div>
         )}
       </div>
     </section>

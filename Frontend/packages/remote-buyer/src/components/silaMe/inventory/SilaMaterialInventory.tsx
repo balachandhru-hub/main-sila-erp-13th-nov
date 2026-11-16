@@ -123,6 +123,21 @@ const SilaMaterialInventory: React.FC<SilaMaterialInventoryProps> = ({ canManage
     reload();
   }, [reload]);
 
+  /** After ERP pull: clear filters that hide new rows and jump to the inventory list. */
+  const afterPulled = useCallback((hint?: { plantCode?: string }) => {
+    setSearch("");
+    setInventoryOnly(false);
+    setPriceStatus("");
+    setPlantCode(hint?.plantCode?.trim().toUpperCase() || "");
+    setPage(0);
+    setViewMode("list");
+    saveViewMode("list");
+    reload();
+    window.requestAnimationFrame(() => {
+      document.getElementById("sinv-material-list")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, [reload]);
+
   return (
     <div className="sila-me sinv-page">
       <PageHeader
@@ -131,7 +146,9 @@ const SilaMaterialInventory: React.FC<SilaMaterialInventoryProps> = ({ canManage
         description="Item Master materials with their inventory controls, plant valuation, approved unit price and UOM conversions. Browse as a catalog grid or dense list."
       />
 
-      <section className="sila-card">
+      {canManageMasterData && <SilaMaterialErpPullPanel onPulled={afterPulled} />}
+
+      <section className="sila-card" id="sinv-material-list">
         <div className="sila-card-header">
           <h2 className="sila-card-title">Item Master inventory</h2>
           <div className="sinv-header-actions">
@@ -409,8 +426,6 @@ const SilaMaterialInventory: React.FC<SilaMaterialInventoryProps> = ({ canManage
           </div>
         )}
       </section>
-
-      {canManageMasterData && <SilaMaterialErpPullPanel onPulled={reload} />}
 
       {editing && <SilaMaterialDialog material={editing} onClose={closeDialog} onSaved={afterSave} />}
       {detailId && <SilaMaterialDetailPanel materialId={detailId} onClose={() => setDetailId(null)} />}

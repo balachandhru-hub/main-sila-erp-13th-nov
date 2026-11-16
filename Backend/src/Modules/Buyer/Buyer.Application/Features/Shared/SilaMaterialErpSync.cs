@@ -78,6 +78,7 @@ namespace Buyer.Application.Features.Shared
             string? syncedCompanyCode = string.IsNullOrWhiteSpace(companyCode) || companyCode.Trim().ToUpperInvariant() == "ALL" ? null : companyCode.Trim();
             DateTime now = DateTime.UtcNow;
 
+            int missingDescriptionNotes = 0;
             foreach (JsonElement record in scoped)
             {
                 result.Read++;
@@ -145,10 +146,20 @@ namespace Buyer.Application.Features.Shared
                         continue;
                     }
 
+                    // Create even when ERP description expand is missing — list shows "Missing description"
+                    // instead of blocking the whole pull. Do not store the material number as Description.
                     if (string.IsNullOrWhiteSpace(description))
                     {
-                        Fail(result, $"{code}: Description is required for Material Master.");
-                        continue;
+                        if (missingDescriptionNotes < 3)
+                        {
+                            Note(result, $"{code}: saved without description (map Material.Description / $expand=to_Description).");
+                        }
+                        else if (missingDescriptionNotes == 3)
+                        {
+                            Note(result, "Further materials were also saved without description.");
+                        }
+
+                        missingDescriptionNotes++;
                     }
 
                     material = NewMaterial(buyerId, code, description, baseUom, group, currency, materialType);
