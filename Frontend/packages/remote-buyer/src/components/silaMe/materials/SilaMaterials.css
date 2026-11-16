@@ -125,6 +125,13 @@
   font-size: var(--sila-text-sm, 0.875rem);
 }
 
+.smat-quick-plant {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)) auto;
+  gap: var(--sila-space-3);
+  align-items: end;
+}
+
 /* Property → plant mapping rows */
 .smat-plant-map {
   display: flex;

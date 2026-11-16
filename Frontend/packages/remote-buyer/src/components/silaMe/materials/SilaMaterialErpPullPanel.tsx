@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Loader, toastService } from "@vosox/shared-ui";
-import { getProperties, updateProperty, type Property } from "../../../api/propertyApi";
+import { createProperty, getProperties, updateProperty, type Property } from "../../../api/propertyApi";
 import {
   getMaterialErpRoute,
   pullMaterialsFromErp,
@@ -16,12 +16,18 @@ interface SilaMaterialErpPullPanelProps {
   onPulled: () => void;
 }
 
-/** Plant-first GET_MATERIAL pull with inline property → plant mapping. */
+/** Plant-first GET_MATERIAL pull with inline property/plant create + mapping. */
 const SilaMaterialErpPullPanel: React.FC<SilaMaterialErpPullPanelProps> = ({ onPulled }) => {
   const [properties, setProperties] = useState<Property[]>([]);
   const [plantDrafts, setPlantDrafts] = useState<Record<string, string>>({});
   const [selectedPropertyIds, setSelectedPropertyIds] = useState<Record<string, boolean>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newCompany, setNewCompany] = useState("");
+  const [newPlant, setNewPlant] = useState("");
+  const [quickCompany, setQuickCompany] = useState("");
+  const [quickPlant, setQuickPlant] = useState("");
   const [route, setRoute] = useState<SilaMaterialErpRoute | null>(null);
   const [routeLoading, setRouteLoading] = useState(false);
   const [routeError, setRouteError] = useState<string | null>(null);
@@ -42,6 +48,10 @@ const SilaMaterialErpPullPanel: React.FC<SilaMaterialErpPullPanelProps> = ({ onP
         }
         setPlantDrafts(drafts);
         setPropertiesError(null);
+        if (rows.length > 0 && !quickCompany) {
+          const firstCompany = rows.find((row) => row.companyCode?.trim())?.companyCode?.trim().toUpperCase() || "";
+          if (firstCompany) setQuickCompany(firstCompany);
+        }
       })
       .catch((err: unknown) => {
         if (!active) return;
@@ -77,10 +87,10 @@ const SilaMaterialErpPullPanel: React.FC<SilaMaterialErpPullPanelProps> = ({ onP
     );
     if (companies.length === 1) return companies[0];
     if (companies.length > 1) return "ALL";
-    return "";
-  }, [selectedForPull]);
+    return quickCompany.trim().toUpperCase();
+  }, [selectedForPull, quickCompany]);
 
-  const routeEntity = derivedCompanyCode || "ALL";
+  const routeEntity = derivedCompanyCode || quickCompany.trim().toUpperCase() || "ALL";
 
   useEffect(() => {
     setResult(null);
@@ -161,17 +171,44 @@ const SilaMaterialErpPullPanel: React.FC<SilaMaterialErpPullPanelProps> = ({ onP
     setDraft(property.id, company);
   };
 
-  const handlePull = async () => {
-    if (selectedPlantCodes.length === 0) {
-      toastService.error("Select properties with a saved plant code, or map plant codes below first.");
+  const handleCreateProperty = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const company = newCompany.trim().toUpperCase();
+    const plant = (newPlant.trim() || company).toUpperCase();
+    const name = newName.trim() || `Plant ${plant}`;
+    if (!company || !plant) {
+      toastService.error("Enter company code and plant code.");
       return;
     }
+    setCreating(true);
+    try {
+      await createProperty({
+        companyCode: company,
+        plantCode: plant,
+        propertyName: name,
+        masterApprovalFlowId: null,
+      });
+      toastService.success(`Property created for plant ${plant}.`);
+      setNewName("");
+      setNewPlant("");
+      setQuickCompany(company);
+      setQuickPlant(plant);
+      setReloadKey((key) => key + 1);
+    } catch (err: unknown) {
+      toastService.error(err instanceof Error ? err.message : "Could not create the property.");
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const runPull = async (plants: string[], company: string) => {
     setPulling(true);
     try {
-      const pulled = await pullMaterialsFromErp(selectedPlantCodes, derivedCompanyCode);
+      const pulled = await pullMaterialsFromErp(plants, company);
       setResult(pulled);
       toastService.success(`${pulled.read} record(s) read: ${pulled.new} new, ${pulled.changed} changed, ${pulled.failed} failed.`);
       if (pulled.new > 0 || pulled.changed > 0) onPulled();
+      setReloadKey((key) => key + 1);
     } catch (err: unknown) {
       toastService.error(err instanceof Error ? err.message : "Could not pull the materials from the ERP.");
     } finally {
@@ -179,7 +216,23 @@ const SilaMaterialErpPullPanel: React.FC<SilaMaterialErpPullPanelProps> = ({ onP
     }
   };
 
+  const handlePull = async () => {
+    if (selectedPlantCodes.length > 0) {
+      await runPull(selectedPlantCodes, derivedCompanyCode);
+      return;
+    }
+    const plant = quickPlant.trim().toUpperCase();
+    const company = quickCompany.trim().toUpperCase() || plant;
+    if (!plant) {
+      toastService.error("Enter a plant code (and company code), or create/select a property first.");
+      return;
+    }
+    await runPull([plant], company);
+  };
+
   const mappedCount = sortedProperties.filter((property) => property.plantCode?.trim()).length;
+  const canPullSelected = selectedPlantCodes.length > 0;
+  const canPullQuick = quickPlant.trim().length > 0 && (quickCompany.trim().length > 0 || quickPlant.trim().length > 0);
 
   return (
     <section className="sila-card">
@@ -188,25 +241,116 @@ const SilaMaterialErpPullPanel: React.FC<SilaMaterialErpPullPanelProps> = ({ onP
       </div>
       <div className="smat-erp">
         <p className="sila-help">
-          Map each property’s company / property to a SAP plant code, then multi-select plants to pull.
-          Pull includes stock, non-stock / non-inventory and service materials. Description maps into the Description column.
+          Enter company and plant codes here — no Properties screen required. New plants are mapped automatically on pull.
+          Pull includes stock, non-stock / non-inventory and service materials.
         </p>
 
         {propertiesError && (
-          <div className="sila-alert sila-alert--danger" role="alert">{propertiesError}</div>
+          <div className="sila-alert sila-alert--warning" role="status">
+            Could not list properties ({propertiesError}). You can still enter company and plant below and pull — the plant will be mapped on pull.
+          </div>
         )}
 
-        {sortedProperties.length === 0 && !propertiesError ? (
-          <div className="sila-alert sila-alert--warning" role="status">
-            No properties found. Create a property with company and plant codes under Properties first.
+        <div className="smat-plant-panel">
+          <div className="smat-plant-panel__header">
+            <div>
+              <h3 className="smat-plant-panel__title">Company &amp; plant</h3>
+              <p className="sila-help">Type the SAP company and plant (often the same, e.g. 1060). Pull uses these even when no property exists yet.</p>
+            </div>
           </div>
-        ) : (
+          <div className="smat-quick-plant">
+            <div className="sila-field">
+              <label className="sila-label" htmlFor="smat-quick-company">Company code *</label>
+              <input
+                id="smat-quick-company"
+                className="sila-input"
+                maxLength={20}
+                placeholder="e.g. 1060"
+                value={quickCompany}
+                onChange={(event) => {
+                  const value = event.target.value.toUpperCase();
+                  setQuickCompany(value);
+                  if (!quickPlant || quickPlant === quickCompany) setQuickPlant(value);
+                }}
+              />
+            </div>
+            <div className="sila-field">
+              <label className="sila-label" htmlFor="smat-quick-plant">Plant code *</label>
+              <input
+                id="smat-quick-plant"
+                className="sila-input"
+                maxLength={20}
+                placeholder="e.g. 1060"
+                value={quickPlant}
+                onChange={(event) => setQuickPlant(event.target.value.toUpperCase())}
+              />
+            </div>
+            <button
+              type="button"
+              className="sila-btn sila-btn--secondary sila-btn--sm"
+              onClick={() => setQuickPlant(quickCompany.trim().toUpperCase())}
+              disabled={!quickCompany.trim()}
+            >
+              Use company as plant
+            </button>
+          </div>
+        </div>
+
+        <form className="smat-plant-panel" onSubmit={handleCreateProperty}>
+          <div className="smat-plant-panel__header">
+            <div>
+              <h3 className="smat-plant-panel__title">Add property (optional)</h3>
+              <p className="sila-help">Creates a property record with company + plant for reuse in locations and later pulls.</p>
+            </div>
+          </div>
+          <div className="smat-quick-plant">
+            <div className="sila-field">
+              <label className="sila-label" htmlFor="smat-new-name">Property name</label>
+              <input
+                id="smat-new-name"
+                className="sila-input"
+                placeholder="Auto: Plant 1060"
+                value={newName}
+                onChange={(event) => setNewName(event.target.value)}
+              />
+            </div>
+            <div className="sila-field">
+              <label className="sila-label" htmlFor="smat-new-company">Company code *</label>
+              <input
+                id="smat-new-company"
+                className="sila-input"
+                maxLength={20}
+                value={newCompany}
+                onChange={(event) => {
+                  const value = event.target.value.toUpperCase();
+                  setNewCompany(value);
+                  if (!newPlant || newPlant === newCompany) setNewPlant(value);
+                }}
+              />
+            </div>
+            <div className="sila-field">
+              <label className="sila-label" htmlFor="smat-new-plant">Plant code *</label>
+              <input
+                id="smat-new-plant"
+                className="sila-input"
+                maxLength={20}
+                value={newPlant}
+                onChange={(event) => setNewPlant(event.target.value.toUpperCase())}
+              />
+            </div>
+            <button type="submit" className="sila-btn sila-btn--secondary" disabled={creating || !newCompany.trim()}>
+              {creating ? "Creating..." : "Create property"}
+            </button>
+          </div>
+        </form>
+
+        {sortedProperties.length > 0 && (
           <div className="smat-plant-panel">
             <div className="smat-plant-panel__header">
               <div>
-                <h3 className="smat-plant-panel__title">Map property → plant</h3>
+                <h3 className="smat-plant-panel__title">Existing properties</h3>
                 <p className="sila-help">
-                  Enter the SAP plant for each property (often the same as company code). Save the mapping, then select plants to pull.
+                  Select mapped plants to pull.
                   {mappedCount > 0 ? ` ${mappedCount} of ${sortedProperties.length} mapped.` : ""}
                 </p>
               </div>
@@ -277,32 +421,36 @@ const SilaMaterialErpPullPanel: React.FC<SilaMaterialErpPullPanelProps> = ({ onP
                 );
               })}
             </div>
-
-            <div className="smat-plant-meta">
-              <span className="sila-help">
-                {selectedPlantCodes.length === 0
-                  ? "Save plant codes and select properties to pull."
-                  : `${selectedPlantCodes.length} plant${selectedPlantCodes.length === 1 ? "" : "s"} selected: ${selectedPlantCodes.join(", ")}`}
-              </span>
-              <span className="smat-plant-meta__company">
-                Company for API: <strong>{derivedCompanyCode || "—"}</strong>
-              </span>
-            </div>
           </div>
         )}
+
+        <div className="smat-plant-meta">
+          <span className="sila-help">
+            {canPullSelected
+              ? `${selectedPlantCodes.length} plant${selectedPlantCodes.length === 1 ? "" : "s"} selected: ${selectedPlantCodes.join(", ")}`
+              : canPullQuick
+                ? `Ready to pull plant ${quickPlant.trim().toUpperCase()} (company ${quickCompany.trim().toUpperCase() || quickPlant.trim().toUpperCase()})`
+                : "Enter company and plant above, or select a mapped property."}
+          </span>
+          <span className="smat-plant-meta__company">
+            Company for API: <strong>{routeEntity}</strong>
+          </span>
+        </div>
 
         <div className="smat-toolbar">
           <button
             type="button"
             className="sila-btn sila-btn--primary"
-            disabled={pulling || routeLoading || selectedPlantCodes.length === 0 || !route?.configured}
+            disabled={pulling || routeLoading || (!canPullSelected && !canPullQuick) || !route?.configured}
             onClick={handlePull}
           >
             {pulling
               ? "Pulling..."
-              : selectedPlantCodes.length > 0
+              : canPullSelected
                 ? `Pull materials (${selectedPlantCodes.length} plant${selectedPlantCodes.length === 1 ? "" : "s"})`
-                : "Map and select plants to pull"}
+                : canPullQuick
+                  ? `Pull plant ${quickPlant.trim().toUpperCase()}`
+                  : "Enter plant to pull"}
           </button>
         </div>
 

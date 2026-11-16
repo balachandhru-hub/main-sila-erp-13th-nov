@@ -50,44 +50,81 @@ namespace Buyer.Application.Features.Commands.PullSilaMaterialsFromErp
 
             List<string> plantCodes = (request.Request.PlantCodes ?? new List<string>())
                 .Select(x => x.Trim().ToUpperInvariant())
-                .Where(x => x.Length > 0)
+                .Where(x => x.Length > 0 && x.Length <= MAX_COMPANY_CODE_LENGTH)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
+
+            string companyCode = request.Request.CompanyCode?.Trim().ToUpperInvariant() ?? string.Empty;
 
             Dictionary<string, List<BuyerProperty>> propertiesByPlant = properties
                 .Where(x => !string.IsNullOrWhiteSpace(x.PlantCode))
                 .GroupBy(x => x.PlantCode.Trim().ToUpperInvariant())
                 .ToDictionary(x => x.Key, x => x.ToList(), StringComparer.OrdinalIgnoreCase);
 
+            // Auto-map missing plants onto BuyerProperty when company code is known (Material Master pull).
             if (plantCodes.Count > 0)
             {
                 List<string> unknown = plantCodes.Where(x => !propertiesByPlant.ContainsKey(x)).ToList();
                 if (unknown.Count > 0)
                 {
-                    throw new BadRequestCustomException(
-                        "Unknown plant code(s).",
-                        $"Plant(s) {string.Join(", ", unknown)} are not mapped on any property. Configure BuyerProperty.PlantCode under Properties first.");
+                    string companyForMap = companyCode.Length > 0 && companyCode != "ALL"
+                        ? companyCode
+                        : unknown.Count == 1
+                            ? unknown[0]
+                            : string.Empty;
+                    if (companyForMap.Length == 0)
+                    {
+                        throw new BadRequestCustomException(
+                            "Unknown plant code(s).",
+                            $"Plant(s) {string.Join(", ", unknown)} are not mapped. Enter a company code with the plant(s) so they can be mapped, or create a property first.");
+                    }
+
+                    foreach (string plant in unknown)
+                    {
+                        BuyerProperty created = new BuyerProperty
+                        {
+                            Id = Guid.NewGuid(),
+                            BuyerId = buyer.Id,
+                            CompanyCode = companyForMap,
+                            PlantCode = plant,
+                            PropertyName = $"Plant {plant}",
+                            MasterApprovalFlowId = null,
+                            IsActive = true
+                        };
+                        _repository.BuyerProperty.Create(created);
+                        properties.Add(created);
+                        propertiesByPlant[plant] = new List<BuyerProperty> { created };
+                        _logger.LogInfo($"Auto-mapped plant to property for ERP pull. Plant: {plant}, Company: {companyForMap}, BuyerId: {buyer.Id}");
+                    }
+
+                    await _repository.SaveAsync();
                 }
             }
 
-            string companyCode = request.Request.CompanyCode?.Trim().ToUpperInvariant() ?? string.Empty;
-            if (plantCodes.Count > 0 && companyCode.Length == 0)
+            if (plantCodes.Count > 0 && (companyCode.Length == 0 || companyCode == "ALL"))
             {
                 List<string> companies = plantCodes
-                    .SelectMany(code => propertiesByPlant[code])
+                    .SelectMany(code => propertiesByPlant.TryGetValue(code, out List<BuyerProperty>? rows) ? rows : new List<BuyerProperty>())
                     .Select(x => x.CompanyCode?.Trim().ToUpperInvariant() ?? string.Empty)
                     .Where(x => x.Length > 0)
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .ToList();
-                companyCode = companies.Count == 1 ? companies[0] : "ALL";
+                if (companies.Count == 1)
+                {
+                    companyCode = companies[0];
+                }
+                else if (companyCode.Length == 0)
+                {
+                    companyCode = "ALL";
+                }
             }
 
             if (companyCode.Length == 0 && plantCodes.Count == 0)
             {
                 _logger.LogError($"ERP material pull without plant or company. OrganizationId: {request.OrganizationId}");
                 throw new BadRequestCustomException(
-                    "Plant is required.",
-                    "Select one or more plants mapped on Properties (or provide a company code).");
+                    "Plant or company is required.",
+                    "Enter a plant code (and company code if the plant is not mapped yet), or create a property first.");
             }
 
             if (companyCode.Length > MAX_COMPANY_CODE_LENGTH)
