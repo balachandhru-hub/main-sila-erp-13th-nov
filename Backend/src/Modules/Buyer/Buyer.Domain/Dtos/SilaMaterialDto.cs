@@ -49,5 +49,11 @@ namespace Buyer.Domain.Dtos
         public string? Category { get; set; }
         public string? AlternateUom { get; set; }
         public string? OrderUom { get; set; }
+
+        /// <summary>SAP plants this material is assigned to (from MaterialPlantAssignment).</summary>
+        public List<string> PlantCodes { get; set; } = new();
+
+        /// <summary>Property names for PlantCodes when mapped on BuyerProperty.</summary>
+        public List<string> PlantPropertyNames { get; set; } = new();
     }
 }

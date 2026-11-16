@@ -264,6 +264,15 @@ export const ItemMaster: React.FC = () => {
   const handleSaveEdit = async (itemId: string) => {
     if (!selectedBuyer || !originalItem) return;
 
+    if (!editDescription.trim()) {
+      showToast('Description is required', 'error');
+      return;
+    }
+    if (!editMaterialCode.trim()) {
+      showToast('Material code is required', 'error');
+      return;
+    }
+
     const descChanged = editDescription.trim() !== originalItem.description;
     const codeChanged = editMaterialCode.trim() !== originalItem.materialCode;
     const groupChanged = editMaterialGroup.trim() !== originalItem.materialGroup;
