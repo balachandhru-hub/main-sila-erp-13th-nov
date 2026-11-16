@@ -90,8 +90,10 @@ namespace Buyer.Application.Features.Shared
                 // Description ownership: A_ProductDescription Language EN is authoritative for ERP-sourced text.
                 // Never substitute material code, material group or material type for description.
                 string? description = null;
+                // Match A_ProductDescription by exact Product (leading zeros); dictionary is case-insensitive.
                 if (descriptionsByProduct != null
-                    && descriptionsByProduct.TryGetValue(codeKey, out string? fromDescriptionEntity))
+                    && (descriptionsByProduct.TryGetValue(code, out string? fromDescriptionEntity)
+                        || descriptionsByProduct.TryGetValue(codeKey, out fromDescriptionEntity)))
                 {
                     description = Clean(fromDescriptionEntity, 500);
                 }
@@ -166,6 +168,7 @@ namespace Buyer.Application.Features.Shared
                     // New ERP materials require a real ProductDescription (not code / group / type / placeholder).
                     if (string.IsNullOrWhiteSpace(description))
                     {
+                        result.DescriptionsMissing++;
                         Fail(result, $"{code}: English ProductDescription is missing from A_ProductDescription (Language eq 'EN'). Material was not created.");
                         continue;
                     }
@@ -182,6 +185,7 @@ namespace Buyer.Application.Features.Shared
                     if (string.IsNullOrWhiteSpace(description))
                     {
                         // Preserve existing valid description; never overwrite with null/blank.
+                        result.DescriptionsMissing++;
                         if (missingEnglishDescriptionNotes < 5)
                         {
                             Note(result, $"{code}: no English ProductDescription from A_ProductDescription; existing description preserved.");
@@ -194,7 +198,13 @@ namespace Buyer.Application.Features.Shared
                         missingEnglishDescriptionNotes++;
                     }
 
+                    string? previousDescription = material.Description;
                     changed = Update(material, description, group, materialType);
+                    if (!string.IsNullOrWhiteSpace(description)
+                        && !string.Equals(previousDescription, material.Description, StringComparison.Ordinal))
+                    {
+                        result.DescriptionsUpdated++;
+                    }
                     if (syncedCompanyCode != null && material.CompanyCode != syncedCompanyCode)
                     {
                         material.CompanyCode = syncedCompanyCode;

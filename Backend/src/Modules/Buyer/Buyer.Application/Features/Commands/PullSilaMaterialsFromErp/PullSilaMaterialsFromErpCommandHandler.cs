@@ -39,8 +39,9 @@ namespace Buyer.Application.Features.Commands.PullSilaMaterialsFromErp
 
         public async Task<SilaMaterialErpPullResultDto> Handle(PullSilaMaterialsFromErpCommand request, CancellationToken cancellationToken)
         {
+            string? productId = NormalizeProductId(request.Request.ProductId);
             _logger.LogInfo(
-                $"Pulling materials from the ERP. OrganizationId: {request.OrganizationId}, CompanyCode: {request.Request.CompanyCode}, Plants: {(request.Request.PlantCodes == null ? 0 : request.Request.PlantCodes.Count)}, UserId: {request.UserId}");
+                $"Pulling materials from the ERP. OrganizationId: {request.OrganizationId}, CompanyCode: {request.Request.CompanyCode}, Plants: {(request.Request.PlantCodes == null ? 0 : request.Request.PlantCodes.Count)}, ProductId: {productId ?? "(all)"}, UserId: {request.UserId}");
 
             BuyerBusinessProfile buyer = await SilaAccess.GetBuyerAsync(_repository, _logger, request.OrganizationId);
 
@@ -119,12 +120,21 @@ namespace Buyer.Application.Features.Commands.PullSilaMaterialsFromErp
                 }
             }
 
-            if (companyCode.Length == 0 && plantCodes.Count == 0)
+            // Both blank (no plant, no Product ID): preserve existing company/configured-plant pull (company or plants required).
+            if (companyCode.Length == 0 && plantCodes.Count == 0 && productId == null)
             {
-                _logger.LogError($"ERP material pull without plant or company. OrganizationId: {request.OrganizationId}");
+                _logger.LogError($"ERP material pull without plant, product or company. OrganizationId: {request.OrganizationId}");
                 throw new BadRequestCustomException(
-                    "Plant or company is required.",
-                    "Enter a plant code (and company code if the plant is not mapped yet), or create a property first.");
+                    "Plant, Product ID or company is required.",
+                    "Enter a plant and/or Product ID (and company if needed), or map properties first.");
+            }
+
+            // Product ID without plant: must stay inside authorized configured BuyerProperty plants (or company for ResolveIntegration).
+            if (productId != null && plantCodes.Count == 0 && propertiesByPlant.Count == 0 && companyCode.Length == 0)
+            {
+                throw new BadRequestCustomException(
+                    "Authorized plant scope is required.",
+                    "Product ID pull needs at least one configured BuyerProperty plant or a company code.");
             }
 
             if (companyCode.Length > MAX_COMPANY_CODE_LENGTH)
@@ -175,7 +185,55 @@ namespace Buyer.Application.Features.Commands.PullSilaMaterialsFromErp
                 EnsureDescriptionMapping(mappings, configuration.Id, request.UserId);
 
                 string? originalPath = configuration.ResourcePath;
-                configuration.ResourcePath = EnsureProductDescriptionExpand(configuration.ResourcePath);
+                List<string> effectivePlants = plantCodes;
+
+                // Product ID + plant eligibility via A_ProductPlant (header has no Plant field).
+                if (productId != null)
+                {
+                    HashSet<string> sapPlants = await FetchProductPlantsAsync(
+                        configuration, originalPath, productId, result, cancellationToken);
+
+                    if (plantCodes.Count > 0)
+                    {
+                        List<string> eligible = plantCodes.Where(p => sapPlants.Contains(p)).ToList();
+                        if (eligible.Count == 0)
+                        {
+                            result.SkippedNotFound++;
+                            result.Failures.Add(
+                                sapPlants.Count == 0
+                                    ? $"{productId}: not assigned in SAP to plant(s) {string.Join(", ", plantCodes)} (A_ProductPlant returned no plants)."
+                                    : $"{productId}: not assigned in SAP to plant(s) {string.Join(", ", plantCodes)}. SAP plants: {string.Join(", ", sapPlants.OrderBy(x => x))}.");
+                            IntegrationRunRules.Complete(configuration, execution);
+                            await _repository.SaveAsync();
+                            return result;
+                        }
+
+                        effectivePlants = eligible;
+                    }
+                    else
+                    {
+                        HashSet<string> authorized = new HashSet<string>(
+                            propertiesByPlant.Keys, StringComparer.OrdinalIgnoreCase);
+                        List<string> eligible = sapPlants.Where(p => authorized.Contains(p)).OrderBy(x => x).ToList();
+                        if (eligible.Count == 0)
+                        {
+                            result.SkippedNotFound++;
+                            result.Failures.Add(
+                                sapPlants.Count == 0
+                                    ? $"{productId}: no SAP plant assignment found in A_ProductPlant within authorized configured plants."
+                                    : $"{productId}: SAP plants {string.Join(", ", sapPlants.OrderBy(x => x))} are outside authorized configured plants.");
+                            IntegrationRunRules.Complete(configuration, execution);
+                            await _repository.SaveAsync();
+                            return result;
+                        }
+
+                        effectivePlants = eligible;
+                    }
+                }
+
+                // Filter A_Product at SAP when Product ID is supplied (do not pull-all then filter in memory).
+                configuration.ResourcePath = ApplyProductIdFilter(
+                    EnsureProductDescriptionExpand(configuration.ResourcePath), productId);
                 List<JsonElement> records;
                 try
                 {
@@ -186,19 +244,30 @@ namespace Buyer.Application.Features.Commands.PullSilaMaterialsFromErp
                     configuration.ResourcePath = originalPath;
                 }
 
+                if (productId != null && records.Count == 0)
+                {
+                    result.SkippedNotFound++;
+                    result.Failures.Add($"{productId}: Product not found on A_Product for the configured GET_MATERIAL connection.");
+                    IntegrationRunRules.Complete(configuration, execution);
+                    await _repository.SaveAsync();
+                    return result;
+                }
+
                 // Exact SAP Product IDs (leading zeros preserved) for A_ProductDescription filter.
-                List<string> productCodes = records
-                    .Select(record => IntegrationRecordReader.Read(mappings, "Material.Code", record)?.Trim())
-                    .Where(code => !string.IsNullOrEmpty(code))
-                    .Select(code => code!)
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .ToList();
+                List<string> productCodes = productId != null
+                    ? new List<string> { productId }
+                    : records
+                        .Select(record => IntegrationRecordReader.Read(mappings, "Material.Code", record)?.Trim())
+                        .Where(code => !string.IsNullOrEmpty(code))
+                        .Select(code => code!)
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToList();
 
                 Dictionary<string, string> descriptionsByProduct = await FetchEnProductDescriptionsAsync(
                     configuration, originalPath, productCodes, result, cancellationToken);
 
                 await SilaMaterialErpSync.ApplyAsync(
-                    _repository, _logger, buyer.Id, request.UserId, companyCode, mappings, records, result, cancellationToken, plantCodes, descriptionsByProduct);
+                    _repository, _logger, buyer.Id, request.UserId, companyCode, mappings, records, result, cancellationToken, effectivePlants, descriptionsByProduct);
                 execution.RecordsRead = result.Read;
                 execution.RecordsCreated = result.New;
                 execution.RecordsUpdated = result.Changed;
@@ -230,8 +299,110 @@ namespace Buyer.Application.Features.Commands.PullSilaMaterialsFromErp
             }
 
             _logger.LogInfo(
-                $"ERP materials pulled. ConfigurationId: {configuration.Id}, Company: {companyCode}, Plants: {plantCodes.Count}, Read: {result.Read}, New: {result.New}, Changed: {result.Changed}, Unchanged: {result.Unchanged}, Failed: {result.Failed}, PriceChanges: {result.PriceChanges}");
+                $"ERP materials pulled. ConfigurationId: {configuration.Id}, Company: {companyCode}, Plants: {plantCodes.Count}, ProductId: {productId ?? "(all)"}, Read: {result.Read}, New: {result.New}, Changed: {result.Changed}, DescriptionsUpdated: {result.DescriptionsUpdated}, DescriptionsMissing: {result.DescriptionsMissing}, SkippedNotFound: {result.SkippedNotFound}, Failed: {result.Failed}");
             return result;
+        }
+
+        /// <summary>Trim only; keep as string so SAP leading zeros are preserved.</summary>
+        private static string? NormalizeProductId(string? productId)
+        {
+            if (productId == null)
+            {
+                return null;
+            }
+
+            string trimmed = productId.Trim();
+            return trimmed.Length == 0 ? null : trimmed;
+        }
+
+        /// <summary>
+        /// Adds <c>Product eq '…'</c> on API_PRODUCT_SRV/A_Product at the SAP request (OData-escaped + URL-encoded).
+        /// </summary>
+        private static string ApplyProductIdFilter(string? resourcePath, string? productId)
+        {
+            string path = resourcePath?.Trim() ?? string.Empty;
+            if (productId == null || path.Length == 0)
+            {
+                return path;
+            }
+
+            string escaped = productId.Replace("'", "''", StringComparison.Ordinal);
+            string clause = $"Product eq '{escaped}'";
+
+            int filterAt = path.IndexOf("$filter=", StringComparison.OrdinalIgnoreCase);
+            if (filterAt >= 0)
+            {
+                int valueStart = filterAt + "$filter=".Length;
+                int valueEnd = path.IndexOf('&', valueStart);
+                if (valueEnd < 0)
+                {
+                    valueEnd = path.Length;
+                }
+
+                string existingRaw = path[valueStart..valueEnd];
+                string existing = Uri.UnescapeDataString(existingRaw);
+                string merged = string.IsNullOrWhiteSpace(existing)
+                    ? clause
+                    : $"({existing}) and ({clause})";
+                return path[..valueStart] + Uri.EscapeDataString(merged) + path[valueEnd..];
+            }
+
+            string encoded = Uri.EscapeDataString(clause);
+            return path + (path.Contains('?', StringComparison.Ordinal) ? "&" : "?") + "$filter=" + encoded;
+        }
+
+        /// <summary>
+        /// Plant assignments for a Product from <c>API_PRODUCT_SRV/A_ProductPlant</c>
+        /// (A_Product header has no Plant field).
+        /// </summary>
+        private async Task<HashSet<string>> FetchProductPlantsAsync(
+            ApiIntegrationConfiguration configuration,
+            string? productResourcePath,
+            string productId,
+            SilaMaterialErpPullResultDto result,
+            CancellationToken cancellationToken)
+        {
+            HashSet<string> plants = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            string? serviceRoot = TryApiProductServiceRoot(productResourcePath ?? configuration.ResourcePath);
+            if (serviceRoot == null)
+            {
+                result.Failures.Add("Product plant eligibility skipped: resource path is not API_PRODUCT_SRV/A_Product.");
+                return plants;
+            }
+
+            string escaped = productId.Replace("'", "''", StringComparison.Ordinal);
+            string filter = $"Product eq '{escaped}'";
+            string? originalPath = configuration.ResourcePath;
+            try
+            {
+                configuration.ResourcePath =
+                    $"{serviceRoot}A_ProductPlant?$filter={Uri.EscapeDataString(filter)}&$format=json";
+                List<JsonElement> rows = await _executor.PullRecordsAsync(configuration, true, cancellationToken);
+                foreach (JsonElement row in rows)
+                {
+                    string? plant = ReadJsonText(row, "Plant")?.Trim().ToUpperInvariant();
+                    if (!string.IsNullOrEmpty(plant))
+                    {
+                        plants.Add(plant);
+                    }
+                }
+
+                _logger.LogInfo(
+                    $"Loaded A_ProductPlant for Product {productId}. Plants: {plants.Count}, ConfigurationId: {configuration.Id}");
+            }
+            catch (Exception exception) when (exception is IntegrationException or JsonException or HttpRequestException)
+            {
+                _logger.LogError(
+                    $"A_ProductPlant fetch failed. Product: {productId}, ConfigurationId: {configuration.Id}, Error: {SilaLogText.Short(exception.Message)}");
+                result.Failures.Add(
+                    $"Could not load A_ProductPlant for {productId}: {SilaLogText.Short(exception.Message)}.");
+            }
+            finally
+            {
+                configuration.ResourcePath = originalPath;
+            }
+
+            return plants;
         }
 
         /// <summary>

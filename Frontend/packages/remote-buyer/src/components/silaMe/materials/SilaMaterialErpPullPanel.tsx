@@ -28,6 +28,8 @@ const SilaMaterialErpPullPanel: React.FC<SilaMaterialErpPullPanelProps> = ({ onP
   const [newPlant, setNewPlant] = useState("");
   const [quickCompany, setQuickCompany] = useState("");
   const [quickPlant, setQuickPlant] = useState("");
+  /** Optional SAP Product ID (string; leading zeros preserved — never parse as number). */
+  const [productId, setProductId] = useState("");
   const [route, setRoute] = useState<SilaMaterialErpRoute | null>(null);
   const [routeLoading, setRouteLoading] = useState(false);
   const [routeError, setRouteError] = useState<string | null>(null);
@@ -201,16 +203,22 @@ const SilaMaterialErpPullPanel: React.FC<SilaMaterialErpPullPanelProps> = ({ onP
     }
   };
 
-  const runPull = async (plants: string[], company: string) => {
+  const trimmedProductId = productId.trim();
+
+  const runPull = async (plants: string[], company: string, product: string) => {
     setPulling(true);
     try {
-      const pulled = await pullMaterialsFromErp(plants, company);
+      const pulled = await pullMaterialsFromErp(plants, company, product);
       setResult(pulled);
+      const descUpdated = pulled.descriptionsUpdated ?? 0;
+      const descMissing = pulled.descriptionsMissing ?? 0;
+      const skipped = pulled.skippedNotFound ?? 0;
       const saved = pulled.new + pulled.changed;
-      const summary = `${pulled.read} read · ${pulled.new} new · ${pulled.changed} changed · ${pulled.unchanged} unchanged · ${pulled.failed} failed`;
+      const summary =
+        `${pulled.read} read · ${pulled.new} new · ${pulled.changed} changed · ${descUpdated} descriptions updated · ${descMissing} missing description · ${skipped} not found · ${pulled.failed} failed`;
       if (saved > 0) {
         toastService.success(`Materials loaded into Item Master. ${summary}`);
-      } else if (pulled.failed > 0) {
+      } else if (pulled.failed > 0 || skipped > 0) {
         toastService.error(`Nothing saved to Item Master. ${summary}. See messages below.`);
       } else {
         toastService.success(`Pull finished with no changes. ${summary}`);
@@ -227,21 +235,38 @@ const SilaMaterialErpPullPanel: React.FC<SilaMaterialErpPullPanelProps> = ({ onP
 
   const handlePull = async () => {
     if (selectedPlantCodes.length > 0) {
-      await runPull(selectedPlantCodes, derivedCompanyCode);
+      await runPull(selectedPlantCodes, derivedCompanyCode, trimmedProductId);
       return;
     }
     const plant = quickPlant.trim().toUpperCase();
     const company = quickCompany.trim().toUpperCase() || plant;
-    if (!plant) {
-      toastService.error("Enter a plant code (and company code), or create/select a property first.");
+    if (!plant && !trimmedProductId) {
+      toastService.error("Enter a plant and/or Product ID, or select a mapped property.");
       return;
     }
-    await runPull([plant], company);
+    if (!plant && trimmedProductId && !company && mappedCount === 0) {
+      toastService.error("Product ID pull needs a company code or at least one configured plant.");
+      return;
+    }
+    await runPull(plant ? [plant] : [], company || "ALL", trimmedProductId);
   };
 
   const mappedCount = sortedProperties.filter((property) => property.plantCode?.trim()).length;
   const canPullSelected = selectedPlantCodes.length > 0;
   const canPullQuick = quickPlant.trim().length > 0 && (quickCompany.trim().length > 0 || quickPlant.trim().length > 0);
+  const canPullProductOnly =
+    trimmedProductId.length > 0 &&
+    (quickCompany.trim().length > 0 || mappedCount > 0 || routeEntity.length > 0);
+  const canPull = canPullSelected || canPullQuick || canPullProductOnly;
+
+  const scopeSummary = (() => {
+    const plants =
+      selectedPlantCodes.length > 0
+        ? selectedPlantCodes.join(", ")
+        : quickPlant.trim().toUpperCase() || "(authorized configured plants)";
+    const product = trimmedProductId || "(all products)";
+    return `Plant: ${plants} · Product ID: ${product} · EN description refresh on every pull`;
+  })();
 
   return (
     <section className="sila-card">
@@ -284,7 +309,7 @@ const SilaMaterialErpPullPanel: React.FC<SilaMaterialErpPullPanelProps> = ({ onP
               />
             </div>
             <div className="sila-field">
-              <label className="sila-label" htmlFor="smat-quick-plant">Plant code *</label>
+              <label className="sila-label" htmlFor="smat-quick-plant">Plant code (optional)</label>
               <input
                 id="smat-quick-plant"
                 className="sila-input"
@@ -292,6 +317,20 @@ const SilaMaterialErpPullPanel: React.FC<SilaMaterialErpPullPanelProps> = ({ onP
                 placeholder="e.g. 1060"
                 value={quickPlant}
                 onChange={(event) => setQuickPlant(event.target.value.toUpperCase())}
+              />
+            </div>
+            <div className="sila-field">
+              <label className="sila-label" htmlFor="smat-product-id">Product ID (optional)</label>
+              <input
+                id="smat-product-id"
+                className="sila-input"
+                maxLength={40}
+                inputMode="text"
+                autoComplete="off"
+                spellCheck={false}
+                placeholder="e.g. 000000000001234567"
+                value={productId}
+                onChange={(event) => setProductId(event.target.value)}
               />
             </div>
             <button
@@ -303,6 +342,10 @@ const SilaMaterialErpPullPanel: React.FC<SilaMaterialErpPullPanelProps> = ({ onP
               Use company as plant
             </button>
           </div>
+          <p className="sila-help">
+            Product ID is a string — leading zeros are kept. Plant and Product ID work alone or together.
+            English ProductDescription is refreshed on every successful pull.
+          </p>
         </div>
 
         <form className="smat-plant-panel" onSubmit={handleCreateProperty}>
@@ -434,13 +477,7 @@ const SilaMaterialErpPullPanel: React.FC<SilaMaterialErpPullPanelProps> = ({ onP
         )}
 
         <div className="smat-plant-meta">
-          <span className="sila-help">
-            {canPullSelected
-              ? `${selectedPlantCodes.length} plant${selectedPlantCodes.length === 1 ? "" : "s"} selected: ${selectedPlantCodes.join(", ")}`
-              : canPullQuick
-                ? `Ready to pull plant ${quickPlant.trim().toUpperCase()} (company ${quickCompany.trim().toUpperCase() || quickPlant.trim().toUpperCase()})`
-                : "Enter company and plant above, or select a mapped property."}
-          </span>
+          <span className="sila-help">{scopeSummary}</span>
           <span className="smat-plant-meta__company">
             Company for API: <strong>{routeEntity}</strong>
           </span>
@@ -450,16 +487,18 @@ const SilaMaterialErpPullPanel: React.FC<SilaMaterialErpPullPanelProps> = ({ onP
           <button
             type="button"
             className="sila-btn sila-btn--primary"
-            disabled={pulling || routeLoading || (!canPullSelected && !canPullQuick) || !route?.configured}
+            disabled={pulling || routeLoading || !canPull || !route?.configured}
             onClick={handlePull}
           >
             {pulling
               ? "Pulling..."
-              : canPullSelected
-                ? `Pull materials (${selectedPlantCodes.length} plant${selectedPlantCodes.length === 1 ? "" : "s"})`
-                : canPullQuick
-                  ? `Pull plant ${quickPlant.trim().toUpperCase()}`
-                  : "Enter plant to pull"}
+              : trimmedProductId && selectedPlantCodes.length === 0 && !quickPlant.trim()
+                ? `Pull product ${trimmedProductId}`
+                : canPullSelected
+                  ? `Pull materials (${selectedPlantCodes.length} plant${selectedPlantCodes.length === 1 ? "" : "s"}${trimmedProductId ? ` · ${trimmedProductId}` : ""})`
+                  : canPullQuick
+                    ? `Pull plant ${quickPlant.trim().toUpperCase()}${trimmedProductId ? ` · ${trimmedProductId}` : ""}`
+                    : "Enter plant or Product ID"}
           </button>
         </div>
 
@@ -480,18 +519,24 @@ const SilaMaterialErpPullPanel: React.FC<SilaMaterialErpPullPanelProps> = ({ onP
           </dl>
         ) : null}
         <span className="sila-help">
-          Pulled materials appear in Item Master inventory below. Description comes from
-          API_PRODUCT_SRV/A_ProductDescription (Language eq EN → ProductDescription), matched by Product ID
-          (leading zeros preserved). New materials without an English description are rejected; existing
-          descriptions are kept when EN text is missing. Stock snapshots never overwrite the SILA inventory ledger.
+          Description refresh: API_PRODUCT_SRV/A_ProductDescription (Language eq EN → ProductDescription).
+          New materials without EN text are rejected; existing descriptions are preserved when EN text is missing.
+          Stock snapshots never overwrite the SILA inventory ledger.
         </span>
         {route?.lastError && !result && <span className="sila-help">Last error: {route.lastError}</span>}
         {result && (
           <div className="smat-pull-result" role="status">
             <div className="smat-counts">
               <span className="sila-badge sila-badge--neutral">{result.read} read</span>
-              <span className="sila-badge sila-badge--success">{result.new} new in Item Master</span>
-              <span className="sila-badge sila-badge--info">{result.changed} changed</span>
+              <span className="sila-badge sila-badge--success">{result.new} created</span>
+              <span className="sila-badge sila-badge--info">{result.changed} updated</span>
+              <span className="sila-badge sila-badge--success">{result.descriptionsUpdated ?? 0} descriptions updated</span>
+              <span className={`sila-badge sila-badge--${(result.descriptionsMissing ?? 0) > 0 ? "warning" : "neutral"}`}>
+                {result.descriptionsMissing ?? 0} missing description
+              </span>
+              <span className={`sila-badge sila-badge--${(result.skippedNotFound ?? 0) > 0 ? "warning" : "neutral"}`}>
+                {result.skippedNotFound ?? 0} not found / skipped
+              </span>
               <span className="sila-badge sila-badge--neutral">{result.unchanged} unchanged</span>
               <span className={`sila-badge sila-badge--${result.failed > 0 ? "danger" : "neutral"}`}>{result.failed} failed</span>
               <span className="sila-badge sila-badge--warning">{result.priceChanges} price change(s) for approval</span>

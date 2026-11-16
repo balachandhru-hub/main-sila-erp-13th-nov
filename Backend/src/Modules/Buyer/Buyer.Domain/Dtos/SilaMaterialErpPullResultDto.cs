@@ -1,8 +1,7 @@
 namespace Buyer.Domain.Dtos
 {
     /// <summary>
-    /// Outcome of an ERP material pull: records read, materials created, changed (fields updated or a price change
-    /// requested), unchanged and failed, with a message per failed record.
+    /// Outcome of an ERP material pull: records read, materials created/changed, description refresh, and failures.
     /// </summary>
     public class SilaMaterialErpPullResultDto
     {
@@ -14,6 +13,16 @@ namespace Buyer.Domain.Dtos
         public int Failed { get; set; }
         /// <summary>Price change requests created for approval.</summary>
         public int PriceChanges { get; set; }
+
+        /// <summary>Existing materials whose Description was refreshed from EN ProductDescription.</summary>
+        public int DescriptionsUpdated { get; set; }
+
+        /// <summary>Materials with no EN ProductDescription (new failed or existing preserved).</summary>
+        public int DescriptionsMissing { get; set; }
+
+        /// <summary>Product/plant scope not found or not eligible.</summary>
+        public int SkippedNotFound { get; set; }
+
         public List<string> Failures { get; set; } = new();
     }
 }

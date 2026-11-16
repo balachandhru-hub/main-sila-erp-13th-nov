@@ -93,6 +93,9 @@ export interface SilaMaterialErpPullResult {
   unchanged: number;
   failed: number;
   priceChanges: number;
+  descriptionsUpdated?: number;
+  descriptionsMissing?: number;
+  skippedNotFound?: number;
   failures: string[];
 }
 
@@ -189,15 +192,18 @@ export const getMaterialErpRoute = (companyCode: string): Promise<SilaMaterialEr
     "Could not load the ERP material API.",
   );
 
-/** Plant-first ERP pull; company code is optional and derived from selected plants when omitted. */
+/** Plant-first ERP pull; optional Product ID filters A_Product at SAP. Leading zeros preserved (string). */
 export const pullMaterialsFromErp = async (
   plantCodes: string[],
   companyCode = "",
+  productId = "",
 ): Promise<SilaMaterialErpPullResult> => {
+  const trimmedProductId = productId.trim();
   const result = await call(
     () => axiosInstance.post<SilaMaterialErpPullResult>(`${BASE}/materials/erp-pull`, {
       plantCodes: plantCodes.map((code) => code.trim()).filter(Boolean),
       companyCode: companyCode.trim() || undefined,
+      productId: trimmedProductId || undefined,
     }),
     "Could not pull the materials from the ERP.",
   );
