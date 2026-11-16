@@ -26,6 +26,20 @@ namespace Buyer.Application.Features.Commands.PredefinedMaterialMaster
         {
             _logger.LogInfo($"Updating ItemBuyerMaster : {request.Id}");
 
+            if (string.IsNullOrWhiteSpace(request.ItemBuyerMasterDto.Description))
+            {
+                throw new BadRequestCustomException(
+                    "Description is required.",
+                    "Material Master requires a description.");
+            }
+
+            if (string.IsNullOrWhiteSpace(request.ItemBuyerMasterDto.MaterialCode))
+            {
+                throw new BadRequestCustomException(
+                    "Material Code is required.",
+                    "Material Master requires a material code.");
+            }
+
             var entity = await _repository.ItemBuyerMaster
                 .FindByCondition(x => x.Id == request.Id && x.IsActive)
                 .FirstOrDefaultAsync(cancellationToken);
@@ -51,9 +65,9 @@ namespace Buyer.Application.Features.Commands.PredefinedMaterialMaster
                     "");
             }
 
-            entity.Description = request.ItemBuyerMasterDto.Description;
-            entity.MaterialCode = request.ItemBuyerMasterDto.MaterialCode;
-            entity.MaterialGroup = request.ItemBuyerMasterDto.MaterialGroup;
+            entity.Description = request.ItemBuyerMasterDto.Description.Trim();
+            entity.MaterialCode = request.ItemBuyerMasterDto.MaterialCode.Trim();
+            entity.MaterialGroup = request.ItemBuyerMasterDto.MaterialGroup?.Trim();
 
             _repository.ItemBuyerMaster.Update(entity);
 

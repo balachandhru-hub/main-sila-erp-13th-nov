@@ -298,8 +298,11 @@ namespace Buyer.Application.Features.Commands.PredefinedMaterialMaster
                 {
                     result.FailedUploads++;
 
+                    var missing = new List<string>();
+                    if (string.IsNullOrWhiteSpace(item.MaterialCode)) missing.Add("MaterialCode");
+                    if (string.IsNullOrWhiteSpace(item.Description)) missing.Add("Description");
                     result.Errors.Add(
-                        $"Invalid record at Excel row {i + 2}");
+                        $"Invalid record at Excel row {i + 2}: {string.Join(" and ", missing)} required.");
 
                     continue;
                 }
@@ -312,7 +315,8 @@ namespace Buyer.Application.Features.Commands.PredefinedMaterialMaster
         private static bool IsValid(BuyerEntity item)
         {
             return
-                !string.IsNullOrWhiteSpace(item.MaterialCode);
+                !string.IsNullOrWhiteSpace(item.MaterialCode) &&
+                !string.IsNullOrWhiteSpace(item.Description);
         }
 
         /// <summary>SubUnit/MicroUnit are nullable columns - store null rather than "" for a blank cell.</summary>

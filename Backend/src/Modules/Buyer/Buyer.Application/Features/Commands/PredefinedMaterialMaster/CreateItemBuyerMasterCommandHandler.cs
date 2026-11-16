@@ -31,6 +31,20 @@ namespace Buyer.Application.Features.Commands.PredefinedMaterialMaster
 
             var dto = request.PredefinedMaterial;
 
+            if (string.IsNullOrWhiteSpace(dto.Description))
+            {
+                throw new BadRequestCustomException(
+                    "Description is required.",
+                    "Material Master requires a description.");
+            }
+
+            if (string.IsNullOrWhiteSpace(dto.MaterialCode))
+            {
+                throw new BadRequestCustomException(
+                    "Material Code is required.",
+                    "Material Master requires a material code.");
+            }
+
             // =========================================================
             // 1. Check duplicate Material Code
             // =========================================================
@@ -100,9 +114,9 @@ namespace Buyer.Application.Features.Commands.PredefinedMaterialMaster
 
                 BuyerId = buyer.Id,
 
-                Description = dto.Description,
+                Description = dto.Description.Trim(),
 
-                MaterialCode = dto.MaterialCode,
+                MaterialCode = dto.MaterialCode.Trim(),
 
                 MaterialGroup = dto.MaterialGroup,
 
