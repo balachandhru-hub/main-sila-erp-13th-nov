@@ -16,7 +16,26 @@ interface SilaMaterialErpPullPanelProps {
   onPulled: () => void;
 }
 
-/** Pulls materials via GET_MATERIAL; optional plant filter from BuyerProperty mappings. */
+interface PlantOption {
+  code: string;
+  propertyName: string;
+}
+
+const plantsFor = (properties: Property[], companyCode: string): PlantOption[] => {
+  const code = companyCode.trim().toUpperCase();
+  const byPlant = new Map<string, string>();
+  for (const property of properties) {
+    if (code && property.companyCode?.trim().toUpperCase() !== code) continue;
+    const plant = property.plantCode?.trim().toUpperCase();
+    if (!plant) continue;
+    if (!byPlant.has(plant)) byPlant.set(plant, property.propertyName?.trim() || plant);
+  }
+  return Array.from(byPlant.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([plantCode, propertyName]) => ({ code: plantCode, propertyName }));
+};
+
+/** Pulls materials via GET_MATERIAL; plant multi-select from BuyerProperty mappings. */
 const SilaMaterialErpPullPanel: React.FC<SilaMaterialErpPullPanelProps> = ({ onPulled }) => {
   const [properties, setProperties] = useState<Property[]>([]);
   const [companyCode, setCompanyCode] = useState("");
@@ -49,17 +68,11 @@ const SilaMaterialErpPullPanel: React.FC<SilaMaterialErpPullPanelProps> = ({ onP
     [properties],
   );
 
-  const plantsForCompany = useMemo(() => {
-    const code = companyCode.trim().toUpperCase();
-    return Array.from(
-      new Set(
-        properties
-          .filter((property) => !code || property.companyCode?.trim().toUpperCase() === code)
-          .map((property) => property.plantCode?.trim().toUpperCase())
-          .filter(Boolean),
-      ),
-    ) as string[];
-  }, [properties, companyCode]);
+  const plantOptions = useMemo(() => plantsFor(properties, companyCode), [properties, companyCode]);
+
+  useEffect(() => {
+    setSelectedPlants({});
+  }, [companyCode]);
 
   useEffect(() => {
     const code = companyCode.trim();
@@ -90,10 +103,27 @@ const SilaMaterialErpPullPanel: React.FC<SilaMaterialErpPullPanelProps> = ({ onP
     };
   }, [companyCode]);
 
+  const selectedCount = useMemo(
+    () => plantOptions.filter((plant) => selectedPlants[plant.code]).length,
+    [plantOptions, selectedPlants],
+  );
+
+  const selectAllPlants = () => {
+    const next: Record<string, boolean> = {};
+    for (const plant of plantOptions) next[plant.code] = true;
+    setSelectedPlants(next);
+  };
+
+  const clearPlants = () => setSelectedPlants({});
+
+  const togglePlant = (code: string) => {
+    setSelectedPlants((current) => ({ ...current, [code]: !current[code] }));
+  };
+
   const handlePull = async () => {
     setPulling(true);
     try {
-      const plants = Object.keys(selectedPlants).filter((code) => selectedPlants[code]);
+      const plants = plantOptions.map((plant) => plant.code).filter((code) => selectedPlants[code]);
       const pulled = await pullMaterialsFromErp(companyCode, plants);
       setResult(pulled);
       toastService.success(`${pulled.read} record(s) read: ${pulled.new} new, ${pulled.changed} changed, ${pulled.failed} failed.`);
@@ -111,6 +141,11 @@ const SilaMaterialErpPullPanel: React.FC<SilaMaterialErpPullPanelProps> = ({ onP
         <h2 className="sila-card-title">Pull from ERP</h2>
       </div>
       <div className="smat-erp">
+        <p className="sila-help">
+          Pulls all material types for the company — stock, non-stock / non-inventory and service —
+          scoped by the plants you select. Plant assignments and valuation follow the selected plants.
+        </p>
+
         <div className="smat-toolbar">
           <div className="sila-field">
             <label className="sila-label" htmlFor="smat-erp-company">Company code *</label>
@@ -132,27 +167,58 @@ const SilaMaterialErpPullPanel: React.FC<SilaMaterialErpPullPanelProps> = ({ onP
             disabled={pulling || routeLoading || !companyCode.trim() || !route?.configured}
             onClick={handlePull}
           >
-            {pulling ? "Pulling..." : "Pull materials"}
+            {pulling ? "Pulling..." : selectedCount > 0 ? `Pull materials (${selectedCount} plant${selectedCount === 1 ? "" : "s"})` : "Pull all plants"}
           </button>
         </div>
 
-        {plantsForCompany.length > 0 && (
-          <div>
-            <p className="sila-help">Optional plant filter (from property mappings). Leave empty to apply all plants present in the pull payload.</p>
-            <div className="smat-counts">
-              {plantsForCompany.map((plant) => (
-                <label key={plant} className="sila-choice">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(selectedPlants[plant])}
-                    onChange={() => setSelectedPlants((current) => ({ ...current, [plant]: !current[plant] }))}
-                  />
-                  {plant}
-                </label>
-              ))}
+        {plantOptions.length > 0 ? (
+          <div className="smat-plant-panel">
+            <div className="smat-plant-panel__header">
+              <div>
+                <h3 className="smat-plant-panel__title">Plants</h3>
+                <p className="sila-help">
+                  Multi-select plants from property mappings. Leave none selected to apply every plant present in the pull payload.
+                </p>
+              </div>
+              <div className="smat-plant-actions">
+                <button type="button" className="sila-btn sila-btn--secondary sila-btn--sm" onClick={selectAllPlants}>
+                  Select all
+                </button>
+                <button type="button" className="sila-btn sila-btn--secondary sila-btn--sm" onClick={clearPlants} disabled={selectedCount === 0}>
+                  Clear
+                </button>
+              </div>
             </div>
+            <div className="smat-plant-grid" role="group" aria-label="Plant selection">
+              {plantOptions.map((plant) => {
+                const checked = Boolean(selectedPlants[plant.code]);
+                return (
+                  <label
+                    key={plant.code}
+                    className={`smat-plant-card${checked ? " smat-plant-card--selected" : ""}`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => togglePlant(plant.code)}
+                    />
+                    <span className="smat-plant-card__code">{plant.code}</span>
+                    <span className="smat-plant-card__name">{plant.propertyName}</span>
+                  </label>
+                );
+              })}
+            </div>
+            <p className="sila-help">
+              {selectedCount === 0
+                ? "No plant filter — all plants in the ERP payload will be applied."
+                : `${selectedCount} of ${plantOptions.length} plant${plantOptions.length === 1 ? "" : "s"} selected.`}
+            </p>
           </div>
-        )}
+        ) : companyCode.trim() ? (
+          <div className="sila-alert sila-alert--warning" role="status">
+            No plant codes are mapped on properties for {companyCode}. Map plants under Properties, or pull without a plant filter.
+          </div>
+        ) : null}
 
         {routeLoading ? (
           <Loader size={20} message="Checking the ERP material API..." />

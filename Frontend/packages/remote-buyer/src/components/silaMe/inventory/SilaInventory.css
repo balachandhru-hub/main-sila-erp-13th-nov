@@ -24,6 +24,11 @@
   flex: 1 1 16rem;
 }
 
+.sinv-filter-note {
+  padding: 0 var(--sila-space-4) var(--sila-space-2);
+  margin: 0;
+}
+
 /* Second, quieter line inside a table cell */
 .sinv-sub {
   display: block;

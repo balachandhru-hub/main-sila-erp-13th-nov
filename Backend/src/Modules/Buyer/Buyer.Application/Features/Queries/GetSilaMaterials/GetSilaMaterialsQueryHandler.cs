@@ -48,13 +48,25 @@ namespace Buyer.Application.Features.Queries.GetSilaMaterials
                 query = query.Where(x =>
                     (x.MaterialCode != null && x.MaterialCode.Contains(term)) ||
                     (x.Description != null && x.Description.Contains(term)) ||
-                    (x.Barcode != null && x.Barcode == term));
+                    (x.Barcode != null && x.Barcode.Contains(term)));
+            }
+
+            string? plantCode = string.IsNullOrWhiteSpace(request.PlantCode) ? null : request.PlantCode.Trim().ToUpperInvariant();
+            if (plantCode != null)
+            {
+                List<Guid> plantMaterialIds = await _repository.MaterialPlantAssignment
+                    .FindByCondition(x => x.BuyerId == buyer.Id && x.IsActive && x.PlantCode != null && x.PlantCode.ToUpper() == plantCode)
+                    .Select(x => x.MaterialId)
+                    .Distinct()
+                    .ToListAsync(cancellationToken);
+                query = query.Where(x => plantMaterialIds.Contains(x.Id));
             }
 
             query = SilaMaterialRules.FilterByPriceStatus(query, _repository, buyer.Id, priceStatus);
 
             List<MaterialEntity> materials = await query
-                .OrderBy(x => x.MaterialCode)
+                .OrderBy(x => x.Description)
+                .ThenBy(x => x.MaterialCode)
                 .Skip(index)
                 .Take(limit)
                 .ToListAsync(cancellationToken);
@@ -62,13 +74,37 @@ namespace Buyer.Application.Features.Queries.GetSilaMaterials
             Dictionary<Guid, List<MaterialUomConversion>> conversions = await UomConverter.GetConversionsAsync(_repository, ids, cancellationToken);
             Dictionary<Guid, MaterialPriceChange> pending = await SilaMaterialRules.GetPendingChangesAsync(_repository, buyer.Id, ids, cancellationToken);
 
-            List<SilaMaterialDto> result = materials.Select(x => SilaMaterialRules.ToDto(
-                x,
-                conversions.TryGetValue(x.Id, out List<MaterialUomConversion>? list) ? list : null,
-                pending.TryGetValue(x.Id, out MaterialPriceChange? change) ? change : null)).ToList();
+            Dictionary<Guid, List<string>> plantsByMaterial = ids.Count == 0
+                ? new Dictionary<Guid, List<string>>()
+                : (await _repository.MaterialPlantAssignment
+                    .FindByCondition(x => x.BuyerId == buyer.Id && x.IsActive && ids.Contains(x.MaterialId))
+                    .ToListAsync(cancellationToken))
+                    .GroupBy(x => x.MaterialId)
+                    .ToDictionary(
+                        x => x.Key,
+                        x => x.Select(p => p.PlantCode).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(p => p).ToList());
+
+            Dictionary<string, string> propertyByPlant = (await _repository.BuyerProperty
+                .FindByCondition(x => x.BuyerId == buyer.Id && x.IsActive && x.PlantCode != null && x.PlantCode != "")
+                .ToListAsync(cancellationToken))
+                .GroupBy(x => x.PlantCode.Trim().ToUpperInvariant())
+                .ToDictionary(x => x.Key, x => x.First().PropertyName ?? x.Key, StringComparer.OrdinalIgnoreCase);
+
+            List<SilaMaterialDto> result = materials.Select(x =>
+            {
+                SilaMaterialDto dto = SilaMaterialRules.ToDto(
+                    x,
+                    conversions.TryGetValue(x.Id, out List<MaterialUomConversion>? list) ? list : null,
+                    pending.TryGetValue(x.Id, out MaterialPriceChange? change) ? change : null);
+                dto.PlantCodes = plantsByMaterial.TryGetValue(x.Id, out List<string>? plants) ? plants : new List<string>();
+                dto.PlantPropertyNames = dto.PlantCodes
+                    .Select(code => propertyByPlant.TryGetValue(code.ToUpperInvariant(), out string? name) ? name : code)
+                    .ToList();
+                return dto;
+            }).ToList();
             await SilaMaterialRules.ApplyApprovedPricesAsync(_repository, buyer.Id, result, cancellationToken);
 
-            _logger.LogInfo($"Inventory materials fetched. Count: {result.Count}, BuyerId: {buyer.Id}");
+            _logger.LogInfo($"Inventory materials fetched. Count: {result.Count}, BuyerId: {buyer.Id}, Plant: {plantCode}");
             return result;
         }
     }
