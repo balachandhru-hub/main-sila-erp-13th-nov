@@ -649,6 +649,7 @@ const SilaRecipeEditor: React.FC<SilaRecipeEditorProps> = ({ recipe, canRequestP
             onAddMany={addMaterials}
             recommended={materialRecs.items}
             recommendReason={materialRecs.reason}
+            outletLocationId={activeOutlet || null}
           />
         </div>
       )}

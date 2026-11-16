@@ -105,6 +105,15 @@ WHERE id = @Config
 -- Header fields supported by SilaMaterialErpSync (Material.Code required).
 -- Description language expand (to_Description) is left for operator mapping when needed;
 -- IntegrationRecordReader walks object paths only (not OData results[] arrays).
+-- Optional plant / SLoc / UOM / valuation targets (map when A_ProductPlant / SLoc / UoM / valuation
+-- payloads are available on the configured connection — do not invent field paths):
+--   Material.Plant, Material.PlantStatus, Material.PurchasingGroup, Material.MrpType,
+--   Material.ProcurementType, Material.ReorderPoint, Material.SafetyStock,
+--   Material.StorageLocation, Material.AltUom, Material.AltUomNumerator, Material.AltUomDenominator,
+--   Material.ValuationClass, Material.PriceControl, Material.StandardPrice,
+--   Material.MovingAveragePrice, Material.PriceUnit, Material.MaterialType, Material.Description
+-- Candidate SAP entity sets (activation not assumed): A_ProductPlant, A_ProductStorageLocation,
+-- A_ProductUnitsOfMeasure, A_ProductValuation, API_MATERIAL_STOCK_SRV.
 ;WITH maps AS (
     SELECT * FROM (VALUES
         (N'Product', N'Material.Code', N'UPPER'),

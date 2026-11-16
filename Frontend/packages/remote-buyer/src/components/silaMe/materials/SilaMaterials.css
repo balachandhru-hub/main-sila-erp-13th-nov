@@ -80,3 +80,40 @@
   gap: var(--sila-space-3);
   padding: var(--sila-space-3) var(--sila-space-4);
 }
+
+.smat-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  max-height: 70vh;
+  overflow: auto;
+}
+
+.smat-detail-hero {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1rem;
+  align-items: center;
+  padding: 0.85rem 1rem;
+  border-radius: 1rem;
+  background: linear-gradient(120deg, #eef6ff, #ffffff 55%, #f3fff8);
+  border: 0.0625rem solid #d7e7f6;
+}
+
+.smat-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.smat-detail-grid > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+@media (max-width: 48rem) {
+  .smat-detail-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}

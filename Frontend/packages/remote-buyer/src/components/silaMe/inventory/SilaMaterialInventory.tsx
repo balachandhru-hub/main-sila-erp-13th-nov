@@ -5,6 +5,7 @@ import SilaMaterialDialog from "./SilaMaterialDialog";
 import SilaMaterialPricePanel from "../materials/SilaMaterialPricePanel";
 import SilaMaterialExcelPanel from "../materials/SilaMaterialExcelPanel";
 import SilaMaterialErpPullPanel from "../materials/SilaMaterialErpPullPanel";
+import SilaMaterialDetailPanel from "../materials/SilaMaterialDetailPanel";
 import SilaPriceStatusBadge from "../materials/SilaPriceStatusBadge";
 import { codeLabel, formatPrice, priceStatusLabel } from "../materials/materialFormat";
 import "../silaMeTheme.css";
@@ -31,6 +32,7 @@ const SilaMaterialInventory: React.FC<SilaMaterialInventoryProps> = ({ canManage
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [editing, setEditing] = useState<SilaMaterial | null>(null);
+  const [detailId, setDetailId] = useState<string | null>(null);
 
   // Searches on the server, shortly after the user stops typing.
   useEffect(() => {
@@ -213,6 +215,14 @@ const SilaMaterialInventory: React.FC<SilaMaterialInventoryProps> = ({ canManage
                       <div className="sinv-inline">
                         <button
                           type="button"
+                          className="sila-btn sila-btn--primary sila-btn--sm"
+                          aria-label={`Open ${material.materialCode} detail`}
+                          onClick={() => setDetailId(material.id)}
+                        >
+                          Detail
+                        </button>
+                        <button
+                          type="button"
                           className="sila-btn sila-btn--secondary sila-btn--sm"
                           aria-label={`Unit price of ${material.materialCode}`}
                           onClick={() => setPricing(material)}
@@ -265,6 +275,7 @@ const SilaMaterialInventory: React.FC<SilaMaterialInventoryProps> = ({ canManage
       {canManageMasterData && <SilaMaterialErpPullPanel onPulled={reload} />}
 
       {editing && <SilaMaterialDialog material={editing} onClose={closeDialog} onSaved={afterSave} />}
+      {detailId && <SilaMaterialDetailPanel materialId={detailId} onClose={() => setDetailId(null)} />}
       {pricing && (
         <SilaMaterialPricePanel
           material={pricing}

@@ -84,9 +84,32 @@ namespace Buyer.Application.Features.Commands.PullSilaMaterialsFromErp
                     throw new IntegrationException("MAPPING_REQUIRED", "Map the ERP field that holds the material code to Material.Code before pulling.");
                 }
 
+                List<string> plantCodes = (request.Request.PlantCodes ?? new List<string>())
+                    .Select(x => x.Trim().ToUpperInvariant())
+                    .Where(x => x.Length > 0)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                if (plantCodes.Count > 0)
+                {
+                    // Only accept plants that exist in BuyerProperty mappings for this buyer (no invented plant numbers).
+                    HashSet<string> authorized = (await _repository.BuyerProperty
+                        .FindByCondition(x => x.BuyerId == buyer.Id && x.IsActive)
+                        .Select(x => x.PlantCode)
+                        .ToListAsync(cancellationToken))
+                        .Select(x => x.Trim().ToUpperInvariant())
+                        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                    List<string> unknown = plantCodes.Where(x => !authorized.Contains(x)).ToList();
+                    if (unknown.Count > 0)
+                    {
+                        throw new BadRequestCustomException(
+                            "Unknown plant code(s).",
+                            $"Plant(s) {string.Join(", ", unknown)} are not mapped on any property. Configure BuyerProperty.PlantCode first.");
+                    }
+                }
+
                 List<JsonElement> records = await _executor.PullRecordsAsync(configuration, true, cancellationToken);
                 await SilaMaterialErpSync.ApplyAsync(
-                    _repository, _logger, buyer.Id, request.UserId, companyCode, mappings, records, result, cancellationToken);
+                    _repository, _logger, buyer.Id, request.UserId, companyCode, mappings, records, result, cancellationToken, plantCodes);
                 execution.RecordsRead = result.Read;
                 execution.RecordsCreated = result.New;
                 execution.RecordsUpdated = result.Changed;

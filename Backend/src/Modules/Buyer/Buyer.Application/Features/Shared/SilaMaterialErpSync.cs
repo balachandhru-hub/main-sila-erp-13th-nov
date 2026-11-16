@@ -12,10 +12,9 @@ using SharedKernel.LoggerServices;
 namespace Buyer.Application.Features.Shared
 {
     /// <summary>
-    /// Applies the records of a GET_MATERIAL pull (target fields Material.*) to the material master: unknown codes become
-    /// new materials, known ones get their description and group updated, and a price that differs from the approved one
-    /// becomes a price change request (approval) — the approved price is never overwritten. The base unit of an existing
-    /// material is not changed (stock is kept in it). The caller saves.
+    /// Applies GET_MATERIAL pull records to Material Master (header upsert), optional plant/SLoc assignments,
+    /// material-specific UOM conversions, and valuation fields. Never overwrites approved UnitCost (price-change request).
+    /// Never mutates InventoryBalance / InventoryLedger. Never deletes materials missing from a partial pull.
     /// </summary>
     public static class SilaMaterialErpSync
     {
@@ -32,9 +31,13 @@ namespace Buyer.Application.Features.Shared
             List<ApiFieldMapping> mappings,
             List<JsonElement> records,
             SilaMaterialErpPullResultDto result,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            IReadOnlyCollection<string>? plantFilter = null)
         {
-            List<string> codes = records
+            HashSet<string>? plants = NormalizePlantFilter(plantFilter);
+            List<JsonElement> scoped = FilterByPlant(records, mappings, plants, result);
+
+            List<string> codes = scoped
                 .Select(record => IntegrationRecordReader.Read(mappings, "Material.Code", record)?.Trim().ToUpperInvariant())
                 .Where(code => !string.IsNullOrEmpty(code))
                 .Select(code => code!)
@@ -52,21 +55,56 @@ namespace Buyer.Application.Features.Shared
                 repository, buyerId, materials.Values.Select(x => x.Id), cancellationToken);
             ApprovalScope scope = await SilaMaterialPricing.GetScopeAsync(repository, buyerId, cancellationToken);
             bool flowExists = await FlowExistsAsync(repository, logger, buyerId, scope, cancellationToken);
-            Dictionary<Guid, List<MaterialUomConversion>> noConversions = new Dictionary<Guid, List<MaterialUomConversion>>();
+            Dictionary<Guid, List<MaterialUomConversion>> conversionsByMaterial = await UomConverter.GetConversionsAsync(
+                repository, materials.Values.Select(x => x.Id).ToList(), cancellationToken);
+            Dictionary<string, Guid> locationByPlantSloc = await LoadLocationMapAsync(repository, buyerId, cancellationToken);
+            Dictionary<string, string> propertyByPlant = await LoadPropertyNamesAsync(repository, buyerId, cancellationToken);
+            _ = propertyByPlant;
+
+            List<MaterialPlantAssignment> plantRows = await repository.MaterialPlantAssignment
+                .FindByCondition(x => x.BuyerId == buyerId && x.IsActive && materials.Values.Select(m => m.Id).Contains(x.MaterialId))
+                .ToListAsync(cancellationToken);
+            Dictionary<(Guid, string), MaterialPlantAssignment> plantIndex = plantRows
+                .ToDictionary(x => (x.MaterialId, x.PlantCode.ToUpperInvariant()), x => x);
+
+            List<MaterialStorageLocationAssignment> slocRows = await repository.MaterialStorageLocationAssignment
+                .FindByCondition(x => x.BuyerId == buyerId && x.IsActive && materials.Values.Select(m => m.Id).Contains(x.MaterialId))
+                .ToListAsync(cancellationToken);
+            Dictionary<(Guid, string, string), MaterialStorageLocationAssignment> slocIndex = slocRows
+                .ToDictionary(x => (x.MaterialId, x.PlantCode.ToUpperInvariant(), x.StorageLocationCode.ToUpperInvariant()), x => x);
+
             HashSet<string> seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             string reason = $"ERP material pull, company code {companyCode}";
             string? syncedCompanyCode = string.IsNullOrWhiteSpace(companyCode) || companyCode.Trim().ToUpperInvariant() == "ALL" ? null : companyCode.Trim();
+            DateTime now = DateTime.UtcNow;
 
-            foreach (JsonElement record in records)
+            foreach (JsonElement record in scoped)
             {
                 result.Read++;
                 string code = IntegrationRecordReader.Read(mappings, "Material.Code", record)?.Trim().ToUpperInvariant() ?? string.Empty;
                 string? description = Clean(IntegrationRecordReader.Read(mappings, "Material.Description", record), 500);
                 string? baseUom = Clean(IntegrationRecordReader.Read(mappings, "Material.BaseUom", record), 20)?.ToUpperInvariant();
                 string? group = Clean(IntegrationRecordReader.Read(mappings, "Material.MaterialGroup", record), 100);
+                string? materialType = Clean(IntegrationRecordReader.Read(mappings, "Material.MaterialType", record), 100);
                 string? priceText = IntegrationRecordReader.Read(mappings, "Material.UnitPrice", record);
                 decimal? price = IntegrationRecordReader.ParseDecimal(priceText);
                 string? currency = Clean(IntegrationRecordReader.Read(mappings, "Material.Currency", record), 3)?.ToUpperInvariant();
+                string? plant = Clean(IntegrationRecordReader.Read(mappings, "Material.Plant", record), 50)?.ToUpperInvariant();
+                string? plantStatus = Clean(IntegrationRecordReader.Read(mappings, "Material.PlantStatus", record), 40);
+                string? purchasingGroup = Clean(IntegrationRecordReader.Read(mappings, "Material.PurchasingGroup", record), 40);
+                string? mrpType = Clean(IntegrationRecordReader.Read(mappings, "Material.MrpType", record), 40);
+                string? procurementType = Clean(IntegrationRecordReader.Read(mappings, "Material.ProcurementType", record), 40);
+                decimal? reorderPoint = IntegrationRecordReader.ParseDecimal(IntegrationRecordReader.Read(mappings, "Material.ReorderPoint", record));
+                decimal? safetyStock = IntegrationRecordReader.ParseDecimal(IntegrationRecordReader.Read(mappings, "Material.SafetyStock", record));
+                string? storageLocation = Clean(IntegrationRecordReader.Read(mappings, "Material.StorageLocation", record), 50)?.ToUpperInvariant();
+                string? altUom = Clean(IntegrationRecordReader.Read(mappings, "Material.AltUom", record), 20)?.ToUpperInvariant();
+                decimal? altNum = IntegrationRecordReader.ParseDecimal(IntegrationRecordReader.Read(mappings, "Material.AltUomNumerator", record));
+                decimal? altDen = IntegrationRecordReader.ParseDecimal(IntegrationRecordReader.Read(mappings, "Material.AltUomDenominator", record));
+                string? valuationClass = Clean(IntegrationRecordReader.Read(mappings, "Material.ValuationClass", record), 40);
+                string? priceControl = Clean(IntegrationRecordReader.Read(mappings, "Material.PriceControl", record), 10)?.ToUpperInvariant();
+                decimal? standardPrice = IntegrationRecordReader.ParseDecimal(IntegrationRecordReader.Read(mappings, "Material.StandardPrice", record));
+                decimal? movingAverage = IntegrationRecordReader.ParseDecimal(IntegrationRecordReader.Read(mappings, "Material.MovingAveragePrice", record));
+                decimal? priceUnit = IntegrationRecordReader.ParseDecimal(IntegrationRecordReader.Read(mappings, "Material.PriceUnit", record));
 
                 if (code.Length == 0 || code.Length > MAX_CODE_LENGTH)
                 {
@@ -74,9 +112,10 @@ namespace Buyer.Application.Features.Shared
                     continue;
                 }
 
-                if (!seen.Add(code))
+                string dedupeKey = $"{code}|{plant ?? ""}|{storageLocation ?? ""}|{altUom ?? ""}";
+                if (!seen.Add(dedupeKey) && string.IsNullOrEmpty(plant) && string.IsNullOrEmpty(storageLocation) && string.IsNullOrEmpty(altUom))
                 {
-                    Fail(result, $"{code}: appears more than once in the ERP response; only the first record was used.");
+                    Fail(result, $"{code}: appears more than once in the ERP response; only the first header record was used.");
                     continue;
                 }
 
@@ -96,24 +135,54 @@ namespace Buyer.Application.Features.Shared
                         continue;
                     }
 
-                    material = NewMaterial(buyerId, code, description, baseUom, group, currency);
+                    if (string.IsNullOrWhiteSpace(description))
+                    {
+                        Fail(result, $"{code}: Description is required for Material Master.");
+                        continue;
+                    }
+
+                    material = NewMaterial(buyerId, code, description, baseUom, group, currency, materialType);
                     material.CompanyCode = syncedCompanyCode;
+                    ApplyValuation(material, valuationClass, priceControl, standardPrice, movingAverage, priceUnit, out _);
                     repository.ItemBuyerMaster.Create(material);
                     materials[code] = material;
+                    conversionsByMaterial[material.Id] = new List<MaterialUomConversion>();
                 }
                 else
                 {
-                    changed = Update(material, description, group);
+                    changed = Update(material, description, group, materialType);
                     if (syncedCompanyCode != null && material.CompanyCode != syncedCompanyCode)
                     {
                         material.CompanyCode = syncedCompanyCode;
                         changed = true;
                     }
 
+                    if (ApplyValuation(material, valuationClass, priceControl, standardPrice, movingAverage, priceUnit, out bool valuationChanged))
+                    {
+                        changed = changed || valuationChanged;
+                    }
+
                     if (changed)
                     {
                         repository.ItemBuyerMaster.Update(material);
                     }
+                }
+
+                if (!string.IsNullOrEmpty(plant))
+                {
+                    changed |= UpsertPlant(repository, buyerId, material.Id, plant, plantStatus, purchasingGroup, mrpType, procurementType, reorderPoint, safetyStock, plantIndex, now);
+                }
+
+                if (!string.IsNullOrEmpty(plant) && !string.IsNullOrEmpty(storageLocation))
+                {
+                    changed |= await UpsertStorageLocationAsync(
+                        repository, buyerId, material, code, plant, storageLocation, locationByPlantSloc, slocIndex, now, result, cancellationToken);
+                }
+
+                if (!string.IsNullOrEmpty(altUom) && !string.IsNullOrEmpty(baseUom ?? material.BaseUnitOfMeasure))
+                {
+                    string baseUnit = (baseUom ?? material.BaseUnitOfMeasure).ToUpperInvariant();
+                    changed |= UpsertUom(repository, buyerId, material.Id, baseUnit, altUom, altNum, altDen, conversionsByMaterial, result, code);
                 }
 
                 bool priceRequested = false;
@@ -130,7 +199,7 @@ namespace Buyer.Application.Features.Shared
                     else
                     {
                         List<string> errors = SilaMaterialPricing.Validate(
-                            logger, material, noConversions, price.Value, currency, null, reason, out _, out _);
+                            logger, material, conversionsByMaterial, price.Value, currency, null, reason, out _, out _);
                         if (errors.Count > 0)
                         {
                             Note(result, $"{code}: ERP price not requested. {string.Join(" ", errors)}");
@@ -138,7 +207,7 @@ namespace Buyer.Application.Features.Shared
                         else
                         {
                             await SilaMaterialPricing.CreateAsync(
-                                repository, logger, buyerId, material, noConversions, price.Value, currency, null, null, reason, userId, scope, cancellationToken);
+                                repository, logger, buyerId, material, conversionsByMaterial, price.Value, currency, null, null, reason, userId, scope, cancellationToken);
                             priceRequested = true;
                             result.PriceChanges++;
                         }
@@ -147,6 +216,303 @@ namespace Buyer.Application.Features.Shared
 
                 CountOutcome(result, isNew, changed || priceRequested);
             }
+        }
+
+        private static HashSet<string>? NormalizePlantFilter(IReadOnlyCollection<string>? plantFilter)
+        {
+            if (plantFilter == null || plantFilter.Count == 0) return null;
+            HashSet<string> plants = new HashSet<string>(
+                plantFilter.Select(x => x.Trim().ToUpperInvariant()).Where(x => x.Length > 0),
+                StringComparer.OrdinalIgnoreCase);
+            return plants.Count == 0 ? null : plants;
+        }
+
+        private static List<JsonElement> FilterByPlant(
+            List<JsonElement> records,
+            List<ApiFieldMapping> mappings,
+            HashSet<string>? plants,
+            SilaMaterialErpPullResultDto result)
+        {
+            if (plants == null) return records;
+            bool hasPlantMapping = mappings.Any(x => x.TargetField.Equals("Material.Plant", StringComparison.OrdinalIgnoreCase));
+            if (!hasPlantMapping)
+            {
+                Note(result, "Plant filter requested but Material.Plant is not mapped; applying all returned header records.");
+                return records;
+            }
+
+            List<JsonElement> filtered = new List<JsonElement>();
+            foreach (JsonElement record in records)
+            {
+                string? plant = Clean(IntegrationRecordReader.Read(mappings, "Material.Plant", record), 50)?.ToUpperInvariant();
+                if (plant == null || plants.Contains(plant))
+                {
+                    filtered.Add(record);
+                }
+            }
+
+            return filtered;
+        }
+
+        private static async Task<Dictionary<string, Guid>> LoadLocationMapAsync(
+            IRepositoryWrapper repository, Guid buyerId, CancellationToken cancellationToken)
+        {
+            Dictionary<Guid, string> plants = (await repository.BuyerProperty
+                .FindByCondition(x => x.BuyerId == buyerId && x.IsActive)
+                .ToListAsync(cancellationToken))
+                .ToDictionary(x => x.Id, x => x.PlantCode.Trim().ToUpperInvariant());
+            List<InventoryLocation> locations = await repository.InventoryLocation
+                .FindByCondition(x => x.BuyerId == buyerId && x.IsActive && x.StorageLocationCode != null)
+                .ToListAsync(cancellationToken);
+            Dictionary<string, Guid> map = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
+            foreach (InventoryLocation location in locations)
+            {
+                if (!plants.TryGetValue(location.PropertyId, out string? plant) || string.IsNullOrWhiteSpace(location.StorageLocationCode)) continue;
+                string key = $"{plant}|{location.StorageLocationCode.Trim().ToUpperInvariant()}";
+                map.TryAdd(key, location.Id);
+            }
+
+            return map;
+        }
+
+        private static async Task<Dictionary<string, string>> LoadPropertyNamesAsync(
+            IRepositoryWrapper repository, Guid buyerId, CancellationToken cancellationToken)
+        {
+            return (await repository.BuyerProperty
+                .FindByCondition(x => x.BuyerId == buyerId && x.IsActive)
+                .ToListAsync(cancellationToken))
+                .GroupBy(x => x.PlantCode.Trim().ToUpperInvariant())
+                .ToDictionary(x => x.Key, x => x.First().PropertyName, StringComparer.OrdinalIgnoreCase);
+        }
+
+        private static bool UpsertPlant(
+            IRepositoryWrapper repository,
+            Guid buyerId,
+            Guid materialId,
+            string plant,
+            string? plantStatus,
+            string? purchasingGroup,
+            string? mrpType,
+            string? procurementType,
+            decimal? reorderPoint,
+            decimal? safetyStock,
+            Dictionary<(Guid, string), MaterialPlantAssignment> plantIndex,
+            DateTime now)
+        {
+            var key = (materialId, plant);
+            if (plantIndex.TryGetValue(key, out MaterialPlantAssignment? row))
+            {
+                bool changed = false;
+                if (plantStatus != null && row.PlantStatus != plantStatus) { row.PlantStatus = plantStatus; changed = true; }
+                if (purchasingGroup != null && row.PurchasingGroup != purchasingGroup) { row.PurchasingGroup = purchasingGroup; changed = true; }
+                if (mrpType != null && row.MrpType != mrpType) { row.MrpType = mrpType; changed = true; }
+                if (procurementType != null && row.ProcurementType != procurementType) { row.ProcurementType = procurementType; changed = true; }
+                if (reorderPoint != null && row.ReorderPoint != reorderPoint) { row.ReorderPoint = reorderPoint; changed = true; }
+                if (safetyStock != null && row.SafetyStock != safetyStock) { row.SafetyStock = safetyStock; changed = true; }
+                row.LastSyncedOn = now;
+                row.SourceSystem = SOURCE_ERP;
+                if (changed) repository.MaterialPlantAssignment.Update(row);
+                return changed;
+            }
+
+            MaterialPlantAssignment created = new MaterialPlantAssignment
+            {
+                Id = Guid.NewGuid(),
+                BuyerId = buyerId,
+                MaterialId = materialId,
+                PlantCode = plant,
+                PlantStatus = plantStatus,
+                PurchasingGroup = purchasingGroup,
+                MrpType = mrpType,
+                ProcurementType = procurementType,
+                ReorderPoint = reorderPoint,
+                SafetyStock = safetyStock,
+                LastSyncedOn = now,
+                SourceSystem = SOURCE_ERP,
+                IsActive = true
+            };
+            repository.MaterialPlantAssignment.Create(created);
+            plantIndex[key] = created;
+            return true;
+        }
+
+        private static async Task<bool> UpsertStorageLocationAsync(
+            IRepositoryWrapper repository,
+            Guid buyerId,
+            ItemBuyerMaster material,
+            string code,
+            string plant,
+            string storageLocation,
+            Dictionary<string, Guid> locationByPlantSloc,
+            Dictionary<(Guid, string, string), MaterialStorageLocationAssignment> slocIndex,
+            DateTime now,
+            SilaMaterialErpPullResultDto result,
+            CancellationToken cancellationToken)
+        {
+            var key = (material.Id, plant, storageLocation);
+            string mapKey = $"{plant}|{storageLocation}";
+            Guid? locationId = locationByPlantSloc.TryGetValue(mapKey, out Guid found) ? found : null;
+            if (locationId == null)
+            {
+                Note(result, $"{code}: SAP storage location {plant}/{storageLocation} is not mapped to a SILA location (recorded in exception worklist).");
+                await RecordUnmappedSlocAsync(repository, buyerId, material.Id, code, plant, storageLocation, cancellationToken);
+            }
+
+            if (slocIndex.TryGetValue(key, out MaterialStorageLocationAssignment? row))
+            {
+                bool changed = row.InventoryLocationId != locationId;
+                row.InventoryLocationId = locationId;
+                row.AssignmentStatus = locationId == null ? "UNMAPPED" : "MAPPED";
+                row.LastSyncedOn = now;
+                row.SourceSystem = SOURCE_ERP;
+                if (changed) repository.MaterialStorageLocationAssignment.Update(row);
+                return changed;
+            }
+
+            MaterialStorageLocationAssignment created = new MaterialStorageLocationAssignment
+            {
+                Id = Guid.NewGuid(),
+                BuyerId = buyerId,
+                MaterialId = material.Id,
+                PlantCode = plant,
+                StorageLocationCode = storageLocation,
+                InventoryLocationId = locationId,
+                AssignmentStatus = locationId == null ? "UNMAPPED" : "MAPPED",
+                LastSyncedOn = now,
+                SourceSystem = SOURCE_ERP,
+                IsActive = true
+            };
+            repository.MaterialStorageLocationAssignment.Create(created);
+            slocIndex[key] = created;
+            return true;
+        }
+
+        private static async Task RecordUnmappedSlocAsync(
+            IRepositoryWrapper repository,
+            Guid buyerId,
+            Guid materialId,
+            string code,
+            string plant,
+            string storageLocation,
+            CancellationToken cancellationToken)
+        {
+            bool exists = await repository.MaterialIntegrationException
+                .FindByCondition(x => x.BuyerId == buyerId && x.IsActive && !x.Resolved
+                    && x.ExceptionType == "UNMAPPED_STORAGE_LOCATION"
+                    && x.MaterialId == materialId
+                    && x.PlantCode == plant
+                    && x.StorageLocationCode == storageLocation)
+                .AnyAsync(cancellationToken);
+            if (exists) return;
+            repository.MaterialIntegrationException.Create(new MaterialIntegrationException
+            {
+                Id = Guid.NewGuid(),
+                BuyerId = buyerId,
+                MaterialId = materialId,
+                MaterialCode = code,
+                ExceptionType = "UNMAPPED_STORAGE_LOCATION",
+                PlantCode = plant,
+                StorageLocationCode = storageLocation,
+                Message = $"SAP storage location {plant}/{storageLocation} has no SILA InventoryLocation mapping.",
+                Resolved = false,
+                IsActive = true
+            });
+        }
+
+        private static bool UpsertUom(
+            IRepositoryWrapper repository,
+            Guid buyerId,
+            Guid materialId,
+            string baseUom,
+            string altUom,
+            decimal? numerator,
+            decimal? denominator,
+            Dictionary<Guid, List<MaterialUomConversion>> conversionsByMaterial,
+            SilaMaterialErpPullResultDto result,
+            string code)
+        {
+            if (altUom == baseUom) return false;
+            if (numerator == null || denominator == null || numerator <= 0 || denominator <= 0)
+            {
+                Note(result, $"{code}: alternate UOM {altUom} skipped — numerator/denominator missing or invalid.");
+                return false;
+            }
+
+            // Factor: 1 AltUom = (numerator/denominator) BaseUom — material-specific.
+            decimal factor = numerator.Value / denominator.Value;
+            if (!conversionsByMaterial.TryGetValue(materialId, out List<MaterialUomConversion>? list))
+            {
+                list = new List<MaterialUomConversion>();
+                conversionsByMaterial[materialId] = list;
+            }
+
+            MaterialUomConversion? existing = list.FirstOrDefault(x =>
+                x.FromUom.Equals(altUom, StringComparison.OrdinalIgnoreCase)
+                && x.ToUom.Equals(baseUom, StringComparison.OrdinalIgnoreCase));
+            if (existing != null)
+            {
+                if (existing.Factor == factor) return false;
+                existing.Factor = factor;
+                repository.MaterialUomConversion.Update(existing);
+                return true;
+            }
+
+            MaterialUomConversion created = new MaterialUomConversion
+            {
+                Id = Guid.NewGuid(),
+                BuyerId = buyerId,
+                MaterialId = materialId,
+                FromUom = altUom,
+                ToUom = baseUom,
+                Factor = factor,
+                IsActive = true
+            };
+            repository.MaterialUomConversion.Create(created);
+            list.Add(created);
+            return true;
+        }
+
+        /// <summary>Updates Standard/MovingAverage/ValuationClass only — never UnitCost (approval path).</summary>
+        private static bool ApplyValuation(
+            ItemBuyerMaster material,
+            string? valuationClass,
+            string? priceControl,
+            decimal? standardPrice,
+            decimal? movingAverage,
+            decimal? priceUnit,
+            out bool changed)
+        {
+            changed = false;
+            if (valuationClass != null && material.ValuationClass != valuationClass)
+            {
+                material.ValuationClass = valuationClass;
+                changed = true;
+            }
+
+            // Normalize when price unit &gt; 1: store per single base unit.
+            decimal divisor = priceUnit is > 0 ? priceUnit.Value : 1m;
+            if (standardPrice != null)
+            {
+                decimal normalized = standardPrice.Value / divisor;
+                if (material.StandardPrice != normalized)
+                {
+                    material.StandardPrice = normalized;
+                    changed = true;
+                }
+            }
+
+            if (movingAverage != null)
+            {
+                decimal normalized = movingAverage.Value / divisor;
+                if (material.MovingAveragePrice != normalized)
+                {
+                    material.MovingAveragePrice = normalized;
+                    changed = true;
+                }
+            }
+
+            _ = priceControl; // Informational; PriceControl on DTO is derived from which prices are set.
+            return changed;
         }
 
         private static async Task<bool> FlowExistsAsync(
@@ -163,7 +529,8 @@ namespace Buyer.Application.Features.Shared
             }
         }
 
-        private static ItemBuyerMaster NewMaterial(Guid buyerId, string code, string? description, string baseUom, string? group, string? currency)
+        private static ItemBuyerMaster NewMaterial(
+            Guid buyerId, string code, string? description, string baseUom, string? group, string? currency, string? materialType)
         {
             return new ItemBuyerMaster
             {
@@ -172,7 +539,7 @@ namespace Buyer.Application.Features.Shared
                 MaterialCode = code,
                 Description = description ?? code,
                 MaterialGroup = group ?? string.Empty,
-                ProductType = string.Empty,
+                ProductType = materialType ?? string.Empty,
                 BaseUnitOfMeasure = baseUom,
                 OrderUnitOfMeasure = baseUom,
                 AlternateUnitOfMeasure = string.Empty,
@@ -184,7 +551,7 @@ namespace Buyer.Application.Features.Shared
             };
         }
 
-        private static bool Update(ItemBuyerMaster material, string? description, string? group)
+        private static bool Update(ItemBuyerMaster material, string? description, string? group, string? materialType)
         {
             bool changed = false;
             if (description != null && description != material.Description)
@@ -199,23 +566,21 @@ namespace Buyer.Application.Features.Shared
                 changed = true;
             }
 
+            // Do not overwrite locally owned ProductType when ERP type is empty; only set when provided.
+            if (!string.IsNullOrWhiteSpace(materialType) && material.ProductType != materialType)
+            {
+                material.ProductType = materialType;
+                changed = true;
+            }
+
             return changed;
         }
 
         private static void CountOutcome(SilaMaterialErpPullResultDto result, bool isNew, bool changed)
         {
-            if (isNew)
-            {
-                result.New++;
-            }
-            else if (changed)
-            {
-                result.Changed++;
-            }
-            else
-            {
-                result.Unchanged++;
-            }
+            if (isNew) result.New++;
+            else if (changed) result.Changed++;
+            else result.Unchanged++;
         }
 
         private static void Fail(SilaMaterialErpPullResultDto result, string message)
@@ -224,22 +589,14 @@ namespace Buyer.Application.Features.Shared
             Note(result, message);
         }
 
-        /// <summary>A message about a record that was still applied (e.g. its price was not requested).</summary>
         private static void Note(SilaMaterialErpPullResultDto result, string message)
         {
-            if (result.Failures.Count < MAX_FAILURES)
-            {
-                result.Failures.Add(message);
-            }
+            if (result.Failures.Count < MAX_FAILURES) result.Failures.Add(message);
         }
 
         private static string? Clean(string? value, int maxLength)
         {
-            if (string.IsNullOrWhiteSpace(value))
-            {
-                return null;
-            }
-
+            if (string.IsNullOrWhiteSpace(value)) return null;
             string trimmed = value.Trim();
             return trimmed.Length > maxLength ? trimmed.Substring(0, maxLength) : trimmed;
         }

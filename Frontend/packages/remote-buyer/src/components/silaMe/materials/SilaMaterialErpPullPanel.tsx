@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Loader, toastService } from "@vosox/shared-ui";
-import { getProperties } from "../../../api/propertyApi";
+import { getProperties, type Property } from "../../../api/propertyApi";
 import {
   getMaterialErpRoute,
   pullMaterialsFromErp,
@@ -16,35 +16,51 @@ interface SilaMaterialErpPullPanelProps {
   onPulled: () => void;
 }
 
-/** Pulls the materials of a company code from the ERP through its GET_MATERIAL API. */
+/** Pulls materials via GET_MATERIAL; optional plant filter from BuyerProperty mappings. */
 const SilaMaterialErpPullPanel: React.FC<SilaMaterialErpPullPanelProps> = ({ onPulled }) => {
-  const [companyCodes, setCompanyCodes] = useState<string[]>([]);
+  const [properties, setProperties] = useState<Property[]>([]);
   const [companyCode, setCompanyCode] = useState("");
+  const [selectedPlants, setSelectedPlants] = useState<Record<string, boolean>>({});
   const [route, setRoute] = useState<SilaMaterialErpRoute | null>(null);
   const [routeLoading, setRouteLoading] = useState(false);
   const [routeError, setRouteError] = useState<string | null>(null);
   const [pulling, setPulling] = useState(false);
   const [result, setResult] = useState<SilaMaterialErpPullResult | null>(null);
 
-  // Company codes of the properties, offered as suggestions; any code can be typed.
   useEffect(() => {
     let active = true;
     getProperties()
-      .then((properties) => {
+      .then((rows) => {
         if (!active) return;
-        const codes = Array.from(new Set(properties.map((property) => property.companyCode?.trim().toUpperCase()).filter(Boolean)));
-        setCompanyCodes(codes);
+        setProperties(rows);
+        const codes = Array.from(new Set(rows.map((property) => property.companyCode?.trim().toUpperCase()).filter(Boolean)));
         if (codes.length > 0) setCompanyCode((current) => current || codes[0]);
       })
       .catch(() => {
-        if (active) setCompanyCodes([]);
+        if (active) setProperties([]);
       });
     return () => {
       active = false;
     };
   }, []);
 
-  // The API a pull would use, shortly after the company code stops changing.
+  const companyCodes = useMemo(
+    () => Array.from(new Set(properties.map((property) => property.companyCode?.trim().toUpperCase()).filter(Boolean))) as string[],
+    [properties],
+  );
+
+  const plantsForCompany = useMemo(() => {
+    const code = companyCode.trim().toUpperCase();
+    return Array.from(
+      new Set(
+        properties
+          .filter((property) => !code || property.companyCode?.trim().toUpperCase() === code)
+          .map((property) => property.plantCode?.trim().toUpperCase())
+          .filter(Boolean),
+      ),
+    ) as string[];
+  }, [properties, companyCode]);
+
   useEffect(() => {
     const code = companyCode.trim();
     setResult(null);
@@ -77,7 +93,8 @@ const SilaMaterialErpPullPanel: React.FC<SilaMaterialErpPullPanelProps> = ({ onP
   const handlePull = async () => {
     setPulling(true);
     try {
-      const pulled = await pullMaterialsFromErp(companyCode);
+      const plants = Object.keys(selectedPlants).filter((code) => selectedPlants[code]);
+      const pulled = await pullMaterialsFromErp(companyCode, plants);
       setResult(pulled);
       toastService.success(`${pulled.read} record(s) read: ${pulled.new} new, ${pulled.changed} changed, ${pulled.failed} failed.`);
       if (pulled.new > 0 || pulled.changed > 0) onPulled();
@@ -97,17 +114,46 @@ const SilaMaterialErpPullPanel: React.FC<SilaMaterialErpPullPanelProps> = ({ onP
         <div className="smat-toolbar">
           <div className="sila-field">
             <label className="sila-label" htmlFor="smat-erp-company">Company code *</label>
-            <input id="smat-erp-company" className="sila-input" list="smat-erp-company-codes" maxLength={20}
-              value={companyCode} onChange={(event) => setCompanyCode(event.target.value.toUpperCase())} />
+            <input
+              id="smat-erp-company"
+              className="sila-input"
+              list="smat-erp-company-codes"
+              maxLength={20}
+              value={companyCode}
+              onChange={(event) => setCompanyCode(event.target.value.toUpperCase())}
+            />
             <datalist id="smat-erp-company-codes">
               {companyCodes.map((code) => <option key={code} value={code} />)}
             </datalist>
           </div>
-          <button type="button" className="sila-btn sila-btn--primary"
-            disabled={pulling || routeLoading || !companyCode.trim() || !route?.configured} onClick={handlePull}>
+          <button
+            type="button"
+            className="sila-btn sila-btn--primary"
+            disabled={pulling || routeLoading || !companyCode.trim() || !route?.configured}
+            onClick={handlePull}
+          >
             {pulling ? "Pulling..." : "Pull materials"}
           </button>
         </div>
+
+        {plantsForCompany.length > 0 && (
+          <div>
+            <p className="sila-help">Optional plant filter (from property mappings). Leave empty to apply all plants present in the pull payload.</p>
+            <div className="smat-counts">
+              {plantsForCompany.map((plant) => (
+                <label key={plant} className="sila-choice">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(selectedPlants[plant])}
+                    onChange={() => setSelectedPlants((current) => ({ ...current, [plant]: !current[plant] }))}
+                  />
+                  {plant}
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+
         {routeLoading ? (
           <Loader size={20} message="Checking the ERP material API..." />
         ) : routeError ? (
@@ -124,6 +170,10 @@ const SilaMaterialErpPullPanel: React.FC<SilaMaterialErpPullPanelProps> = ({ onP
             <div><dt>Last sync</dt><dd>{formatDateTime(route.lastSyncAt)}</dd></div>
           </dl>
         ) : null}
+        <span className="sila-help">
+          Live SAP calls are not performed from this agent task. Pull uses the configured GET_MATERIAL route when authorized operators run it.
+          Stock snapshots never overwrite the SILA inventory ledger.
+        </span>
         {route?.lastError && !result && <span className="sila-help">Last error: {route.lastError}</span>}
         {result && (
           <>

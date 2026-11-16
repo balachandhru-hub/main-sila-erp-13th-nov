@@ -1,6 +1,7 @@
 using Buyer.Application.Features.Commands.ImportSilaMaterials;
 using Buyer.Application.Features.Commands.PullSilaMaterialsFromErp;
 using Buyer.Application.Features.Queries.ExportSilaMaterials;
+using Buyer.Application.Features.Queries.GetSilaMaterialDetail;
 using Buyer.Application.Features.Queries.GetSilaMaterialErpRoute;
 using Buyer.Application.Features.Shared;
 using Buyer.Domain.Dtos;
@@ -102,6 +103,24 @@ namespace Buyer.API.Controllers
                 CompanyCode = companyCode
             });
             _logger.LogDebug($"ERP material route resolved. Configured: {result.Configured}");
+            return Ok(result);
+        }
+
+        [HttpGet]
+        [Route("api/v1/buyer/sila/materials/{materialId}/detail")]
+        [ApiAuthorization(Name = "VIEW_SILA_INVENTORY")]
+        [SwaggerOperation("GetSilaMaterialDetail")]
+        [SwaggerResponse(200, type: typeof(SilaMaterialDetailDto))]
+        public async Task<IActionResult> MaterialDetail([FromRoute] Guid materialId)
+        {
+            _logger.LogDebug($"Loading material detail. MaterialId: {materialId}");
+            SilaMaterialDetailDto result = await _mediator.Send(new GetSilaMaterialDetailQuery
+            {
+                OrganizationId = GetOrganizationId(),
+                UserId = GetUserId(),
+                RoleId = GetRoleId(),
+                MaterialId = materialId
+            });
             return Ok(result);
         }
 

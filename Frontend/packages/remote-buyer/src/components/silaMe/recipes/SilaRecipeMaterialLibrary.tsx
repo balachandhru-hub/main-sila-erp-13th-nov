@@ -22,6 +22,8 @@ interface SilaRecipeMaterialLibraryProps {
   /** Rule-based / recent recommendations from the editor. */
   recommended?: SilaIngredientOption[];
   recommendReason?: string;
+  /** Authorized outlet/store location for location-specific ledger stock (optional). */
+  outletLocationId?: string | null;
 }
 
 const EMPTY_FACETS: SilaIngredientFacets = { materialGroups: [], categories: [], suppliers: [], materialTypes: [], supplierOptions: [] };
@@ -36,6 +38,7 @@ const SilaRecipeMaterialLibrary: React.FC<SilaRecipeMaterialLibraryProps> = ({
   onReplacePick,
   recommended = [],
   recommendReason = "Browse Material Master to begin.",
+  outletLocationId = null,
 }) => {
   const [tab, setTab] = useState<CatalogTab>("recommended");
   const [facets, setFacets] = useState<SilaIngredientFacets>(EMPTY_FACETS);
@@ -62,7 +65,7 @@ const SilaRecipeMaterialLibrary: React.FC<SilaRecipeMaterialLibraryProps> = ({
       return undefined;
     }
     let current = true;
-    searchIngredients({ search: "", limit: RESULT_LIMIT })
+    searchIngredients({ search: "", limit: RESULT_LIMIT, outletLocationId: outletLocationId || undefined })
       .then((page) => {
         if (!current) return;
         const byId = new Map(page.items.map((item) => [item.id.toLowerCase(), item]));
@@ -78,7 +81,7 @@ const SilaRecipeMaterialLibrary: React.FC<SilaRecipeMaterialLibraryProps> = ({
     return () => {
       current = false;
     };
-  }, [tab, recentIds, recommended, results]);
+  }, [tab, recentIds, recommended, results, outletLocationId]);
 
   const term = search.trim();
   const filtersOn = Boolean(materialGroup || category || materialType);
@@ -90,7 +93,7 @@ const SilaRecipeMaterialLibrary: React.FC<SilaRecipeMaterialLibraryProps> = ({
       // Soft browse first page when opening All without a filter so the catalog is never empty.
       let current = true;
       setSearching(true);
-      searchIngredients({ search: "", limit: RESULT_LIMIT })
+      searchIngredients({ search: "", limit: RESULT_LIMIT, outletLocationId: outletLocationId || undefined })
         .then((page) => {
           if (!current) return;
           setResults(page.items);
@@ -117,6 +120,7 @@ const SilaRecipeMaterialLibrary: React.FC<SilaRecipeMaterialLibraryProps> = ({
           materialGroup,
           category,
           materialType,
+          outletLocationId: outletLocationId || undefined,
           limit: RESULT_LIMIT,
         });
         if (current) {
@@ -133,7 +137,7 @@ const SilaRecipeMaterialLibrary: React.FC<SilaRecipeMaterialLibraryProps> = ({
       current = false;
       window.clearTimeout(timer);
     };
-  }, [tab, active, term, materialGroup, category, materialType]);
+  }, [tab, active, term, materialGroup, category, materialType, outletLocationId]);
 
   const added = useMemo(() => new Set(addedIds.map((id) => id.toLowerCase())), [addedIds]);
 
@@ -186,6 +190,15 @@ const SilaRecipeMaterialLibrary: React.FC<SilaRecipeMaterialLibraryProps> = ({
           <div className="srec-lib-meta">
             <span>{material.baseUom}</span>
             <span>{unitPriceText(material.priceStatus, material.unitCost, material.currency, material.baseUom)}</span>
+          </div>
+          <div className="srec-sub">
+            {outletLocationId
+              ? material.stockAvailable == null
+                ? "Stock UNKNOWN"
+                : material.stockAvailable <= 0
+                  ? `Out of stock (${material.stockFreshness || "—"})`
+                  : `Avail ${material.stockAvailable} ${material.baseUom} · ${material.stockFreshness || "—"}`
+              : "Stock not determined (select outlet)"}
           </div>
           <div className="srec-sub">{conversionSummary(material) || "Base UOM only"}</div>
         </div>
