@@ -38,6 +38,8 @@ assert.match(catalog, /hasPicture/);
 const detail = read("SilaRecipeDetailView.tsx");
 assert.match(detail, /SilaRecipePicture/);
 assert.match(detail, /hasPicture/);
+assert.match(detail, /import \{ resolveStudioKind, StudioCover \} from "\.\/recipeStudioVisuals"/);
+assert.match(detail, /StudioCover/);
 
 const api = read("../../../api/silaMe/silaRecipeApi.ts");
 assert.match(api, /\/recipes\/\$\{recipeId\}\/picture/);

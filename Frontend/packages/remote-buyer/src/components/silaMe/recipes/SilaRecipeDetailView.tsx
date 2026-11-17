@@ -23,6 +23,7 @@ import {
   DELETE_DRAFT_SUCCESS,
   DELETE_DRAFT_TITLE,
 } from "./recipeStudioDraftDelete";
+import { resolveStudioKind, StudioCover } from "./recipeStudioVisuals";
 import "./SilaRecipeStudio.css";
 
 interface SilaRecipeDetailViewProps {
