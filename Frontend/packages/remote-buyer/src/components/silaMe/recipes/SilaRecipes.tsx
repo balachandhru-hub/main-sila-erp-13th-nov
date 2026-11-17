@@ -185,6 +185,7 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({ canManage, canRequestPrice: _
         key={`new-recipe-shell-${locationKey}-${newShellEpoch}`}
         mode="new"
         onBackToCatalog={goCatalog}
+        onDraftSaved={goDetail}
       />
     );
   }
