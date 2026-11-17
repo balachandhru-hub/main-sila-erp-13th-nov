@@ -32,7 +32,11 @@ assert.equal(isRecipeId("new"), false);
 // Shell display contract (mirrors SilaRecipeWorkspaceShell copy — keep in sync).
 const shellTitle = (mode: "new" | "edit") =>
   mode === "edit" ? "Edit Recipe — Workspace Ready" : "New Recipe — Workspace Ready";
+const shellBody = (mode: "new" | "edit") =>
+  mode === "edit" ? "Recipe editing workspace is connected." : "Recipe creation workspace is connected.";
 assert.equal(shellTitle("new"), "New Recipe — Workspace Ready");
 assert.equal(shellTitle("edit"), "Edit Recipe — Workspace Ready");
+assert.equal(shellBody("new"), "Recipe creation workspace is connected.");
+assert.equal(shellBody("edit"), "Recipe editing workspace is connected.");
 
 console.log("silaRecipeWorkspaceShell.test.ts: ok");
