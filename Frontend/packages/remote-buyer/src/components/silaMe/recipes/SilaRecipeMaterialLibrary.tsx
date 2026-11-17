@@ -156,12 +156,6 @@ const SilaRecipeMaterialLibrary: React.FC<SilaRecipeMaterialLibraryProps> = ({
   const toggle = (id: string) => setSelected((current) => ({ ...current, [id]: !current[id] }));
 
   const startDrag = (event: React.DragEvent, material: SilaIngredientOption) => {
-    const target = event.target as HTMLElement | null;
-    // Keep checkbox / Add Ingredient clicks from being swallowed by HTML5 drag.
-    if (target?.closest("button, input, label, a, select, textarea")) {
-      event.preventDefault();
-      return;
-    }
     event.dataTransfer.setData("application/x-sila-material", JSON.stringify(material));
     event.dataTransfer.effectAllowed = "copy";
   };
@@ -175,13 +169,19 @@ const SilaRecipeMaterialLibrary: React.FC<SilaRecipeMaterialLibraryProps> = ({
       <article
         key={material.id}
         className={`srec-lib-card${selected[material.id] ? " is-selected" : ""}${isAdded ? " is-added" : ""}`}
-        draggable
-        onDragStart={(event) => startDrag(event, material)}
       >
         <label className="srec-lib-check">
           <input type="checkbox" checked={Boolean(selected[material.id])} onChange={() => toggle(material.id)} aria-label={`Select ${material.materialCode}`} />
         </label>
-        <span className="srec-lib-drag" aria-hidden="true" title="Drag to recipe">⠿</span>
+        <span
+          className="srec-lib-drag"
+          title="Drag to recipe"
+          draggable
+          onDragStart={(event) => startDrag(event, material)}
+          aria-label={`Drag ${material.materialCode} to recipe`}
+        >
+          ⠿
+        </span>
         <StudioCover compact kind={kind} title={material.description || material.materialCode} />
         <div className="srec-lib-body">
           <div className="srec-lib-title">
