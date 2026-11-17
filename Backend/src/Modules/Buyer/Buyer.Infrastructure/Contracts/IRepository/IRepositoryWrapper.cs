@@ -78,6 +78,10 @@ namespace Buyer.Infrastructure.Contracts.IRepository
         IApiIntegrationExecutionRepository ApiIntegrationExecution { get; }
         IIntegrationSchemaSnapshotRepository IntegrationSchemaSnapshot { get; }
         IMaterialUomConversionRepository MaterialUomConversion { get; }
+        IMaterialPlantAssignmentRepository MaterialPlantAssignment { get; }
+        IMaterialStorageLocationAssignmentRepository MaterialStorageLocationAssignment { get; }
+        IMaterialErpStockSnapshotRepository MaterialErpStockSnapshot { get; }
+        IMaterialIntegrationExceptionRepository MaterialIntegrationException { get; }
         IInventoryLocationRepository InventoryLocation { get; }
         IInventoryLocationUserMappingRepository InventoryLocationUserMapping { get; }
         IInventoryLocationMaterialRepository InventoryLocationMaterial { get; }

@@ -89,6 +89,10 @@ namespace Buyer.Infrastructure.DbContext
         public DbSet<ApiIntegrationExecution> ApiIntegrationExecution { get; set; }
         public DbSet<IntegrationSchemaSnapshot> IntegrationSchemaSnapshot { get; set; }
         public DbSet<MaterialUomConversion> MaterialUomConversion { get; set; }
+        public DbSet<MaterialPlantAssignment> MaterialPlantAssignment { get; set; }
+        public DbSet<MaterialStorageLocationAssignment> MaterialStorageLocationAssignment { get; set; }
+        public DbSet<MaterialErpStockSnapshot> MaterialErpStockSnapshot { get; set; }
+        public DbSet<MaterialIntegrationException> MaterialIntegrationException { get; set; }
         public DbSet<InventoryLocation> InventoryLocation { get; set; }
         public DbSet<InventoryLocationUserMapping> InventoryLocationUserMapping { get; set; }
         public DbSet<InventoryLocationMaterial> InventoryLocationMaterial { get; set; }
@@ -164,6 +168,15 @@ namespace Buyer.Infrastructure.DbContext
             _ = modelBuilder.Entity<RFQAnswerOption>().HasIndex(a => a.IsActive);
             _ = modelBuilder.Entity<RFQQuestionOption>().HasIndex(a => a.IsActive);
             _ = modelBuilder.Entity<ItemBuyerMaster>().HasIndex(a => a.IsActive);
+            _ = modelBuilder.Entity<MaterialPlantAssignment>()
+                .HasIndex(a => new { a.BuyerId, a.MaterialId, a.PlantCode })
+                .IsUnique();
+            _ = modelBuilder.Entity<MaterialStorageLocationAssignment>()
+                .HasIndex(a => new { a.BuyerId, a.MaterialId, a.PlantCode, a.StorageLocationCode })
+                .IsUnique();
+            _ = modelBuilder.Entity<MaterialErpStockSnapshot>()
+                .HasIndex(a => new { a.BuyerId, a.MaterialId, a.PlantCode, a.StorageLocationCode, a.StockCategory, a.Batch });
+            _ = modelBuilder.Entity<MaterialIntegrationException>().HasIndex(a => new { a.BuyerId, a.Resolved, a.ExceptionType });
             _ = modelBuilder.Entity<SupplierVerificationRequest>().HasIndex(a => a.IsActive);
             _ = modelBuilder.Entity<VerificationAnswer>().HasIndex(a => a.IsActive);
             _ = modelBuilder.Entity<VerificationAnswerOption>().HasIndex(a => a.IsActive);

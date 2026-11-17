@@ -1292,6 +1292,229 @@ namespace Buyer.Infrastructure.Migrations
                     b.ToTable("contract_template", "buyersystem");
                 });
 
+            modelBuilder.Entity("Buyer.Domain.Entities.CreditMemo", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("BuyerId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("buyer_id");
+
+                    b.Property<string>("CompanyCode")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("company_code");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("created_by");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("created_by_user_id");
+
+                    b.Property<string>("CreditMemoNumber")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("credit_memo_number");
+
+                    b.Property<string>("CreditMemoReference")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("credit_memo_reference");
+
+                    b.Property<string>("Currency")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("currency");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("date_created");
+
+                    b.Property<DateTime>("DateUpdated")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("date_updated");
+
+                    b.Property<DateTime?>("DocumentDate")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("document_date");
+
+                    b.Property<Guid?>("ErpPostingId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("erp_posting_id");
+
+                    b.Property<decimal?>("GrossAmount")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("gross_amount");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("PoNumber")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("po_number");
+
+                    b.Property<string>("PostingData")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("posting_data");
+
+                    b.Property<DateTime?>("PostingDate")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("posting_date");
+
+                    b.Property<Guid?>("PurchaseOrderId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("purchase_order_id");
+
+                    b.Property<string>("Reason")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("reason");
+
+                    b.Property<string>("ReferenceErpInvoiceId")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("reference_erp_invoice_id");
+
+                    b.Property<string>("ReferenceFiscalYear")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("reference_fiscal_year");
+
+                    b.Property<Guid>("ReferenceInvoiceId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("reference_invoice_id");
+
+                    b.Property<string>("ReferenceSupplierInvoiceNumber")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("reference_supplier_invoice_number");
+
+                    b.Property<Guid?>("SilaSupplierId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("sila_supplier_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("status");
+
+                    b.Property<Guid?>("SupplierId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("supplier_id");
+
+                    b.Property<string>("SupplierName")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("supplier_name");
+
+                    b.Property<DateTime?>("TaxCalculationDate")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("tax_calculation_date");
+
+                    b.Property<Guid>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_credit_memo");
+
+                    b.HasIndex("IsActive")
+                        .HasDatabaseName("ix_credit_memo_is_active");
+
+                    b.HasIndex("BuyerId", "ReferenceInvoiceId")
+                        .HasDatabaseName("ix_credit_memo_buyer_id_reference_invoice_id");
+
+                    b.ToTable("credit_memo", "buyersystem");
+                });
+
+            modelBuilder.Entity("Buyer.Domain.Entities.CreditMemoItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("id");
+
+                    b.Property<decimal?>("Amount")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("amount");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("created_by");
+
+                    b.Property<Guid>("CreditMemoId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("credit_memo_id");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("date_created");
+
+                    b.Property<DateTime>("DateUpdated")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("date_updated");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("description");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit")
+                        .HasColumnName("is_active");
+
+                    b.Property<int>("LineNumber")
+                        .HasColumnType("int")
+                        .HasColumnName("line_number");
+
+                    b.Property<string>("Material")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("material");
+
+                    b.Property<string>("PoItem")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("po_item");
+
+                    b.Property<string>("PoNumber")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("po_number");
+
+                    b.Property<decimal?>("Quantity")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("quantity");
+
+                    b.Property<string>("Reason")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("reason");
+
+                    b.Property<Guid?>("ReferenceInvoiceLineId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("reference_invoice_line_id");
+
+                    b.Property<string>("TaxCode")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("tax_code");
+
+                    b.Property<string>("Uom")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("uom");
+
+                    b.Property<Guid>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_credit_memo_item");
+
+                    b.HasIndex("CreditMemoId")
+                        .HasDatabaseName("ix_credit_memo_item_credit_memo_id");
+
+                    b.HasIndex("IsActive")
+                        .HasDatabaseName("ix_credit_memo_item_is_active");
+
+                    b.ToTable("credit_memo_item", "buyersystem");
+                });
+
             modelBuilder.Entity("Buyer.Domain.Entities.DefaultVerificationTemplate", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1865,13 +2088,11 @@ namespace Buyer.Infrastructure.Migrations
                         .HasColumnName("location_id");
 
                     b.Property<string>("MaterialDocument")
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)")
+                        .HasColumnType("nvarchar(max)")
                         .HasColumnName("material_document");
 
                     b.Property<string>("MaterialDocumentYear")
-                        .HasMaxLength(4)
-                        .HasColumnType("nvarchar(4)")
+                        .HasColumnType("nvarchar(max)")
                         .HasColumnName("material_document_year");
 
                     b.Property<Guid?>("ParentGoodsReceiptId")
@@ -1905,23 +2126,19 @@ namespace Buyer.Infrastructure.Migrations
                         .HasColumnName("reversal_grn_number");
 
                     b.Property<string>("ReversalMaterialDocument")
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)")
+                        .HasColumnType("nvarchar(max)")
                         .HasColumnName("reversal_material_document");
 
                     b.Property<string>("ReversalMaterialDocumentYear")
-                        .HasMaxLength(4)
-                        .HasColumnType("nvarchar(4)")
+                        .HasColumnType("nvarchar(max)")
                         .HasColumnName("reversal_material_document_year");
 
                     b.Property<string>("ReversalReason")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)")
+                        .HasColumnType("nvarchar(max)")
                         .HasColumnName("reversal_reason");
 
                     b.Property<string>("ReversalStatus")
-                        .HasMaxLength(40)
-                        .HasColumnType("nvarchar(40)")
+                        .HasColumnType("nvarchar(max)")
                         .HasColumnName("reversal_status");
 
                     b.Property<Guid?>("ReversedBy")
@@ -2015,8 +2232,7 @@ namespace Buyer.Infrastructure.Migrations
                         .HasColumnName("material_code");
 
                     b.Property<string>("MaterialDocumentItem")
-                        .HasMaxLength(10)
-                        .HasColumnType("nvarchar(10)")
+                        .HasColumnType("nvarchar(max)")
                         .HasColumnName("material_document_item");
 
                     b.Property<Guid?>("MaterialId")
@@ -3114,7 +3330,7 @@ namespace Buyer.Infrastructure.Migrations
                         .HasColumnName("buyer_id");
 
                     b.Property<string>("CompanyCode")
-                        .HasColumnType("nvarchar(450)")
+                        .HasColumnType("nvarchar(max)")
                         .HasColumnName("company_code");
 
                     b.Property<string>("ContentHash")
@@ -3126,7 +3342,7 @@ namespace Buyer.Infrastructure.Migrations
                         .HasColumnName("created_by");
 
                     b.Property<string>("CreationType")
-                        .HasColumnType("nvarchar(450)")
+                        .HasColumnType("nvarchar(max)")
                         .HasColumnName("creation_type");
 
                     b.Property<string>("Currency")
@@ -3765,6 +3981,181 @@ namespace Buyer.Infrastructure.Migrations
                     b.ToTable("master_approval_flow", "buyersystem");
                 });
 
+            modelBuilder.Entity("Buyer.Domain.Entities.MaterialErpStockSnapshot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("id");
+
+                    b.Property<string>("BaseUom")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasColumnName("base_uom");
+
+                    b.Property<string>("Batch")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasColumnName("batch");
+
+                    b.Property<Guid>("BuyerId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("buyer_id");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("date_created");
+
+                    b.Property<DateTime>("DateUpdated")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("date_updated");
+
+                    b.Property<Guid?>("InventoryLocationId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("inventory_location_id");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit")
+                        .HasColumnName("is_active");
+
+                    b.Property<Guid>("MaterialId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("material_id");
+
+                    b.Property<string>("PlantCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasColumnName("plant_code");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("quantity");
+
+                    b.Property<DateTime>("SnapshotOn")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("snapshot_on");
+
+                    b.Property<string>("SourceSystem")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)")
+                        .HasColumnName("source_system");
+
+                    b.Property<string>("SpecialStock")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)")
+                        .HasColumnName("special_stock");
+
+                    b.Property<string>("StockCategory")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)")
+                        .HasColumnName("stock_category");
+
+                    b.Property<string>("StorageLocationCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasColumnName("storage_location_code");
+
+                    b.Property<Guid>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_material_erp_stock_snapshot");
+
+                    b.HasIndex("BuyerId", "MaterialId", "PlantCode", "StorageLocationCode", "StockCategory", "Batch")
+                        .HasDatabaseName("ix_material_erp_stock_snapshot_buyer_id_material_id_plant_code_storage_location_code_stock_category_batch");
+
+                    b.ToTable("material_erp_stock_snapshot", "buyersystem");
+                });
+
+            modelBuilder.Entity("Buyer.Domain.Entities.MaterialIntegrationException", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("BuyerId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("buyer_id");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("date_created");
+
+                    b.Property<DateTime>("DateUpdated")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("date_updated");
+
+                    b.Property<string>("ExceptionType")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)")
+                        .HasColumnName("exception_type");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("MaterialCode")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)")
+                        .HasColumnName("material_code");
+
+                    b.Property<Guid?>("MaterialId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("material_id");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)")
+                        .HasColumnName("message");
+
+                    b.Property<string>("PlantCode")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasColumnName("plant_code");
+
+                    b.Property<bool>("Resolved")
+                        .HasColumnType("bit")
+                        .HasColumnName("resolved");
+
+                    b.Property<DateTime?>("ResolvedOn")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("resolved_on");
+
+                    b.Property<string>("StorageLocationCode")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasColumnName("storage_location_code");
+
+                    b.Property<Guid>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_material_integration_exception");
+
+                    b.HasIndex("BuyerId", "Resolved", "ExceptionType")
+                        .HasDatabaseName("ix_material_integration_exception_buyer_id_resolved_exception_type");
+
+                    b.ToTable("material_integration_exception", "buyersystem");
+                });
+
             modelBuilder.Entity("Buyer.Domain.Entities.MaterialOutletPrice", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3824,6 +4215,110 @@ namespace Buyer.Infrastructure.Migrations
                         .HasDatabaseName("ix_material_outlet_price_buyer_id_material_id_outlet_location_id");
 
                     b.ToTable("material_outlet_price", "buyersystem");
+                });
+
+            modelBuilder.Entity("Buyer.Domain.Entities.MaterialPlantAssignment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("BuyerId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("buyer_id");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("date_created");
+
+                    b.Property<DateTime>("DateUpdated")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("date_updated");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit")
+                        .HasColumnName("is_active");
+
+                    b.Property<DateTime?>("LastSyncedOn")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("last_synced_on");
+
+                    b.Property<Guid>("MaterialId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("material_id");
+
+                    b.Property<decimal?>("MaxLotSize")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("max_lot_size");
+
+                    b.Property<decimal?>("MinLotSize")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("min_lot_size");
+
+                    b.Property<string>("MrpType")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)")
+                        .HasColumnName("mrp_type");
+
+                    b.Property<int?>("PlannedDeliveryDays")
+                        .HasColumnType("int")
+                        .HasColumnName("planned_delivery_days");
+
+                    b.Property<string>("PlantCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasColumnName("plant_code");
+
+                    b.Property<string>("PlantStatus")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)")
+                        .HasColumnName("plant_status");
+
+                    b.Property<string>("ProcurementType")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)")
+                        .HasColumnName("procurement_type");
+
+                    b.Property<string>("PurchasingGroup")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)")
+                        .HasColumnName("purchasing_group");
+
+                    b.Property<decimal?>("ReorderPoint")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("reorder_point");
+
+                    b.Property<decimal?>("SafetyStock")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("safety_stock");
+
+                    b.Property<string>("SourceSystem")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)")
+                        .HasColumnName("source_system");
+
+                    b.Property<Guid>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_material_plant_assignment");
+
+                    b.HasIndex("BuyerId", "MaterialId", "PlantCode")
+                        .IsUnique()
+                        .HasDatabaseName("ix_material_plant_assignment_buyer_id_material_id_plant_code");
+
+                    b.ToTable("material_plant_assignment", "buyersystem");
                 });
 
             modelBuilder.Entity("Buyer.Domain.Entities.MaterialPriceChange", b =>
@@ -3926,6 +4421,81 @@ namespace Buyer.Infrastructure.Migrations
                     b.ToTable("material_price_change", "buyersystem");
                 });
 
+            modelBuilder.Entity("Buyer.Domain.Entities.MaterialStorageLocationAssignment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AssignmentStatus")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)")
+                        .HasColumnName("assignment_status");
+
+                    b.Property<Guid>("BuyerId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("buyer_id");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("date_created");
+
+                    b.Property<DateTime>("DateUpdated")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("date_updated");
+
+                    b.Property<Guid?>("InventoryLocationId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("inventory_location_id");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit")
+                        .HasColumnName("is_active");
+
+                    b.Property<DateTime?>("LastSyncedOn")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("last_synced_on");
+
+                    b.Property<Guid>("MaterialId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("material_id");
+
+                    b.Property<string>("PlantCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasColumnName("plant_code");
+
+                    b.Property<string>("SourceSystem")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)")
+                        .HasColumnName("source_system");
+
+                    b.Property<string>("StorageLocationCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasColumnName("storage_location_code");
+
+                    b.Property<Guid>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_material_storage_location_assignment");
+
+                    b.HasIndex("BuyerId", "MaterialId", "PlantCode", "StorageLocationCode")
+                        .IsUnique()
+                        .HasDatabaseName("ix_material_storage_location_assignment_buyer_id_material_id_plant_code_storage_location_code");
+
+                    b.ToTable("material_storage_location_assignment", "buyersystem");
+                });
+
             modelBuilder.Entity("Buyer.Domain.Entities.MaterialUomConversion", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3990,6 +4560,546 @@ namespace Buyer.Infrastructure.Migrations
                         .HasDatabaseName("ix_material_uom_conversion_material_id_from_uom_to_uom");
 
                     b.ToTable("material_uom_conversion", "buyersystem");
+                });
+
+            modelBuilder.Entity("Buyer.Domain.Entities.MenuEngineeringSettings", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AiNotes")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("ai_notes");
+
+                    b.Property<Guid>("BuyerId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("buyer_id");
+
+                    b.Property<string>("CategoriesJson")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("categories_json");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("date_created");
+
+                    b.Property<DateTime>("DateUpdated")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("date_updated");
+
+                    b.Property<decimal>("DefaultAdultFactor")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("default_adult_factor");
+
+                    b.Property<decimal>("DefaultBufferPercentage")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("default_buffer_percentage");
+
+                    b.Property<decimal>("DefaultChildFactor")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("default_child_factor");
+
+                    b.Property<decimal>("DefaultItemParticipation")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("default_item_participation");
+
+                    b.Property<decimal>("DefaultMealParticipation")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("default_meal_participation");
+
+                    b.Property<decimal>("HighFoodCostPercent")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("high_food_cost_percent");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("MealPeriodsJson")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("meal_periods_json");
+
+                    b.Property<string>("PmsConnectionName")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("pms_connection_name");
+
+                    b.Property<string>("PmsProvider")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("pms_provider");
+
+                    b.Property<decimal>("PopularityThreshold")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("popularity_threshold");
+
+                    b.Property<string>("PosConnectionName")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("pos_connection_name");
+
+                    b.Property<int>("StaleHours")
+                        .HasColumnType("int")
+                        .HasColumnName("stale_hours");
+
+                    b.Property<Guid>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_menu_engineering_settings");
+
+                    b.HasIndex("BuyerId")
+                        .HasDatabaseName("ix_menu_engineering_settings_buyer_id");
+
+                    b.ToTable("menu_engineering_settings", "buyersystem");
+                });
+
+            modelBuilder.Entity("Buyer.Domain.Entities.MenuItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("id");
+
+                    b.Property<decimal?>("AdultPortionFactor")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("adult_portion_factor");
+
+                    b.Property<string>("AllergenNotes")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("allergen_notes");
+
+                    b.Property<Guid>("BuyerId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("buyer_id");
+
+                    b.Property<string>("Category")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("category");
+
+                    b.Property<decimal?>("ChildPortionFactor")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("child_portion_factor");
+
+                    b.Property<string>("Classification")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("classification");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Cuisine")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("cuisine");
+
+                    b.Property<string>("Currency")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("currency");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("date_created");
+
+                    b.Property<DateTime>("DateUpdated")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("date_updated");
+
+                    b.Property<decimal?>("DefaultBufferPercentage")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("default_buffer_percentage");
+
+                    b.Property<decimal?>("DefaultParticipationRate")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("default_participation_rate");
+
+                    b.Property<decimal>("DefaultPortionQty")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("default_portion_qty");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("description");
+
+                    b.Property<string>("DietaryTags")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("dietary_tags");
+
+                    b.Property<DateTime?>("EffectiveFrom")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("effective_from");
+
+                    b.Property<DateTime?>("EffectiveTo")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("effective_to");
+
+                    b.Property<string>("ImagePath")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("image_path");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit")
+                        .HasColumnName("is_active");
+
+                    b.Property<Guid?>("LinkedRecipeId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("linked_recipe_id");
+
+                    b.Property<string>("MealPeriods")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("meal_periods");
+
+                    b.Property<string>("MenuItemCode")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("menu_item_code");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("name");
+
+                    b.Property<Guid?>("OutletLocationId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("outlet_location_id");
+
+                    b.Property<string>("PortionUom")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("portion_uom");
+
+                    b.Property<Guid?>("PropertyId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("property_id");
+
+                    b.Property<string>("RecipeLinkStatus")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("recipe_link_status");
+
+                    b.Property<decimal?>("SellingPrice")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("selling_price");
+
+                    b.Property<string>("ServiceType")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("service_type");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("SubCategory")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("sub_category");
+
+                    b.Property<Guid>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_menu_item");
+
+                    b.HasIndex("BuyerId")
+                        .HasDatabaseName("ix_menu_item_buyer_id");
+
+                    b.ToTable("menu_item", "buyersystem");
+                });
+
+            modelBuilder.Entity("Buyer.Domain.Entities.MenuPlan", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("BusinessDate")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("business_date");
+
+                    b.Property<Guid>("BuyerId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("buyer_id");
+
+                    b.Property<Guid?>("CopiedFromPlanId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("copied_from_plan_id");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("date_created");
+
+                    b.Property<DateTime>("DateUpdated")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("date_updated");
+
+                    b.Property<DateTime?>("EndDate")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("end_date");
+
+                    b.Property<string>("EventName")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("event_name");
+
+                    b.Property<decimal?>("ExpectedCovers")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("expected_covers");
+
+                    b.Property<decimal?>("ExpectedGuests")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("expected_guests");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit")
+                        .HasColumnName("is_active");
+
+                    b.Property<decimal?>("MealParticipation")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("meal_participation");
+
+                    b.Property<string>("MealPeriod")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("meal_period");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("notes");
+
+                    b.Property<Guid?>("OutletLocationId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("outlet_location_id");
+
+                    b.Property<string>("PlanCode")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("plan_code");
+
+                    b.Property<Guid?>("PropertyId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("property_id");
+
+                    b.Property<DateTime?>("StartDate")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("start_date");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_menu_plan");
+
+                    b.HasIndex("BuyerId")
+                        .HasDatabaseName("ix_menu_plan_buyer_id");
+
+                    b.ToTable("menu_plan", "buyersystem");
+                });
+
+            modelBuilder.Entity("Buyer.Domain.Entities.MenuPlanLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("id");
+
+                    b.Property<decimal?>("ActualPortions")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("actual_portions");
+
+                    b.Property<decimal?>("AdultFactor")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("adult_factor");
+
+                    b.Property<decimal?>("BufferPercentage")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("buffer_percentage");
+
+                    b.Property<decimal?>("ChildFactor")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("child_factor");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("date_created");
+
+                    b.Property<DateTime>("DateUpdated")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("date_updated");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit")
+                        .HasColumnName("is_active");
+
+                    b.Property<Guid>("MenuItemId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("menu_item_id");
+
+                    b.Property<Guid>("MenuPlanId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("menu_plan_id");
+
+                    b.Property<string>("OverrideReason")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("override_reason");
+
+                    b.Property<decimal?>("ParticipationRate")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("participation_rate");
+
+                    b.Property<decimal?>("PlannedPortions")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("planned_portions");
+
+                    b.Property<bool>("PortionsConfirmed")
+                        .HasColumnType("bit")
+                        .HasColumnName("portions_confirmed");
+
+                    b.Property<decimal>("RecommendedPortions")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("recommended_portions");
+
+                    b.Property<Guid>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("updated_by");
+
+                    b.Property<string>("Warning")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("warning");
+
+                    b.HasKey("Id")
+                        .HasName("pk_menu_plan_line");
+
+                    b.HasIndex("MenuPlanId")
+                        .HasDatabaseName("ix_menu_plan_line_menu_plan_id");
+
+                    b.ToTable("menu_plan_line", "buyersystem");
+                });
+
+            modelBuilder.Entity("Buyer.Domain.Entities.MenuPosMapping", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("BuyerId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("buyer_id");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("date_created");
+
+                    b.Property<DateTime>("DateUpdated")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("date_updated");
+
+                    b.Property<DateTime?>("EffectiveFrom")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("effective_from");
+
+                    b.Property<DateTime?>("EffectiveTo")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("effective_to");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("MappingSource")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("mapping_source");
+
+                    b.Property<Guid?>("MenuItemId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("menu_item_id");
+
+                    b.Property<Guid?>("OutletLocationId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("outlet_location_id");
+
+                    b.Property<string>("PosCode")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("pos_code");
+
+                    b.Property<string>("PosDescription")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("pos_description");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("status");
+
+                    b.Property<Guid?>("SuggestedMenuItemId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("suggested_menu_item_id");
+
+                    b.Property<decimal?>("SuggestionConfidence")
+                        .HasColumnType("decimal(18,2)")
+                        .HasColumnName("suggestion_confidence");
+
+                    b.Property<Guid>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_menu_pos_mapping");
+
+                    b.HasIndex("BuyerId")
+                        .HasDatabaseName("ix_menu_pos_mapping_buyer_id");
+
+                    b.ToTable("menu_pos_mapping", "buyersystem");
                 });
 
             modelBuilder.Entity("Buyer.Domain.Entities.Message", b =>
@@ -4194,6 +5304,281 @@ namespace Buyer.Infrastructure.Migrations
                         .HasDatabaseName("ix_message_thread_rfqid");
 
                     b.ToTable("message_thread", "buyersystem");
+                });
+
+            modelBuilder.Entity("Buyer.Domain.Entities.OperationalAlert", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime?>("AcknowledgedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("acknowledged_at");
+
+                    b.Property<Guid?>("AcknowledgedBy")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("acknowledged_by");
+
+                    b.Property<string>("ActionRoute")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("action_route");
+
+                    b.Property<string>("AlertType")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("alert_type");
+
+                    b.Property<Guid>("BuyerId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("buyer_id");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("created_by");
+
+                    b.Property<Guid?>("CreditMemoId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("credit_memo_id");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("date_created");
+
+                    b.Property<DateTime>("DateUpdated")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("date_updated");
+
+                    b.Property<string>("DeduplicationKey")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)")
+                        .HasColumnName("deduplication_key");
+
+                    b.Property<Guid?>("GoodsReceiptId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("goods_receipt_id");
+
+                    b.Property<Guid?>("InvoiceId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("invoice_id");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit")
+                        .HasColumnName("is_active");
+
+                    b.Property<Guid?>("LocationId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("location_id");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("message");
+
+                    b.Property<string>("Metadata")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("metadata");
+
+                    b.Property<Guid?>("PurchaseOrderId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("purchase_order_id");
+
+                    b.Property<string>("RecipientPermission")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("recipient_permission");
+
+                    b.Property<Guid?>("RecipientUserId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("recipient_user_id");
+
+                    b.Property<string>("Severity")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("severity");
+
+                    b.Property<Guid>("SourceDocumentId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("source_document_id");
+
+                    b.Property<string>("SourceDocumentType")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("source_document_type");
+
+                    b.Property<string>("SourceModule")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("source_module");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("title");
+
+                    b.Property<Guid>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_operational_alert");
+
+                    b.HasIndex("BuyerId", "DeduplicationKey")
+                        .IsUnique()
+                        .HasDatabaseName("ix_operational_alert_buyer_id_deduplication_key");
+
+                    b.HasIndex("BuyerId", "Status")
+                        .HasDatabaseName("ix_operational_alert_buyer_id_status");
+
+                    b.ToTable("operational_alert", "buyersystem");
+                });
+
+            modelBuilder.Entity("Buyer.Domain.Entities.OperationalTask", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ActionRoute")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("action_route");
+
+                    b.Property<string>("ActionType")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("action_type");
+
+                    b.Property<string>("AssignedPermission")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("assigned_permission");
+
+                    b.Property<Guid?>("AssignedUserId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("assigned_user_id");
+
+                    b.Property<Guid>("BuyerId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("buyer_id");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("completed_at");
+
+                    b.Property<Guid?>("CompletedBy")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("completed_by");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("created_by");
+
+                    b.Property<Guid?>("CreditMemoId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("credit_memo_id");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("date_created");
+
+                    b.Property<DateTime>("DateUpdated")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("date_updated");
+
+                    b.Property<string>("DeduplicationKey")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)")
+                        .HasColumnName("deduplication_key");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("description");
+
+                    b.Property<DateTime?>("DueAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("due_at");
+
+                    b.Property<Guid?>("GoodsReceiptId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("goods_receipt_id");
+
+                    b.Property<Guid?>("InvoiceId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("invoice_id");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit")
+                        .HasColumnName("is_active");
+
+                    b.Property<Guid?>("LocationId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("location_id");
+
+                    b.Property<string>("Metadata")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("metadata");
+
+                    b.Property<string>("Priority")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("priority");
+
+                    b.Property<Guid?>("PurchaseOrderId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("purchase_order_id");
+
+                    b.Property<Guid>("SourceDocumentId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("source_document_id");
+
+                    b.Property<string>("SourceDocumentNumber")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("source_document_number");
+
+                    b.Property<string>("SourceDocumentType")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("source_document_type");
+
+                    b.Property<string>("SourceModule")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("source_module");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("TaskType")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("task_type");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("title");
+
+                    b.Property<Guid>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_operational_task");
+
+                    b.HasIndex("BuyerId", "DeduplicationKey")
+                        .IsUnique()
+                        .HasDatabaseName("ix_operational_task_buyer_id_deduplication_key");
+
+                    b.HasIndex("BuyerId", "Status")
+                        .HasDatabaseName("ix_operational_task_buyer_id_status");
+
+                    b.ToTable("operational_task", "buyersystem");
                 });
 
             modelBuilder.Entity("Buyer.Domain.Entities.PersonalWishlist", b =>
@@ -4433,6 +5818,153 @@ namespace Buyer.Infrastructure.Migrations
                         .HasDatabaseName("ix_physical_inventory_request_buyer_id_location_id_status");
 
                     b.ToTable("physical_inventory_request", "buyersystem");
+                });
+
+            modelBuilder.Entity("Buyer.Domain.Entities.PmsDemandSnapshot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("id");
+
+                    b.Property<decimal?>("Adults")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("adults");
+
+                    b.Property<decimal?>("Arrivals")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("arrivals");
+
+                    b.Property<DateTime>("BusinessDate")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("business_date");
+
+                    b.Property<Guid>("BuyerId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("buyer_id");
+
+                    b.Property<decimal?>("Children")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("children");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("date_created");
+
+                    b.Property<DateTime>("DateUpdated")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("date_updated");
+
+                    b.Property<decimal?>("Departures")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("departures");
+
+                    b.Property<string>("Events")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("events");
+
+                    b.Property<decimal?>("ExpectedGuests")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("expected_guests");
+
+                    b.Property<decimal?>("ForecastReservations")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("forecast_reservations");
+
+                    b.Property<string>("Freshness")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("freshness");
+
+                    b.Property<decimal?>("GroupBookings")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("group_bookings");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit")
+                        .HasColumnName("is_active");
+
+                    b.Property<DateTime?>("LastSuccessfulSync")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("last_successful_sync");
+
+                    b.Property<string>("MealPlans")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("meal_plans");
+
+                    b.Property<string>("Message")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("message");
+
+                    b.Property<decimal?>("OccupancyPercent")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("occupancy_percent");
+
+                    b.Property<Guid?>("PropertyId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("property_id");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("provider");
+
+                    b.Property<decimal?>("Reservations")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("reservations");
+
+                    b.Property<decimal?>("RoomsAvailable")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("rooms_available");
+
+                    b.Property<decimal?>("RoomsOccupied")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("rooms_occupied");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("source");
+
+                    b.Property<DateTime?>("SourceTimestamp")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("source_timestamp");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("status");
+
+                    b.Property<decimal?>("Stayovers")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("stayovers");
+
+                    b.Property<Guid>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_pms_demand_snapshot");
+
+                    b.HasIndex("BuyerId")
+                        .HasDatabaseName("ix_pms_demand_snapshot_buyer_id");
+
+                    b.ToTable("pms_demand_snapshot", "buyersystem");
                 });
 
             modelBuilder.Entity("Buyer.Domain.Entities.PosItemMapping", b =>
@@ -9705,6 +11237,30 @@ namespace Buyer.Infrastructure.Migrations
                     b.Navigation("BuyerBusinessProfile");
                 });
 
+            modelBuilder.Entity("Buyer.Domain.Entities.CreditMemo", b =>
+                {
+                    b.HasOne("Buyer.Domain.Entities.BuyerBusinessProfile", "BuyerBusinessProfile")
+                        .WithMany()
+                        .HasForeignKey("BuyerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_credit_memo_buyer_business_profile_buyer_id");
+
+                    b.Navigation("BuyerBusinessProfile");
+                });
+
+            modelBuilder.Entity("Buyer.Domain.Entities.CreditMemoItem", b =>
+                {
+                    b.HasOne("Buyer.Domain.Entities.CreditMemo", "CreditMemo")
+                        .WithMany("Items")
+                        .HasForeignKey("CreditMemoId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_credit_memo_item_credit_memo_credit_memo_id");
+
+                    b.Navigation("CreditMemo");
+                });
+
             modelBuilder.Entity("Buyer.Domain.Entities.ErpIntegrationConfiguration", b =>
                 {
                     b.HasOne("Buyer.Domain.Entities.BuyerBusinessProfile", "BuyerBusinessProfile")
@@ -9990,6 +11546,30 @@ namespace Buyer.Infrastructure.Migrations
                     b.Navigation("BuyerBusinessProfile");
                 });
 
+            modelBuilder.Entity("Buyer.Domain.Entities.MaterialErpStockSnapshot", b =>
+                {
+                    b.HasOne("Buyer.Domain.Entities.BuyerBusinessProfile", "BuyerBusinessProfile")
+                        .WithMany()
+                        .HasForeignKey("BuyerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_material_erp_stock_snapshot_buyer_business_profile_buyer_id");
+
+                    b.Navigation("BuyerBusinessProfile");
+                });
+
+            modelBuilder.Entity("Buyer.Domain.Entities.MaterialIntegrationException", b =>
+                {
+                    b.HasOne("Buyer.Domain.Entities.BuyerBusinessProfile", "BuyerBusinessProfile")
+                        .WithMany()
+                        .HasForeignKey("BuyerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_material_integration_exception_buyer_business_profile_buyer_id");
+
+                    b.Navigation("BuyerBusinessProfile");
+                });
+
             modelBuilder.Entity("Buyer.Domain.Entities.MaterialOutletPrice", b =>
                 {
                     b.HasOne("Buyer.Domain.Entities.BuyerBusinessProfile", "BuyerBusinessProfile")
@@ -9998,6 +11578,18 @@ namespace Buyer.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_material_outlet_price_buyer_business_profile_buyer_id");
+
+                    b.Navigation("BuyerBusinessProfile");
+                });
+
+            modelBuilder.Entity("Buyer.Domain.Entities.MaterialPlantAssignment", b =>
+                {
+                    b.HasOne("Buyer.Domain.Entities.BuyerBusinessProfile", "BuyerBusinessProfile")
+                        .WithMany()
+                        .HasForeignKey("BuyerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_material_plant_assignment_buyer_business_profile_buyer_id");
 
                     b.Navigation("BuyerBusinessProfile");
                 });
@@ -10014,6 +11606,18 @@ namespace Buyer.Infrastructure.Migrations
                     b.Navigation("BuyerBusinessProfile");
                 });
 
+            modelBuilder.Entity("Buyer.Domain.Entities.MaterialStorageLocationAssignment", b =>
+                {
+                    b.HasOne("Buyer.Domain.Entities.BuyerBusinessProfile", "BuyerBusinessProfile")
+                        .WithMany()
+                        .HasForeignKey("BuyerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_material_storage_location_assignment_buyer_business_profile_buyer_id");
+
+                    b.Navigation("BuyerBusinessProfile");
+                });
+
             modelBuilder.Entity("Buyer.Domain.Entities.MaterialUomConversion", b =>
                 {
                     b.HasOne("Buyer.Domain.Entities.BuyerBusinessProfile", "BuyerBusinessProfile")
@@ -10022,6 +11626,66 @@ namespace Buyer.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_material_uom_conversion_buyer_business_profile_buyer_id");
+
+                    b.Navigation("BuyerBusinessProfile");
+                });
+
+            modelBuilder.Entity("Buyer.Domain.Entities.MenuEngineeringSettings", b =>
+                {
+                    b.HasOne("Buyer.Domain.Entities.BuyerBusinessProfile", "BuyerBusinessProfile")
+                        .WithMany()
+                        .HasForeignKey("BuyerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_menu_engineering_settings_buyer_business_profile_buyer_id");
+
+                    b.Navigation("BuyerBusinessProfile");
+                });
+
+            modelBuilder.Entity("Buyer.Domain.Entities.MenuItem", b =>
+                {
+                    b.HasOne("Buyer.Domain.Entities.BuyerBusinessProfile", "BuyerBusinessProfile")
+                        .WithMany()
+                        .HasForeignKey("BuyerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_menu_item_buyer_business_profile_buyer_id");
+
+                    b.Navigation("BuyerBusinessProfile");
+                });
+
+            modelBuilder.Entity("Buyer.Domain.Entities.MenuPlan", b =>
+                {
+                    b.HasOne("Buyer.Domain.Entities.BuyerBusinessProfile", "BuyerBusinessProfile")
+                        .WithMany()
+                        .HasForeignKey("BuyerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_menu_plan_buyer_business_profile_buyer_id");
+
+                    b.Navigation("BuyerBusinessProfile");
+                });
+
+            modelBuilder.Entity("Buyer.Domain.Entities.MenuPlanLine", b =>
+                {
+                    b.HasOne("Buyer.Domain.Entities.MenuPlan", "MenuPlan")
+                        .WithMany("Lines")
+                        .HasForeignKey("MenuPlanId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_menu_plan_line_menu_plan_menu_plan_id");
+
+                    b.Navigation("MenuPlan");
+                });
+
+            modelBuilder.Entity("Buyer.Domain.Entities.MenuPosMapping", b =>
+                {
+                    b.HasOne("Buyer.Domain.Entities.BuyerBusinessProfile", "BuyerBusinessProfile")
+                        .WithMany()
+                        .HasForeignKey("BuyerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_menu_pos_mapping_buyer_business_profile_buyer_id");
 
                     b.Navigation("BuyerBusinessProfile");
                 });
@@ -10069,6 +11733,30 @@ namespace Buyer.Infrastructure.Migrations
                     b.Navigation("RFQ");
                 });
 
+            modelBuilder.Entity("Buyer.Domain.Entities.OperationalAlert", b =>
+                {
+                    b.HasOne("Buyer.Domain.Entities.BuyerBusinessProfile", "BuyerBusinessProfile")
+                        .WithMany()
+                        .HasForeignKey("BuyerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_operational_alert_buyer_business_profile_buyer_id");
+
+                    b.Navigation("BuyerBusinessProfile");
+                });
+
+            modelBuilder.Entity("Buyer.Domain.Entities.OperationalTask", b =>
+                {
+                    b.HasOne("Buyer.Domain.Entities.BuyerBusinessProfile", "BuyerBusinessProfile")
+                        .WithMany()
+                        .HasForeignKey("BuyerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_operational_task_buyer_business_profile_buyer_id");
+
+                    b.Navigation("BuyerBusinessProfile");
+                });
+
             modelBuilder.Entity("Buyer.Domain.Entities.PersonalWishlist", b =>
                 {
                     b.HasOne("Buyer.Domain.Entities.BuyerBusinessProfile", "BuyerBusinessProfile")
@@ -10101,6 +11789,18 @@ namespace Buyer.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_physical_inventory_request_buyer_business_profile_buyer_id");
+
+                    b.Navigation("BuyerBusinessProfile");
+                });
+
+            modelBuilder.Entity("Buyer.Domain.Entities.PmsDemandSnapshot", b =>
+                {
+                    b.HasOne("Buyer.Domain.Entities.BuyerBusinessProfile", "BuyerBusinessProfile")
+                        .WithMany()
+                        .HasForeignKey("BuyerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_pms_demand_snapshot_buyer_business_profile_buyer_id");
 
                     b.Navigation("BuyerBusinessProfile");
                 });
@@ -10752,6 +12452,11 @@ namespace Buyer.Infrastructure.Migrations
                     b.Navigation("Configuration");
                 });
 
+            modelBuilder.Entity("Buyer.Domain.Entities.CreditMemo", b =>
+                {
+                    b.Navigation("Items");
+                });
+
             modelBuilder.Entity("Buyer.Domain.Entities.GoodsIssue", b =>
                 {
                     b.Navigation("Items");
@@ -10770,6 +12475,11 @@ namespace Buyer.Infrastructure.Migrations
             modelBuilder.Entity("Buyer.Domain.Entities.Invoice", b =>
                 {
                     b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("Buyer.Domain.Entities.MenuPlan", b =>
+                {
+                    b.Navigation("Lines");
                 });
 
             modelBuilder.Entity("Buyer.Domain.Entities.PosSource", b =>

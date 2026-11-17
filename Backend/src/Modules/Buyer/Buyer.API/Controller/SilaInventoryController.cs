@@ -225,16 +225,18 @@ namespace Buyer.API.Controllers
             [FromQuery] string? search,
             [FromQuery] bool inventoryOnly = false,
             [FromQuery] string? priceStatus = null,
+            [FromQuery] string? plantCode = null,
             [FromQuery] int index = 0,
             [FromQuery] int limit = 50)
         {
-            _logger.LogDebug($"Fetching inventory materials. Search: {search}, PriceStatus: {priceStatus}, Index: {index}, Limit: {limit}");
+            _logger.LogDebug($"Fetching inventory materials. Search: {search}, Plant: {plantCode}, PriceStatus: {priceStatus}, Index: {index}, Limit: {limit}");
             List<SilaMaterialDto> result = await _mediator.Send(new GetSilaMaterialsQuery
             {
                 OrganizationId = GetOrganizationId(),
                 Search = search,
                 InventoryOnly = inventoryOnly,
                 PriceStatus = priceStatus,
+                PlantCode = plantCode,
                 Index = index,
                 Limit = limit
             });
