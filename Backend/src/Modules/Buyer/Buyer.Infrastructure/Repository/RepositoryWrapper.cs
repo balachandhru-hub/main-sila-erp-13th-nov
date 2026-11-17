@@ -33,6 +33,10 @@ namespace Buyer.Infrastructure.Repository
         private IStockCountPhotoRepository? _stockCountPhoto;
         private ISilaDocumentSequenceRepository? _silaDocumentSequence;
         private IMaterialUomConversionRepository? _materialUomConversion;
+        private IMaterialPlantAssignmentRepository? _materialPlantAssignment;
+        private IMaterialStorageLocationAssignmentRepository? _materialStorageLocationAssignment;
+        private IMaterialErpStockSnapshotRepository? _materialErpStockSnapshot;
+        private IMaterialIntegrationExceptionRepository? _materialIntegrationException;
         private IInventoryLocationRepository? _inventoryLocation;
         private IInventoryLocationUserMappingRepository? _inventoryLocationUserMapping;
         private IInventoryLocationMaterialRepository? _inventoryLocationMaterial;
@@ -928,6 +932,42 @@ namespace Buyer.Infrastructure.Repository
             {
                 _materialUomConversion ??= new MaterialUomConversionRepository(_context);
                 return _materialUomConversion;
+            }
+        }
+
+        public IMaterialPlantAssignmentRepository MaterialPlantAssignment
+        {
+            get
+            {
+                _materialPlantAssignment ??= new MaterialPlantAssignmentRepository(_context);
+                return _materialPlantAssignment;
+            }
+        }
+
+        public IMaterialStorageLocationAssignmentRepository MaterialStorageLocationAssignment
+        {
+            get
+            {
+                _materialStorageLocationAssignment ??= new MaterialStorageLocationAssignmentRepository(_context);
+                return _materialStorageLocationAssignment;
+            }
+        }
+
+        public IMaterialErpStockSnapshotRepository MaterialErpStockSnapshot
+        {
+            get
+            {
+                _materialErpStockSnapshot ??= new MaterialErpStockSnapshotRepository(_context);
+                return _materialErpStockSnapshot;
+            }
+        }
+
+        public IMaterialIntegrationExceptionRepository MaterialIntegrationException
+        {
+            get
+            {
+                _materialIntegrationException ??= new MaterialIntegrationExceptionRepository(_context);
+                return _materialIntegrationException;
             }
         }
 

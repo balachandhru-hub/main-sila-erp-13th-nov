@@ -80,3 +80,213 @@
   gap: var(--sila-space-3);
   padding: var(--sila-space-3) var(--sila-space-4);
 }
+
+/* Plant multi-select for ERP pull */
+.smat-plant-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sila-space-2);
+  padding: var(--sila-space-3);
+  border: 0.0625rem solid var(--sila-border, #d7e0ea);
+  border-radius: 0.75rem;
+  background: var(--sila-surface-muted, #f7fafc);
+}
+
+.smat-plant-panel__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sila-space-2);
+}
+
+.smat-plant-panel__title {
+  margin: 0;
+  font-size: var(--sila-text-sm, 0.875rem);
+  font-weight: 600;
+}
+
+.smat-plant-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sila-space-2);
+}
+
+.smat-plant-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sila-space-2);
+}
+
+.smat-plant-meta__company {
+  font-size: var(--sila-text-sm, 0.875rem);
+}
+
+.smat-quick-plant {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)) auto;
+  gap: var(--sila-space-3);
+  align-items: end;
+}
+
+.smat-pull-result {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sila-space-2);
+  padding: var(--sila-space-3);
+  border: 0.0625rem solid var(--sila-border, #d7e0ea);
+  border-radius: 0.65rem;
+  background: var(--sila-surface-muted, #f7fafc);
+}
+
+/* Property → plant mapping rows */
+.smat-plant-map {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sila-space-2);
+  max-height: 28rem;
+  overflow-y: auto;
+}
+
+.smat-plant-map-row {
+  display: grid;
+  grid-template-columns: auto minmax(10rem, 1.4fr) minmax(8rem, 0.9fr) auto;
+  gap: var(--sila-space-3);
+  align-items: end;
+  padding: 0.75rem 0.85rem;
+  border: 0.0625rem solid var(--sila-border, #d7e0ea);
+  border-radius: 0.65rem;
+  background: #fff;
+}
+
+.smat-plant-map-row--selected {
+  border-color: var(--sila-primary, #1f6feb);
+  background: var(--sila-primary-soft, #eef5ff);
+}
+
+.smat-plant-map-row__check {
+  align-self: center;
+  margin: 0;
+}
+
+.smat-plant-map-row__identity {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+  padding-bottom: 0.35rem;
+}
+
+.smat-plant-map-row__name {
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.smat-plant-map-row__plant {
+  min-width: 0;
+  margin: 0;
+}
+
+.smat-plant-map-row__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sila-space-2);
+  justify-content: flex-end;
+}
+
+@media (max-width: 48rem) {
+  .smat-plant-map-row {
+    grid-template-columns: auto 1fr;
+  }
+
+  .smat-plant-map-row__plant,
+  .smat-plant-map-row__actions {
+    grid-column: 1 / -1;
+  }
+}
+
+.smat-plant-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(12.5rem, 1fr));
+  gap: var(--sila-space-2);
+}
+
+.smat-plant-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 0.65rem;
+  row-gap: 0.15rem;
+  align-items: start;
+  margin: 0;
+  padding: 0.7rem 0.8rem;
+  border: 0.0625rem solid var(--sila-border, #d7e0ea);
+  border-radius: 0.65rem;
+  background: #fff;
+  cursor: pointer;
+}
+
+.smat-plant-card input {
+  grid-row: 1 / span 2;
+  margin-top: 0.2rem;
+}
+
+.smat-plant-card__code {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+.smat-plant-card__name {
+  grid-column: 2;
+  font-size: var(--sila-text-xs, 0.75rem);
+  color: var(--sila-text-muted, #5b6b7c);
+  line-height: 1.3;
+  word-break: break-word;
+}
+
+.smat-plant-card--selected {
+  border-color: var(--sila-primary, #1f6feb);
+  background: var(--sila-primary-soft, #eef5ff);
+  box-shadow: inset 0 0 0 0.0625rem var(--sila-primary, #1f6feb);
+}
+
+.smat-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  max-height: 70vh;
+  overflow: auto;
+}
+
+.smat-detail-hero {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1rem;
+  align-items: center;
+  padding: 0.85rem 1rem;
+  border-radius: 1rem;
+  background: linear-gradient(120deg, #eef6ff, #ffffff 55%, #f3fff8);
+  border: 0.0625rem solid #d7e7f6;
+}
+
+.smat-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.smat-detail-grid > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+@media (max-width: 48rem) {
+  .smat-detail-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}

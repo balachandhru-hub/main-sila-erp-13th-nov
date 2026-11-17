@@ -78,7 +78,7 @@ const BY_ROLE: Record<SilaMeRole, SilaMePermissions> = {
     viewMenuEngineering: true,
   },
   "fnb-director": {
-    ...NONE, manageTransfer: true, manageCount: true, initiateCount: true, approveRecipe: true, approvePrice: true,
+    ...NONE, manageTransfer: true, manageCount: true, initiateCount: true, manageRecipe: true, approveRecipe: true, approvePrice: true,
     viewReceiving: true, viewInventory: true, ...invoiceProcess,
     viewMenuEngineering: true, manageMenuEngineering: true,
   },

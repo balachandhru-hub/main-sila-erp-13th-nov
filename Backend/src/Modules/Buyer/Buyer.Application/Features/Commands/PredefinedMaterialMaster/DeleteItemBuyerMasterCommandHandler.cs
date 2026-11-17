@@ -39,11 +39,25 @@ namespace Buyer.Application.Features.Commands.PredefinedMaterialMaster
                     "");
             }
 
-            _repository.ItemBuyerMaster.Delete(entity);
+            // Soft-delete only. Hard delete orphans recipe ingredients (no FK) and breaks
+            // Recipe Studio readiness with "Material is inactive or missing" / "Price missing".
+            bool usedInRecipe = await _repository.RecipeIngredient
+                .FindByCondition(x => x.MaterialId == entity.Id && x.IsActive)
+                .AnyAsync(cancellationToken);
+            if (usedInRecipe)
+            {
+                _logger.LogError($"Cannot remove material used in active recipes. MaterialId: {entity.Id}, Code: {entity.MaterialCode}");
+                throw new BadRequestCustomException(
+                    "Material is used in a recipe.",
+                    $"{entity.MaterialCode} is linked to one or more recipes. Remove it from those recipes before deactivating, or keep it active.");
+            }
+
+            entity.IsActive = false;
+            _repository.ItemBuyerMaster.Update(entity);
 
             await _repository.SaveAsync();
 
-            _logger.LogInfo($"PredefinedMaterial deleted : {entity.Id}");
+            _logger.LogInfo($"PredefinedMaterial deactivated (soft delete) : {entity.Id}");
 
             return true;
         }

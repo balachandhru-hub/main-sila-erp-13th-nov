@@ -1,6 +1,11 @@
 import axiosInstance from "../axiosInstance";
 import { readError } from "../readError";
 import type { SilaUomConversion } from "./silaInventoryApi";
+import { readSuccessId } from "./readSuccessId";
+import { canStartRevision, writeFromDetail } from "../../components/silaMe/recipes/recipeWriteModel";
+
+export { readSuccessId } from "./readSuccessId";
+export { writeFromDetail, canStartRevision } from "../../components/silaMe/recipes/recipeWriteModel";
 
 /** DIRECT (one material) | RECIPE (several materials) | BATCH (may contain another recipe). */
 export type SilaRecipeMode = "DIRECT" | "RECIPE" | "BATCH";
@@ -232,10 +237,6 @@ export interface SilaRecipeFilters {
   limit?: number;
 }
 
-interface SuccessResponse {
-  id: string;
-}
-
 const BASE = "/api/v1/buyer/sila";
 
 const list = <T>(value: T[] | null | undefined): T[] => (Array.isArray(value) ? value : []);
@@ -283,11 +284,15 @@ export const getRecipe = async (recipeId: string, version?: number): Promise<Sil
   }
 };
 
-/** Creates a DRAFT recipe (version 1) and returns its id. */
+/** Creates a DRAFT recipe (version 1) and returns its persisted id. */
 export const createRecipe = async (request: SilaRecipeWrite): Promise<string> => {
   try {
-    const response = await axiosInstance.post<SuccessResponse>(`${BASE}/recipes`, request);
-    return response.data.id;
+    const response = await axiosInstance.post(`${BASE}/recipes`, request);
+    const id = readSuccessId(response.data);
+    if (!id) {
+      throw new Error("Recipe was created but the server did not return a persisted id.");
+    }
+    return id;
   } catch (error: unknown) {
     throw new Error(readError(error, "Could not create the recipe."));
   }
@@ -300,6 +305,22 @@ export const updateRecipe = async (recipeId: string, request: SilaRecipeWrite): 
   } catch (error: unknown) {
     throw new Error(readError(error, "Could not save the recipe."));
   }
+};
+
+/**
+ * Starts a new draft version from an APPROVED/REJECTED recipe by saving the current latest rows.
+ * The selling ActiveVersion is unchanged until the draft is approved.
+ */
+export const createRecipeRevision = async (detail: SilaRecipeDetail): Promise<number> => {
+  if (!canStartRevision(detail.status)) {
+    throw new Error("Only an approved or rejected recipe can start a new revision.");
+  }
+  if (!list(detail.ingredients).length) {
+    throw new Error("This recipe has no ingredients to copy into the new revision.");
+  }
+  const nextVersion = detail.version + 1;
+  await updateRecipe(detail.id, writeFromDetail(detail));
+  return nextVersion;
 };
 
 export const submitRecipe = async (recipeId: string): Promise<void> => {

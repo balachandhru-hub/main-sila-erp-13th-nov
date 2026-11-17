@@ -8,16 +8,18 @@ interface SilaRecipeCatalogGridProps {
   canManage: boolean;
   onOpen: (recipeId: string) => void;
   onEdit?: (recipeId: string) => void;
+  onDelete?: (recipe: SilaRecipeListItem) => void;
 }
 
 /** Premium visual recipe catalog cards (default Recipe Studio grid). */
-const SilaRecipeCatalogGrid: React.FC<SilaRecipeCatalogGridProps> = ({ rows, canManage, onOpen, onEdit }) => (
+const SilaRecipeCatalogGrid: React.FC<SilaRecipeCatalogGridProps> = ({ rows, canManage, onOpen, onEdit, onDelete }) => (
   <div className="rstudio-grid" role="list">
     {rows.map((row) => {
       const kind = resolveStudioKind(row.category, row.familyName, row.name);
       const portionCost = row.costComplete || row.activeVersion > 0
         ? (row.costPerServing ?? costPerServing(row.totalCost, row.servingQty))
         : null;
+      const canDelete = canManage && row.status !== "INACTIVE" && Boolean(onDelete);
       return (
         <article key={row.id} className="rstudio-card" role="listitem">
           <button type="button" className="rstudio-card__media" onClick={() => onOpen(row.id)} aria-label={`View ${row.name}`}>
@@ -32,6 +34,7 @@ const SilaRecipeCatalogGrid: React.FC<SilaRecipeCatalogGridProps> = ({ rows, can
               {row.recipeCode}
               {row.category ? ` · ${row.category}` : ""}
               {row.familyName ? ` · ${row.familyName}` : ""}
+              {row.posCode ? ` · POS ${row.posCode}` : ""}
             </p>
             <div className="rstudio-card__stats">
               <span>v{row.version}{row.activeVersion > 0 && row.activeVersion !== row.version ? ` · selling v${row.activeVersion}` : ""}</span>
@@ -52,6 +55,9 @@ const SilaRecipeCatalogGrid: React.FC<SilaRecipeCatalogGridProps> = ({ rows, can
               <button type="button" className="sila-btn sila-btn--secondary sila-btn--sm" onClick={() => onOpen(row.id)}>View</button>
               {canManage && onEdit && (
                 <button type="button" className="sila-btn sila-btn--primary sila-btn--sm" onClick={() => onEdit(row.id)}>Edit</button>
+              )}
+              {canDelete && (
+                <button type="button" className="sila-btn sila-btn--danger sila-btn--sm" onClick={() => onDelete?.(row)}>Delete</button>
               )}
             </div>
           </div>

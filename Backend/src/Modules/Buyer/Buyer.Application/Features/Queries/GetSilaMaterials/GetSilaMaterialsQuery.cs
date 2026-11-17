@@ -12,6 +12,8 @@ namespace Buyer.Application.Features.Queries.GetSilaMaterials
         public bool InventoryOnly { get; set; }
         /// <summary>APPROVED | MISSING | PENDING_APPROVAL; empty for all.</summary>
         public string? PriceStatus { get; set; }
+        /// <summary>Optional SAP plant code — materials with a MaterialPlantAssignment for this plant.</summary>
+        public string? PlantCode { get; set; }
         public int Index { get; set; }
         public int Limit { get; set; }
     }

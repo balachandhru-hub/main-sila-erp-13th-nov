@@ -181,7 +181,7 @@ namespace Buyer.Tests.Shared
         }
 
         [Fact]
-        public async Task InactiveOrUnknownMaterial_IsALineIssue()
+        public async Task InactiveMaterial_IsALineIssue()
         {
             using TestDatabase db = new TestDatabase();
             ItemBuyerMaster inactive = Material("OLD", 0.1m);
@@ -192,7 +192,22 @@ namespace Buyer.Tests.Shared
             SilaRecipeReadinessDto result = await Evaluate(db, recipe);
 
             Assert.False(result.CostComplete);
-            Assert.Contains(result.Issues, x => x.EndsWith("Material is inactive or missing"));
+            Assert.Contains(result.Issues, x => x.EndsWith("Material is inactive"));
+        }
+
+        [Fact]
+        public async Task MissingMaterial_IsALineIssue()
+        {
+            using TestDatabase db = new TestDatabase();
+            Recipe recipe = NewRecipe();
+            RecipeIngredient orphan = Line(recipe, Material("GONE", 1m), 30m, "ML");
+            orphan.MaterialId = Guid.NewGuid();
+            db.Seed(recipe, orphan, Price(recipe));
+
+            SilaRecipeReadinessDto result = await Evaluate(db, recipe);
+
+            Assert.False(result.CostComplete);
+            Assert.Contains(result.Issues, x => x.Contains("Material is missing from Item Master"));
         }
 
         [Fact]

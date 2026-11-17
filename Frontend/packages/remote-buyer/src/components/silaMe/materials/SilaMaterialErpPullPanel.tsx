@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Loader, toastService } from "@vosox/shared-ui";
-import { getProperties } from "../../../api/propertyApi";
+import { createProperty, getProperties, updateProperty, type Property } from "../../../api/propertyApi";
 import {
   getMaterialErpRoute,
   pullMaterialsFromErp,
@@ -12,52 +12,96 @@ import "../silaMeTheme.css";
 import "./SilaMaterials.css";
 
 interface SilaMaterialErpPullPanelProps {
-  /** Called after a pull changed the material master. */
-  onPulled: () => void;
+  /** Called after a pull finishes so Item Master inventory can reload and show materials. */
+  onPulled: (hint?: { plantCode?: string }) => void;
 }
 
-/** Pulls the materials of a company code from the ERP through its GET_MATERIAL API. */
+/** Plant-first GET_MATERIAL pull with inline property/plant create + mapping. */
 const SilaMaterialErpPullPanel: React.FC<SilaMaterialErpPullPanelProps> = ({ onPulled }) => {
-  const [companyCodes, setCompanyCodes] = useState<string[]>([]);
-  const [companyCode, setCompanyCode] = useState("");
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [plantDrafts, setPlantDrafts] = useState<Record<string, string>>({});
+  const [selectedPropertyIds, setSelectedPropertyIds] = useState<Record<string, boolean>>({});
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newCompany, setNewCompany] = useState("");
+  const [newPlant, setNewPlant] = useState("");
+  const [quickCompany, setQuickCompany] = useState("");
+  const [quickPlant, setQuickPlant] = useState("");
+  /** Optional SAP Product ID (string; leading zeros preserved — never parse as number). */
+  const [productId, setProductId] = useState("");
   const [route, setRoute] = useState<SilaMaterialErpRoute | null>(null);
   const [routeLoading, setRouteLoading] = useState(false);
   const [routeError, setRouteError] = useState<string | null>(null);
   const [pulling, setPulling] = useState(false);
   const [result, setResult] = useState<SilaMaterialErpPullResult | null>(null);
+  const [propertiesError, setPropertiesError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
-  // Company codes of the properties, offered as suggestions; any code can be typed.
   useEffect(() => {
     let active = true;
     getProperties()
-      .then((properties) => {
+      .then((rows) => {
         if (!active) return;
-        const codes = Array.from(new Set(properties.map((property) => property.companyCode?.trim().toUpperCase()).filter(Boolean)));
-        setCompanyCodes(codes);
-        if (codes.length > 0) setCompanyCode((current) => current || codes[0]);
+        setProperties(rows);
+        const drafts: Record<string, string> = {};
+        for (const property of rows) {
+          drafts[property.id] = (property.plantCode || property.companyCode || "").trim().toUpperCase();
+        }
+        setPlantDrafts(drafts);
+        setPropertiesError(null);
+        if (rows.length > 0 && !quickCompany) {
+          const firstCompany = rows.find((row) => row.companyCode?.trim())?.companyCode?.trim().toUpperCase() || "";
+          if (firstCompany) setQuickCompany(firstCompany);
+        }
       })
-      .catch(() => {
-        if (active) setCompanyCodes([]);
+      .catch((err: unknown) => {
+        if (!active) return;
+        setProperties([]);
+        setPropertiesError(err instanceof Error ? err.message : "Could not load properties.");
       });
     return () => {
       active = false;
     };
-  }, []);
+  }, [reloadKey]);
 
-  // The API a pull would use, shortly after the company code stops changing.
+  const sortedProperties = useMemo(
+    () => [...properties].sort((a, b) => (a.propertyName || "").localeCompare(b.propertyName || "")),
+    [properties],
+  );
+
+  const selectedForPull = useMemo(() => {
+    return sortedProperties.filter((property) => {
+      if (!selectedPropertyIds[property.id]) return false;
+      const plant = (plantDrafts[property.id] || property.plantCode || "").trim().toUpperCase();
+      return plant.length > 0 && property.plantCode?.trim().toUpperCase() === plant;
+    });
+  }, [sortedProperties, selectedPropertyIds, plantDrafts]);
+
+  const selectedPlantCodes = useMemo(
+    () => Array.from(new Set(selectedForPull.map((property) => property.plantCode.trim().toUpperCase()))),
+    [selectedForPull],
+  );
+
+  const derivedCompanyCode = useMemo(() => {
+    const companies = Array.from(
+      new Set(selectedForPull.map((property) => property.companyCode?.trim().toUpperCase()).filter(Boolean)),
+    );
+    if (companies.length === 1) return companies[0];
+    if (companies.length > 1) return "ALL";
+    return quickCompany.trim().toUpperCase();
+  }, [selectedForPull, quickCompany]);
+
+  const routeEntity = derivedCompanyCode || quickCompany.trim().toUpperCase() || "ALL";
+
   useEffect(() => {
-    const code = companyCode.trim();
     setResult(null);
-    if (!code) {
-      setRoute(null);
-      return undefined;
-    }
     let active = true;
     setRouteLoading(true);
     setRouteError(null);
     const timer = window.setTimeout(async () => {
       try {
-        const found = await getMaterialErpRoute(code);
+        const found = await getMaterialErpRoute(routeEntity);
         if (active) setRoute(found);
       } catch (err: unknown) {
         if (active) {
@@ -72,15 +116,116 @@ const SilaMaterialErpPullPanel: React.FC<SilaMaterialErpPullPanelProps> = ({ onP
       active = false;
       window.clearTimeout(timer);
     };
-  }, [companyCode]);
+  }, [routeEntity]);
 
-  const handlePull = async () => {
+  const setDraft = (propertyId: string, value: string) => {
+    setPlantDrafts((current) => ({ ...current, [propertyId]: value.toUpperCase() }));
+  };
+
+  const toggleProperty = (propertyId: string) => {
+    setSelectedPropertyIds((current) => ({ ...current, [propertyId]: !current[propertyId] }));
+  };
+
+  const selectAllMapped = () => {
+    const next: Record<string, boolean> = {};
+    for (const property of sortedProperties) {
+      if (property.plantCode?.trim()) next[property.id] = true;
+    }
+    setSelectedPropertyIds(next);
+  };
+
+  const clearSelection = () => setSelectedPropertyIds({});
+
+  const savePlantMapping = async (property: Property) => {
+    const plant = (plantDrafts[property.id] || "").trim().toUpperCase();
+    if (!plant) {
+      toastService.error("Enter a plant code for this property.");
+      return;
+    }
+    if (!property.companyCode?.trim() || !property.propertyName?.trim()) {
+      toastService.error("Property needs a company code and name before mapping a plant.");
+      return;
+    }
+    setSavingId(property.id);
+    try {
+      await updateProperty(property.id, {
+        companyCode: property.companyCode.trim(),
+        plantCode: plant,
+        propertyName: property.propertyName.trim(),
+        masterApprovalFlowId: property.masterApprovalFlowId ?? null,
+      });
+      toastService.success(`Mapped plant ${plant} to ${property.propertyName}.`);
+      setReloadKey((key) => key + 1);
+      setSelectedPropertyIds((current) => ({ ...current, [property.id]: true }));
+    } catch (err: unknown) {
+      toastService.error(err instanceof Error ? err.message : "Could not save the plant mapping.");
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  const useCompanyAsPlant = (property: Property) => {
+    const company = property.companyCode?.trim().toUpperCase() || "";
+    if (!company) {
+      toastService.error("This property has no company code to copy.");
+      return;
+    }
+    setDraft(property.id, company);
+  };
+
+  const handleCreateProperty = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const company = newCompany.trim().toUpperCase();
+    const plant = (newPlant.trim() || company).toUpperCase();
+    const name = newName.trim() || `Plant ${plant}`;
+    if (!company || !plant) {
+      toastService.error("Enter company code and plant code.");
+      return;
+    }
+    setCreating(true);
+    try {
+      await createProperty({
+        companyCode: company,
+        plantCode: plant,
+        propertyName: name,
+        masterApprovalFlowId: null,
+      });
+      toastService.success(`Property created for plant ${plant}.`);
+      setNewName("");
+      setNewPlant("");
+      setQuickCompany(company);
+      setQuickPlant(plant);
+      setReloadKey((key) => key + 1);
+    } catch (err: unknown) {
+      toastService.error(err instanceof Error ? err.message : "Could not create the property.");
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const trimmedProductId = productId.trim();
+
+  const runPull = async (plants: string[], company: string, product: string) => {
     setPulling(true);
     try {
-      const pulled = await pullMaterialsFromErp(companyCode);
+      const pulled = await pullMaterialsFromErp(plants, company, product);
       setResult(pulled);
-      toastService.success(`${pulled.read} record(s) read: ${pulled.new} new, ${pulled.changed} changed, ${pulled.failed} failed.`);
-      if (pulled.new > 0 || pulled.changed > 0) onPulled();
+      const descUpdated = pulled.descriptionsUpdated ?? 0;
+      const descMissing = pulled.descriptionsMissing ?? 0;
+      const skipped = pulled.skippedNotFound ?? 0;
+      const saved = pulled.new + pulled.changed;
+      const summary =
+        `${pulled.read} read · ${pulled.new} new · ${pulled.changed} changed · ${descUpdated} descriptions updated · ${descMissing} missing description · ${skipped} not found · ${pulled.failed} failed`;
+      if (saved > 0) {
+        toastService.success(`Materials loaded into Item Master. ${summary}`);
+      } else if (pulled.failed > 0 || skipped > 0) {
+        toastService.error(`Nothing saved to Item Master. ${summary}. See messages below.`);
+      } else {
+        toastService.success(`Pull finished with no changes. ${summary}`);
+      }
+      // Always refresh the inventory list so operators can select/browse pulled materials.
+      onPulled({ plantCode: plants.length === 1 ? plants[0] : undefined });
+      setReloadKey((key) => key + 1);
     } catch (err: unknown) {
       toastService.error(err instanceof Error ? err.message : "Could not pull the materials from the ERP.");
     } finally {
@@ -88,33 +233,282 @@ const SilaMaterialErpPullPanel: React.FC<SilaMaterialErpPullPanelProps> = ({ onP
     }
   };
 
+  const handlePull = async () => {
+    if (selectedPlantCodes.length > 0) {
+      await runPull(selectedPlantCodes, derivedCompanyCode, trimmedProductId);
+      return;
+    }
+    const plant = quickPlant.trim().toUpperCase();
+    const company = quickCompany.trim().toUpperCase() || plant;
+    if (!plant && !trimmedProductId) {
+      toastService.error("Enter a plant and/or Product ID, or select a mapped property.");
+      return;
+    }
+    if (!plant && trimmedProductId && !company && mappedCount === 0) {
+      toastService.error("Product ID pull needs a company code or at least one configured plant.");
+      return;
+    }
+    await runPull(plant ? [plant] : [], company || "ALL", trimmedProductId);
+  };
+
+  const mappedCount = sortedProperties.filter((property) => property.plantCode?.trim()).length;
+  const canPullSelected = selectedPlantCodes.length > 0;
+  const canPullQuick = quickPlant.trim().length > 0 && (quickCompany.trim().length > 0 || quickPlant.trim().length > 0);
+  const canPullProductOnly =
+    trimmedProductId.length > 0 &&
+    (quickCompany.trim().length > 0 || mappedCount > 0 || routeEntity.length > 0);
+  const canPull = canPullSelected || canPullQuick || canPullProductOnly;
+
+  const scopeSummary = (() => {
+    const plants =
+      selectedPlantCodes.length > 0
+        ? selectedPlantCodes.join(", ")
+        : quickPlant.trim().toUpperCase() || "(authorized configured plants)";
+    const product = trimmedProductId || "(all products)";
+    return `Plant: ${plants} · Product ID: ${product} · EN description refresh on every pull`;
+  })();
+
   return (
     <section className="sila-card">
       <div className="sila-card-header">
         <h2 className="sila-card-title">Pull from ERP</h2>
       </div>
       <div className="smat-erp">
-        <div className="smat-toolbar">
-          <div className="sila-field">
-            <label className="sila-label" htmlFor="smat-erp-company">Company code *</label>
-            <input id="smat-erp-company" className="sila-input" list="smat-erp-company-codes" maxLength={20}
-              value={companyCode} onChange={(event) => setCompanyCode(event.target.value.toUpperCase())} />
-            <datalist id="smat-erp-company-codes">
-              {companyCodes.map((code) => <option key={code} value={code} />)}
-            </datalist>
+        <p className="sila-help">
+          Enter company and plant codes here — no Properties screen required. New plants are mapped automatically on pull.
+          Pull includes stock, non-stock / non-inventory and service materials.
+        </p>
+
+        {propertiesError && (
+          <div className="sila-alert sila-alert--warning" role="status">
+            Could not list properties ({propertiesError}). You can still enter company and plant below and pull — the plant will be mapped on pull.
           </div>
-          <button type="button" className="sila-btn sila-btn--primary"
-            disabled={pulling || routeLoading || !companyCode.trim() || !route?.configured} onClick={handlePull}>
-            {pulling ? "Pulling..." : "Pull materials"}
+        )}
+
+        <div className="smat-plant-panel">
+          <div className="smat-plant-panel__header">
+            <div>
+              <h3 className="smat-plant-panel__title">Company &amp; plant</h3>
+              <p className="sila-help">Type the SAP company and plant (often the same, e.g. 1060). Pull uses these even when no property exists yet.</p>
+            </div>
+          </div>
+          <div className="smat-quick-plant">
+            <div className="sila-field">
+              <label className="sila-label" htmlFor="smat-quick-company">Company code *</label>
+              <input
+                id="smat-quick-company"
+                className="sila-input"
+                maxLength={20}
+                placeholder="e.g. 1060"
+                value={quickCompany}
+                onChange={(event) => {
+                  const value = event.target.value.toUpperCase();
+                  setQuickCompany(value);
+                  if (!quickPlant || quickPlant === quickCompany) setQuickPlant(value);
+                }}
+              />
+            </div>
+            <div className="sila-field">
+              <label className="sila-label" htmlFor="smat-quick-plant">Plant code (optional)</label>
+              <input
+                id="smat-quick-plant"
+                className="sila-input"
+                maxLength={20}
+                placeholder="e.g. 1060"
+                value={quickPlant}
+                onChange={(event) => setQuickPlant(event.target.value.toUpperCase())}
+              />
+            </div>
+            <div className="sila-field">
+              <label className="sila-label" htmlFor="smat-product-id">Product ID (optional)</label>
+              <input
+                id="smat-product-id"
+                className="sila-input"
+                maxLength={40}
+                inputMode="text"
+                autoComplete="off"
+                spellCheck={false}
+                placeholder="e.g. 000000000001234567"
+                value={productId}
+                onChange={(event) => setProductId(event.target.value)}
+              />
+            </div>
+            <button
+              type="button"
+              className="sila-btn sila-btn--secondary sila-btn--sm"
+              onClick={() => setQuickPlant(quickCompany.trim().toUpperCase())}
+              disabled={!quickCompany.trim()}
+            >
+              Use company as plant
+            </button>
+          </div>
+          <p className="sila-help">
+            Product ID is a string — leading zeros are kept. Plant and Product ID work alone or together.
+            English ProductDescription is refreshed on every successful pull.
+          </p>
+        </div>
+
+        <form className="smat-plant-panel" onSubmit={handleCreateProperty}>
+          <div className="smat-plant-panel__header">
+            <div>
+              <h3 className="smat-plant-panel__title">Add property (optional)</h3>
+              <p className="sila-help">Creates a property record with company + plant for reuse in locations and later pulls.</p>
+            </div>
+          </div>
+          <div className="smat-quick-plant">
+            <div className="sila-field">
+              <label className="sila-label" htmlFor="smat-new-name">Property name</label>
+              <input
+                id="smat-new-name"
+                className="sila-input"
+                placeholder="Auto: Plant 1060"
+                value={newName}
+                onChange={(event) => setNewName(event.target.value)}
+              />
+            </div>
+            <div className="sila-field">
+              <label className="sila-label" htmlFor="smat-new-company">Company code *</label>
+              <input
+                id="smat-new-company"
+                className="sila-input"
+                maxLength={20}
+                value={newCompany}
+                onChange={(event) => {
+                  const value = event.target.value.toUpperCase();
+                  setNewCompany(value);
+                  if (!newPlant || newPlant === newCompany) setNewPlant(value);
+                }}
+              />
+            </div>
+            <div className="sila-field">
+              <label className="sila-label" htmlFor="smat-new-plant">Plant code *</label>
+              <input
+                id="smat-new-plant"
+                className="sila-input"
+                maxLength={20}
+                value={newPlant}
+                onChange={(event) => setNewPlant(event.target.value.toUpperCase())}
+              />
+            </div>
+            <button type="submit" className="sila-btn sila-btn--secondary" disabled={creating || !newCompany.trim()}>
+              {creating ? "Creating..." : "Create property"}
+            </button>
+          </div>
+        </form>
+
+        {sortedProperties.length > 0 && (
+          <div className="smat-plant-panel">
+            <div className="smat-plant-panel__header">
+              <div>
+                <h3 className="smat-plant-panel__title">Existing properties</h3>
+                <p className="sila-help">
+                  Select mapped plants to pull.
+                  {mappedCount > 0 ? ` ${mappedCount} of ${sortedProperties.length} mapped.` : ""}
+                </p>
+              </div>
+              <div className="smat-plant-actions">
+                <button type="button" className="sila-btn sila-btn--secondary sila-btn--sm" onClick={selectAllMapped} disabled={mappedCount === 0}>
+                  Select mapped
+                </button>
+                <button type="button" className="sila-btn sila-btn--secondary sila-btn--sm" onClick={clearSelection} disabled={selectedPlantCodes.length === 0}>
+                  Clear
+                </button>
+              </div>
+            </div>
+
+            <div className="smat-plant-map" role="list" aria-label="Property to plant mapping">
+              {sortedProperties.map((property) => {
+                const draft = plantDrafts[property.id] ?? "";
+                const savedPlant = property.plantCode?.trim().toUpperCase() || "";
+                const dirty = draft.trim().toUpperCase() !== savedPlant;
+                const checked = Boolean(selectedPropertyIds[property.id]) && !!savedPlant && !dirty;
+                return (
+                  <div key={property.id} className={`smat-plant-map-row${checked ? " smat-plant-map-row--selected" : ""}`} role="listitem">
+                    <label className="smat-plant-map-row__check">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(selectedPropertyIds[property.id])}
+                        disabled={!savedPlant || dirty}
+                        onChange={() => toggleProperty(property.id)}
+                        aria-label={`Select plant for ${property.propertyName}`}
+                      />
+                    </label>
+                    <div className="smat-plant-map-row__identity">
+                      <span className="smat-plant-map-row__name">{property.propertyName || "—"}</span>
+                      <span className="sila-help">
+                        Company {property.companyCode || "—"}
+                        {savedPlant ? ` · Saved plant ${savedPlant}` : " · Plant not mapped"}
+                      </span>
+                    </div>
+                    <div className="sila-field smat-plant-map-row__plant">
+                      <label className="sila-label" htmlFor={`smat-plant-${property.id}`}>Plant code</label>
+                      <input
+                        id={`smat-plant-${property.id}`}
+                        className="sila-input"
+                        maxLength={20}
+                        placeholder={property.companyCode ? `e.g. ${property.companyCode}` : "SAP plant"}
+                        value={draft}
+                        onChange={(event) => setDraft(property.id, event.target.value)}
+                      />
+                    </div>
+                    <div className="smat-plant-map-row__actions">
+                      <button
+                        type="button"
+                        className="sila-btn sila-btn--secondary sila-btn--sm"
+                        onClick={() => useCompanyAsPlant(property)}
+                        disabled={!property.companyCode?.trim()}
+                      >
+                        Use company
+                      </button>
+                      <button
+                        type="button"
+                        className="sila-btn sila-btn--primary sila-btn--sm"
+                        disabled={savingId === property.id || !draft.trim() || !dirty}
+                        onClick={() => savePlantMapping(property)}
+                      >
+                        {savingId === property.id ? "Saving..." : dirty ? "Save plant" : "Saved"}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        <div className="smat-plant-meta">
+          <span className="sila-help">{scopeSummary}</span>
+          <span className="smat-plant-meta__company">
+            Company for API: <strong>{routeEntity}</strong>
+          </span>
+        </div>
+
+        <div className="smat-toolbar">
+          <button
+            type="button"
+            className="sila-btn sila-btn--primary"
+            disabled={pulling || routeLoading || !canPull || !route?.configured}
+            onClick={handlePull}
+          >
+            {pulling
+              ? "Pulling..."
+              : trimmedProductId && selectedPlantCodes.length === 0 && !quickPlant.trim()
+                ? `Pull product ${trimmedProductId}`
+                : canPullSelected
+                  ? `Pull materials (${selectedPlantCodes.length} plant${selectedPlantCodes.length === 1 ? "" : "s"}${trimmedProductId ? ` · ${trimmedProductId}` : ""})`
+                  : canPullQuick
+                    ? `Pull plant ${quickPlant.trim().toUpperCase()}${trimmedProductId ? ` · ${trimmedProductId}` : ""}`
+                    : "Enter plant or Product ID"}
           </button>
         </div>
+
         {routeLoading ? (
           <Loader size={20} message="Checking the ERP material API..." />
         ) : routeError ? (
           <div className="sila-alert sila-alert--danger" role="alert">{routeError}</div>
         ) : route && !route.configured ? (
           <div className="sila-alert sila-alert--warning" role="status">
-            No GET_MATERIAL API is active for {companyCode} or ALL. Configure it under Integration first.
+            No GET_MATERIAL API is active for {routeEntity} or ALL. Configure it under Integration first.
           </div>
         ) : route ? (
           <dl className="smat-facts">
@@ -124,23 +518,54 @@ const SilaMaterialErpPullPanel: React.FC<SilaMaterialErpPullPanelProps> = ({ onP
             <div><dt>Last sync</dt><dd>{formatDateTime(route.lastSyncAt)}</dd></div>
           </dl>
         ) : null}
+        <span className="sila-help">
+          Description refresh: API_PRODUCT_SRV/A_ProductDescription (Language eq EN → ProductDescription).
+          New materials without EN text are rejected; existing descriptions are preserved when EN text is missing.
+          Stock snapshots never overwrite the SILA inventory ledger.
+        </span>
         {route?.lastError && !result && <span className="sila-help">Last error: {route.lastError}</span>}
         {result && (
-          <>
+          <div className="smat-pull-result" role="status">
             <div className="smat-counts">
               <span className="sila-badge sila-badge--neutral">{result.read} read</span>
-              <span className="sila-badge sila-badge--success">{result.new} new</span>
-              <span className="sila-badge sila-badge--info">{result.changed} changed</span>
+              <span className="sila-badge sila-badge--success">{result.new} created</span>
+              <span className="sila-badge sila-badge--info">{result.changed} updated</span>
+              <span className="sila-badge sila-badge--success">{result.descriptionsUpdated ?? 0} descriptions updated</span>
+              <span className={`sila-badge sila-badge--${(result.descriptionsMissing ?? 0) > 0 ? "warning" : "neutral"}`}>
+                {result.descriptionsMissing ?? 0} missing description
+              </span>
+              <span className={`sila-badge sila-badge--${(result.skippedNotFound ?? 0) > 0 ? "warning" : "neutral"}`}>
+                {result.skippedNotFound ?? 0} not found / skipped
+              </span>
               <span className="sila-badge sila-badge--neutral">{result.unchanged} unchanged</span>
               <span className={`sila-badge sila-badge--${result.failed > 0 ? "danger" : "neutral"}`}>{result.failed} failed</span>
               <span className="sila-badge sila-badge--warning">{result.priceChanges} price change(s) for approval</span>
             </div>
+            {(result.new > 0 || result.changed > 0) ? (
+              <p className="sila-help">
+                {result.new + result.changed} material(s) are ready in Item Master inventory below — use Catalog or List, or search by code/description.
+              </p>
+            ) : result.failed > 0 ? (
+              <p className="sila-help">
+                Records were read from ERP but none were saved. Check messages below (often missing Base UOM). Fix mapping and pull again.
+              </p>
+            ) : (
+              <p className="sila-help">No new or changed materials. Inventory list was refreshed.</p>
+            )}
+            <button
+              type="button"
+              className="sila-btn sila-btn--secondary sila-btn--sm"
+              onClick={() => onPulled({ plantCode: selectedPlantCodes[0] || quickPlant.trim().toUpperCase() || undefined })}
+            >
+              Open Item Master list
+            </button>
             {result.failures.length > 0 && (
               <ul className="smat-messages" aria-label="Pull messages">
-                {result.failures.map((message, index) => <li key={`${index}-${message}`}>{message}</li>)}
+                {result.failures.slice(0, 40).map((message, index) => <li key={`${index}-${message}`}>{message}</li>)}
+                {result.failures.length > 40 && <li>…and {result.failures.length - 40} more</li>}
               </ul>
             )}
-          </>
+          </div>
         )}
       </div>
     </section>

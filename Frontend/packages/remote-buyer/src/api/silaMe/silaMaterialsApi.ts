@@ -93,6 +93,9 @@ export interface SilaMaterialErpPullResult {
   unchanged: number;
   failed: number;
   priceChanges: number;
+  descriptionsUpdated?: number;
+  descriptionsMissing?: number;
+  skippedNotFound?: number;
   failures: string[];
 }
 
@@ -189,10 +192,114 @@ export const getMaterialErpRoute = (companyCode: string): Promise<SilaMaterialEr
     "Could not load the ERP material API.",
   );
 
-export const pullMaterialsFromErp = async (companyCode: string): Promise<SilaMaterialErpPullResult> => {
+/** Plant-first ERP pull; optional Product ID filters A_Product at SAP. Leading zeros preserved (string). */
+export const pullMaterialsFromErp = async (
+  plantCodes: string[],
+  companyCode = "",
+  productId = "",
+): Promise<SilaMaterialErpPullResult> => {
+  const trimmedProductId = productId.trim();
   const result = await call(
-    () => axiosInstance.post<SilaMaterialErpPullResult>(`${BASE}/materials/erp-pull`, { companyCode: companyCode.trim() }),
+    () => axiosInstance.post<SilaMaterialErpPullResult>(`${BASE}/materials/erp-pull`, {
+      plantCodes: plantCodes.map((code) => code.trim()).filter(Boolean),
+      companyCode: companyCode.trim() || undefined,
+      productId: trimmedProductId || undefined,
+    }),
     "Could not pull the materials from the ERP.",
   );
   return { ...result, failures: list(result.failures) };
+};
+
+export interface SilaMaterialDetail {
+  id: string;
+  materialCode: string;
+  description: string;
+  materialGroup?: string | null;
+  baseUom: string;
+  unitCost?: number | null;
+  currency?: string | null;
+  materialType?: string | null;
+  category?: string | null;
+  valuationClass?: string | null;
+  priceControl?: string | null;
+  standardPrice?: number | null;
+  movingAveragePrice?: number | null;
+  source?: string | null;
+  companyCode?: string | null;
+  conversions: { id?: string; fromUom: string; toUom: string; factor: number }[];
+  plants: {
+    id: string;
+    plantCode: string;
+    propertyName?: string | null;
+    plantStatus?: string | null;
+    purchasingGroup?: string | null;
+    mrpType?: string | null;
+    procurementType?: string | null;
+    reorderPoint?: number | null;
+    safetyStock?: number | null;
+    lastSyncedOn?: string | null;
+  }[];
+  storageLocations: {
+    id: string;
+    plantCode: string;
+    storageLocationCode: string;
+    inventoryLocationId?: string | null;
+    silaLocationName?: string | null;
+    silaLocationType?: string | null;
+    assignmentStatus?: string | null;
+    mapped: boolean;
+    lastSyncedOn?: string | null;
+  }[];
+  inventory: {
+    inventoryLocationId?: string | null;
+    locationName?: string | null;
+    plantCode?: string | null;
+    storageLocationCode?: string | null;
+    onHandQty: number;
+    inTransitQty: number;
+    availableQty: number;
+    baseUom: string;
+    unitCost?: number | null;
+    lastMovementOn?: string | null;
+    erpSnapshotOn?: string | null;
+    erpUnrestrictedQty?: number | null;
+    stockFreshness: string;
+  }[];
+  valuation: {
+    valuationArea?: string | null;
+    priceControl?: string | null;
+    standardPrice?: number | null;
+    movingAveragePrice?: number | null;
+    approvedUnitCost?: number | null;
+    currency?: string | null;
+    valuationClass?: string | null;
+    lastValuationRefresh?: string | null;
+  };
+  integration: {
+    lastMaterialSync?: string | null;
+    lastStockSync?: string | null;
+    lastValuationSync?: string | null;
+    sourceSystem?: string | null;
+    openExceptions: number;
+    exceptionMessages: string[];
+  };
+}
+
+export const getMaterialDetail = async (materialId: string): Promise<SilaMaterialDetail> => {
+  const result = await call(
+    () => axiosInstance.get<SilaMaterialDetail>(`${BASE}/materials/${materialId}/detail`),
+    "Could not load the material detail.",
+  );
+  return {
+    ...result,
+    conversions: list(result.conversions),
+    plants: list(result.plants),
+    storageLocations: list(result.storageLocations),
+    inventory: list(result.inventory),
+    valuation: result.valuation ?? {},
+    integration: {
+      ...(result.integration ?? { openExceptions: 0, exceptionMessages: [] }),
+      exceptionMessages: list(result.integration?.exceptionMessages),
+    },
+  };
 };
