@@ -1,5 +1,5 @@
 /**
- * Step 3: host Vite must serve presentation UI on the Step 2 mount path.
+ * Step 4: host Vite must serve presentation UI on the Step 2 mount path.
  * Run: npx --yes tsx src/components/silaMe/recipes/silaRecipeWorkspaceMount.test.ts
  */
 import assert from "node:assert/strict";
@@ -53,9 +53,12 @@ assert.match(presentationBody, /Create New Recipe/);
 assert.match(presentationBody, /Edit Recipe/);
 assert.match(presentationBody, /My Recipe/);
 assert.match(presentationBody, /Material Catalog/);
+assert.match(presentationBody, /SilaRecipeMaterialLibrary/);
+assert.match(presentationBody, /SilaRecipeCanvas/);
+assert.match(presentationBody, /searchIngredients/);
 assert.match(presentationBody, /Save Draft — Available in Step 5/);
 assert.match(presentationBody, /Submit — Available in Step 6/);
 assert.match(presentationBody, /COST PENDING/);
-assert.doesNotMatch(presentationBody, /getRecipe|createRecipe|updateRecipe|searchIngredients/);
+assert.doesNotMatch(presentationBody, /\bgetRecipe\b|\bcreateRecipe\b|\bupdateRecipe\b|\bsubmitRecipe\b/);
 
 console.log("silaRecipeWorkspaceMount.test.ts: ok");

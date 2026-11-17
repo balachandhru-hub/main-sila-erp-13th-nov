@@ -90,7 +90,7 @@ export const materialFromOption = (option: SilaIngredientOption): IngredientMate
   currency: option.currency,
   priceStatus: option.priceStatus,
   outletPrices: option.outletPrices ?? [],
-  conversions: option.conversions,
+  conversions: option.conversions ?? [],
 });
 
 /** The editor lines of a saved version; sub-recipes must still be active (else they are dropped). Ordered by Sequence. */

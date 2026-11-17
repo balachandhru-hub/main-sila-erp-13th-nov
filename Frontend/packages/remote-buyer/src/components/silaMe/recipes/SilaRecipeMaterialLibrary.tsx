@@ -169,13 +169,19 @@ const SilaRecipeMaterialLibrary: React.FC<SilaRecipeMaterialLibraryProps> = ({
       <article
         key={material.id}
         className={`srec-lib-card${selected[material.id] ? " is-selected" : ""}${isAdded ? " is-added" : ""}`}
-        draggable
-        onDragStart={(event) => startDrag(event, material)}
       >
         <label className="srec-lib-check">
           <input type="checkbox" checked={Boolean(selected[material.id])} onChange={() => toggle(material.id)} aria-label={`Select ${material.materialCode}`} />
         </label>
-        <span className="srec-lib-drag" aria-hidden="true" title="Drag to recipe">⠿</span>
+        <span
+          className="srec-lib-drag"
+          title="Drag to recipe"
+          draggable
+          onDragStart={(event) => startDrag(event, material)}
+          aria-label={`Drag ${material.materialCode} to recipe`}
+        >
+          ⠿
+        </span>
         <StudioCover compact kind={kind} title={material.description || material.materialCode} />
         <div className="srec-lib-body">
           <div className="srec-lib-title">
@@ -206,9 +212,18 @@ const SilaRecipeMaterialLibrary: React.FC<SilaRecipeMaterialLibraryProps> = ({
           type="button"
           className="sila-btn sila-btn--primary sila-btn--sm"
           disabled={isAdded && !replaceTargetKey}
-          onClick={() => pick(material)}
+          draggable={false}
+          onMouseDown={(event) => event.stopPropagation()}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            pick(material);
+          }}
+          data-testid="recipe-catalog-add"
+          aria-label={replaceTargetKey ? `Use ${material.materialCode}` : isAdded ? `${material.materialCode} already added` : `Add ingredient ${material.materialCode}`}
         >
-          {replaceTargetKey ? "Use" : isAdded ? "Added" : "Add"}
+          {replaceTargetKey ? "Use material" : isAdded ? "Added" : "Add Ingredient"}
         </button>
       </article>
     );
