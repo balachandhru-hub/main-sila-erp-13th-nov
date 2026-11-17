@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { EmptyState, Loader, Modal, toastService } from "@vosox/shared-ui";
-import { getLocations, type SilaLocation, type SilaMaterial } from "../../../api/silaMe/silaInventoryApi";
+import { getLocations, getMyLocations, type SilaLocation, type SilaMaterial } from "../../../api/silaMe/silaInventoryApi";
 import {
   createRecipe,
   deactivateRecipe,
@@ -135,9 +135,13 @@ const SilaRecipeEditor: React.FC<SilaRecipeEditorProps> = ({ recipe, canRequestP
       setLoadError(null);
       try {
         // Keep Edit/New unblocked: optional calls must not fail the whole editor open.
-        const [locations, approved, loadedFamilies, loadedCategories, loadedUoms, browse, menus] = await Promise.all([
+        const [allLocations, myLocationsResult, approved, allRecipes, loadedFamilies, loadedCategories, loadedUoms, browse, menus] = await Promise.all([
           getLocations().catch(() => [] as SilaLocation[]),
+          getMyLocations()
+            .then((items) => ({ ok: true as const, items }))
+            .catch(() => ({ ok: false as const, items: [] as SilaLocation[] })),
           getRecipes({ active: true, limit: 200 }).catch(() => ({ items: [] as SilaRecipeListItem[], total: 0, index: 0, limit: 200 })),
+          getRecipes({ limit: 200 }).catch(() => ({ items: [] as SilaRecipeListItem[], total: 0, index: 0, limit: 200 })),
           getRecipeMasters("families").catch(() => [] as SilaRecipeMaster[]),
           getRecipeMasters("categories").catch(() => [] as SilaRecipeMaster[]),
           getRecipeUoms().catch(() => [] as string[]),
@@ -153,8 +157,19 @@ const SilaRecipeEditor: React.FC<SilaRecipeEditorProps> = ({ recipe, canRequestP
         setBaseline(snap);
         setUndoStack([]);
         baselineReady.current = true;
-        setOutlets(locations.filter((location) => location.locationType === "OUTLET"));
-        setApprovedRecipes(approved.items);
+
+        // Prefer outlets the user can access; keep already-priced recipe outlets visible.
+        // If /locations/mine is unavailable, fall back to all org outlets (admin/full-access path).
+        const scoped = (myLocationsResult.ok ? myLocationsResult.items : allLocations)
+          .filter((location) => location.locationType === "OUTLET");
+        const mine = new Map(scoped.map((location) => [location.id, location]));
+        for (const price of recipe?.outletPrices ?? []) {
+          if (mine.has(price.outletLocationId)) continue;
+          const found = allLocations.find((location) => location.id === price.outletLocationId);
+          if (found) mine.set(found.id, found);
+        }
+        setOutlets(Array.from(mine.values()).sort((a, b) => a.locationName.localeCompare(b.locationName)));
+        setApprovedRecipes(allRecipes.items.length > 0 ? allRecipes.items : approved.items);
         setSubRecipes(approved.items.filter((x) => x.id !== recipe?.id));
         setFamilies(loadedFamilies);
         setCategories(loadedCategories);
@@ -178,42 +193,53 @@ const SilaRecipeEditor: React.FC<SilaRecipeEditorProps> = ({ recipe, canRequestP
     let active = true;
     const loadPos = async () => {
       try {
-        const [sources, approved] = await Promise.all([
+        const [sources, recipesPage] = await Promise.all([
           getPosSources().catch(() => []),
-          getRecipes({ active: true, limit: 200 }).catch(() => ({ items: [] as SilaRecipeListItem[] })),
+          getRecipes({ limit: 200 }).catch(() => ({ items: [] as SilaRecipeListItem[] })),
         ]);
         const pages = await Promise.all(
           sources.slice(0, 8).map((source) => getItemMappings(source.id, "", 0, 100).catch(() => null)),
         );
         if (!active) return;
+
+        const takenByOther = new Map<string, string>();
+        for (const row of recipesPage.items) {
+          if (row.id === recipe?.id || row.status === "INACTIVE") continue;
+          const code = row.posCode?.trim();
+          if (code) takenByOther.set(code.toUpperCase(), row.recipeCode || row.name);
+        }
+
         const map = new Map<string, PosIdOption>();
         for (const page of pages) {
           for (const row of page?.items ?? []) {
             const code = row.posItemCode?.trim();
-            if (!code || map.has(code)) continue;
+            if (!code) continue;
+            const taken = takenByOther.has(code.toUpperCase())
+              && !(recipe?.id && row.recipeId === recipe.id);
+            // Offer free codes, or codes already mapped to this recipe.
+            if (taken && row.recipeId !== recipe?.id) continue;
+            const description = row.posItemDescription?.trim() || "";
             map.set(code, {
               code,
-              label: row.posItemDescription?.trim()
-                ? `${code} · ${row.posItemDescription.trim()}`
-                : code,
+              description,
+              label: description ? `${code} · ${description}` : code,
+              taken: false,
             });
           }
         }
-        for (const row of approved.items) {
-          const code = row.posCode?.trim();
-          if (!code || map.has(code)) continue;
-          map.set(code, {
-            code,
-            label: row.posItem?.trim() ? `${code} · ${row.posItem.trim()}` : code,
+
+        // Current recipe's POS code stays selectable even if not in mappings.
+        const currentCode = (recipe?.posCode ?? "").trim();
+        if (currentCode && !map.has(currentCode)) {
+          const description = (recipe?.posItem ?? "").trim();
+          map.set(currentCode, {
+            code: currentCode,
+            description,
+            label: description ? `${currentCode} · ${description}` : currentCode,
+            taken: false,
           });
         }
-        if (header.posCode.trim() && !map.has(header.posCode.trim())) {
-          const code = header.posCode.trim();
-          map.set(code, {
-            code,
-            label: header.posItem.trim() ? `${code} · ${header.posItem.trim()}` : code,
-          });
-        }
+
         setPosOptions(Array.from(map.values()).sort((a, b) => a.code.localeCompare(b.code)));
       } catch {
         if (active) setPosOptions([]);
@@ -223,8 +249,7 @@ const SilaRecipeEditor: React.FC<SilaRecipeEditorProps> = ({ recipe, canRequestP
     return () => {
       active = false;
     };
-    // Once per editor mount / recipe identity — not on every POS field keystroke.
-  }, [recipe?.id]);
+  }, [recipe?.id, recipe?.posCode, recipe?.posItem]);
 
   useEffect(() => {
     if (!recipe?.id) return;
@@ -461,6 +486,18 @@ const SilaRecipeEditor: React.FC<SilaRecipeEditorProps> = ({ recipe, canRequestP
     if (lines.some((line) => !(toNumber(line.quantity) > 0))) return "Enter a quantity greater than zero for every ingredient.";
     if (Object.values(prices).some((value) => value.trim() !== "" && !(toNumber(value) > 0))) {
       return "Menu prices must be greater than zero (leave empty when not sold at an outlet).";
+    }
+    const pos = header.posCode.trim();
+    if (pos) {
+      const conflict = approvedRecipes.find(
+        (row) => row.id !== recipe?.id && (row.posCode || "").trim().toUpperCase() === pos.toUpperCase(),
+      );
+      if (conflict) {
+        return `POS ID "${pos}" is already used by ${conflict.recipeCode || conflict.name}. Choose a free POS ID.`;
+      }
+    }
+    if (header.posItem.trim().length > 200) {
+      return "POS item name must be at most 200 characters.";
     }
     return null;
   };

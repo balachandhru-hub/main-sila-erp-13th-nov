@@ -10,6 +10,10 @@ import type { ClassificationSuggestion, NameSuggestion, PricingSuggestion } from
 export interface PosIdOption {
   code: string;
   label: string;
+  /** POS item description only (not the composite label). */
+  description?: string;
+  /** True when another recipe already owns this POS code — not selectable for save. */
+  taken?: boolean;
 }
 
 interface SilaRecipeSmartSummaryProps {
@@ -192,7 +196,7 @@ const SilaRecipeSmartSummary: React.FC<SilaRecipeSmartSummaryProps> = ({
                 <select
                   id="rstudio-pos-pick"
                   className="sila-select"
-                  value={posOptions.some((row) => row.code === header.posCode) ? header.posCode : ""}
+                  value={posOptions.some((row) => row.code === header.posCode && !row.taken) ? header.posCode : ""}
                   onChange={(e) => {
                     const code = e.target.value;
                     if (!code) {
@@ -200,14 +204,15 @@ const SilaRecipeSmartSummary: React.FC<SilaRecipeSmartSummaryProps> = ({
                       return;
                     }
                     const match = posOptions.find((row) => row.code === code);
+                    if (match?.taken) return;
                     onHeaderChange({
                       posCode: code,
-                      posItem: match?.label && match.label !== code ? match.label : header.posItem,
+                      posItem: (match?.description ?? "").slice(0, 200),
                     });
                   }}
                 >
                   <option value="">Choose POS ID / enter below</option>
-                  {posOptions.map((row) => (
+                  {posOptions.filter((row) => !row.taken).map((row) => (
                     <option key={row.code} value={row.code}>{row.label}</option>
                   ))}
                 </select>
@@ -220,11 +225,13 @@ const SilaRecipeSmartSummary: React.FC<SilaRecipeSmartSummaryProps> = ({
                   maxLength={50}
                   list="rstudio-pos-list"
                   value={header.posCode}
-                  placeholder="POS item code"
+                  placeholder="Unique POS item code"
                   onChange={(e) => onHeaderChange({ posCode: e.target.value })}
                 />
                 <datalist id="rstudio-pos-list">
-                  {posOptions.map((row) => <option key={row.code} value={row.code}>{row.label}</option>)}
+                  {posOptions.filter((row) => !row.taken).map((row) => (
+                    <option key={row.code} value={row.code}>{row.description || row.label}</option>
+                  ))}
                 </datalist>
               </div>
               <div className="sila-field">
@@ -235,7 +242,7 @@ const SilaRecipeSmartSummary: React.FC<SilaRecipeSmartSummaryProps> = ({
                   maxLength={200}
                   value={header.posItem}
                   placeholder="Optional POS description"
-                  onChange={(e) => onHeaderChange({ posItem: e.target.value })}
+                  onChange={(e) => onHeaderChange({ posItem: e.target.value.slice(0, 200) })}
                 />
               </div>
             </div>

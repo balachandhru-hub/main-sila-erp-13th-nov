@@ -171,6 +171,7 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({
   if (view.kind === "edit") {
     return (
       <SilaRecipeEditor
+        key={view.recipe?.id ?? "new-recipe"}
         recipe={view.recipe}
         canRequestPrice={canRequestPrice}
         onCancel={() => setView(view.recipe ? { kind: "detail", recipeId: view.recipe.id } : { kind: "list" })}
