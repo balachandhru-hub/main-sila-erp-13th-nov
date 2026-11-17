@@ -156,6 +156,12 @@ const SilaRecipeMaterialLibrary: React.FC<SilaRecipeMaterialLibraryProps> = ({
   const toggle = (id: string) => setSelected((current) => ({ ...current, [id]: !current[id] }));
 
   const startDrag = (event: React.DragEvent, material: SilaIngredientOption) => {
+    const target = event.target as HTMLElement | null;
+    // Keep checkbox / Add Ingredient clicks from being swallowed by HTML5 drag.
+    if (target?.closest("button, input, label, a, select, textarea")) {
+      event.preventDefault();
+      return;
+    }
     event.dataTransfer.setData("application/x-sila-material", JSON.stringify(material));
     event.dataTransfer.effectAllowed = "copy";
   };
@@ -206,7 +212,14 @@ const SilaRecipeMaterialLibrary: React.FC<SilaRecipeMaterialLibraryProps> = ({
           type="button"
           className="sila-btn sila-btn--primary sila-btn--sm"
           disabled={isAdded && !replaceTargetKey}
-          onClick={() => pick(material)}
+          draggable={false}
+          onMouseDown={(event) => event.stopPropagation()}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            pick(material);
+          }}
           data-testid="recipe-catalog-add"
           aria-label={replaceTargetKey ? `Use ${material.materialCode}` : isAdded ? `${material.materialCode} already added` : `Add ingredient ${material.materialCode}`}
         >

@@ -54,7 +54,7 @@ export const lineLabel = (line: IngredientLine): string => {
 
 export const materialLine = (option: SilaIngredientOption, quantity = "1"): IngredientLine => {
   const material = materialFromOption(option);
-  return { key: nextKey(), material, quantity, uom: material.baseUom.toUpperCase() };
+  return { key: nextKey(), material, quantity, uom: (material.baseUom || "EA").toUpperCase() };
 };
 
 export const duplicateLine = (line: IngredientLine): IngredientLine => ({
