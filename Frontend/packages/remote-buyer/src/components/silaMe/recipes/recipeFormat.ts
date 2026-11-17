@@ -160,6 +160,31 @@ export const toBaseQuantity = (material: ConvertibleMaterial, quantity: number, 
   return null;
 };
 
+/** Convert a base-UOM quantity into a target UOM using the same material conversion graph. */
+export const fromBaseQuantity = (material: ConvertibleMaterial, baseQuantity: number, targetUom: string): number | null => {
+  const perUnit = toBaseQuantity(material, 1, targetUom);
+  if (perUnit == null || perUnit === 0) return null;
+  return Math.round((baseQuantity / perUnit) * 1e6) / 1e6;
+};
+
+/**
+ * Preserve physical quantity when switching UOM.
+ * Returns convertible:false when either leg has no valid conversion path — caller keeps the typed qty and costing shows a warning.
+ */
+export const quantityForUomChange = (
+  material: ConvertibleMaterial,
+  quantity: number,
+  fromUom: string,
+  toUom: string,
+): { quantity: number; convertible: boolean } => {
+  if (canonicalUom(fromUom) === canonicalUom(toUom)) return { quantity, convertible: true };
+  const base = toBaseQuantity(material, quantity, fromUom);
+  if (base == null) return { quantity, convertible: false };
+  const next = fromBaseQuantity(material, base, toUom);
+  if (next == null) return { quantity, convertible: false };
+  return { quantity: next, convertible: true };
+};
+
 /** "READY FOR APPROVAL" or "NOT READY (n)" (prototype edge text). */
 export const readinessLabel = (issueCount: number): string => (issueCount === 0 ? "READY FOR APPROVAL" : `NOT READY (${issueCount})`);
 

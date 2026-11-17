@@ -43,21 +43,26 @@ interface SilaRecipeCanvasProps {
   onAddMaterial: (material: SilaIngredientOption) => void;
   onReplaceMaterial: (key: string, material: SilaIngredientOption) => void;
   onUpdatePrice?: (material: IngredientMaterial) => void;
+  /** Optional accessible Up/Down reorder (mobile/PWA; drag still works on desktop). */
+  onMove?: (key: string, direction: -1 | 1) => void;
 }
 
 interface SortableRowProps {
   line: IngredientLine;
   cost: LineCost;
   currency: string;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
   onChange: (key: string, change: Partial<IngredientLine>) => void;
   onRemove: (key: string) => void;
   onDuplicate: (key: string) => void;
   onReplace: (key: string) => void;
   onUpdatePrice?: (material: IngredientMaterial) => void;
+  onMove?: (key: string, direction: -1 | 1) => void;
 }
 
 const SortableRow: React.FC<SortableRowProps> = ({
-  line, cost, currency, onChange, onRemove, onDuplicate, onReplace, onUpdatePrice,
+  line, cost, currency, canMoveUp, canMoveDown, onChange, onRemove, onDuplicate, onReplace, onUpdatePrice, onMove,
 }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: line.key });
   const style = {
@@ -127,6 +132,16 @@ const SortableRow: React.FC<SortableRowProps> = ({
         {cost.issue && <div className="sila-me-flag srec-negative">{cost.issue}</div>}
       </div>
       <div className="srec-canvas-actions">
+        {onMove && (
+          <>
+            <button type="button" className="sila-btn sila-btn--ghost sila-btn--sm" disabled={!canMoveUp} onClick={() => onMove(line.key, -1)} aria-label={`Move ${code} up`}>
+              Up
+            </button>
+            <button type="button" className="sila-btn sila-btn--ghost sila-btn--sm" disabled={!canMoveDown} onClick={() => onMove(line.key, 1)} aria-label={`Move ${code} down`}>
+              Down
+            </button>
+          </>
+        )}
         {line.material && (
           <button type="button" className="sila-btn sila-btn--ghost sila-btn--sm" onClick={() => onReplace(line.key)}>Replace</button>
         )}
@@ -154,6 +169,7 @@ const SilaRecipeCanvas: React.FC<SilaRecipeCanvasProps> = ({
   onAddMaterial,
   onReplaceMaterial,
   onUpdatePrice,
+  onMove,
 }) => {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [dropActive, setDropActive] = useState(false);
@@ -256,11 +272,14 @@ const SilaRecipeCanvas: React.FC<SilaRecipeCanvasProps> = ({
                     line={line}
                     cost={costs[index]}
                     currency={currency}
+                    canMoveUp={index > 0}
+                    canMoveDown={index < lines.length - 1}
                     onChange={onChange}
                     onRemove={onRemove}
                     onDuplicate={onDuplicate}
                     onReplace={onReplace}
                     onUpdatePrice={onUpdatePrice}
+                    onMove={onMove}
                   />
                 </div>
               ))}

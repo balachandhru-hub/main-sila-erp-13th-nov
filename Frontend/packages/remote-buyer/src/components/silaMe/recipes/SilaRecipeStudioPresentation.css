@@ -1,4 +1,4 @@
-/* Step 3 — ingredient-first Recipe Studio presentation (no API wiring). */
+/* Step 4 — ingredient-first Recipe Studio with live Material Catalog. */
 
 .rstudio-build {
   --rstudio-mint: #1f9a6c;
@@ -399,6 +399,38 @@
   margin: 0;
   font-size: 0.75rem;
   color: #5b7a99;
+}
+
+.rstudio-suggest {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.55rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: 0.75rem;
+  background: #ffffff;
+  border: 0.0625rem dashed #9fc8ea;
+  color: #3d5f7f;
+  font-size: 0.8125rem;
+}
+
+.rstudio-section--canvas,
+.rstudio-section--catalog-live {
+  padding: 0.45rem;
+  background: transparent;
+  border: none;
+}
+
+.rstudio-section--canvas .srec-canvas,
+.rstudio-section--catalog-live .srec-lib {
+  box-shadow: none;
+  border: 0.0625rem solid #e3edf6;
+  background: #ffffff;
+}
+
+.rstudio-panel--catalog .srec-builder-panel__head {
+  display: none;
 }
 
 @media (max-width: 1100px) {
