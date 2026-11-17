@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { EmptyState, KpiCard, Loader, PageHeader, toastService } from "@vosox/shared-ui";
 import {
   getMenuEngineering,
@@ -9,6 +10,7 @@ import {
   type MenuItemDetail,
   type MenuPlanLine,
 } from "../../../api/silaMe/silaMenuEngineeringApi";
+import { silaRecipeEditPath } from "../recipes/silaRecipeRoutes";
 import "../silaMeTheme.css";
 import "./SilaMenuEngineering.css";
 
@@ -73,6 +75,7 @@ interface Props {
 const today = (): string => new Date().toISOString().slice(0, 10);
 
 const SilaMenuEngineeringApp: React.FC<Props> = ({ navKey, canManage, canRequestPurchase, canManageRecipe, onNavigate }) => {
+  const navigate = useNavigate();
   const [dateFrom, setDateFrom] = useState(today());
   const [dateTo, setDateTo] = useState(today());
   const [outletId, setOutletId] = useState("");
@@ -127,7 +130,10 @@ const SilaMenuEngineeringApp: React.FC<Props> = ({ navKey, canManage, canRequest
     try {
       const result = await saveMenuEngineering(body);
       toastService.success(result.message || "Saved.");
-      if (result.savedId && body.action === "CREATE_RECIPE") onNavigate("silaRecipes");
+      if (result.savedId && body.action === "CREATE_RECIPE") {
+        // Open the two-panel Recipe Studio on the new draft (canonical edit URL).
+        navigate(silaRecipeEditPath(String(result.savedId)));
+      }
       load();
       return result;
     } catch (caught: unknown) {

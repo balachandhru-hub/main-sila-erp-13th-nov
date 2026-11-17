@@ -1,5 +1,7 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import type { SilaMeNavKey, SilaMeRole } from "./silaMeNav";
+import { silaRecipeDetailPath, silaRecipeNewPath } from "./recipes/silaRecipeRoutes";
 import { silaMePermissions, type SilaMePermissions } from "./silaMePermissions";
 import SilaHomeDashboard from "./SilaHomeDashboard";
 import {
@@ -62,11 +64,10 @@ interface SilaMeWorkspaceProps {
 const SilaMeWorkspace: React.FC<SilaMeWorkspaceProps> = ({ navKey, role, permissions, capabilities, onNavigate }) => {
   const can = permissions ?? silaMePermissions(role);
   const homeCaps = capabilities ?? silaHomeCapabilities(true, can);
+  const navigate = useNavigate();
   const [previewPersona, setPreviewPersona] = useState<SilaHomePersona>("self");
   // Screens that open a specific record in another screen pass it through here.
   const [countToOpen, setCountToOpen] = useState<string | null>(null);
-  const [recipeToOpen, setRecipeToOpen] = useState<string | null>(null);
-  const [newRecipe, setNewRecipe] = useState(false);
   const [liveSearch, setLiveSearch] = useState<string | undefined>(undefined);
 
   const openCount = (stockCountId: string) => {
@@ -134,16 +135,10 @@ const SilaMeWorkspace: React.FC<SilaMeWorkspaceProps> = ({ navKey, role, permiss
         return (
           <SilaRecipeDashboard
             onOpenRecipes={() => onNavigate("silaRecipes")}
-            onOpenRecipe={(recipeId) => {
-              setRecipeToOpen(recipeId);
-              onNavigate("silaRecipes");
-            }}
+            onOpenRecipe={(recipeId) => navigate(silaRecipeDetailPath(recipeId))}
             onOpenApprovals={can.approveRecipe ? () => onNavigate("silaRecipeApprovals") : undefined}
             onOpenPosTransactions={can.managePos ? () => onNavigate("silaTracker") : undefined}
-            onNewRecipe={can.manageRecipe ? () => {
-              setNewRecipe(true);
-              onNavigate("silaRecipes");
-            } : undefined}
+            onNewRecipe={can.manageRecipe ? () => navigate(silaRecipeNewPath()) : undefined}
           />
         );
       case "silaRecipes":
@@ -151,10 +146,6 @@ const SilaMeWorkspace: React.FC<SilaMeWorkspaceProps> = ({ navKey, role, permiss
           <SilaRecipes
             canManage={can.manageRecipe}
             canRequestPrice={can.manageMasterData}
-            openRecipeId={recipeToOpen}
-            startNew={newRecipe}
-            onOpenedNew={() => setNewRecipe(false)}
-            onOpenedRecipe={() => setRecipeToOpen(null)}
           />
         );
       case "silaRecipeApprovals":
