@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useState } from "react";
 import { EmptyState, Loader, Modal, PageHeader, toastService } from "@vosox/shared-ui";
 import {
   approveRecipe,
-  createRecipeRevision,
   deactivateRecipe,
   getRecipe,
   rejectRecipe,
@@ -29,7 +28,7 @@ interface SilaRecipeDetailViewProps {
   onChanged: () => void;
 }
 
-type Busy = "submit" | "approve" | "reject" | "deactivate" | "revise" | null;
+type Busy = "submit" | "approve" | "reject" | "deactivate" | null;
 
 /**
  * One recipe at a version (latest by default): header, readiness, costing per outlet, approval trail; switch versions,
@@ -108,27 +107,8 @@ const SilaRecipeDetailView: React.FC<SilaRecipeDetailViewProps> = ({ recipeId, c
   const submittable = canManage && latest && recipe.status === "DRAFT";
   const deactivatable = canManage && recipe.status !== "INACTIVE";
   const showReadiness = latest && (recipe.status === "DRAFT" || recipe.status === "REJECTED");
+  // Step 1: Edit / Create revision only navigates to the temporary workspace shell (no API mutate).
   const needsRevision = canStartRevision(recipe.status);
-
-  const openStudio = async () => {
-    if (!needsRevision) {
-      onEdit(recipe);
-      return;
-    }
-    // Button says "Create revision" — persist draft Version+1 immediately, then open Studio on that draft.
-    // (Previously this only navigated to edit; nothing was created until Save, so the action looked broken.)
-    setBusy("revise");
-    try {
-      const nextVersion = await createRecipeRevision(recipe);
-      toastService.success(`Draft version ${nextVersion} created. POS keeps selling v${recipe.activeVersion} until it is approved.`);
-      onChanged();
-      onEdit(recipe);
-    } catch (err: unknown) {
-      toastService.error(err instanceof Error ? err.message : "Could not create the revision.");
-    } finally {
-      setBusy(null);
-    }
-  };
 
   const coverKind = resolveStudioKind(recipe.categoryName || recipe.category, recipe.familyName, recipe.name);
   const menuPrice = recipe.outletPrices.length === 0
@@ -175,12 +155,8 @@ const SilaRecipeDetailView: React.FC<SilaRecipeDetailViewProps> = ({ recipeId, c
           {recipe.description && <p className="rstudio-detail-hero__desc">{recipe.description}</p>}
           <div className="srec-actions">
             {editable && (
-              <button type="button" className="sila-btn sila-btn--primary" onClick={() => void openStudio()} disabled={busy !== null}>
-                {busy === "revise"
-                  ? "Creating revision..."
-                  : needsRevision
-                    ? `Create revision v${recipe.version + 1}`
-                    : "Edit in Recipe Studio"}
+              <button type="button" className="sila-btn sila-btn--primary" onClick={() => onEdit(recipe)} disabled={busy !== null}>
+                {needsRevision ? `Open workspace (revision v${recipe.version + 1})` : "Open workspace"}
               </button>
             )}
             {submittable && (
