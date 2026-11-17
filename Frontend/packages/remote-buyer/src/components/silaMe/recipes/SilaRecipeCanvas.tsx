@@ -35,6 +35,8 @@ interface SilaRecipeCanvasProps {
   costs: LineCost[];
   mode: SilaRecipeMode;
   currency: string;
+  /** When true, quantity/UOM/reorder/actions are disabled (status/RBAC lock). */
+  locked?: boolean;
   onReorder: (lines: IngredientLine[]) => void;
   onChange: (key: string, change: Partial<IngredientLine>) => void;
   onRemove: (key: string) => void;
@@ -51,6 +53,7 @@ interface SortableRowProps {
   line: IngredientLine;
   cost: LineCost;
   currency: string;
+  locked: boolean;
   canMoveUp: boolean;
   canMoveDown: boolean;
   onChange: (key: string, change: Partial<IngredientLine>) => void;
@@ -62,9 +65,12 @@ interface SortableRowProps {
 }
 
 const SortableRow: React.FC<SortableRowProps> = ({
-  line, cost, currency, canMoveUp, canMoveDown, onChange, onRemove, onDuplicate, onReplace, onUpdatePrice, onMove,
+  line, cost, currency, locked, canMoveUp, canMoveDown, onChange, onRemove, onDuplicate, onReplace, onUpdatePrice, onMove,
 }) => {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: line.key });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: line.key,
+    disabled: locked,
+  });
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -77,10 +83,16 @@ const SortableRow: React.FC<SortableRowProps> = ({
     <article
       ref={setNodeRef}
       style={style}
-      className={`srec-canvas-card${isDragging ? " is-dragging" : ""}${cost.cost == null ? " is-warn" : ""}`}
+      className={`srec-canvas-card${isDragging ? " is-dragging" : ""}${cost.cost == null ? " is-warn" : ""}${locked ? " is-locked" : ""}`}
       data-line-key={line.key}
     >
-      <button type="button" className="srec-canvas-handle" aria-label={`Reorder ${code}`} {...attributes} {...listeners}>
+      <button
+        type="button"
+        className="srec-canvas-handle"
+        aria-label={`Reorder ${code}`}
+        disabled={locked}
+        {...(locked ? {} : { ...attributes, ...listeners })}
+      >
         ⋮⋮
       </button>
       <StudioCover compact kind={kind} title={name || code} />
@@ -100,6 +112,7 @@ const SortableRow: React.FC<SortableRowProps> = ({
               min="0"
               step="any"
               value={line.quantity}
+              disabled={locked}
               onChange={(event) => onChange(line.key, { quantity: event.target.value })}
             />
           </label>
@@ -109,6 +122,7 @@ const SortableRow: React.FC<SortableRowProps> = ({
               <select
                 className="sila-select srec-cell-input"
                 value={line.uom}
+                disabled={locked}
                 onChange={(event) => onChange(line.key, { uom: event.target.value })}
               >
                 {Array.from(new Set([line.uom.toUpperCase(), ...materialUoms(line.material)])).map((unit) => (
@@ -134,22 +148,22 @@ const SortableRow: React.FC<SortableRowProps> = ({
       <div className="srec-canvas-actions">
         {onMove && (
           <>
-            <button type="button" className="sila-btn sila-btn--ghost sila-btn--sm" disabled={!canMoveUp} onClick={() => onMove(line.key, -1)} aria-label={`Move ${code} up`}>
+            <button type="button" className="sila-btn sila-btn--ghost sila-btn--sm" disabled={locked || !canMoveUp} onClick={() => onMove(line.key, -1)} aria-label={`Move ${code} up`}>
               Up
             </button>
-            <button type="button" className="sila-btn sila-btn--ghost sila-btn--sm" disabled={!canMoveDown} onClick={() => onMove(line.key, 1)} aria-label={`Move ${code} down`}>
+            <button type="button" className="sila-btn sila-btn--ghost sila-btn--sm" disabled={locked || !canMoveDown} onClick={() => onMove(line.key, 1)} aria-label={`Move ${code} down`}>
               Down
             </button>
           </>
         )}
         {line.material && (
-          <button type="button" className="sila-btn sila-btn--ghost sila-btn--sm" onClick={() => onReplace(line.key)}>Replace</button>
+          <button type="button" className="sila-btn sila-btn--ghost sila-btn--sm" disabled={locked} onClick={() => onReplace(line.key)}>Replace</button>
         )}
-        <button type="button" className="sila-btn sila-btn--ghost sila-btn--sm" onClick={() => onDuplicate(line.key)}>Duplicate</button>
+        <button type="button" className="sila-btn sila-btn--ghost sila-btn--sm" disabled={locked} onClick={() => onDuplicate(line.key)}>Duplicate</button>
         {line.material && onUpdatePrice && line.material.priceStatus !== "PENDING_APPROVAL" && (
-          <button type="button" className="sila-btn sila-btn--secondary sila-btn--sm" onClick={() => line.material && onUpdatePrice(line.material)}>Price</button>
+          <button type="button" className="sila-btn sila-btn--secondary sila-btn--sm" disabled={locked} onClick={() => line.material && onUpdatePrice(line.material)}>Price</button>
         )}
-        <button type="button" className="sila-btn sila-btn--ghost sila-btn--sm" onClick={() => onRemove(line.key)}>Remove</button>
+        <button type="button" className="sila-btn sila-btn--ghost sila-btn--sm" disabled={locked} onClick={() => onRemove(line.key)}>Remove</button>
       </div>
     </article>
   );
@@ -161,6 +175,7 @@ const SilaRecipeCanvas: React.FC<SilaRecipeCanvasProps> = ({
   costs,
   mode,
   currency,
+  locked = false,
   onReorder,
   onChange,
   onRemove,
@@ -184,6 +199,7 @@ const SilaRecipeCanvas: React.FC<SilaRecipeCanvasProps> = ({
   const onDragStart = (event: DragStartEvent) => setActiveId(String(event.active.id));
   const onDragEnd = (event: DragEndEvent) => {
     setActiveId(null);
+    if (locked) return;
     const { active, over } = event;
     if (!over || active.id === over.id) return;
     const oldIndex = lines.findIndex((line) => line.key === active.id);
@@ -204,6 +220,7 @@ const SilaRecipeCanvas: React.FC<SilaRecipeCanvasProps> = ({
   const handleLibraryDrop = (event: React.DragEvent, targetKey?: string) => {
     event.preventDefault();
     setDropActive(false);
+    if (locked) return;
     const material = parseMaterial(event);
     if (!material) return;
     if (targetKey) {
@@ -272,6 +289,7 @@ const SilaRecipeCanvas: React.FC<SilaRecipeCanvasProps> = ({
                     line={line}
                     cost={costs[index]}
                     currency={currency}
+                    locked={locked}
                     canMoveUp={index > 0}
                     canMoveDown={index < lines.length - 1}
                     onChange={onChange}
