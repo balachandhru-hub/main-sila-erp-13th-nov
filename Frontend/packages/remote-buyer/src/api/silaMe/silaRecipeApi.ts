@@ -5,7 +5,7 @@ import { readSuccessId } from "./readSuccessId";
 import { canStartRevision, writeFromDetail } from "../../components/silaMe/recipes/recipeWriteModel";
 
 export { readSuccessId } from "./readSuccessId";
-export { writeFromDetail, canStartRevision } from "../../components/silaMe/recipes/recipeWriteModel";
+export { canStartRevision, writeFromDetail };
 
 /** DIRECT (one material) | RECIPE (several materials) | BATCH (may contain another recipe). */
 export type SilaRecipeMode = "DIRECT" | "RECIPE" | "BATCH";

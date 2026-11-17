@@ -43,7 +43,7 @@ const PAGE_SIZE = 48;
  * Canonical URLs under /sila-recipes; SilaRecipeEditor is not mounted in Step 1.
  */
 const SilaRecipes: React.FC<SilaRecipesProps> = ({ canManage, canRequestPrice: _canRequestPrice = false }) => {
-  const { pathname } = useLocation();
+  const { pathname, key: locationKey } = useLocation();
   const navigate = useNavigate();
   const route = useMemo(() => parseSilaRecipePath(pathname), [pathname]);
 
@@ -64,6 +64,8 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({ canManage, canRequestPrice: _
   const [viewMode, setViewMode] = useState<StudioViewMode>(() => loadStudioViewMode());
   const [deleteTarget, setDeleteTarget] = useState<SilaRecipeListItem | null>(null);
   const [deleting, setDeleting] = useState(false);
+  /** Remount New shell when New is clicked again while already on /sila-recipes/new. */
+  const [newShellEpoch, setNewShellEpoch] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -123,7 +125,11 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({ canManage, canRequestPrice: _
       toastService.error("You do not have permission to create or edit recipes.");
       return;
     }
-    // Absolute path so New Recipe always mounts CREATE Studio (not in-memory view).
+    // Already on New: remount shell — do not blank, do not invent a recipe id, do not enter Edit.
+    if (route.kind === "new") {
+      setNewShellEpoch((epoch) => epoch + 1);
+      return;
+    }
     navigate(silaRecipeNewPath(), { replace: false });
   };
   const goEdit = (recipeId: string) => {
@@ -131,7 +137,12 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({ canManage, canRequestPrice: _
       toastService.error("You do not have permission to create or edit recipes.");
       return;
     }
-    navigate(silaRecipeEditPath(recipeId));
+    const id = recipeId?.trim() ?? "";
+    if (!id) {
+      toastService.error("Cannot open Edit: recipe id is missing.");
+      return;
+    }
+    navigate(silaRecipeEditPath(id));
   };
 
   const setMode = (mode: StudioViewMode) => {
@@ -155,7 +166,7 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({ canManage, canRequestPrice: _
     }
   };
 
-  // --- New Recipe: Step 1 temporary workspace shell (SilaRecipeEditor not mounted) ---
+  // --- New Recipe: temporary workspace shell (SilaRecipeEditor not mounted) ---
   if (route.kind === "new") {
     if (!canManage) {
       return (
@@ -169,10 +180,16 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({ canManage, canRequestPrice: _
         </div>
       );
     }
-    return <SilaRecipeWorkspaceShell key="new-recipe-shell" mode="new" onBackToCatalog={goCatalog} />;
+    return (
+      <SilaRecipeWorkspaceShell
+        key={`new-recipe-shell-${locationKey}-${newShellEpoch}`}
+        mode="new"
+        onBackToCatalog={goCatalog}
+      />
+    );
   }
 
-  // --- Edit Recipe: Step 1 temporary workspace shell (id from URL; no editor load) ---
+  // --- Edit Recipe: temporary workspace shell (id from URL; no editor load) ---
   if (route.kind === "edit") {
     if (!canManage) {
       return (
@@ -188,7 +205,7 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({ canManage, canRequestPrice: _
     }
     return (
       <SilaRecipeWorkspaceShell
-        key={`edit-recipe-shell-${route.recipeId}`}
+        key={`edit-recipe-shell-${locationKey}-${route.recipeId}`}
         mode="edit"
         recipeId={route.recipeId}
         onBackToCatalog={goCatalog}
