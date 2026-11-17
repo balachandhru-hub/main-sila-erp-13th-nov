@@ -1,6 +1,6 @@
 -- SILA Test Buyer: link FL01 / FL10 outlets to plant 1060 and set on-hand 50
 -- for materials 1000000 and 1000001 at both outlets.
--- Also upserts material plant + storage-location assignments for plant 1060.
+-- Also upserts material plant + storage-location assignments and location stocking rows.
 -- Idempotent. Does not post to SAP.
 
 DECLARE @Buyer uniqueidentifier = '15ce77a3-df16-4474-a5da-f874551782d8';
@@ -217,7 +217,7 @@ WHEN NOT MATCHED THEN
         SYSUTCDATETIME(), SYSUTCDATETIME(), @Actor, @Actor, 1
     );
 
--- 6) On-hand qty 50 at both FL01 and FL10.
+-- 6) Targets: both outlets × both materials.
 DECLARE @Targets TABLE (
     location_id uniqueidentifier NOT NULL,
     location_code nvarchar(50) NOT NULL,
@@ -232,6 +232,29 @@ SELECT s.location_id, s.storage_location_code, p.material_id, p.material_code, p
 FROM @Pick p
 CROSS JOIN @Sloc s;
 
+-- 7) Location stocking (inventory_location_material) — required for outlet material lists / transfers.
+MERGE buyersystem.inventory_location_material AS target
+USING @Targets AS source
+ON target.location_id = source.location_id AND target.material_id = source.material_id
+WHEN MATCHED THEN
+    UPDATE SET
+        is_active = 1,
+        stocking_type = COALESCE(NULLIF(target.stocking_type, N''), N'REGULAR'),
+        date_updated = SYSUTCDATETIME(),
+        updated_by = @Actor
+WHEN NOT MATCHED THEN
+    INSERT (
+        id, location_id, material_id, minimum_stock, par_level, reorder_point,
+        maximum_stock, safety_stock, stocking_type,
+        date_created, date_updated, created_by, updated_by, is_active
+    )
+    VALUES (
+        NEWID(), source.location_id, source.material_id, NULL, NULL, NULL,
+        NULL, NULL, N'REGULAR',
+        SYSUTCDATETIME(), SYSUTCDATETIME(), @Actor, @Actor, 1
+    );
+
+-- 8) On-hand qty 50 at both FL01 and FL10.
 MERGE buyersystem.inventory_balance AS target
 USING @Targets AS source
 ON target.location_id = source.location_id AND target.material_id = source.material_id
