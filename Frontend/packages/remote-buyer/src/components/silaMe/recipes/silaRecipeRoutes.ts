@@ -25,11 +25,14 @@ export const isRecipeId = (value: string): boolean => GUID_RE.test(value.trim())
 
 /** Parse pathname into a Recipe Studio route; unknown shapes fall back to catalog. */
 export const parseSilaRecipePath = (pathname: string): SilaRecipeRoute => {
-  const parts = pathname.split("/").filter(Boolean);
-  if (parts[0] !== "sila-recipes") return { kind: "list" };
+  // Ignore query/hash; tolerate trailing slash and accidental double segments.
+  const clean = pathname.split("?")[0]?.split("#")[0] ?? pathname;
+  const parts = clean.split("/").filter(Boolean);
+  const baseIdx = parts.findIndex((part) => part.toLowerCase() === "sila-recipes");
+  if (baseIdx < 0) return { kind: "list" };
 
-  const second = parts[1]?.trim() ?? "";
-  const third = parts[2]?.trim().toLowerCase() ?? "";
+  const second = parts[baseIdx + 1]?.trim() ?? "";
+  const third = parts[baseIdx + 2]?.trim().toLowerCase() ?? "";
 
   if (!second) return { kind: "list" };
   if (second.toLowerCase() === "new") return { kind: "new" };

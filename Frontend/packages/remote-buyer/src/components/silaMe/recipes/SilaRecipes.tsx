@@ -166,7 +166,8 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({ canManage, canRequestPrice = 
       toastService.error("You do not have permission to create or edit recipes.");
       return;
     }
-    navigate(silaRecipeNewPath());
+    // Absolute path so New Recipe always mounts CREATE Studio (not in-memory view).
+    navigate(silaRecipeNewPath(), { replace: false });
   };
   const goEdit = (recipeId: string) => {
     if (!canManage) {

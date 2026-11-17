@@ -16,6 +16,8 @@ const guid = "a1b2c3d4-e5f6-4789-a012-3456789abcde";
 assert.equal(parseSilaRecipePath("/sila-recipes").kind, "list");
 assert.equal(parseSilaRecipePath("/sila-recipes/new").kind, "new");
 assert.equal(parseSilaRecipePath("/sila-recipes/NEW").kind, "new");
+assert.equal(parseSilaRecipePath("/sila-recipes/new/").kind, "new");
+assert.equal(parseSilaRecipePath("/sila-recipes/new?x=1").kind, "new");
 assert.deepEqual(parseSilaRecipePath(`/sila-recipes/${guid}`), { kind: "detail", recipeId: guid });
 assert.deepEqual(parseSilaRecipePath(`/sila-recipes/${guid}/edit`), { kind: "edit", recipeId: guid });
 // "new" must never be treated as a recipe id

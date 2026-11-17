@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { EmptyState, Loader, Modal, toastService } from "@vosox/shared-ui";
+import { Modal, toastService } from "@vosox/shared-ui";
 import { getLocations, getMyLocations, type SilaLocation, type SilaMaterial } from "../../../api/silaMe/silaInventoryApi";
 import {
   createRecipe,
@@ -86,6 +86,16 @@ interface SaveFieldErrors {
   outlets?: string;
 }
 
+const BOOTSTRAP_MS = 8000;
+
+const withTimeout = <T,>(promise: Promise<T>, ms: number, fallback: T): Promise<T> =>
+  Promise.race([
+    promise,
+    new Promise<T>((resolve) => {
+      window.setTimeout(() => resolve(fallback), ms);
+    }),
+  ]);
+
 const asPanelMaterial = (material: IngredientMaterial): SilaMaterial => ({
   id: material.id,
   materialCode: material.materialCode,
@@ -105,7 +115,9 @@ const SilaRecipeEditor: React.FC<SilaRecipeEditorProps> = ({ recipe, canRequestP
   const isCreateMode = !persistedRecipeId;
 
   const [header, setHeader] = useState<HeaderValues>(() => headerFrom(recipe));
-  const [lines, setLines] = useState<IngredientLine[]>([]);
+  // Seed lines from the loaded recipe immediately so Edit is not blank while helpers load.
+  // CREATE starts with an empty local draft — Studio must paint before any API returns.
+  const [lines, setLines] = useState<IngredientLine[]>(() => linesFrom(recipe, []));
   const [prices, setPrices] = useState<Record<string, string>>(() =>
     Object.fromEntries((recipe?.outletPrices ?? []).map((price) => [price.outletLocationId, String(price.menuPrice)])),
   );
@@ -119,7 +131,8 @@ const SilaRecipeEditor: React.FC<SilaRecipeEditorProps> = ({ recipe, canRequestP
   const [catalogPool, setCatalogPool] = useState<SilaIngredientOption[]>([]);
   const [subRecipeId, setSubRecipeId] = useState("");
   const [priceMaterial, setPriceMaterial] = useState<IngredientMaterial | null>(null);
-  const [loading, setLoading] = useState(true);
+  /** Background helpers only — never blank the whole New/Edit Studio on open. */
+  const [bootstrapping, setBootstrapping] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState<Saving>("");
   const [fieldErrors, setFieldErrors] = useState<SaveFieldErrors>({});
@@ -133,25 +146,25 @@ const SilaRecipeEditor: React.FC<SilaRecipeEditorProps> = ({ recipe, canRequestP
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [undoStack, setUndoStack] = useState<BuilderSnapshot[]>([]);
-  const [baseline, setBaseline] = useState<BuilderSnapshot>(() => snapshotOf([], headerFrom(recipe).servingQty));
+  const [baseline, setBaseline] = useState<BuilderSnapshot>(() => snapshotOf(linesFrom(recipe, []), headerFrom(recipe).servingQty));
   const [replaceKey, setReplaceKey] = useState<string | null>(null);
   const [nameConfirmed, setNameConfirmed] = useState(() => Boolean(recipe?.name?.trim()));
   const [classConfirmed, setClassConfirmed] = useState(() => Boolean(recipe?.familyId || recipe?.categoryId));
   const [targetFoodCostPercent, setTargetFoodCostPercent] = useState(() => loadTargetFoodCostPercent());
   const [reviewOpen, setReviewOpen] = useState(false);
   const [pendingSubmit, setPendingSubmit] = useState(false);
-  const baselineReady = useRef(false);
+  const baselineReady = useRef(true);
   /** After a successful create, hold the returned id so a second Save before navigation uses update. */
   const createdIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     let active = true;
     const load = async () => {
-      setLoading(true);
+      setBootstrapping(true);
       setLoadError(null);
       try {
-        // Keep Edit/New unblocked: optional calls must not fail the whole editor open.
-        const [allLocations, myLocationsResult, approved, allRecipes, loadedFamilies, loadedCategories, loadedUoms, browse, menus] = await Promise.all([
+        // Soft-fail each helper; also race the batch so a hung API cannot blank New Recipe forever.
+        const boot = Promise.all([
           getLocations().catch(() => [] as SilaLocation[]),
           getMyLocations()
             .then((items) => ({ ok: true as const, items }))
@@ -164,7 +177,38 @@ const SilaRecipeEditor: React.FC<SilaRecipeEditorProps> = ({ recipe, canRequestP
           searchIngredients({ search: "", limit: 60 }).catch(() => ({ items: [] as SilaIngredientOption[], total: 0, index: 0, limit: 60 })),
           getMenuEngineering("items", { search: "", limit: 80 }).catch(() => null),
         ]);
+        type BootResult = [
+          SilaLocation[],
+          { ok: boolean; items: SilaLocation[] },
+          { items: SilaRecipeListItem[] },
+          { items: SilaRecipeListItem[] },
+          SilaRecipeMaster[],
+          SilaRecipeMaster[],
+          string[],
+          { items: SilaIngredientOption[] },
+          Awaited<ReturnType<typeof getMenuEngineering>> | null,
+        ];
+        const emptyBoot: BootResult = [
+          [],
+          { ok: false, items: [] },
+          { items: [] },
+          { items: [] },
+          [],
+          [],
+          [],
+          { items: [] },
+          null,
+        ];
+        const bootResult = await withTimeout(boot as Promise<BootResult>, BOOTSTRAP_MS, emptyBoot);
         if (!active) return;
+        const timedOut = bootResult === emptyBoot;
+        if (timedOut) {
+          // Studio shell already visible; catalog/outlets fill in when helpers respond later.
+          setLoadError("Some Recipe Studio helpers are slow to respond. You can still build the draft and retry Search.");
+          return;
+        }
+        const [allLocations, myLocationsResult, approved, allRecipes, loadedFamilies, loadedCategories, loadedUoms, browse, menus] =
+          bootResult;
         const loaded = linesFrom(recipe, approved.items);
         const dropped = (recipe?.ingredients.length ?? 0) - loaded.length;
         if (dropped > 0) toastService.error(`${dropped} sub-recipe(s) are no longer approved and were removed from the editor.`);
@@ -192,10 +236,14 @@ const SilaRecipeEditor: React.FC<SilaRecipeEditorProps> = ({ recipe, canRequestP
         setUoms(loadedUoms);
         setCatalogPool(browse.items);
         setMenuPool(menus?.items?.items ?? []);
+        setLoadError(null);
       } catch (err: unknown) {
-        if (active) setLoadError(err instanceof Error ? err.message : "Could not load the recipe editor.");
+        if (active) {
+          // Keep the Studio open; show a non-blocking notice.
+          setLoadError(err instanceof Error ? err.message : "Could not load Recipe Studio helpers.");
+        }
       } finally {
-        if (active) setLoading(false);
+        if (active) setBootstrapping(false);
       }
     };
     load();
@@ -611,22 +659,6 @@ const SilaRecipeEditor: React.FC<SilaRecipeEditorProps> = ({ recipe, canRequestP
     : (header.name.trim() || "Untitled draft");
   const coverKind = resolveStudioKind(header.name, recipe?.category, recipe?.familyName, ...lines.map((line) => line.material?.description));
 
-  if (loading || loadError) {
-    return (
-      <div className="sila-me srec-page rstudio-page">
-        <div className="rstudio-editor-top">
-          <StudioCover compact kind="main" title="Recipe Studio" />
-          <div>
-            <p className="rstudio-kicker">Recipe Studio</p>
-            <h1 className="rstudio-hero__title" style={{ fontSize: "1.45rem" }}>{title}</h1>
-          </div>
-        </div>
-        {loading ? <Loader size={24} message="Loading Recipe Studio..." /> : <EmptyState variant="error" title="Couldn't open the editor" description={loadError ?? undefined} />}
-        <button type="button" className="sila-btn sila-btn--secondary" onClick={onCancel}>Close</button>
-      </div>
-    );
-  }
-
   return (
     <div className="sila-me srec-page rstudio-page rstudio-editor-shell">
       <div className="rstudio-editor-top">
@@ -652,7 +684,13 @@ const SilaRecipeEditor: React.FC<SilaRecipeEditorProps> = ({ recipe, canRequestP
             {!isCreateMode && recipe && <span className="sila-badge sila-badge--neutral">v{recipe.version}</span>}
             {isCreateMode && <span className="sila-badge sila-badge--neutral">Local draft</span>}
             {dirty && <span className="sila-badge sila-badge--warning">Unsaved changes</span>}
+            {bootstrapping && <span className="sila-badge sila-badge--neutral">Loading catalog…</span>}
           </div>
+          {loadError && (
+            <div className="sila-alert sila-alert--warning" role="status">
+              {loadError}
+            </div>
+          )}
         </div>
         <div className="rstudio-yield">
           <label className="sila-label" htmlFor="rstudio-yield-qty">Yield</label>
