@@ -70,6 +70,8 @@ export interface SilaRecipeListItem {
   submittedOn?: string | null;
   approvedOn?: string | null;
   dateUpdated?: string | null;
+  /** Catalog/selling picture exists in managed file storage. */
+  hasPicture?: boolean;
 }
 
 export interface SilaRecipePage {
@@ -193,6 +195,15 @@ export interface SilaRecipeDetail
   /** Every version, newest first. */
   approvalSteps: SilaRecipeApprovalStep[];
   history: SilaRecipeEvent[];
+  /** Picture for the shown version (draft slot when revising). */
+  hasPicture?: boolean;
+  /** active | draft */
+  pictureSlot?: string | null;
+}
+
+export interface SilaRecipePictureInfo {
+  hasPicture: boolean;
+  slot?: string | null;
 }
 
 export interface SilaRecipeIngredientWrite {
@@ -352,6 +363,42 @@ export const deactivateRecipe = async (recipeId: string): Promise<void> => {
     await axiosInstance.post(`${BASE}/recipes/${recipeId}/deactivate`);
   } catch (error: unknown) {
     throw new Error(readError(error, "Could not deactivate the recipe."));
+  }
+};
+
+/** Uploads or replaces the recipe picture (JPEG/PNG/WebP ≤ 5 MB) via managed file storage. */
+export const setRecipePicture = async (recipeId: string, file: File | Blob): Promise<SilaRecipePictureInfo> => {
+  const form = new FormData();
+  form.append("file", file, file instanceof File ? file.name : "recipe.webp");
+  try {
+    const response = await axiosInstance.post<SilaRecipePictureInfo>(`${BASE}/recipes/${recipeId}/picture`, form, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return response.data;
+  } catch (error: unknown) {
+    throw new Error(readError(error, "Could not save the recipe picture."));
+  }
+};
+
+/** Authenticated recipe picture blob (catalog uses preferDraft=false so approved images stay unchanged). */
+export const getRecipePicture = async (recipeId: string, preferDraft = false): Promise<Blob> => {
+  try {
+    const response = await axiosInstance.get<Blob>(`${BASE}/recipes/${recipeId}/picture`, {
+      params: preferDraft ? { preferDraft: true } : undefined,
+      responseType: "blob",
+    });
+    return response.data;
+  } catch (error: unknown) {
+    throw new Error(readError(error, "Could not load the recipe picture."));
+  }
+};
+
+export const removeRecipePicture = async (recipeId: string): Promise<SilaRecipePictureInfo> => {
+  try {
+    const response = await axiosInstance.delete<SilaRecipePictureInfo>(`${BASE}/recipes/${recipeId}/picture`);
+    return response.data;
+  } catch (error: unknown) {
+    throw new Error(readError(error, "Could not remove the recipe picture."));
   }
 };
 

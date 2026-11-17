@@ -136,6 +136,52 @@
   gap: 0.75rem;
 }
 
+.rstudio-picture {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  min-width: 0;
+}
+
+.rstudio-picture__frame {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 1rem;
+  border: 0.0625rem solid #d5e4f4;
+  background: linear-gradient(160deg, #f4f9ff 0%, #ffffff 55%, #f3fff8 100%);
+}
+
+.rstudio-picture__img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.rstudio-picture__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.rstudio-picture__error {
+  margin: 0;
+  color: #b42318;
+  font-size: 0.8rem;
+}
+
+.rstudio-picture--catalog .rstudio-picture__frame,
+.rstudio-picture--detail .rstudio-picture__frame {
+  border-radius: 0;
+  border: 0;
+}
+
+.rstudio-picture--detail {
+  margin-bottom: 1rem;
+}
+
 .rstudio-image-ph {
   display: flex;
   align-items: center;

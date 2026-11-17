@@ -47,7 +47,7 @@ assert.match(presentation, /handleSubmit/);
 assert.match(presentation, /skipNavigate/);
 assert.doesNotMatch(presentation, /Awaiting existing-recipe loading in Step 6/);
 assert.doesNotMatch(presentation, /Submit — Available in Step 6/);
-assert.match(presentation, /Step 6 of 7/);
+assert.match(presentation, /Step 7 of 7/);
 assert.match(presentation, /locked=\{!canEdit\}/);
 
 const api = read("../../../api/silaMe/silaRecipeApi.ts");

@@ -3,6 +3,7 @@ using Buyer.Domain.Common;
 using Buyer.Domain.Entities;
 using Buyer.Infrastructure.Contracts.IRepository;
 using MediatR;
+using Microsoft.Extensions.Configuration;
 using SharedKernel.ExceptionHandler;
 using SharedKernel.LoggerServices;
 
@@ -19,11 +20,13 @@ namespace Buyer.Application.Features.Commands.DecideSilaRecipe
 
         private readonly IRepositoryWrapper _repository;
         private readonly ILoggerManager _logger;
+        private readonly IConfiguration _configuration;
 
-        public DecideSilaRecipeCommandHandler(IRepositoryWrapper repository, ILoggerManager logger)
+        public DecideSilaRecipeCommandHandler(IRepositoryWrapper repository, ILoggerManager logger, IConfiguration configuration)
         {
             _repository = repository;
             _logger = logger;
+            _configuration = configuration;
         }
 
         public async Task<Unit> Handle(DecideSilaRecipeCommand request, CancellationToken cancellationToken)
@@ -50,10 +53,16 @@ namespace Buyer.Application.Features.Commands.DecideSilaRecipe
                 SilaAccess.IsAdministrator(request.RoleId));
 
             InventoryLedger ledger = new InventoryLedger(_repository, buyer.Id, request.UserId);
+            string? basePath = _configuration[Common.BASE_FOLDER_PATH];
             if (decision.Outcome == SilaApprovals.OUTCOME_REJECTED)
             {
                 recipe.Status = Common.SILA_RECIPE_REJECTED;
                 SilaRecipeRules.ClearDraftHeader(recipe);
+                if (!string.IsNullOrWhiteSpace(basePath))
+                {
+                    SilaRecipePictureRules.ClearDraft(basePath, buyer.Id, recipe.Id);
+                }
+
                 ledger.AddEvent(Common.SILA_REF_RECIPE, recipe.Id, SilaRecipeRules.EVENT_REJECTED, $"Version {recipe.Version}, level {decision.Level}: {comment}");
             }
             else
@@ -64,6 +73,11 @@ namespace Buyer.Application.Features.Commands.DecideSilaRecipe
                     recipe.Status = Common.SILA_RECIPE_APPROVED;
                     recipe.ActiveVersion = recipe.Version;
                     SilaRecipeRules.PromoteDraftHeader(recipe);
+                    if (!string.IsNullOrWhiteSpace(basePath))
+                    {
+                        SilaRecipePictureRules.PromoteDraftToActive(basePath, buyer.Id, recipe.Id, _logger);
+                    }
+
                     recipe.ApprovedOn = DateTime.UtcNow;
                 }
             }

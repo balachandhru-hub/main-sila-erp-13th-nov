@@ -9,6 +9,8 @@ import {
   createRecipe,
   createRecipeRevision,
   getRecipe,
+  removeRecipePicture,
+  setRecipePicture,
   submitRecipe,
   updateRecipe,
   type SilaRecipeDetail,
@@ -50,6 +52,7 @@ import {
 } from "./recipeStudioSuggestions";
 import SilaRecipeCanvas from "./SilaRecipeCanvas";
 import SilaRecipeMaterialLibrary from "./SilaRecipeMaterialLibrary";
+import SilaRecipePicture from "./SilaRecipePicture";
 import { RECIPE_WORKSPACE_BACK_LABEL } from "./recipeWorkspaceShellCopy";
 import "./SilaRecipeStudioPresentation.css";
 
@@ -65,8 +68,8 @@ interface SilaRecipeStudioPresentationProps {
 }
 
 /**
- * Step 6 Recipe Studio presentation.
- * Create + Edit load/update, explicit revision for approved/rejected, and Submit.
+ * Step 7 Recipe Studio presentation.
+ * Create + Edit load/update, picture management, explicit revision, and Submit.
  */
 const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> = ({
   mode,
@@ -110,11 +113,37 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
   const [loadingRecipe, setLoadingRecipe] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
+  const [localPictureFile, setLocalPictureFile] = useState<File | null>(null);
+  const [localPreviewUrl, setLocalPreviewUrl] = useState<string | null>(null);
+  const [hasPicture, setHasPicture] = useState(false);
+  const [pictureBusy, setPictureBusy] = useState(false);
+  const [pictureError, setPictureError] = useState<string | null>(null);
+  const [pictureEpoch, setPictureEpoch] = useState(0);
   /** Prevents a second CREATE for the same local draft if navigation is slow. */
   const createdIdRef = useRef<string | null>(null);
   const revisionGuardRef = useRef(false);
+  const previewUrlRef = useRef<string | null>(null);
 
   const markDirty = () => setDirty(true);
+
+  const clearLocalPicture = () => {
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current);
+      previewUrlRef.current = null;
+    }
+    setLocalPreviewUrl(null);
+    setLocalPictureFile(null);
+  };
+
+  const assignLocalPicture = (file: File) => {
+    clearLocalPicture();
+    const url = URL.createObjectURL(file);
+    previewUrlRef.current = url;
+    setLocalPreviewUrl(url);
+    setLocalPictureFile(file);
+    setPictureError(null);
+    markDirty();
+  };
 
   const applyLoadedForm = (detail: SilaRecipeDetail) => {
     const form = formFromRecipeDetail(detail, []);
@@ -132,10 +161,18 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
     setClassConfirmed(form.classConfirmed);
     setLines(form.lines);
     setOutletPrices(form.outletPrices);
+    setHasPicture(Boolean(detail.hasPicture));
+    clearLocalPicture();
+    setPictureError(null);
+    setPictureEpoch((value) => value + 1);
     setDirty(false);
     setFieldErrors({});
     setReplaceKey(null);
   };
+
+  useEffect(() => () => {
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -318,6 +355,78 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
     request,
   );
 
+  const persistPendingPicture = async (recipeId: string): Promise<boolean> => {
+    if (!localPictureFile) return true;
+    setPictureBusy(true);
+    setPictureError(null);
+    try {
+      await setRecipePicture(recipeId, localPictureFile);
+      clearLocalPicture();
+      setHasPicture(true);
+      setPictureEpoch((value) => value + 1);
+      return true;
+    } catch (err: unknown) {
+      const message = err instanceof Error
+        ? `Recipe saved, but the picture was not stored: ${err.message}`
+        : "Recipe saved, but the picture was not stored.";
+      setPictureError(message);
+      toastService.error(message);
+      return false;
+    } finally {
+      setPictureBusy(false);
+    }
+  };
+
+  const handleChoosePicture = async (file: File) => {
+    if (!canEdit) return;
+    assignLocalPicture(file);
+    const targetId = isEdit ? persistedEditId : (createdIdRef.current || "");
+    if (!targetId) return;
+    setPictureBusy(true);
+    setPictureError(null);
+    try {
+      await setRecipePicture(targetId, file);
+      clearLocalPicture();
+      setHasPicture(true);
+      setPictureEpoch((value) => value + 1);
+      toastService.success("Recipe picture saved.");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Could not save the recipe picture.";
+      setPictureError(message);
+      toastService.error(message);
+    } finally {
+      setPictureBusy(false);
+    }
+  };
+
+  const handleRemovePicture = async () => {
+    if (!canEdit) return;
+    setPictureError(null);
+    if (localPictureFile || localPreviewUrl) {
+      clearLocalPicture();
+      markDirty();
+      return;
+    }
+    const targetId = isEdit ? persistedEditId : (createdIdRef.current || "");
+    if (!targetId || !hasPicture) {
+      setHasPicture(false);
+      return;
+    }
+    setPictureBusy(true);
+    try {
+      const info = await removeRecipePicture(targetId);
+      setHasPicture(Boolean(info.hasPicture));
+      setPictureEpoch((value) => value + 1);
+      toastService.success("Recipe picture removed.");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Could not remove the recipe picture.";
+      setPictureError(message);
+      toastService.error(message);
+    } finally {
+      setPictureBusy(false);
+    }
+  };
+
   const handleSaveDraft = async (options?: { skipNavigate?: boolean }): Promise<string | null> => {
     if (saving || submitting || revising) return null;
     if (isEdit && editAccess.kind !== "editable") {
@@ -366,12 +475,14 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
         setSaving(false);
         return persistedId;
       }
-      setLoadedRecipe(detail);
-      applyLoadedForm(detail);
+      const pictureOk = await persistPendingPicture(persistedId);
+      const refreshed = pictureOk ? await getRecipe(persistedId).catch(() => detail) : detail;
+      setLoadedRecipe(refreshed);
+      applyLoadedForm(refreshed);
       toastService.success(
         isEdit
-          ? `Draft updated (${detail.recipeCode || persistedId}).`
-          : `Recipe saved as draft (${detail.recipeCode || persistedId}).`,
+          ? `Draft updated (${refreshed.recipeCode || persistedId}).`
+          : `Recipe saved as draft (${refreshed.recipeCode || persistedId}).`,
       );
       if (!isEdit && !options?.skipNavigate) onDraftSaved?.(persistedId);
       return persistedId;
@@ -381,6 +492,7 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
         : `Draft saved (${persistedId}) but could not be re-read.`;
       setVerifyWarning(message);
       toastService.error(message);
+      await persistPendingPicture(persistedId);
       return persistedId;
     } finally {
       setSaving(false);
@@ -558,12 +670,12 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
 
       <header className="rstudio-build__top">
         <div>
-          <p className="rstudio-kicker">SILA Recipe Studio · Step 6 of 7</p>
+          <p className="rstudio-kicker">SILA Recipe Studio · Step 7 of 7</p>
           <h1>{heading}</h1>
           <p className="rstudio-build__top-meta">
             {isEdit
-              ? "Load, edit, revise, and submit using the existing Recipe Master APIs. Approved versions stay read-only until you create a Draft revision."
-              : "Live Material Catalog with Save Draft and Submit. Successful create opens Recipe Detail; Edit reuses this same Studio."}
+              ? "Load, edit, picture, revise, and submit using the existing Recipe Master APIs. Approved versions stay read-only until you create a Draft revision."
+              : "Live Material Catalog with picture, Save Draft and Submit. Successful create opens Recipe Detail; Edit reuses this same Studio."}
           </p>
           <div className="rstudio-build__badges">
             <span className={recipeBadgeClass(status || "DRAFT")} data-testid="recipe-studio-status">
@@ -734,11 +846,22 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
                   />
                 </div>
               </div>
-              <div className="rstudio-image-ph" aria-hidden="true">
-                Recipe image
-                <br />
-                placeholder
-              </div>
+              <SilaRecipePicture
+                key={`studio-pic-${persistedEditId || "new"}-${pictureEpoch}`}
+                recipeId={persistedEditId || createdIdRef.current}
+                preferDraft
+                hasPicture={hasPicture}
+                localPreviewUrl={localPreviewUrl}
+                placeholderTitle={name || "Recipe"}
+                placeholderCategory={categoryName}
+                placeholderFamily={familyName}
+                locked={!canEdit}
+                variant="studio"
+                busy={pictureBusy || busy}
+                error={pictureError}
+                onChooseFile={handleChoosePicture}
+                onRemove={handleRemovePicture}
+              />
             </div>
             {canEdit && classification && !classConfirmed && (
               <div className="rstudio-suggest" role="status">

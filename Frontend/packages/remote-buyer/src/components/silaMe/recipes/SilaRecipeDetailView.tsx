@@ -15,7 +15,7 @@ import SilaRecipeReadinessPanel from "./SilaRecipeReadinessPanel";
 import { formatCost, formatQty, readinessStatusBadgeClass, readinessText, recipeBadgeClass, recipeLabel, versionsSummary } from "./recipeFormat";
 import SilaRecipeCostSummary from "./SilaRecipeCostSummary";
 import { canStartRevision } from "./recipeWriteModel";
-import { resolveStudioKind, StudioCover } from "./recipeStudioVisuals";
+import SilaRecipePicture from "./SilaRecipePicture";
 import "./SilaRecipeStudio.css";
 
 interface SilaRecipeDetailViewProps {
@@ -110,7 +110,6 @@ const SilaRecipeDetailView: React.FC<SilaRecipeDetailViewProps> = ({ recipeId, c
   // Step 1: Edit / Create revision only navigates to the temporary workspace shell (no API mutate).
   const needsRevision = canStartRevision(recipe.status);
 
-  const coverKind = resolveStudioKind(recipe.categoryName || recipe.category, recipe.familyName, recipe.name);
   const menuPrice = recipe.outletPrices.length === 0
     ? null
     : Math.min(...recipe.outletPrices.map((price) => price.menuPrice));
@@ -121,7 +120,18 @@ const SilaRecipeDetailView: React.FC<SilaRecipeDetailViewProps> = ({ recipeId, c
       <button type="button" className="sila-btn sila-btn--ghost sila-btn--sm rstudio-back" onClick={onBack}>← Back to catalog</button>
 
       <header className="rstudio-detail-hero">
-        <StudioCover kind={coverKind} title={recipe.name} subtitle={recipe.categoryName || recipe.category || undefined} className="rstudio-detail-hero__cover" />
+        <div className="rstudio-detail-hero__cover">
+          <SilaRecipePicture
+            recipeId={recipe.id}
+            preferDraft={recipe.viewVersion === recipe.version && recipe.activeVersion > 0 && recipe.status !== "APPROVED"}
+            hasPicture={Boolean(recipe.hasPicture)}
+            placeholderTitle={recipe.name}
+            placeholderCategory={recipe.categoryName || recipe.category}
+            placeholderFamily={recipe.familyName}
+            variant="detail"
+            locked
+          />
+        </div>
         <div className="rstudio-detail-hero__copy">
           <p className="rstudio-kicker">{recipe.recipeCode}</p>
           <h1>{recipe.name}</h1>

@@ -60,10 +60,12 @@ assert.match(presentationBody, /createRecipe/);
 assert.match(presentationBody, /getRecipe/);
 assert.match(presentationBody, /updateRecipe/);
 assert.match(presentationBody, /createRecipeRevision/);
+assert.match(presentationBody, /setRecipePicture/);
 assert.match(presentationBody, /recipe-studio-save-draft/);
 assert.match(presentationBody, /recipe-studio-submit/);
 assert.match(presentationBody, /COST PENDING/);
 assert.match(presentationBody, /\bsubmitRecipe\b/);
+assert.match(presentationBody, /Step 7 of 7/);
 assert.doesNotMatch(presentationBody, /import SilaRecipeEditor/);
 
 console.log("silaRecipeWorkspaceMount.test.ts: ok");
