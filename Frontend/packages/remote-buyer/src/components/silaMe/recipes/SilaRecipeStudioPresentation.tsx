@@ -1,9 +1,15 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { toastService } from "@vosox/shared-ui";
 import {
   getLocations,
   getMyLocations,
   type SilaLocation,
 } from "../../../api/silaMe/silaInventoryApi";
+import {
+  createRecipe,
+  getRecipe,
+  updateRecipe,
+} from "../../../api/silaMe/silaRecipeApi";
 import {
   getRecipeMasters,
   searchIngredients,
@@ -25,6 +31,12 @@ import {
 } from "./recipeEditorModel";
 import { formatCost, quantityForUomChange } from "./recipeFormat";
 import {
+  buildStudioCreateRequest,
+  validateStudioDraft,
+  verifyPersistedDraft,
+  type StudioSaveFieldErrors,
+} from "./recipeStudioDraftSave";
+import {
   loadTargetFoodCostPercent,
   recommendMaterials,
   saveTargetFoodCostPercent,
@@ -43,17 +55,20 @@ interface SilaRecipeStudioPresentationProps {
   /** Route id in Edit mode only; recipe fetch is deferred to Step 6. */
   recipeId?: string | null;
   onBackToCatalog: () => void;
+  /** After successful create + verify, parent navigates to Recipe Detail (Edit load is Step 6). */
+  onDraftSaved?: (recipeId: string) => void;
 }
 
 /**
- * Step 4 Recipe Studio presentation.
- * Connects Material Catalog search, local ingredient draft, UOM, drag/drop and draft costing.
- * Does not call Recipe create/update/get APIs. Save/Submit remain disabled.
+ * Step 5 Recipe Studio presentation.
+ * Live Material Catalog + local ingredient draft (Step 4) with Save Draft → createRecipe.
+ * Submit and Edit reload remain for Step 6.
  */
 const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> = ({
   mode,
   recipeId,
   onBackToCatalog,
+  onDraftSaved,
 }) => {
   const isEdit = mode === "edit";
   const idText = (recipeId ?? "").trim();
@@ -64,6 +79,7 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
   const [cuisine, setCuisine] = useState("");
   const [mealPeriod, setMealPeriod] = useState("");
   const [yieldQty, setYieldQty] = useState("1");
+  const [servingUom, setServingUom] = useState("EA");
   const [prepTime, setPrepTime] = useState("");
   const [targetFoodCost, setTargetFoodCost] = useState(() => String(loadTargetFoodCostPercent()));
   const [classConfirmed, setClassConfirmed] = useState(false);
@@ -78,6 +94,12 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
   const [categories, setCategories] = useState<SilaRecipeMaster[]>([]);
   const [catalogPool, setCatalogPool] = useState<SilaIngredientOption[]>([]);
   const [helperNotice, setHelperNotice] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<StudioSaveFieldErrors>({});
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [verifyWarning, setVerifyWarning] = useState<string | null>(null);
+  /** Prevents a second CREATE for the same local draft if navigation is slow. */
+  const createdIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -154,14 +176,114 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
     setLines((current) => (typeof next === "function" ? next(current) : next));
   };
 
+  const buildOptionalDescription = (): string => {
+    const notes = [
+      cuisine.trim() ? `Cuisine: ${cuisine.trim()}` : "",
+      mealPeriod.trim() ? `Meal period: ${mealPeriod.trim()}` : "",
+      prepTime.trim() ? `Prep: ${prepTime.trim()}` : "",
+      menuItem.trim() ? `Menu item note: ${menuItem.trim()}` : "",
+      outletNote.trim() ? `Outlet note: ${outletNote.trim()}` : "",
+    ].filter(Boolean);
+    return notes.join(" · ");
+  };
+
+  const handleSaveDraft = async () => {
+    if (isEdit) return;
+    if (saving) return;
+    setSaveError(null);
+    setVerifyWarning(null);
+    const header = {
+      name,
+      description: buildOptionalDescription(),
+      familyId,
+      categoryId,
+      itemMode: "RECIPE" as const,
+      servingQty: yieldQty,
+      servingUom,
+      sellingUom: "EA",
+      currency: currency || undefined,
+    };
+    const draftLines = lines.map((line) => ({
+      materialId: line.material?.id ?? null,
+      subRecipeId: line.subRecipe?.id ?? null,
+      quantity: line.quantity,
+      uom: line.uom,
+    }));
+    const errors = validateStudioDraft(header, draftLines);
+    setFieldErrors(errors);
+    const problem = errors.name || errors.serving || errors.ingredients || null;
+    if (problem) {
+      toastService.error(problem);
+      return;
+    }
+    const request = buildStudioCreateRequest(header, draftLines, []);
+    setSaving(true);
+    let persistedId = createdIdRef.current;
+    try {
+      if (persistedId) {
+        await updateRecipe(persistedId, request);
+      } else {
+        persistedId = await createRecipe(request);
+        createdIdRef.current = persistedId;
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Could not save the recipe.";
+      setSaveError(message);
+      toastService.error(message);
+      setSaving(false);
+      return;
+    }
+    if (!persistedId) {
+      const message = "Save completed but no recipe id was returned. Your draft is still on this page.";
+      setSaveError(message);
+      toastService.error(message);
+      setSaving(false);
+      return;
+    }
+    try {
+      const detail = await getRecipe(persistedId);
+      const check = verifyPersistedDraft(
+        {
+          name: detail.name,
+          status: detail.status,
+          ingredients: detail.ingredients.map((ingredient) => ({
+            sequence: ingredient.sequence,
+            materialId: ingredient.materialId,
+            quantity: ingredient.quantity,
+            uom: ingredient.uom,
+          })),
+        },
+        request,
+      );
+      if (!check.ok) {
+        setVerifyWarning(check.warning || "Saved recipe could not be fully verified.");
+        toastService.error(check.warning || "Saved, but persistence verification reported issues.");
+        setSaving(false);
+        return;
+      }
+      toastService.success(`Recipe saved as draft (${detail.recipeCode || persistedId}).`);
+      onDraftSaved?.(persistedId);
+    } catch (err: unknown) {
+      const message = err instanceof Error
+        ? `Draft created (${persistedId}) but could not be re-read: ${err.message}`
+        : `Draft created (${persistedId}) but could not be re-read.`;
+      setVerifyWarning(message);
+      toastService.error(message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const addMaterial = (option: SilaIngredientOption) => {
     rememberMaterial(option.id);
     const line = materialLine(option);
+    setFieldErrors((current) => ({ ...current, ingredients: undefined }));
     commitLines((current) => (current.some((x) => x.material?.id === line.material?.id) ? current : [...current, line]));
   };
 
   const addMaterials = (options: SilaIngredientOption[]) => {
     options.forEach((option) => rememberMaterial(option.id));
+    setFieldErrors((current) => ({ ...current, ingredients: undefined }));
     commitLines((current) => {
       const next = [...current];
       options.forEach((option) => {
@@ -225,17 +347,17 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
 
       <header className="rstudio-build__top">
         <div>
-          <p className="rstudio-kicker">SILA Recipe Studio · Step 4 of 7</p>
+          <p className="rstudio-kicker">SILA Recipe Studio · Step 5 of 7</p>
           <h1>{heading}</h1>
           <p className="rstudio-build__top-meta">
             {isEdit
               ? "Same Studio canvas as Create. Existing recipe loading connects in Step 6 — no fabricated recipe details."
-              : "Local ingredient draft with live Material Catalog. No recipe row until Save Draft in Step 5."}
+              : "Live Material Catalog with Save Draft. Successful create navigates to Recipe Detail until Edit reload lands in Step 6."}
           </p>
           <div className="rstudio-build__badges">
             <span className="rstudio-build__badge rstudio-build__badge--draft">Draft</span>
             <span className="rstudio-build__badge rstudio-build__badge--mode">{isEdit ? "Edit mode" : "Create mode"}</span>
-            <span className="rstudio-build__badge rstudio-build__badge--step">Catalog live</span>
+            <span className="rstudio-build__badge rstudio-build__badge--step">Save Draft live</span>
             {isEdit && (
               <span className="rstudio-build__badge rstudio-build__badge--mode" data-testid="recipe-studio-edit-id">
                 ID {idText || "—"}
@@ -274,9 +396,14 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
                     id="rstudio-name"
                     value={name}
                     placeholder="e.g. House citrus spritz"
-                    onChange={(e) => setName(e.target.value)}
+                    onChange={(e) => {
+                      setName(e.target.value);
+                      setFieldErrors((current) => ({ ...current, name: undefined }));
+                    }}
                     maxLength={200}
+                    aria-invalid={Boolean(fieldErrors.name)}
                   />
+                  {fieldErrors.name && <span className="rstudio-field-error">{fieldErrors.name}</span>}
                 </div>
                 <div className="rstudio-field">
                   <label htmlFor="rstudio-code">Recipe code</label>
@@ -324,11 +451,36 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
                 </div>
                 <div className="rstudio-field">
                   <label htmlFor="rstudio-yield">Yield / portions</label>
-                  <input id="rstudio-yield" type="number" min="0" step="any" value={yieldQty} onChange={(e) => setYieldQty(e.target.value)} />
+                  <input
+                    id="rstudio-yield"
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={yieldQty}
+                    onChange={(e) => {
+                      setYieldQty(e.target.value);
+                      setFieldErrors((current) => ({ ...current, serving: undefined }));
+                    }}
+                    aria-invalid={Boolean(fieldErrors.serving)}
+                  />
+                </div>
+                <div className="rstudio-field">
+                  <label htmlFor="rstudio-serving-uom">Serving UOM</label>
+                  <input
+                    id="rstudio-serving-uom"
+                    value={servingUom}
+                    onChange={(e) => {
+                      setServingUom(e.target.value.toUpperCase());
+                      setFieldErrors((current) => ({ ...current, serving: undefined }));
+                    }}
+                    maxLength={10}
+                    aria-invalid={Boolean(fieldErrors.serving)}
+                  />
+                  {fieldErrors.serving && <span className="rstudio-field-error">{fieldErrors.serving}</span>}
                 </div>
                 <div className="rstudio-field">
                   <label htmlFor="rstudio-prep">Preparation time</label>
-                  <input id="rstudio-prep" value={prepTime} placeholder="e.g. 12 min" onChange={(e) => setPrepTime(e.target.value)} />
+                  <input id="rstudio-prep" value={prepTime} placeholder="e.g. 12 min (local note)" onChange={(e) => setPrepTime(e.target.value)} />
                 </div>
               </div>
               <div className="rstudio-image-ph" aria-hidden="true">
@@ -355,6 +507,9 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
 
           <div className="rstudio-section rstudio-section--canvas">
             <p className="rstudio-section__label">Ingredient canvas</p>
+            {fieldErrors.ingredients && (
+              <div className="sila-alert sila-alert--warning" role="alert">{fieldErrors.ingredients}</div>
+            )}
             <SilaRecipeCanvas
               lines={lines}
               costs={costs}
@@ -508,18 +663,38 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
         </aside>
       </div>
 
+      {(saveError || verifyWarning) && (
+        <div className={`sila-alert ${saveError ? "sila-alert--danger" : "sila-alert--warning"}`} role="alert">
+          {saveError || verifyWarning}
+        </div>
+      )}
+
       <div className="rstudio-actions" role="toolbar" aria-label="Recipe Studio actions">
-        <button type="button" className="sila-btn sila-btn--secondary" onClick={onBackToCatalog}>
+        <button type="button" className="sila-btn sila-btn--secondary" onClick={onBackToCatalog} disabled={saving}>
           {RECIPE_WORKSPACE_BACK_LABEL}
         </button>
-        <button type="button" className="sila-btn sila-btn--secondary" disabled title="Available in Step 5">
-          Save Draft — Available in Step 5
-        </button>
+        {isEdit ? (
+          <button type="button" className="sila-btn sila-btn--secondary" disabled title="Available in Step 6">
+            Save Draft — Edit persistence in Step 6
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="sila-btn sila-btn--secondary"
+            onClick={() => { void handleSaveDraft(); }}
+            disabled={saving}
+            data-testid="recipe-studio-save-draft"
+          >
+            {saving ? "Saving Draft…" : "Save Draft"}
+          </button>
+        )}
         <button type="button" className="sila-btn sila-btn--primary" disabled title="Available in Step 6">
           Submit — Available in Step 6
         </button>
         <p className="rstudio-actions__note">
-          Save Draft and Submit stay disabled. Ingredient changes remain local draft state — no recipe create/update API calls in Step 4.
+          {isEdit
+            ? "Edit mode does not load or update an existing recipe until Step 6. Submit stays disabled."
+            : "Save Draft posts to the existing Recipe Master create API, verifies with getRecipe, then opens Recipe Detail. Submit stays disabled until Step 6."}
         </p>
       </div>
     </div>

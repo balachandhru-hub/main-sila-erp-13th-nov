@@ -1,5 +1,5 @@
 /**
- * Step 4: presentation contract + UOM helper source checks (no Vite/axios runtime).
+ * Step 4 catalog/canvas/UOM contract checks (still valid under Step 5 presentation).
  * Run: npx --yes tsx src/components/silaMe/recipes/silaRecipeStudioStep4.test.ts
  */
 import assert from "node:assert/strict";
@@ -17,11 +17,9 @@ assert.match(presentation, /searchIngredients/);
 assert.match(presentation, /quantityForUomChange/);
 assert.match(presentation, /recommendMaterials/);
 assert.match(presentation, /lineCost/);
-assert.match(presentation, /Save Draft — Available in Step 5/);
 assert.match(presentation, /Submit — Available in Step 6/);
 assert.match(presentation, /COST PENDING/);
 assert.match(presentation, /Select outlet to view stock/);
-assert.doesNotMatch(presentation, /\bgetRecipe\b|\bcreateRecipe\b|\bupdateRecipe\b|\bsubmitRecipe\b/);
 
 const formatSrc = read("recipeFormat.ts");
 assert.match(formatSrc, /export const fromBaseQuantity/);

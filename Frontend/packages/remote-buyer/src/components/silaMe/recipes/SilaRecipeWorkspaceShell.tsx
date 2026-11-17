@@ -9,18 +9,20 @@ interface SilaRecipeWorkspaceShellProps {
   /** Present for Edit; ignored for New. */
   recipeId?: string | null;
   onBackToCatalog: () => void;
+  /** New Recipe only: after Save Draft create + verify, open Recipe Detail. */
+  onDraftSaved?: (recipeId: string) => void;
 }
 
 /**
- * Recipe Studio workspace mount (Steps 1–4).
- * Owns the verified New/Edit route mount from Step 2 and renders the Step 4
- * presentation (live Material Catalog + local ingredient draft). Does not mount
- * SilaRecipeEditor. No Recipe create/update/get APIs.
+ * Recipe Studio workspace mount (Steps 1–5).
+ * Owns the verified New/Edit route mount from Step 2 and renders the Step 5
+ * presentation (catalog + draft + Save Draft create). Does not mount SilaRecipeEditor.
  */
 const SilaRecipeWorkspaceShell: React.FC<SilaRecipeWorkspaceShellProps> = ({
   mode,
   recipeId,
   onBackToCatalog,
+  onDraftSaved,
 }) => {
   const isEdit = mode === "edit";
   const idText = (recipeId ?? "").trim();
@@ -36,6 +38,7 @@ const SilaRecipeWorkspaceShell: React.FC<SilaRecipeWorkspaceShellProps> = ({
         mode={mode}
         recipeId={isEdit ? idText : null}
         onBackToCatalog={onBackToCatalog}
+        onDraftSaved={onDraftSaved}
       />
     </div>
   );
