@@ -1,7 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { EmptyState, Loader, Modal, Pagination, toastService } from "@vosox/shared-ui";
-import { deactivateRecipe, getRecipes, type SilaRecipeListItem } from "../../../api/silaMe/silaRecipeApi";
+import { deleteRecipeDraft, getRecipes, type SilaRecipeListItem } from "../../../api/silaMe/silaRecipeApi";
+import {
+  DELETE_DRAFT_BODY,
+  DELETE_DRAFT_CONFIRM_LABEL,
+  DELETE_DRAFT_SUCCESS,
+  DELETE_DRAFT_TITLE,
+} from "./recipeStudioDraftDelete";
 import {
   confirmRecipeImport,
   downloadRecipeTemplate,
@@ -154,13 +160,13 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({ canManage, canRequestPrice: _
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      await deactivateRecipe(deleteTarget.id);
-      toastService.success(`Deleted ${deleteTarget.recipeCode}.`);
+      await deleteRecipeDraft(deleteTarget.id);
+      toastService.success(DELETE_DRAFT_SUCCESS);
       setDeleteTarget(null);
+      await load();
       if (route.kind !== "list") goCatalog();
-      else await load();
     } catch (err: unknown) {
-      toastService.error(err instanceof Error ? err.message : "Could not delete the recipe.");
+      toastService.error(err instanceof Error ? err.message : "Could not delete the draft recipe.");
     } finally {
       setDeleting(false);
     }
@@ -400,21 +406,24 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({ canManage, canRequestPrice: _
 
       <Modal
         isOpen={Boolean(deleteTarget)}
-        onClose={() => setDeleteTarget(null)}
+        onClose={() => { if (!deleting) setDeleteTarget(null); }}
         variant="danger"
-        headerProps={{ heading: `Delete ${deleteTarget?.recipeCode || "recipe"}` }}
+        headerProps={{ heading: DELETE_DRAFT_TITLE }}
         footerProps={{
           secondaryButton: { text: "Cancel", onClick: () => setDeleteTarget(null), disabled: deleting },
           primaryButton: {
-            text: "Delete",
+            text: DELETE_DRAFT_CONFIRM_LABEL,
             loading: deleting,
+            disabled: deleting,
             onClick: confirmDelete,
           },
         }}
       >
+        <p className="sila-modal-text">{DELETE_DRAFT_BODY}</p>
         <p className="sila-modal-text">
-          Delete {deleteTarget?.name}? This deactivates the recipe
-          {deleteTarget?.posCode ? ` and stops POS matching for ${deleteTarget.posCode}` : ""}.
+          <strong>{deleteTarget?.name || "—"}</strong>
+          {" · "}
+          {deleteTarget?.recipeCode || "—"}
         </p>
       </Modal>
     </div>

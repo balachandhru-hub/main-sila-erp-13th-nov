@@ -366,6 +366,18 @@ export const deactivateRecipe = async (recipeId: string): Promise<void> => {
   }
 };
 
+/**
+ * Deletes a DRAFT recipe (soft-delete) or discards a Draft revision of an approved recipe.
+ * Server refuses PENDING_APPROVAL / APPROVED / REJECTED / INACTIVE.
+ */
+export const deleteRecipeDraft = async (recipeId: string): Promise<void> => {
+  try {
+    await axiosInstance.post(`${BASE}/recipes/${recipeId}/draft/delete`);
+  } catch (error: unknown) {
+    throw new Error(readError(error, "Could not delete the draft recipe."));
+  }
+};
+
 /** Uploads or replaces the recipe picture (JPEG/PNG/WebP ≤ 5 MB) via managed file storage. */
 export const setRecipePicture = async (recipeId: string, file: File | Blob): Promise<SilaRecipePictureInfo> => {
   const form = new FormData();

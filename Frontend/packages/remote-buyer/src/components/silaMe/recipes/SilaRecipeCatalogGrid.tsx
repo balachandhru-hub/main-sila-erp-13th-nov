@@ -18,7 +18,7 @@ const SilaRecipeCatalogGrid: React.FC<SilaRecipeCatalogGridProps> = ({ rows, can
       const portionCost = row.costComplete || row.activeVersion > 0
         ? (row.costPerServing ?? costPerServing(row.totalCost, row.servingQty))
         : null;
-      const canDelete = canManage && row.status !== "INACTIVE" && Boolean(onDelete);
+      const canDelete = canManage && row.status === "DRAFT" && Boolean(onDelete);
       return (
         <article key={row.id} className="rstudio-card" role="listitem">
           <button type="button" className="rstudio-card__media" onClick={() => onOpen(row.id)} aria-label={`View ${row.name}`}>
@@ -64,7 +64,7 @@ const SilaRecipeCatalogGrid: React.FC<SilaRecipeCatalogGridProps> = ({ rows, can
                 <button type="button" className="sila-btn sila-btn--primary sila-btn--sm" onClick={() => onEdit(row.id)}>Edit</button>
               )}
               {canDelete && (
-                <button type="button" className="sila-btn sila-btn--danger sila-btn--sm" onClick={() => onDelete?.(row)}>Delete</button>
+                <button type="button" className="sila-btn sila-btn--danger sila-btn--sm" onClick={() => onDelete?.(row)}>Delete Draft</button>
               )}
             </div>
           </div>

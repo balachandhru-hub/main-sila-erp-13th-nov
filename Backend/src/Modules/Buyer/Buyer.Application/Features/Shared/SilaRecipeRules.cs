@@ -23,6 +23,7 @@ namespace Buyer.Application.Features.Shared
         public const string EVENT_APPROVED = "APPROVED";
         public const string EVENT_REJECTED = "REJECTED";
         public const string EVENT_DEACTIVATED = "DEACTIVATED";
+        public const string EVENT_DRAFT_DELETED = "DRAFT_DELETED";
 
         public const string VERSION_ACTIVE = "ACTIVE";
         public const string VERSION_SUPERSEDED = "SUPERSEDED";

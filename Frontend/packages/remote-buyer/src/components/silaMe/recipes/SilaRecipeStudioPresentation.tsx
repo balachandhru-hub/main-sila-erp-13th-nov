@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { toastService } from "@vosox/shared-ui";
+import { Modal, toastService } from "@vosox/shared-ui";
 import {
   getLocations,
   getMyLocations,
@@ -8,6 +8,7 @@ import {
 import {
   createRecipe,
   createRecipeRevision,
+  deleteRecipeDraft,
   getRecipe,
   removeRecipePicture,
   setRecipePicture,
@@ -42,6 +43,14 @@ import {
   type StudioSaveFieldErrors,
 } from "./recipeStudioDraftSave";
 import { studioEditAccess } from "./recipeStudioEditAccess";
+import {
+  canDeleteDraftRecipe,
+  DELETE_DRAFT_BODY,
+  DELETE_DRAFT_CONFIRM_LABEL,
+  DELETE_DRAFT_SUCCESS,
+  DELETE_DRAFT_TITLE,
+  DISCARD_CHANGES_LABEL,
+} from "./recipeStudioDraftDelete";
 import { formFromRecipeDetail } from "./recipeStudioEditLoad";
 import {
   loadTargetFoodCostPercent,
@@ -118,6 +127,8 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
   const [hasPicture, setHasPicture] = useState(false);
   const [pictureBusy, setPictureBusy] = useState(false);
   const [pictureError, setPictureError] = useState<string | null>(null);
+  const [confirmDeleteDraft, setConfirmDeleteDraft] = useState(false);
+  const [deletingDraft, setDeletingDraft] = useState(false);
   const [pictureEpoch, setPictureEpoch] = useState(0);
   /** Prevents a second CREATE for the same local draft if navigation is slow. */
   const createdIdRef = useRef<string | null>(null);
@@ -285,7 +296,9 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
   const status = loadedRecipe?.status ?? (isEdit ? "" : "DRAFT");
   const editAccess = isEdit ? studioEditAccess(status) : { kind: "editable" as const };
   const canEdit = !isEdit || editAccess.kind === "editable";
-  const busy = saving || submitting || revising || loadingRecipe;
+  const busy = saving || submitting || revising || loadingRecipe || deletingDraft || pictureBusy;
+  const showDeleteDraft = isEdit && Boolean(loadedRecipe) && canDeleteDraftRecipe(status);
+  const showDiscardChanges = !isEdit;
   const persistedEditId = (loadedRecipe?.id || idText || "").trim();
 
   const commitLines = (next: IngredientLine[] | ((current: IngredientLine[]) => IngredientLine[])) => {
@@ -553,6 +566,26 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
   const handleBack = () => {
     if (dirty && !window.confirm("You have unsaved changes. Leave Recipe Studio anyway?")) return;
     onBackToCatalog();
+  };
+
+  const handleDeleteDraft = async () => {
+    const targetId = (loadedRecipe?.id || idText).trim();
+    if (!targetId || !showDeleteDraft) return;
+    setDeletingDraft(true);
+    setSaveError(null);
+    try {
+      await deleteRecipeDraft(targetId);
+      toastService.success(DELETE_DRAFT_SUCCESS);
+      setConfirmDeleteDraft(false);
+      setDirty(false);
+      onBackToCatalog();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Could not delete the draft recipe.";
+      setSaveError(message);
+      toastService.error(message);
+    } finally {
+      setDeletingDraft(false);
+    }
   };
 
   const addMaterial = (option: SilaIngredientOption) => {
@@ -1063,6 +1096,17 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
         <button type="button" className="sila-btn sila-btn--secondary" onClick={handleBack} disabled={busy}>
           {RECIPE_WORKSPACE_BACK_LABEL}
         </button>
+        {showDiscardChanges && (
+          <button
+            type="button"
+            className="sila-btn sila-btn--secondary"
+            onClick={handleBack}
+            disabled={busy}
+            data-testid="recipe-studio-discard-changes"
+          >
+            {DISCARD_CHANGES_LABEL}
+          </button>
+        )}
         {editAccess.kind === "revision-required" && isEdit && (
           <button
             type="button"
@@ -1094,6 +1138,17 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
         >
           {submitting ? "Submitting…" : "Submit for approval"}
         </button>
+        {showDeleteDraft && (
+          <button
+            type="button"
+            className="sila-btn sila-btn--danger"
+            onClick={() => setConfirmDeleteDraft(true)}
+            disabled={busy}
+            data-testid="recipe-studio-delete-draft"
+          >
+            Delete Draft
+          </button>
+        )}
         <p className="rstudio-actions__note">
           {isEdit
             ? canEdit
@@ -1101,9 +1156,36 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
               : editAccess.kind === "revision-required"
                 ? "Create an explicit Draft revision before editing. The approved selling version stays unchanged until the revision is approved."
                 : editAccess.reason
-            : "Save Draft posts createRecipe (or updateRecipe after first save). Submit validates, saves, then calls submitRecipe. No auto-approve."}
+            : "Save Draft posts createRecipe (or updateRecipe after first save). Submit validates, saves, then calls submitRecipe. No auto-approve. Use Discard Changes for an unsaved new recipe."}
         </p>
       </div>
+
+      <Modal
+        isOpen={confirmDeleteDraft}
+        onClose={() => { if (!deletingDraft) setConfirmDeleteDraft(false); }}
+        variant="danger"
+        headerProps={{ heading: DELETE_DRAFT_TITLE }}
+        footerProps={{
+          secondaryButton: {
+            text: "Cancel",
+            onClick: () => setConfirmDeleteDraft(false),
+            disabled: deletingDraft,
+          },
+          primaryButton: {
+            text: DELETE_DRAFT_CONFIRM_LABEL,
+            loading: deletingDraft,
+            disabled: deletingDraft,
+            onClick: () => { void handleDeleteDraft(); },
+          },
+        }}
+      >
+        <p className="sila-modal-text">{DELETE_DRAFT_BODY}</p>
+        <p className="sila-modal-text">
+          <strong>{loadedRecipe?.name || name || "—"}</strong>
+          {" · "}
+          {loadedRecipe?.recipeCode || recipeCode || "—"}
+        </p>
+      </Modal>
     </div>
   );
 };

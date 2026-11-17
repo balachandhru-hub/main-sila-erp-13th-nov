@@ -1,5 +1,6 @@
 using Buyer.Application.Features.Commands.CreateSilaRecipe;
 using Buyer.Application.Features.Commands.DeactivateSilaRecipe;
+using Buyer.Application.Features.Commands.DeleteSilaRecipeDraft;
 using Buyer.Application.Features.Commands.DecideSilaRecipe;
 using Buyer.Application.Features.Commands.RemoveSilaRecipePicture;
 using Buyer.Application.Features.Commands.SetSilaRecipePicture;
@@ -209,6 +210,28 @@ namespace Buyer.API.Controllers
             });
             _logger.LogDebug($"Recipe deactivated. RecipeId: {recipeId}");
             return Ok(new SuccessResponseDto { Id = recipeId.ToString(), StatusCode = 200, Message = "Success", Description = "Recipe deactivated." });
+        }
+
+        /// <summary>
+        /// Deletes a Draft recipe (soft-delete) or discards a Draft revision of an approved recipe without touching the approved selling version.
+        /// </summary>
+        [HttpPost]
+        [Route("api/v1/buyer/sila/recipes/{recipeId}/draft/delete")]
+        [ApiAuthorization(Name = "MANAGE_SILA_RECIPE")]
+        [SwaggerOperation("DeleteSilaRecipeDraft")]
+        [SwaggerResponse(200, type: typeof(SuccessResponseDto))]
+        public async Task<IActionResult> DeleteDraft([FromRoute] Guid recipeId)
+        {
+            _logger.LogDebug($"Deleting recipe draft. RecipeId: {recipeId}");
+            await _mediator.Send(new DeleteSilaRecipeDraftCommand
+            {
+                OrganizationId = GetOrganizationId(),
+                UserId = GetUserId(),
+                RoleId = GetRoleId(),
+                RecipeId = recipeId
+            });
+            _logger.LogDebug($"Recipe draft deleted. RecipeId: {recipeId}");
+            return Ok(new SuccessResponseDto { Id = recipeId.ToString(), StatusCode = 200, Message = "Success", Description = "Draft recipe deleted." });
         }
 
         [HttpPost]
