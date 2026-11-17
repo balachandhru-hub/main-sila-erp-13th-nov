@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { EmptyState } from "@vosox/shared-ui";
 import type { SilaRecipeMaster } from "../../../api/silaMe/silaRecipeToolsApi";
 import type { MenuItemDetail } from "../../../api/silaMe/silaMenuEngineeringApi";
@@ -42,6 +42,14 @@ interface SilaRecipeSmartSummaryProps {
   outlets: SilaLocation[];
   outletRecommendations: SilaLocation[];
   prices: Record<string, string>;
+  /** Save validation messages shown next to the relevant fields. */
+  fieldErrors?: {
+    name?: string;
+    serving?: string;
+    ingredients?: string;
+    pos?: string;
+    outlets?: string;
+  };
   onHeaderChange: (change: Partial<HeaderValues>) => void;
   onConfirmName: (name: string) => void;
   onConfirmClassification: (suggestion: ClassificationSuggestion) => void;
@@ -84,6 +92,7 @@ const SilaRecipeSmartSummary: React.FC<SilaRecipeSmartSummaryProps> = ({
   outlets,
   outletRecommendations,
   prices,
+  fieldErrors = {},
   onHeaderChange,
   onConfirmName,
   onConfirmClassification,
@@ -102,6 +111,11 @@ const SilaRecipeSmartSummary: React.FC<SilaRecipeSmartSummaryProps> = ({
   const [outletPick, setOutletPick] = useState("");
   const assignedIds = Object.keys(prices);
   const availableOutlets = outlets.filter((outlet) => !Object.prototype.hasOwnProperty.call(prices, outlet.id));
+  const hasFieldErrors = Boolean(fieldErrors.name || fieldErrors.pos || fieldErrors.outlets);
+
+  useEffect(() => {
+    if (hasFieldErrors) setOpen(true);
+  }, [hasFieldErrors]);
 
   return (
     <section className="srec-builder-panel rstudio-smart" aria-label="Smart Recipe Summary">
@@ -139,8 +153,10 @@ const SilaRecipeSmartSummary: React.FC<SilaRecipeSmartSummaryProps> = ({
                   maxLength={200}
                   value={header.name}
                   placeholder="Name before save (optional while building)"
+                  aria-invalid={Boolean(fieldErrors.name)}
                   onChange={(e) => onHeaderChange({ name: e.target.value })}
                 />
+                {fieldErrors.name && <p className="sila-field-error" role="alert">{fieldErrors.name}</p>}
                 {nameConfirmed && <span className="sila-help">Confirmed by chef</span>}
               </div>
               <div className="sila-field">
@@ -242,10 +258,12 @@ const SilaRecipeSmartSummary: React.FC<SilaRecipeSmartSummaryProps> = ({
                   maxLength={200}
                   value={header.posItem}
                   placeholder="Optional POS description"
+                  aria-invalid={Boolean(fieldErrors.pos)}
                   onChange={(e) => onHeaderChange({ posItem: e.target.value.slice(0, 200) })}
                 />
               </div>
             </div>
+            {fieldErrors.pos && <p className="sila-field-error" role="alert">{fieldErrors.pos}</p>}
             {nameSuggestions.length > 0 && !nameConfirmed && (
               <div className="rstudio-suggest-row">
                 <span className="sila-help">Suggested names</span>
@@ -447,6 +465,7 @@ const SilaRecipeSmartSummary: React.FC<SilaRecipeSmartSummaryProps> = ({
                 })}
               </div>
             )}
+            {fieldErrors.outlets && <p className="sila-field-error" role="alert">{fieldErrors.outlets}</p>}
             {assignedIds.length === 0 ? (
               <EmptyState title="No outlets selected" description="Pick outlets from the dropdown to set menu prices." />
             ) : (
@@ -466,6 +485,7 @@ const SilaRecipeSmartSummary: React.FC<SilaRecipeSmartSummaryProps> = ({
                           value={prices[id]}
                           placeholder="Menu price"
                           inputMode="decimal"
+                          aria-invalid={Boolean(fieldErrors.outlets)}
                           onChange={(e) => onOutletPrice(id, e.target.value)}
                         />
                         <button type="button" className="sila-btn sila-btn--ghost sila-btn--sm" onClick={() => onRemoveOutlet(id)}>Remove</button>

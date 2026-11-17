@@ -596,3 +596,10 @@
   border-color: #d7e7f6 !important;
   background: #fff !important;
 }
+
+.sila-me .sila-field-error {
+  margin: 0.25rem 0 0;
+  color: var(--sila-me-red, #b44943);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}

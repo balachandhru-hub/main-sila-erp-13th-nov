@@ -77,6 +77,15 @@ interface SilaRecipeEditorProps {
 
 type Saving = "" | "draft" | "submit";
 
+/** Field-level save validation (aligned with create/update backend contracts). */
+interface SaveFieldErrors {
+  name?: string;
+  serving?: string;
+  ingredients?: string;
+  pos?: string;
+  outlets?: string;
+}
+
 const asPanelMaterial = (material: IngredientMaterial): SilaMaterial => ({
   id: material.id,
   materialCode: material.materialCode,
@@ -91,6 +100,10 @@ const asPanelMaterial = (material: IngredientMaterial): SilaMaterial => ({
 
 /** Ingredient-first Recipe Studio: My Recipe (left) + Recommended Material Catalog (right). */
 const SilaRecipeEditor: React.FC<SilaRecipeEditorProps> = ({ recipe, canRequestPrice = false, onCancel, onSaved, onDeleted }) => {
+  /** CREATE vs UPDATE is driven only by a persisted recipe id — never by URL text or name. */
+  const persistedRecipeId = recipe?.id?.trim() || null;
+  const isCreateMode = !persistedRecipeId;
+
   const [header, setHeader] = useState<HeaderValues>(() => headerFrom(recipe));
   const [lines, setLines] = useState<IngredientLine[]>([]);
   const [prices, setPrices] = useState<Record<string, string>>(() =>
@@ -109,6 +122,7 @@ const SilaRecipeEditor: React.FC<SilaRecipeEditorProps> = ({ recipe, canRequestP
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState<Saving>("");
+  const [fieldErrors, setFieldErrors] = useState<SaveFieldErrors>({});
   const [menuSearch, setMenuSearch] = useState("");
   const [menuMatches, setMenuMatches] = useState<MenuItemDetail[]>([]);
   const [menuPool, setMenuPool] = useState<MenuItemDetail[]>([]);
@@ -127,6 +141,8 @@ const SilaRecipeEditor: React.FC<SilaRecipeEditorProps> = ({ recipe, canRequestP
   const [reviewOpen, setReviewOpen] = useState(false);
   const [pendingSubmit, setPendingSubmit] = useState(false);
   const baselineReady = useRef(false);
+  /** After a successful create, hold the returned id so a second Save before navigation uses update. */
+  const createdIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -479,27 +495,38 @@ const SilaRecipeEditor: React.FC<SilaRecipeEditorProps> = ({ recipe, canRequestP
     }));
   };
 
-  const validate = (): string | null => {
-    if (!header.name.trim()) return "Enter the recipe name.";
-    if (!(toNumber(header.servingQty) > 0) || !header.servingUom.trim()) return "Enter a serving quantity greater than zero and its unit.";
-    if (lines.length === 0) return "Add at least one ingredient.";
-    if (lines.some((line) => !(toNumber(line.quantity) > 0))) return "Enter a quantity greater than zero for every ingredient.";
-    if (Object.values(prices).some((value) => value.trim() !== "" && !(toNumber(value) > 0))) {
-      return "Menu prices must be greater than zero (leave empty when not sold at an outlet).";
+  const validate = (): SaveFieldErrors => {
+    const errors: SaveFieldErrors = {};
+    if (!header.name.trim()) errors.name = "Enter the recipe name.";
+    if (!(toNumber(header.servingQty) > 0) || !header.servingUom.trim()) {
+      errors.serving = "Enter a serving quantity greater than zero and its unit.";
     }
+    if (lines.length === 0) {
+      errors.ingredients = "Add at least one ingredient from the Material Catalog.";
+    } else if (lines.some((line) => !(toNumber(line.quantity) > 0))) {
+      errors.ingredients = "Enter a quantity greater than zero for every ingredient.";
+    } else if (lines.some((line) => !line.material?.id && !line.subRecipe?.id)) {
+      errors.ingredients = "Each ingredient must be a material or a sub-recipe.";
+    } else if (header.itemMode === "DIRECT" && (lines.length !== 1 || !lines[0]?.material?.id)) {
+      errors.ingredients = "A DIRECT item needs exactly one material ingredient.";
+    }
+    if (Object.values(prices).some((value) => value.trim() !== "" && !(toNumber(value) > 0))) {
+      errors.outlets = "Menu prices must be greater than zero (leave empty when not sold at an outlet).";
+    }
+    const effectiveId = persistedRecipeId || createdIdRef.current;
     const pos = header.posCode.trim();
     if (pos) {
       const conflict = approvedRecipes.find(
-        (row) => row.id !== recipe?.id && (row.posCode || "").trim().toUpperCase() === pos.toUpperCase(),
+        (row) => row.id !== effectiveId && (row.posCode || "").trim().toUpperCase() === pos.toUpperCase(),
       );
       if (conflict) {
-        return `POS ID "${pos}" is already used by ${conflict.recipeCode || conflict.name}. Choose a free POS ID.`;
+        errors.pos = `POS ID "${pos}" is already used by ${conflict.recipeCode || conflict.name}. Choose a free POS ID.`;
       }
     }
     if (header.posItem.trim().length > 200) {
-      return "POS item name must be at most 200 characters.";
+      errors.pos = "POS item name must be at most 200 characters.";
     }
-    return null;
+    return errors;
   };
 
   const buildRequest = (): SilaRecipeWrite => ({
@@ -526,28 +553,39 @@ const SilaRecipeEditor: React.FC<SilaRecipeEditorProps> = ({ recipe, canRequestP
   });
 
   const handleSave = async (submit: boolean) => {
-    const problem = validate();
+    if (saving !== "") return;
+    const errors = validate();
+    setFieldErrors(errors);
+    const problem = errors.name || errors.serving || errors.ingredients || errors.pos || errors.outlets || null;
     if (problem) {
       toastService.error(problem);
       setReviewOpen(true);
       return;
     }
     setSaving(submit ? "submit" : "draft");
-    let recipeId = recipe?.id ?? null;
+    // Prefer in-session created id (prevents duplicate create if navigation is slow).
+    let recipeId = persistedRecipeId || createdIdRef.current;
     try {
-      if (recipe) {
-        await updateRecipe(recipe.id, buildRequest());
+      if (recipeId) {
+        await updateRecipe(recipeId, buildRequest());
       } else {
         recipeId = await createRecipe(buildRequest());
+        createdIdRef.current = recipeId;
       }
     } catch (err: unknown) {
+      // Keep draft state; do not navigate away on API failure.
       toastService.error(err instanceof Error ? err.message : "Could not save the recipe.");
+      setSaving("");
+      return;
+    }
+    if (!recipeId) {
+      toastService.error("Save completed but no recipe id was returned. Your draft is still on this page.");
       setSaving("");
       return;
     }
     const newVersion = recipe && (recipe.status === "APPROVED" || recipe.status === "REJECTED");
     try {
-      if (submit && recipeId) {
+      if (submit) {
         await submitRecipe(recipeId);
         toastService.success("Recipe saved and sent for approval.");
       } else {
@@ -558,8 +596,9 @@ const SilaRecipeEditor: React.FC<SilaRecipeEditorProps> = ({ recipe, canRequestP
     } finally {
       setSaving("");
       setReviewOpen(false);
+      setFieldErrors({});
     }
-    if (recipeId) onSaved(recipeId);
+    onSaved(recipeId);
   };
 
   const openReview = (submit: boolean) => {
@@ -567,7 +606,9 @@ const SilaRecipeEditor: React.FC<SilaRecipeEditorProps> = ({ recipe, canRequestP
     setReviewOpen(true);
   };
 
-  const title = recipe ? `${recipe.recipeCode} ${header.name || recipe.name}` : (header.name.trim() || "Untitled draft");
+  const title = !isCreateMode && recipe
+    ? `${recipe.recipeCode} ${header.name || recipe.name}`
+    : (header.name.trim() || "Untitled draft");
   const coverKind = resolveStudioKind(header.name, recipe?.category, recipe?.familyName, ...lines.map((line) => line.material?.description));
 
   if (loading || loadError) {
@@ -591,20 +632,25 @@ const SilaRecipeEditor: React.FC<SilaRecipeEditorProps> = ({ recipe, canRequestP
       <div className="rstudio-editor-top">
         <StudioCover compact kind={coverKind} title={title} />
         <div className="rstudio-editor-top__main">
-          <p className="rstudio-kicker">{recipe ? "Change Recipe" : "New Recipe"} · ingredient-first</p>
+          <p className="rstudio-kicker">{isCreateMode ? "New Recipe" : "Change Recipe"} · ingredient-first</p>
           <input
             className="rstudio-name-input"
             value={header.name}
             placeholder="Recipe name (optional while building — required on save)"
             maxLength={200}
             aria-label="Recipe name"
-            onChange={(e) => changeHeader({ name: e.target.value })}
+            aria-invalid={Boolean(fieldErrors.name)}
+            onChange={(e) => {
+              setFieldErrors((current) => ({ ...current, name: undefined }));
+              changeHeader({ name: e.target.value });
+            }}
           />
+          {fieldErrors.name && <p className="sila-field-error" role="alert">{fieldErrors.name}</p>}
           <div className="srec-badges">
             <span className={recipeBadgeClass(recipe?.status ?? "DRAFT")}>{recipeLabel(recipe?.status ?? "DRAFT")}</span>
             <span className={readinessBadgeClass(issues.length)}>{readinessLabel(issues.length)}</span>
-            {recipe && <span className="sila-badge sila-badge--neutral">v{recipe.version}</span>}
-            {!recipe && <span className="sila-badge sila-badge--neutral">Local draft</span>}
+            {!isCreateMode && recipe && <span className="sila-badge sila-badge--neutral">v{recipe.version}</span>}
+            {isCreateMode && <span className="sila-badge sila-badge--neutral">Local draft</span>}
             {dirty && <span className="sila-badge sila-badge--warning">Unsaved changes</span>}
           </div>
         </div>
@@ -617,20 +663,29 @@ const SilaRecipeEditor: React.FC<SilaRecipeEditorProps> = ({ recipe, canRequestP
               type="number"
               min="0"
               step="any"
+              aria-invalid={Boolean(fieldErrors.serving)}
               value={header.servingQty}
-              onChange={(e) => commitServingQty(e.target.value)}
+              onChange={(e) => {
+                setFieldErrors((current) => ({ ...current, serving: undefined }));
+                commitServingQty(e.target.value);
+              }}
             />
             <input
               className="sila-input"
               list="rstudio-yield-uoms"
               value={header.servingUom}
               aria-label="Yield UOM"
-              onChange={(e) => changeHeader({ servingUom: e.target.value })}
+              aria-invalid={Boolean(fieldErrors.serving)}
+              onChange={(e) => {
+                setFieldErrors((current) => ({ ...current, serving: undefined }));
+                changeHeader({ servingUom: e.target.value });
+              }}
             />
             <datalist id="rstudio-yield-uoms">
               {uoms.map((unit) => <option key={unit} value={unit} />)}
             </datalist>
           </div>
+          {fieldErrors.serving && <p className="sila-field-error" role="alert">{fieldErrors.serving}</p>}
           <div className="rstudio-live-cost">
             <span className="sila-help">Recipe cost</span>
             <strong>{pricing.incomplete || totalCost == null ? "COST PENDING" : formatCost(totalCost, currency)}</strong>
@@ -669,14 +724,26 @@ const SilaRecipeEditor: React.FC<SilaRecipeEditorProps> = ({ recipe, canRequestP
       ) : (
         <div className="srec-builder srec-builder--studio">
           <div className="rstudio-my-recipe" aria-label="My Recipe">
+            {fieldErrors.ingredients && (
+              <div className="sila-alert sila-alert--warning" role="alert">{fieldErrors.ingredients}</div>
+            )}
             <SilaRecipeCanvas
               lines={lines}
               costs={costs}
               mode={header.itemMode}
               currency={currency}
-              onReorder={(next) => commitLines(next)}
-              onChange={(key, change) => commitLines((current) => current.map((line) => (line.key === key ? { ...line, ...change } : line)))}
-              onRemove={(key) => commitLines((current) => current.filter((line) => line.key !== key))}
+              onReorder={(next) => {
+                setFieldErrors((current) => ({ ...current, ingredients: undefined }));
+                commitLines(next);
+              }}
+              onChange={(key, change) => {
+                setFieldErrors((current) => ({ ...current, ingredients: undefined }));
+                commitLines((current) => current.map((line) => (line.key === key ? { ...line, ...change } : line)));
+              }}
+              onRemove={(key) => {
+                setFieldErrors((current) => ({ ...current, ingredients: undefined }));
+                commitLines((current) => current.filter((line) => line.key !== key));
+              }}
               onDuplicate={(key) => commitLines((current) => {
                 const index = current.findIndex((line) => line.key === key);
                 if (index < 0) return current;
@@ -686,9 +753,13 @@ const SilaRecipeEditor: React.FC<SilaRecipeEditorProps> = ({ recipe, canRequestP
                 return next;
               })}
               onReplace={setReplaceKey}
-              onAddMaterial={addMaterial}
+              onAddMaterial={(material) => {
+                setFieldErrors((current) => ({ ...current, ingredients: undefined }));
+                addMaterial(material);
+              }}
               onReplaceMaterial={(key, material) => {
                 rememberMaterial(material.id);
+                setFieldErrors((current) => ({ ...current, ingredients: undefined }));
                 commitLines((current) => current.map((line) => (
                   line.key === key ? replaceMaterialOnLine(line, material, line.quantity, material.baseUom) : line
                 )));
@@ -734,14 +805,22 @@ const SilaRecipeEditor: React.FC<SilaRecipeEditorProps> = ({ recipe, canRequestP
               menuMatches={menuMatches}
               menuSearch={menuSearch}
               menuRecommendations={menuRecommendations}
-              canLinkMenu={Boolean(recipe?.id)}
+              canLinkMenu={Boolean(persistedRecipeId || createdIdRef.current)}
               linkingMenu={linkingMenu}
               updatingMenuPrice={updatingMenuPrice}
               posOptions={posOptions}
               outlets={outlets}
               outletRecommendations={outletRecommendations}
               prices={prices}
-              onHeaderChange={changeHeader}
+              fieldErrors={fieldErrors}
+              onHeaderChange={(change) => {
+                setFieldErrors((current) => ({
+                  ...current,
+                  name: change.name != null ? undefined : current.name,
+                  pos: change.posCode != null || change.posItem != null ? undefined : current.pos,
+                }));
+                changeHeader(change);
+              }}
               onConfirmName={confirmName}
               onConfirmClassification={confirmClassification}
               onTargetFoodCost={(percent) => {
@@ -809,8 +888,14 @@ const SilaRecipeEditor: React.FC<SilaRecipeEditorProps> = ({ recipe, canRequestP
 
           <SilaRecipeMaterialLibrary
             addedIds={lines.filter((x) => x.material).map((x) => x.material!.id)}
-            onAdd={addMaterial}
-            onAddMany={addMaterials}
+            onAdd={(option) => {
+              setFieldErrors((current) => ({ ...current, ingredients: undefined }));
+              addMaterial(option);
+            }}
+            onAddMany={(options) => {
+              setFieldErrors((current) => ({ ...current, ingredients: undefined }));
+              addMaterials(options);
+            }}
             recommended={materialRecs.items}
             recommendReason={materialRecs.reason}
           />
@@ -826,7 +911,7 @@ const SilaRecipeEditor: React.FC<SilaRecipeEditorProps> = ({ recipe, canRequestP
         <button type="button" className="sila-btn sila-btn--ghost" onClick={undo} disabled={saving !== "" || deleting || undoStack.length === 0}>Undo</button>
         <button type="button" className="sila-btn sila-btn--ghost" onClick={cancelChanges} disabled={saving !== "" || deleting || !dirty}>Cancel changes</button>
         <button type="button" className="sila-btn sila-btn--secondary" onClick={onCancel} disabled={saving !== "" || deleting}>Close</button>
-        {recipe?.id && recipe.status !== "INACTIVE" && (
+        {persistedRecipeId && recipe && recipe.status !== "INACTIVE" && (
           <button
             type="button"
             className="sila-btn sila-btn--danger"
@@ -883,12 +968,20 @@ const SilaRecipeEditor: React.FC<SilaRecipeEditorProps> = ({ recipe, canRequestP
               <li><strong>Outlets with price:</strong> {pricedOutlets}</li>
               <li><strong>Menu Item:</strong> {linkedMenuItem?.name ?? "None linked"}</li>
             </ul>
-            {issues.length > 0 && (
-              <div className="sila-alert sila-alert--warning" role="status">
-                Readiness: {issues.join("; ")}
+            {(fieldErrors.name || fieldErrors.serving || fieldErrors.ingredients || fieldErrors.pos || fieldErrors.outlets) && (
+              <div className="sila-alert sila-alert--warning" role="alert">
+                Complete before save:{" "}
+                {[fieldErrors.name, fieldErrors.serving, fieldErrors.ingredients, fieldErrors.pos, fieldErrors.outlets]
+                  .filter(Boolean)
+                  .join(" ")}
               </div>
             )}
-            <p className="sila-help">Mandatory fields are validated by existing save rules. Incomplete recipes are not persisted until validation passes.</p>
+            {issues.length > 0 && (
+              <div className="sila-alert sila-alert--warning" role="status">
+                Readiness (advisory): {issues.join("; ")}
+              </div>
+            )}
+            <p className="sila-help">Mandatory fields follow the create/update API rules. Family, category and outlet prices are optional for draft save. Incomplete drafts stay on this page when save fails.</p>
             <div className="rstudio-review__actions">
               <button type="button" className="sila-btn sila-btn--ghost" onClick={() => setReviewOpen(false)} disabled={saving !== ""}>Back</button>
               <button type="button" className="sila-btn sila-btn--primary" onClick={() => handleSave(pendingSubmit)} disabled={saving !== ""}>

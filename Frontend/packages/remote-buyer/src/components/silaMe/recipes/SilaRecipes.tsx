@@ -19,6 +19,7 @@ import SilaRecipeExcelPanel from "./SilaRecipeExcelPanel";
 import SilaRecipeTable from "./SilaRecipeTable";
 import { RECIPE_STATUSES, formatCost, recipeLabel } from "./recipeFormat";
 import {
+  isRecipeId,
   parseSilaRecipePath,
   silaRecipeCatalogPath,
   silaRecipeDetailPath,
@@ -217,8 +218,15 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({ canManage, canRequestPrice = 
         canRequestPrice={canRequestPrice}
         onCancel={goCatalog}
         onSaved={(recipeId) => {
+          // CREATE → persist id → stay in Studio on the canonical edit URL (not detail/catalog).
+          if (!isRecipeId(recipeId)) {
+            toastService.error("Recipe was saved but the returned id was invalid. Open it from the catalog.");
+            load();
+            goCatalog();
+            return;
+          }
           load();
-          goDetail(recipeId);
+          goEdit(recipeId);
         }}
       />
     );
@@ -261,7 +269,8 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({ canManage, canRequestPrice = 
         onCancel={() => goDetail(editRecipe.id)}
         onSaved={(recipeId) => {
           load();
-          goDetail(recipeId);
+          // Stay on the edit URL so repeated Save uses update (persisted id), not create.
+          goEdit(recipeId || editRecipe.id);
         }}
         onDeleted={() => {
           load();

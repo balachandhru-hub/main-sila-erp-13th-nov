@@ -1,6 +1,9 @@
 import axiosInstance from "../axiosInstance";
 import { readError } from "../readError";
 import type { SilaUomConversion } from "./silaInventoryApi";
+import { readSuccessId } from "./readSuccessId";
+
+export { readSuccessId } from "./readSuccessId";
 
 /** DIRECT (one material) | RECIPE (several materials) | BATCH (may contain another recipe). */
 export type SilaRecipeMode = "DIRECT" | "RECIPE" | "BATCH";
@@ -232,10 +235,6 @@ export interface SilaRecipeFilters {
   limit?: number;
 }
 
-interface SuccessResponse {
-  id: string;
-}
-
 const BASE = "/api/v1/buyer/sila";
 
 const list = <T>(value: T[] | null | undefined): T[] => (Array.isArray(value) ? value : []);
@@ -283,11 +282,15 @@ export const getRecipe = async (recipeId: string, version?: number): Promise<Sil
   }
 };
 
-/** Creates a DRAFT recipe (version 1) and returns its id. */
+/** Creates a DRAFT recipe (version 1) and returns its persisted id. */
 export const createRecipe = async (request: SilaRecipeWrite): Promise<string> => {
   try {
-    const response = await axiosInstance.post<SuccessResponse>(`${BASE}/recipes`, request);
-    return response.data.id;
+    const response = await axiosInstance.post(`${BASE}/recipes`, request);
+    const id = readSuccessId(response.data);
+    if (!id) {
+      throw new Error("Recipe was created but the server did not return a persisted id.");
+    }
+    return id;
   } catch (error: unknown) {
     throw new Error(readError(error, "Could not create the recipe."));
   }
