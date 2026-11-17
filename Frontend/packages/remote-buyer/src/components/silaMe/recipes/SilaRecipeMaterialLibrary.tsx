@@ -24,6 +24,8 @@ interface SilaRecipeMaterialLibraryProps {
   recommendReason?: string;
   /** Authorized outlet/store location for location-specific ledger stock (optional). */
   outletLocationId?: string | null;
+  /** When true, add/replace/drag into the recipe is disabled. */
+  locked?: boolean;
 }
 
 const EMPTY_FACETS: SilaIngredientFacets = { materialGroups: [], categories: [], suppliers: [], materialTypes: [], supplierOptions: [] };
@@ -39,6 +41,7 @@ const SilaRecipeMaterialLibrary: React.FC<SilaRecipeMaterialLibraryProps> = ({
   recommended = [],
   recommendReason = "Browse Material Master to begin.",
   outletLocationId = null,
+  locked = false,
 }) => {
   const [tab, setTab] = useState<CatalogTab>("recommended");
   const [facets, setFacets] = useState<SilaIngredientFacets>(EMPTY_FACETS);
@@ -145,6 +148,7 @@ const SilaRecipeMaterialLibrary: React.FC<SilaRecipeMaterialLibraryProps> = ({
   const selectedItems = displayItems.filter((item) => selected[item.id]);
 
   const pick = (material: SilaIngredientOption) => {
+    if (locked) return;
     rememberMaterial(material.id);
     if (replaceTargetKey && onReplacePick) {
       onReplacePick(material);
@@ -156,6 +160,10 @@ const SilaRecipeMaterialLibrary: React.FC<SilaRecipeMaterialLibraryProps> = ({
   const toggle = (id: string) => setSelected((current) => ({ ...current, [id]: !current[id] }));
 
   const startDrag = (event: React.DragEvent, material: SilaIngredientOption) => {
+    if (locked) {
+      event.preventDefault();
+      return;
+    }
     event.dataTransfer.setData("application/x-sila-material", JSON.stringify(material));
     event.dataTransfer.effectAllowed = "copy";
   };
@@ -176,7 +184,7 @@ const SilaRecipeMaterialLibrary: React.FC<SilaRecipeMaterialLibraryProps> = ({
         <span
           className="srec-lib-drag"
           title="Drag to recipe"
-          draggable
+          draggable={!locked}
           onDragStart={(event) => startDrag(event, material)}
           aria-label={`Drag ${material.materialCode} to recipe`}
         >
@@ -211,7 +219,7 @@ const SilaRecipeMaterialLibrary: React.FC<SilaRecipeMaterialLibraryProps> = ({
         <button
           type="button"
           className="sila-btn sila-btn--primary sila-btn--sm"
-          disabled={isAdded && !replaceTargetKey}
+          disabled={locked || (isAdded && !replaceTargetKey)}
           draggable={false}
           onMouseDown={(event) => event.stopPropagation()}
           onPointerDown={(event) => event.stopPropagation()}
@@ -223,7 +231,7 @@ const SilaRecipeMaterialLibrary: React.FC<SilaRecipeMaterialLibraryProps> = ({
           data-testid="recipe-catalog-add"
           aria-label={replaceTargetKey ? `Use ${material.materialCode}` : isAdded ? `${material.materialCode} already added` : `Add ingredient ${material.materialCode}`}
         >
-          {replaceTargetKey ? "Use material" : isAdded ? "Added" : "Add Ingredient"}
+          {locked ? "Read-only" : replaceTargetKey ? "Use material" : isAdded ? "Added" : "Add Ingredient"}
         </button>
       </article>
     );
@@ -329,7 +337,9 @@ const SilaRecipeMaterialLibrary: React.FC<SilaRecipeMaterialLibraryProps> = ({
           <button
             type="button"
             className="sila-btn sila-btn--primary sila-btn--sm"
+            disabled={locked}
             onClick={() => {
+              if (locked) return;
               selectedItems.forEach((item) => rememberMaterial(item.id));
               onAddMany(selectedItems);
               setSelected({});

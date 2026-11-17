@@ -58,9 +58,12 @@ assert.match(presentationBody, /SilaRecipeCanvas/);
 assert.match(presentationBody, /searchIngredients/);
 assert.match(presentationBody, /createRecipe/);
 assert.match(presentationBody, /getRecipe/);
+assert.match(presentationBody, /updateRecipe/);
+assert.match(presentationBody, /createRecipeRevision/);
 assert.match(presentationBody, /recipe-studio-save-draft/);
-assert.match(presentationBody, /Submit — Available in Step 6/);
+assert.match(presentationBody, /recipe-studio-submit/);
 assert.match(presentationBody, /COST PENDING/);
-assert.doesNotMatch(presentationBody, /\bsubmitRecipe\b/);
+assert.match(presentationBody, /\bsubmitRecipe\b/);
+assert.doesNotMatch(presentationBody, /import SilaRecipeEditor/);
 
 console.log("silaRecipeWorkspaceMount.test.ts: ok");

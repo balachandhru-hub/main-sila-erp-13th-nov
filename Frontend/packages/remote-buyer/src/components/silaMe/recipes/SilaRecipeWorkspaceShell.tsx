@@ -14,9 +14,9 @@ interface SilaRecipeWorkspaceShellProps {
 }
 
 /**
- * Recipe Studio workspace mount (Steps 1–5).
- * Owns the verified New/Edit route mount from Step 2 and renders the Step 5
- * presentation (catalog + draft + Save Draft create). Does not mount SilaRecipeEditor.
+ * Recipe Studio workspace mount (Steps 1–6).
+ * Owns the verified New/Edit route mount from Step 2 and renders the Step 6
+ * presentation (catalog, create/update draft, revision, submit). Does not mount SilaRecipeEditor.
  */
 const SilaRecipeWorkspaceShell: React.FC<SilaRecipeWorkspaceShellProps> = ({
   mode,

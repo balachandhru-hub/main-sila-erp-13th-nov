@@ -39,8 +39,8 @@ interface SilaRecipesProps {
 const PAGE_SIZE = 48;
 
 /**
- * Recipe Studio — catalog/detail + Step 1 temporary New/Edit workspace shell.
- * Canonical URLs under /sila-recipes; SilaRecipeEditor is not mounted in Step 1.
+ * Recipe Studio — catalog/detail + New/Edit workspace shell (Steps 1–6).
+ * Canonical URLs under /sila-recipes; SilaRecipeEditor is not mounted.
  */
 const SilaRecipes: React.FC<SilaRecipesProps> = ({ canManage, canRequestPrice: _canRequestPrice = false }) => {
   const { pathname, key: locationKey } = useLocation();
@@ -166,7 +166,7 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({ canManage, canRequestPrice: _
     }
   };
 
-  // --- New Recipe: temporary workspace shell (SilaRecipeEditor not mounted) ---
+  // --- New Recipe: Recipe Studio workspace (SilaRecipeEditor not mounted) ---
   if (route.kind === "new") {
     if (!canManage) {
       return (
@@ -190,7 +190,7 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({ canManage, canRequestPrice: _
     );
   }
 
-  // --- Edit Recipe: temporary workspace shell (id from URL; no editor load) ---
+  // --- Edit Recipe: Recipe Studio workspace (load/update/revision/submit in presentation) ---
   if (route.kind === "edit") {
     if (!canManage) {
       return (

@@ -87,8 +87,8 @@ assert.match(presentation, /createRecipe/);
 assert.match(presentation, /getRecipe/);
 assert.match(presentation, /handleSaveDraft/);
 assert.match(presentation, /recipe-studio-save-draft/);
-assert.match(presentation, /Submit — Available in Step 6/);
-assert.doesNotMatch(presentation, /submitRecipe/);
+assert.match(presentation, /createRecipe/);
+assert.match(presentation, /updateRecipe/);
 
 const recipes = read("SilaRecipes.tsx");
 assert.match(recipes, /onDraftSaved=\{goDetail\}/);
