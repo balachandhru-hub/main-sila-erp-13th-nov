@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { EmptyState, Loader, Modal, PageHeader, toastService } from "@vosox/shared-ui";
 import {
   approveRecipe,
+  createRecipeRevision,
   deactivateRecipe,
   getRecipe,
   rejectRecipe,
@@ -14,6 +15,7 @@ import SilaRecipeCosting from "./SilaRecipeCosting";
 import SilaRecipeReadinessPanel from "./SilaRecipeReadinessPanel";
 import { formatCost, formatQty, readinessStatusBadgeClass, readinessText, recipeBadgeClass, recipeLabel, versionsSummary } from "./recipeFormat";
 import SilaRecipeCostSummary from "./SilaRecipeCostSummary";
+import { canStartRevision } from "./recipeWriteModel";
 import { resolveStudioKind, StudioCover } from "./recipeStudioVisuals";
 import "./SilaRecipeStudio.css";
 
@@ -27,7 +29,7 @@ interface SilaRecipeDetailViewProps {
   onChanged: () => void;
 }
 
-type Busy = "submit" | "approve" | "reject" | "deactivate" | null;
+type Busy = "submit" | "approve" | "reject" | "deactivate" | "revise" | null;
 
 /**
  * One recipe at a version (latest by default): header, readiness, costing per outlet, approval trail; switch versions,
@@ -106,6 +108,27 @@ const SilaRecipeDetailView: React.FC<SilaRecipeDetailViewProps> = ({ recipeId, c
   const submittable = canManage && latest && recipe.status === "DRAFT";
   const deactivatable = canManage && recipe.status !== "INACTIVE";
   const showReadiness = latest && (recipe.status === "DRAFT" || recipe.status === "REJECTED");
+  const needsRevision = canStartRevision(recipe.status);
+
+  const openStudio = async () => {
+    if (!needsRevision) {
+      onEdit(recipe);
+      return;
+    }
+    // Button says "Create revision" — persist draft Version+1 immediately, then open Studio on that draft.
+    // (Previously this only navigated to edit; nothing was created until Save, so the action looked broken.)
+    setBusy("revise");
+    try {
+      const nextVersion = await createRecipeRevision(recipe);
+      toastService.success(`Draft version ${nextVersion} created. POS keeps selling v${recipe.activeVersion} until it is approved.`);
+      onChanged();
+      onEdit(recipe);
+    } catch (err: unknown) {
+      toastService.error(err instanceof Error ? err.message : "Could not create the revision.");
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const coverKind = resolveStudioKind(recipe.categoryName || recipe.category, recipe.familyName, recipe.name);
   const menuPrice = recipe.outletPrices.length === 0
@@ -152,8 +175,12 @@ const SilaRecipeDetailView: React.FC<SilaRecipeDetailViewProps> = ({ recipeId, c
           {recipe.description && <p className="rstudio-detail-hero__desc">{recipe.description}</p>}
           <div className="srec-actions">
             {editable && (
-              <button type="button" className="sila-btn sila-btn--primary" onClick={() => onEdit(recipe)} disabled={busy !== null}>
-                {recipe.status === "DRAFT" ? "Edit in Recipe Studio" : `Create revision v${recipe.version + 1}`}
+              <button type="button" className="sila-btn sila-btn--primary" onClick={() => void openStudio()} disabled={busy !== null}>
+                {busy === "revise"
+                  ? "Creating revision..."
+                  : needsRevision
+                    ? `Create revision v${recipe.version + 1}`
+                    : "Edit in Recipe Studio"}
               </button>
             )}
             {submittable && (

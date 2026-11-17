@@ -2,8 +2,10 @@ import axiosInstance from "../axiosInstance";
 import { readError } from "../readError";
 import type { SilaUomConversion } from "./silaInventoryApi";
 import { readSuccessId } from "./readSuccessId";
+import { canStartRevision, writeFromDetail } from "../../components/silaMe/recipes/recipeWriteModel";
 
 export { readSuccessId } from "./readSuccessId";
+export { writeFromDetail, canStartRevision } from "../../components/silaMe/recipes/recipeWriteModel";
 
 /** DIRECT (one material) | RECIPE (several materials) | BATCH (may contain another recipe). */
 export type SilaRecipeMode = "DIRECT" | "RECIPE" | "BATCH";
@@ -303,6 +305,22 @@ export const updateRecipe = async (recipeId: string, request: SilaRecipeWrite): 
   } catch (error: unknown) {
     throw new Error(readError(error, "Could not save the recipe."));
   }
+};
+
+/**
+ * Starts a new draft version from an APPROVED/REJECTED recipe by saving the current latest rows.
+ * The selling ActiveVersion is unchanged until the draft is approved.
+ */
+export const createRecipeRevision = async (detail: SilaRecipeDetail): Promise<number> => {
+  if (!canStartRevision(detail.status)) {
+    throw new Error("Only an approved or rejected recipe can start a new revision.");
+  }
+  if (!list(detail.ingredients).length) {
+    throw new Error("This recipe has no ingredients to copy into the new revision.");
+  }
+  const nextVersion = detail.version + 1;
+  await updateRecipe(detail.id, writeFromDetail(detail));
+  return nextVersion;
 };
 
 export const submitRecipe = async (recipeId: string): Promise<void> => {
