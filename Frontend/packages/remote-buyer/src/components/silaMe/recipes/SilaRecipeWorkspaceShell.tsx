@@ -1,9 +1,5 @@
 import React from "react";
-import {
-  RECIPE_WORKSPACE_BACK_LABEL,
-  recipeWorkspaceShellBody,
-  recipeWorkspaceShellTitle,
-} from "./recipeWorkspaceShellCopy";
+import SilaRecipeStudioPresentation from "./SilaRecipeStudioPresentation";
 import "./SilaRecipeStudio.css";
 
 export type RecipeWorkspaceMode = "new" | "edit";
@@ -16,11 +12,9 @@ interface SilaRecipeWorkspaceShellProps {
 }
 
 /**
- * Temporary Recipe Studio workspace shell (Steps 1–2 of 7).
- *
- * Deliberately not a permanent editor. New/Edit routes mount this instead of
- * SilaRecipeEditor while create/edit UI is rebuilt. No Material Catalog,
- * Save Draft, Submit, or drag/drop wiring yet.
+ * Recipe Studio workspace mount (Steps 1–3).
+ * Owns the verified New/Edit route mount from Step 2 and renders the Step 3
+ * two-panel presentation. Does not mount SilaRecipeEditor. No Recipe/Material APIs.
  */
 const SilaRecipeWorkspaceShell: React.FC<SilaRecipeWorkspaceShellProps> = ({
   mode,
@@ -28,8 +22,6 @@ const SilaRecipeWorkspaceShell: React.FC<SilaRecipeWorkspaceShellProps> = ({
   onBackToCatalog,
 }) => {
   const isEdit = mode === "edit";
-  const title = recipeWorkspaceShellTitle(mode);
-  const subtitle = recipeWorkspaceShellBody(mode);
   const idText = (recipeId ?? "").trim();
 
   return (
@@ -39,31 +31,11 @@ const SilaRecipeWorkspaceShell: React.FC<SilaRecipeWorkspaceShellProps> = ({
       data-mode={mode}
       data-recipe-id={isEdit ? idText || undefined : undefined}
     >
-      <button type="button" className="sila-btn sila-btn--ghost sila-btn--sm rstudio-back" onClick={onBackToCatalog}>
-        ← {RECIPE_WORKSPACE_BACK_LABEL}
-      </button>
-
-      <header className="rstudio-detail-hero" style={{ minHeight: "12rem" }}>
-        <div className="rstudio-detail-hero__copy">
-          <p className="rstudio-kicker">SILA Recipe Studio · Step 2 of 7</p>
-          <h1>{title}</h1>
-          <p className="rstudio-detail-hero__meta">{subtitle}</p>
-          {isEdit && (
-            <p className="rstudio-detail-hero__desc" data-testid="recipe-workspace-edit-id">
-              Recipe ID: <code>{idText || "—"}</code>
-            </p>
-          )}
-          <div className="srec-actions">
-            <button type="button" className="sila-btn sila-btn--secondary" onClick={onBackToCatalog}>
-              {RECIPE_WORKSPACE_BACK_LABEL}
-            </button>
-          </div>
-        </div>
-      </header>
-
-      <div className="sila-alert sila-alert--info" role="status">
-        Create/Edit editor remains isolated for rebuild. Catalog and detail stay available. No Save or Submit in this step.
-      </div>
+      <SilaRecipeStudioPresentation
+        mode={mode}
+        recipeId={isEdit ? idText : null}
+        onBackToCatalog={onBackToCatalog}
+      />
     </div>
   );
 };

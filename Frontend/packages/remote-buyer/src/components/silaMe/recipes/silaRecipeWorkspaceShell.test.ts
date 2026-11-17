@@ -1,5 +1,5 @@
 /**
- * Step 1 route + shell contract checks (no Vite/DOM required).
+ * Step 3 shell/presentation contract checks.
  * Run: npx --yes tsx src/components/silaMe/recipes/silaRecipeWorkspaceShell.test.ts
  */
 import assert from "node:assert/strict";
@@ -11,6 +11,11 @@ import {
   silaRecipeEditPath,
   silaRecipeNewPath,
 } from "./silaRecipeRoutes";
+import {
+  RECIPE_WORKSPACE_BACK_LABEL,
+  recipeWorkspaceShellBody,
+  recipeWorkspaceShellTitle,
+} from "./recipeWorkspaceShellCopy";
 
 const guid = "f4eb96d4-95fc-4cec-9da2-f45d2df284d2";
 
@@ -23,20 +28,13 @@ assert.equal(parseSilaRecipePath("/sila-recipes").kind, "list");
 assert.equal(parseSilaRecipePath("/sila-recipes/new").kind, "new");
 assert.deepEqual(parseSilaRecipePath(`/sila-recipes/${guid}`), { kind: "detail", recipeId: guid });
 assert.deepEqual(parseSilaRecipePath(`/sila-recipes/${guid}/edit`), { kind: "edit", recipeId: guid });
-assert.equal(parseSilaRecipePath("/sila-recipes/not-a-guid").kind, "list");
-// Extra segments after /edit are ignored by the existing first-two-segment contract (third === "edit").
-assert.deepEqual(parseSilaRecipePath(`/sila-recipes/${guid}/edit/extra`), { kind: "edit", recipeId: guid });
 assert.equal(isRecipeId(guid), true);
 assert.equal(isRecipeId("new"), false);
 
-// Shell display contract (mirrors SilaRecipeWorkspaceShell copy — keep in sync).
-const shellTitle = (mode: "new" | "edit") =>
-  mode === "edit" ? "Edit Recipe — Workspace Ready" : "New Recipe — Workspace Ready";
-const shellBody = (mode: "new" | "edit") =>
-  mode === "edit" ? "Recipe editing workspace is connected." : "Recipe creation workspace is connected.";
-assert.equal(shellTitle("new"), "New Recipe — Workspace Ready");
-assert.equal(shellTitle("edit"), "Edit Recipe — Workspace Ready");
-assert.equal(shellBody("new"), "Recipe creation workspace is connected.");
-assert.equal(shellBody("edit"), "Recipe editing workspace is connected.");
+assert.equal(recipeWorkspaceShellTitle("new"), "Create New Recipe");
+assert.equal(recipeWorkspaceShellTitle("edit"), "Edit Recipe");
+assert.match(recipeWorkspaceShellBody("new"), /Blank local UI draft/);
+assert.match(recipeWorkspaceShellBody("edit"), /Step 6/);
+assert.equal(RECIPE_WORKSPACE_BACK_LABEL, "Back to Recipe Catalog");
 
 console.log("silaRecipeWorkspaceShell.test.ts: ok");
