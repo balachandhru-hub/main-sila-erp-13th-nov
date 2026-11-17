@@ -29,6 +29,9 @@ assert.match(presentation, /removeRecipePicture/);
 assert.match(presentation, /SilaRecipePicture/);
 assert.match(presentation, /Step 7 of 7/);
 assert.match(presentation, /persistPendingPicture/);
+assert.match(presentation, /recipe-studio-outlet-menu-price/);
+assert.match(presentation, /Menu price for selected outlet/);
+assert.match(presentation, /outletCatalog/);
 assert.doesNotMatch(presentation, /import SilaRecipeEditor/);
 
 const catalog = read("SilaRecipeCatalogGrid.tsx");

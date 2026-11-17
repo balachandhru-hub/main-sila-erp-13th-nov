@@ -243,6 +243,38 @@
   grid-column: 1 / -1;
 }
 
+.rstudio-outlet-price-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.rstudio-outlet-price-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 0.55rem;
+  background: #f7f4ff;
+  border: 0.0625rem solid #e4dcf8;
+}
+
+.rstudio-outlet-price-list__pick {
+  border: 0;
+  background: transparent;
+  color: #3d2f7a;
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  padding: 0;
+}
+
 .rstudio-field-error {
   color: #b42318;
   font-size: 0.72rem;

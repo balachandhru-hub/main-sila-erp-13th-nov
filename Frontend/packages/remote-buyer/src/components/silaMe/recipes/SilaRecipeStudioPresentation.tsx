@@ -129,6 +129,9 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
   const [pictureError, setPictureError] = useState<string | null>(null);
   const [confirmDeleteDraft, setConfirmDeleteDraft] = useState(false);
   const [deletingDraft, setDeletingDraft] = useState(false);
+  /** Full OUTLET catalog (not just authorized) used to resolve priced / newly selected outlets like FL10. */
+  const [outletCatalog, setOutletCatalog] = useState<SilaLocation[]>([]);
+  const outletCatalogRef = useRef<SilaLocation[]>([]);
   const [pictureEpoch, setPictureEpoch] = useState(0);
   /** Prevents a second CREATE for the same local draft if navigation is slow. */
   const createdIdRef = useRef<string | null>(null);
@@ -204,12 +207,19 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
           })),
         ]);
         if (!active) return;
+        const allOutlets = allLocations.filter((location) => location.locationType === "OUTLET");
         const scoped = (myLocations.ok ? myLocations.items : allLocations)
           .filter((location) => location.locationType === "OUTLET");
-        const sorted = scoped.length > 0
-          ? scoped
-          : allLocations.filter((location) => location.locationType === "OUTLET");
-        setOutlets(sorted.sort((a, b) => a.locationName.localeCompare(b.locationName)));
+        // Prefer authorized outlets; keep full OUTLET catalog as fallback so FL* codes stay selectable.
+        const sorted = (scoped.length > 0 ? scoped : allOutlets)
+          .slice()
+          .sort((a, b) => a.locationName.localeCompare(b.locationName));
+        const catalog = (allOutlets.length > 0 ? allOutlets : sorted)
+          .slice()
+          .sort((a, b) => a.locationName.localeCompare(b.locationName));
+        outletCatalogRef.current = catalog;
+        setOutletCatalog(catalog);
+        setOutlets(sorted);
         setFamilies(loadedFamilies);
         setCategories(loadedCategories);
         setCatalogPool(browse.items);
@@ -248,6 +258,17 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
         if (!active) return;
         setLoadedRecipe(detail);
         applyLoadedForm(detail);
+        // Ensure every saved outlet (and common codes like FL10) appears even if not in myLocations.
+        setOutlets((current) => {
+          const byId = new Map(current.map((outlet) => [outlet.id, outlet]));
+          for (const outlet of outletCatalogRef.current) byId.set(outlet.id, outlet);
+          for (const price of detail.outletPrices ?? []) {
+            if (byId.has(price.outletLocationId)) continue;
+            const found = outletCatalogRef.current.find((outlet) => outlet.id === price.outletLocationId);
+            if (found) byId.set(found.id, found);
+          }
+          return Array.from(byId.values()).sort((a, b) => a.locationName.localeCompare(b.locationName));
+        });
         const firstOutlet = detail.outletPrices?.[0]?.outletLocationId;
         if (firstOutlet) setOutletLocationId(firstOutlet);
       } catch (err: unknown) {
@@ -993,60 +1014,120 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
             <p className="rstudio-section__label">Menu and outlet</p>
             <div className="rstudio-fields">
               <div className="rstudio-field rstudio-field--wide">
-                <label htmlFor="rstudio-stock-outlet">Outlet for stock / costing</label>
+                <label htmlFor="rstudio-stock-outlet">Outlet</label>
                 <select
                   id="rstudio-stock-outlet"
                   value={outletLocationId}
-                  onChange={(e) => setOutletLocationId(e.target.value)}
+                  onChange={(e) => {
+                    const nextId = e.target.value;
+                    setOutletLocationId(nextId);
+                    // Pull from full catalog when selecting an outlet not yet in the short list (e.g. FL10).
+                    if (nextId && !outlets.some((outlet) => outlet.id === nextId)) {
+                      const found = outletCatalogRef.current.find((outlet) => outlet.id === nextId);
+                      if (found) {
+                        setOutlets((current) => [...current, found].sort((a, b) => a.locationName.localeCompare(b.locationName)));
+                      }
+                    }
+                  }}
                   data-testid="recipe-studio-outlet"
                 >
-                  <option value="">Select outlet to view stock</option>
-                  {outlets.map((outlet) => (
-                    <option key={outlet.id} value={outlet.id}>
-                      {outlet.locationName}
-                      {outlet.plantCode || outlet.storageLocationCode
-                        ? ` · ${[outlet.plantCode, outlet.storageLocationCode].filter(Boolean).join("/")}`
-                        : ""}
-                    </option>
-                  ))}
+                  <option value="">Select outlet for stock and menu price</option>
+                  {(outletCatalog.length > 0 ? outletCatalog : outlets).map((outlet) => (
+                      <option key={outlet.id} value={outlet.id}>
+                        {outlet.locationCode ? `${outlet.locationCode} · ` : ""}
+                        {outlet.locationName}
+                        {outlet.plantCode || outlet.storageLocationCode
+                          ? ` · ${[outlet.plantCode, outlet.storageLocationCode].filter(Boolean).join("/")}`
+                          : ""}
+                      </option>
+                    ))}
                 </select>
               </div>
-              <div className="rstudio-field rstudio-field--wide">
+              <div className="rstudio-field">
+                <label htmlFor="rstudio-menu-price">Menu price for selected outlet</label>
+                <input
+                  id="rstudio-menu-price"
+                  inputMode="decimal"
+                  value={outletLocationId ? (outletPrices[outletLocationId] ?? "") : ""}
+                  placeholder={
+                    pricing.suggestedSellingPrice != null
+                      ? `e.g. ${pricing.suggestedSellingPrice.toFixed(2)}`
+                      : "Enter selling price"
+                  }
+                  disabled={!canEdit || !outletLocationId}
+                  data-testid="recipe-studio-outlet-menu-price"
+                  onChange={(e) => {
+                    if (!outletLocationId) return;
+                    const value = e.target.value;
+                    markDirty();
+                    setOutletPrices((current) => {
+                      if (value.trim() === "") {
+                        const next = { ...current };
+                        delete next[outletLocationId];
+                        return next;
+                      }
+                      return { ...current, [outletLocationId]: value };
+                    });
+                  }}
+                />
+              </div>
+              <div className="rstudio-field">
                 <label htmlFor="rstudio-menu">Linked menu item</label>
                 <input
                   id="rstudio-menu"
                   value={menuItem}
-                  placeholder="Placeholder — Menu Engineering later"
+                  placeholder="Optional note / menu item name"
                   disabled={!canEdit}
                   onChange={(e) => setHeader(setMenuItem, e.target.value)}
                 />
               </div>
-              <div className="rstudio-field rstudio-field--wide">
-                <label htmlFor="rstudio-outlets">Outlet assignments</label>
-                <input
-                  id="rstudio-outlets"
-                  value={outletNote}
-                  placeholder="Placeholder — outlet prices later"
-                  disabled={!canEdit}
-                  onChange={(e) => setHeader(setOutletNote, e.target.value)}
-                />
-              </div>
               {Object.keys(outletPrices).length > 0 && (
                 <div className="rstudio-field rstudio-field--wide" data-testid="recipe-studio-outlet-prices">
-                  <label>Saved outlet menu prices</label>
-                  <p className="rstudio-panel__hint">
+                  <label>Assigned outlet menu prices</label>
+                  <ul className="rstudio-outlet-price-list">
                     {Object.entries(outletPrices).map(([outletId, price]) => {
-                      const outlet = outlets.find((item) => item.id === outletId);
-                      return `${outlet?.locationName || outletId}: ${price}`;
-                    }).join(" · ")}
-                  </p>
+                      const outlet = outlets.find((item) => item.id === outletId)
+                        || outletCatalogRef.current.find((item) => item.id === outletId);
+                      const label = outlet
+                        ? `${outlet.locationCode ? `${outlet.locationCode} · ` : ""}${outlet.locationName}`
+                        : outletId;
+                      return (
+                        <li key={outletId}>
+                          <button
+                            type="button"
+                            className="rstudio-outlet-price-list__pick"
+                            onClick={() => setOutletLocationId(outletId)}
+                          >
+                            {label}: {price}{currency ? ` ${currency}` : ""}
+                          </button>
+                          {canEdit && (
+                            <button
+                              type="button"
+                              className="sila-btn sila-btn--ghost sila-btn--sm"
+                              aria-label={`Remove menu price for ${label}`}
+                              onClick={() => {
+                                markDirty();
+                                setOutletPrices((current) => {
+                                  const next = { ...current };
+                                  delete next[outletId];
+                                  return next;
+                                });
+                              }}
+                            >
+                              Remove
+                            </button>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
                 </div>
               )}
             </div>
             <p className="rstudio-panel__hint">
               {selectedOutlet
-                ? `Stock uses inventory at ${selectedOutlet.locationName}. Out-of-stock materials can still be added.`
-                : "Stock not determined until an authorized outlet is selected. No reservations or ledger writes."}
+                ? `Stock/costing uses ${selectedOutlet.locationCode || ""} ${selectedOutlet.locationName}. Enter a menu price for this outlet, then Save Draft to persist it on the recipe.`
+                : "Select an outlet (e.g. FL10), enter its menu item price, then Save Draft."}
             </p>
           </div>
         </section>
