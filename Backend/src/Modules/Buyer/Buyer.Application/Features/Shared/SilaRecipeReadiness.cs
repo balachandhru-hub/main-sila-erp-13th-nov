@@ -63,10 +63,11 @@ namespace Buyer.Application.Features.Shared
                     .ToListAsync(cancellationToken);
 
             List<Guid> materialIds = ingredients.Where(x => x.MaterialId != null).Select(x => x.MaterialId!.Value).Distinct().ToList();
+            // Include inactive rows so readiness can say "inactive" vs "missing" (hard-deleted / re-created under a new id).
             Dictionary<Guid, ItemBuyerMaster> materials = materialIds.Count == 0
                 ? new Dictionary<Guid, ItemBuyerMaster>()
                 : await repository.ItemBuyerMaster
-                    .FindByCondition(x => x.BuyerId == buyerId && x.IsActive && materialIds.Contains(x.Id))
+                    .FindByCondition(x => x.BuyerId == buyerId && materialIds.Contains(x.Id))
                     .ToDictionaryAsync(x => x.Id, cancellationToken);
             Dictionary<Guid, List<MaterialUomConversion>> conversions = await UomConverter.GetConversionsAsync(repository, materialIds, cancellationToken);
             var pending = materialIds.Count == 0
@@ -162,13 +163,14 @@ namespace Buyer.Application.Features.Shared
             return parts.Count == 0 ? null : string.Join("; ", parts);
         }
 
-        /// <summary>APPROVED, MISSING or PENDING_APPROVAL for a material ingredient; null for a sub-recipe.</summary>
+        /// <summary>APPROVED, MISSING or PENDING_APPROVAL for a material ingredient; null for a sub-recipe or inactive/missing material (LineIssue covers those).</summary>
         public string? PriceStatusOf(RecipeIngredient ingredient)
         {
             ItemBuyerMaster? material = MaterialOf(ingredient);
-            if (material == null)
+            if (material == null || !material.IsActive)
             {
-                return ingredient.MaterialId == null ? null : PRICE_MISSING;
+                // Do not surface PRICE_MISSING when the real problem is a missing/inactive material link.
+                return null;
             }
 
             return PriceStatus(material, _pendingPriceMaterials.Contains(material.Id));
@@ -213,7 +215,13 @@ namespace Buyer.Application.Features.Shared
             ItemBuyerMaster? material = MaterialOf(ingredient);
             if (material == null)
             {
-                return "Material is inactive or missing";
+                // Ingredient still points at an Item Master id that no longer exists (often after a hard delete + re-pull).
+                return "Material is missing from Item Master — re-add from the catalog";
+            }
+
+            if (!material.IsActive)
+            {
+                return "Material is inactive";
             }
 
             string status = PriceStatus(material, _pendingPriceMaterials.Contains(material.Id));

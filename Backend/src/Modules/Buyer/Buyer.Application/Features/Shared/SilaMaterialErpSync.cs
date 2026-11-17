@@ -44,9 +44,13 @@ namespace Buyer.Application.Features.Shared
                 .Select(code => code!)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
+            // Match by material code including inactive rows so a re-pull reactivates instead of
+            // creating a second Item Master id (which orphans recipe ingredients).
             Dictionary<string, ItemBuyerMaster> materials = new Dictionary<string, ItemBuyerMaster>(StringComparer.OrdinalIgnoreCase);
             foreach (ItemBuyerMaster material in await repository.ItemBuyerMaster
-                .FindByCondition(x => x.BuyerId == buyerId && x.IsActive && codes.Contains(x.MaterialCode))
+                .FindByCondition(x => x.BuyerId == buyerId && codes.Contains(x.MaterialCode))
+                .OrderByDescending(x => x.IsActive)
+                .ThenByDescending(x => x.DateUpdated)
                 .ToListAsync(cancellationToken))
             {
                 materials.TryAdd(material.MaterialCode.Trim(), material);
@@ -182,6 +186,13 @@ namespace Buyer.Application.Features.Shared
                 }
                 else
                 {
+                    if (!material.IsActive)
+                    {
+                        material.IsActive = true;
+                        changed = true;
+                        Note(result, $"{code}: reactivated existing Item Master row (same material code).");
+                    }
+
                     if (string.IsNullOrWhiteSpace(description))
                     {
                         // Preserve existing valid description; never overwrite with null/blank.
@@ -199,7 +210,7 @@ namespace Buyer.Application.Features.Shared
                     }
 
                     string? previousDescription = material.Description;
-                    changed = Update(material, description, group, materialType);
+                    changed = Update(material, description, group, materialType) || changed;
                     if (!string.IsNullOrWhiteSpace(description)
                         && !string.Equals(previousDescription, material.Description, StringComparison.Ordinal))
                     {
