@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { EmptyState, Loader, Modal, Pagination, toastService } from "@vosox/shared-ui";
-import { deactivateRecipe, getRecipe, getRecipes, type SilaRecipeDetail, type SilaRecipeListItem } from "../../../api/silaMe/silaRecipeApi";
+import { deactivateRecipe, getRecipes, type SilaRecipeListItem } from "../../../api/silaMe/silaRecipeApi";
 import {
   confirmRecipeImport,
   downloadRecipeTemplate,
@@ -14,12 +14,11 @@ import {
 } from "../../../api/silaMe/silaRecipeToolsApi";
 import SilaRecipeCatalogGrid from "./SilaRecipeCatalogGrid";
 import SilaRecipeDetailView from "./SilaRecipeDetailView";
-import SilaRecipeEditor from "./SilaRecipeEditor";
 import SilaRecipeExcelPanel from "./SilaRecipeExcelPanel";
 import SilaRecipeTable from "./SilaRecipeTable";
+import SilaRecipeWorkspaceShell from "./SilaRecipeWorkspaceShell";
 import { RECIPE_STATUSES, formatCost, recipeLabel } from "./recipeFormat";
 import {
-  isRecipeId,
   parseSilaRecipePath,
   silaRecipeCatalogPath,
   silaRecipeDetailPath,
@@ -33,16 +32,17 @@ import "./SilaRecipeStudio.css";
 
 interface SilaRecipesProps {
   canManage: boolean;
+  /** Reserved for later rebuild steps (Material price requests). Unused in Step 1 shell. */
   canRequestPrice?: boolean;
 }
 
 const PAGE_SIZE = 48;
 
 /**
- * Recipe Studio — catalog/detail/editor driven by canonical URLs under /sila-recipes
- * so New/Edit survive refresh, Back/Forward and deep links (not in-memory view state).
+ * Recipe Studio — catalog/detail + Step 1 temporary New/Edit workspace shell.
+ * Canonical URLs under /sila-recipes; SilaRecipeEditor is not mounted in Step 1.
  */
-const SilaRecipes: React.FC<SilaRecipesProps> = ({ canManage, canRequestPrice = false }) => {
+const SilaRecipes: React.FC<SilaRecipesProps> = ({ canManage, canRequestPrice: _canRequestPrice = false }) => {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const route = useMemo(() => parseSilaRecipePath(pathname), [pathname]);
@@ -64,10 +64,6 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({ canManage, canRequestPrice = 
   const [viewMode, setViewMode] = useState<StudioViewMode>(() => loadStudioViewMode());
   const [deleteTarget, setDeleteTarget] = useState<SilaRecipeListItem | null>(null);
   const [deleting, setDeleting] = useState(false);
-
-  const [editRecipe, setEditRecipe] = useState<SilaRecipeDetail | null>(null);
-  const [editLoading, setEditLoading] = useState(false);
-  const [editError, setEditError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -114,45 +110,6 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({ canManage, canRequestPrice = 
     return () => window.clearTimeout(timer);
   }, [search]);
 
-  // Load recipe by URL id for Edit (and keep Studio mounted on the same two-panel editor).
-  useEffect(() => {
-    if (route.kind !== "edit") {
-      setEditRecipe(null);
-      setEditError(null);
-      setEditLoading(false);
-      return;
-    }
-
-    if (!canManage) {
-      setEditRecipe(null);
-      setEditLoading(false);
-      setEditError("You do not have permission to edit recipes.");
-      return;
-    }
-
-    let active = true;
-    setEditLoading(true);
-    setEditError(null);
-    setEditRecipe(null);
-    getRecipe(route.recipeId)
-      .then((detail) => {
-        if (!active) return;
-        setEditRecipe(detail);
-      })
-      .catch((err: unknown) => {
-        if (!active) return;
-        setEditRecipe(null);
-        setEditError(err instanceof Error ? err.message : "Could not load the recipe for editing.");
-      })
-      .finally(() => {
-        if (active) setEditLoading(false);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [route, canManage]);
-
   const avgCost = useMemo(() => {
     const priced = rows.filter((row) => row.costComplete && row.totalCost > 0);
     if (priced.length === 0) return null;
@@ -198,7 +155,7 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({ canManage, canRequestPrice = 
     }
   };
 
-  // --- New Recipe: empty two-panel Studio (no DB row until Save) ---
+  // --- New Recipe: Step 1 temporary workspace shell (SilaRecipeEditor not mounted) ---
   if (route.kind === "new") {
     if (!canManage) {
       return (
@@ -207,76 +164,34 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({ canManage, canRequestPrice = 
             variant="error"
             title="Cannot create recipe"
             description="You do not have permission to create recipes."
-            action={<button type="button" className="sila-btn sila-btn--secondary" onClick={goCatalog}>Back to catalog</button>}
+            action={<button type="button" className="sila-btn sila-btn--secondary" onClick={goCatalog}>Back to Recipe Catalog</button>}
           />
         </div>
       );
     }
-    return (
-      <SilaRecipeEditor
-        key="new-recipe"
-        recipe={null}
-        canRequestPrice={canRequestPrice}
-        onCancel={goCatalog}
-        onSaved={(recipeId) => {
-          // CREATE → persist id → stay in Studio on the canonical edit URL (not detail/catalog).
-          if (!isRecipeId(recipeId)) {
-            toastService.error("Recipe was saved but the returned id was invalid. Open it from the catalog.");
-            load();
-            goCatalog();
-            return;
-          }
-          load();
-          goEdit(recipeId);
-        }}
-      />
-    );
+    return <SilaRecipeWorkspaceShell key="new-recipe-shell" mode="new" onBackToCatalog={goCatalog} />;
   }
 
-  // --- Edit Recipe: same Studio, loaded by persisted recipe ID from the URL ---
+  // --- Edit Recipe: Step 1 temporary workspace shell (id from URL; no editor load) ---
   if (route.kind === "edit") {
-    if (editLoading) {
-      return (
-        <div className="sila-me srec-page rstudio-page">
-          <Loader size={24} message="Loading recipe for edit..." />
-          <button type="button" className="sila-btn sila-btn--secondary" onClick={goCatalog}>Back to catalog</button>
-        </div>
-      );
-    }
-    if (editError || !editRecipe) {
+    if (!canManage) {
       return (
         <div className="sila-me srec-page rstudio-page">
           <EmptyState
             variant="error"
-            title="Couldn't open Recipe Studio"
-            description={editError ?? "Recipe not found."}
-            action={(
-              <div className="srec-actions">
-                <button type="button" className="sila-btn sila-btn--secondary" onClick={goCatalog}>Back to catalog</button>
-                {canManage && (
-                  <button type="button" className="sila-btn sila-btn--primary" onClick={() => goEdit(route.recipeId)}>Try again</button>
-                )}
-              </div>
-            )}
+            title="Cannot edit recipe"
+            description="You do not have permission to edit recipes."
+            action={<button type="button" className="sila-btn sila-btn--secondary" onClick={goCatalog}>Back to Recipe Catalog</button>}
           />
         </div>
       );
     }
     return (
-      <SilaRecipeEditor
-        key={editRecipe.id}
-        recipe={editRecipe}
-        canRequestPrice={canRequestPrice}
-        onCancel={() => goDetail(editRecipe.id)}
-        onSaved={(recipeId) => {
-          load();
-          // Stay on the edit URL so repeated Save uses update (persisted id), not create.
-          goEdit(recipeId || editRecipe.id);
-        }}
-        onDeleted={() => {
-          load();
-          goCatalog();
-        }}
+      <SilaRecipeWorkspaceShell
+        key={`edit-recipe-shell-${route.recipeId}`}
+        mode="edit"
+        recipeId={route.recipeId}
+        onBackToCatalog={goCatalog}
       />
     );
   }
