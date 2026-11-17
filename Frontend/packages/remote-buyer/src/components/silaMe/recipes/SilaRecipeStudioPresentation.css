@@ -433,6 +433,32 @@
   display: none;
 }
 
+/* Nested catalog is narrower than the old full Studio column — keep one card per row
+   and pin the Add control so it cannot be clipped out of the card grid. */
+.rstudio-panel--catalog .srec-lib-list.rstudio-catalog-grid,
+.rstudio-panel--catalog .rstudio-catalog-grid {
+  grid-template-columns: 1fr;
+}
+
+.rstudio-panel--catalog .srec-lib-card {
+  grid-template-columns: auto auto auto minmax(0, 1fr);
+  grid-template-areas:
+    "check drag cover body"
+    "action action action action";
+  align-items: start;
+}
+
+.rstudio-panel--catalog .srec-lib-card > .srec-lib-check { grid-area: check; }
+.rstudio-panel--catalog .srec-lib-card > .srec-lib-drag { grid-area: drag; }
+.rstudio-panel--catalog .srec-lib-card > .rstudio-cover { grid-area: cover; }
+.rstudio-panel--catalog .srec-lib-card > .srec-lib-body { grid-area: body; }
+.rstudio-panel--catalog .srec-lib-card > .sila-btn {
+  grid-area: action;
+  justify-self: stretch;
+  width: 100%;
+  margin-top: 0.35rem;
+}
+
 @media (max-width: 1100px) {
   .rstudio-build__panels {
     grid-template-columns: 1fr;

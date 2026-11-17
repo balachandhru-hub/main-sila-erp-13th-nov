@@ -207,8 +207,10 @@ const SilaRecipeMaterialLibrary: React.FC<SilaRecipeMaterialLibraryProps> = ({
           className="sila-btn sila-btn--primary sila-btn--sm"
           disabled={isAdded && !replaceTargetKey}
           onClick={() => pick(material)}
+          data-testid="recipe-catalog-add"
+          aria-label={replaceTargetKey ? `Use ${material.materialCode}` : isAdded ? `${material.materialCode} already added` : `Add ingredient ${material.materialCode}`}
         >
-          {replaceTargetKey ? "Use" : isAdded ? "Added" : "Add"}
+          {replaceTargetKey ? "Use material" : isAdded ? "Added" : "Add Ingredient"}
         </button>
       </article>
     );
