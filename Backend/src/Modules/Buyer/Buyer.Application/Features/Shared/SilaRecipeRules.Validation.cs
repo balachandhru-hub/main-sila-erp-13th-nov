@@ -175,7 +175,8 @@ namespace Buyer.Application.Features.Shared
         }
 
         /// <summary>Retires (IsActive = false) the ingredient and price rows of one version before it is rewritten.</summary>
-        private static async Task RetireVersionRowsAsync(IRepositoryWrapper repository, Guid recipeId, int version, CancellationToken cancellationToken)
+        /// <summary>Soft-retires ingredient and outlet-price rows of one version (IsActive = false). Other versions are untouched.</summary>
+        public static async Task RetireVersionRowsAsync(IRepositoryWrapper repository, Guid recipeId, int version, CancellationToken cancellationToken)
         {
             List<RecipeIngredient> oldIngredients = await repository.RecipeIngredient
                 .FindByCondition(x => x.RecipeId == recipeId && x.Version == version && x.IsActive)

@@ -5,6 +5,7 @@ using Buyer.Domain.Entities;
 using Buyer.Infrastructure.Contracts.IRepository;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using SharedKernel.ExceptionHandler;
 using SharedKernel.LoggerServices;
 
@@ -17,11 +18,13 @@ namespace Buyer.Application.Features.Queries.GetSilaRecipes
 
         private readonly IRepositoryWrapper _repository;
         private readonly ILoggerManager _logger;
+        private readonly IConfiguration _configuration;
 
-        public GetSilaRecipesQueryHandler(IRepositoryWrapper repository, ILoggerManager logger)
+        public GetSilaRecipesQueryHandler(IRepositoryWrapper repository, ILoggerManager logger, IConfiguration configuration)
         {
             _repository = repository;
             _logger = logger;
+            _configuration = configuration;
         }
 
         public async Task<SilaRecipePageDto> Handle(GetSilaRecipesQuery request, CancellationToken cancellationToken)
@@ -84,6 +87,14 @@ namespace Buyer.Application.Features.Queries.GetSilaRecipes
                 .Take(request.Limit)
                 .ToListAsync(cancellationToken);
             List<SilaRecipeListItemDto> items = await SilaRecipeRules.ToListItemsAsync(_repository, buyer.Id, recipes, cancellationToken);
+            string? basePath = _configuration[Common.BASE_FOLDER_PATH];
+            if (!string.IsNullOrWhiteSpace(basePath))
+            {
+                foreach (SilaRecipeListItemDto item in items)
+                {
+                    item.HasPicture = SilaRecipePictureRules.ResolveCatalogFile(basePath, buyer.Id, recipes.First(x => x.Id == item.Id)) != null;
+                }
+            }
 
             _logger.LogInfo($"Recipes fetched. Count: {items.Count}, Total: {total}");
             return new SilaRecipePageDto { Items = items, Total = total, Index = request.Index, Limit = request.Limit };

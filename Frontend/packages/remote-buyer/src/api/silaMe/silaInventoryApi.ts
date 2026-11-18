@@ -120,6 +120,10 @@ export interface SilaMaterial {
   category?: string | null;
   alternateUom?: string | null;
   orderUom?: string | null;
+  /** SAP plants this material is assigned to. */
+  plantCodes?: string[];
+  /** Property names aligned with plantCodes when mapped. */
+  plantPropertyNames?: string[];
 }
 
 /** Inventory fields of a material; the unit price changes only through an approved price change. */
@@ -336,6 +340,8 @@ const list = <T>(value: T[] | null | undefined): T[] => (Array.isArray(value) ? 
 const normalizeMaterial = (material: SilaMaterial): SilaMaterial => ({
   ...material,
   conversions: list(material.conversions),
+  plantCodes: list(material.plantCodes),
+  plantPropertyNames: list(material.plantPropertyNames),
 });
 
 /** Locations the caller can work with (assigned, outlet locations of his outlets, or all for admin / store manager). */
@@ -371,13 +377,14 @@ export const searchMaterials = async (search: string): Promise<SilaMaterial[]> =
   }
 };
 
-/** One page of Item Master materials; `index` is the row offset. */
+/** One page of Item Master materials; `index` is the row offset. Optional plant scopes valuation/assignment. */
 export const getMaterialsPage = async (
   search: string,
   index: number,
   limit: number,
   inventoryOnly = false,
   priceStatus = "",
+  plantCode = "",
 ): Promise<SilaMaterial[]> => {
   try {
     const response = await axiosInstance.get<SilaMaterial[]>(`${BASE}/materials`, {
@@ -387,6 +394,7 @@ export const getMaterialsPage = async (
         limit,
         inventoryOnly: inventoryOnly || undefined,
         priceStatus: priceStatus || undefined,
+        plantCode: plantCode.trim() || undefined,
       },
     });
     return list(response.data).map(normalizeMaterial);

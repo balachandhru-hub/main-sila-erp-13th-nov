@@ -138,8 +138,9 @@ export const buildSilaMeNavItem = (role: SilaMeRole, access?: SilaHomeCapabiliti
     {
       label: "Recipe Management",
       items: [
-        { key: "silaRecipeDashboard", label: "Dashboard" },
-        { key: "silaRecipes", label: "Recipes" },
+        // Recipe Studio owns catalog + former dashboard KPIs. Do not remove this entry
+        // or reintroduce a separate Recipe Dashboard nav item.
+        { key: "silaRecipes", label: "Recipe Studio" },
         ...leaf(can.approveRecipe, "silaRecipeApprovals", "Recipe Approvals"),
         { key: "silaSubstitutions", label: "Ingredient Substitutions" },
         ...leaf(can.managePos, "silaPos", "POS Studio"),
