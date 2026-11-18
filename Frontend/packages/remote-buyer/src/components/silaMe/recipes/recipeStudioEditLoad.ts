@@ -19,6 +19,8 @@ export interface StudioLoadedForm {
   classConfirmed: boolean;
   lines: IngredientLine[];
   outletPrices: Record<string, string>;
+  /** Outlet-specific POS identity (code and item are the same value when linked to menu item). */
+  outletPos: Record<string, { posCode: string; posItem: string }>;
   currency: string;
 }
 
@@ -50,6 +52,13 @@ export const formFromRecipeDetail = (
     lines: linesFrom(detail, activeRecipes),
     outletPrices: Object.fromEntries(
       (detail.outletPrices ?? []).map((price) => [price.outletLocationId, String(price.menuPrice)]),
+    ),
+    outletPos: Object.fromEntries(
+      (detail.outletPrices ?? []).map((price) => {
+        const code = (price.posCode ?? "").trim() || pos.posCode;
+        const item = (price.posItem ?? "").trim() || pos.posItem || code;
+        return [price.outletLocationId, { posCode: code, posItem: item }];
+      }),
     ),
     currency: detail.currency ?? "",
   };

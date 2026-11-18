@@ -24,6 +24,12 @@ namespace Buyer.Domain.Entities
 
         public string? Currency { get; set; }
 
+        /// <summary>POS code sold at this outlet (outlet-specific; defaults from recipe header when empty on write).</summary>
+        public string? PosCode { get; set; }
+
+        /// <summary>POS item name at this outlet (same identity as menu item when both are set).</summary>
+        public string? PosItem { get; set; }
+
         // SILA ME release 2
         public int Version { get; set; }
     }

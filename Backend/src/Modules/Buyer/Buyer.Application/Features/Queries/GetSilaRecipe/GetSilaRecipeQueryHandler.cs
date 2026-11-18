@@ -155,6 +155,10 @@ namespace Buyer.Application.Features.Queries.GetSilaRecipe
                     LocationName = locations.TryGetValue(x.OutletLocationId, out InventoryLocation? name) ? name.LocationName : null,
                     MenuPrice = x.MenuPrice,
                     Currency = x.Currency,
+                    PosCode = string.IsNullOrWhiteSpace(x.PosCode)
+                        ? (showDraft ? SilaRecipeRules.LatestPosCode(recipe) : recipe.PosCode)
+                        : x.PosCode,
+                    PosItem = string.IsNullOrWhiteSpace(x.PosItem) ? recipe.PosItem : x.PosItem,
                     CostPerServing = outletCostPerServing[x.OutletLocationId],
                     CostPercent = SilaRecipeRules.CostPercent(outletCostPerServing[x.OutletLocationId], x.MenuPrice),
                     MarginAmount = SilaRecipeRules.MarginAmount(outletCostPerServing[x.OutletLocationId], x.MenuPrice),

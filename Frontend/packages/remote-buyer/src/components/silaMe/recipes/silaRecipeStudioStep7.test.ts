@@ -35,6 +35,9 @@ assert.match(presentation, /Menu price for selected outlet/);
 assert.match(presentation, /recipe-studio-pos-code/);
 assert.match(presentation, /recipe-studio-pos-item/);
 assert.match(presentation, /setPosIdentity/);
+assert.match(presentation, /setSelectedOutletPos/);
+assert.match(presentation, /outletPos/);
+assert.match(presentation, /POS code \(this outlet\)/);
 assert.match(presentation, /outletCatalog/);
 assert.doesNotMatch(presentation, /import SilaRecipeEditor/);
 

@@ -105,6 +105,7 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
   const [posItem, setPosItem] = useState("");
   const [outletNote, setOutletNote] = useState("");
   const [outletPrices, setOutletPrices] = useState<Record<string, string>>({});
+  const [outletPos, setOutletPos] = useState<Record<string, { posCode: string; posItem: string }>>({});
 
   const [lines, setLines] = useState<IngredientLine[]>([]);
   const [replaceKey, setReplaceKey] = useState<string | null>(null);
@@ -179,6 +180,7 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
     setClassConfirmed(form.classConfirmed);
     setLines(form.lines);
     setOutletPrices(form.outletPrices);
+    setOutletPos(form.outletPos);
     setHasPicture(Boolean(detail.hasPicture));
     clearLocalPicture();
     setPictureError(null);
@@ -343,7 +345,9 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
     return notes.join(" · ");
   };
 
-  /** Menu item and POS identity are the same value in Studio outlet area. */
+  const defaultPosIdentity = () => (posCode.trim() || posItem.trim() || menuItem.trim());
+
+  /** Recipe-level default POS / menu item (seeds new outlet assignments). */
   const setPosIdentity = (value: string) => {
     markDirty();
     setMenuItem(value);
@@ -351,8 +355,36 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
     setPosItem(value);
   };
 
+  /** POS code / POS item for the selected outlet assignment (outlet-specific). */
+  const selectedOutletPosValue = outletLocationId
+    ? (outletPos[outletLocationId]?.posCode
+      || outletPos[outletLocationId]?.posItem
+      || defaultPosIdentity())
+    : defaultPosIdentity();
+
+  const setSelectedOutletPos = (value: string) => {
+    markDirty();
+    if (!outletLocationId) {
+      setPosIdentity(value);
+      return;
+    }
+    setOutletPos((current) => ({
+      ...current,
+      [outletLocationId]: { posCode: value, posItem: value },
+    }));
+  };
+
+  const ensureOutletPos = (outletId: string) => {
+    setOutletPos((current) => {
+      if (current[outletId]?.posCode || current[outletId]?.posItem) return current;
+      const identity = defaultPosIdentity();
+      if (!identity) return current;
+      return { ...current, [outletId]: { posCode: identity, posItem: identity } };
+    });
+  };
+
   const buildRequest = () => {
-    const posIdentity = (posCode.trim() || posItem.trim() || menuItem.trim());
+    const posIdentity = defaultPosIdentity();
     const header = {
       name,
       description: buildOptionalDescription(),
@@ -374,11 +406,20 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
     }));
     const prices = Object.entries(outletPrices)
       .filter(([, value]) => value.trim() !== "")
-      .map(([outletLocationIdKey, value]) => ({
-        outletLocationId: outletLocationIdKey,
-        menuPrice: toNumber(value),
-        currency: currency || loadedRecipe?.currency || null,
-      }));
+      .map(([outletLocationIdKey, value]) => {
+        const outletIdentity = (
+          outletPos[outletLocationIdKey]?.posCode
+          || outletPos[outletLocationIdKey]?.posItem
+          || posIdentity
+        ).trim();
+        return {
+          outletLocationId: outletLocationIdKey,
+          menuPrice: toNumber(value),
+          currency: currency || loadedRecipe?.currency || null,
+          posCode: outletIdentity || null,
+          posItem: outletIdentity || null,
+        };
+      });
     return {
       header,
       draftLines,
@@ -1043,6 +1084,9 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
                         setOutlets((current) => [...current, found].sort((a, b) => a.locationName.localeCompare(b.locationName)));
                       }
                     }
+                    if (nextId && Object.prototype.hasOwnProperty.call(outletPrices, nextId)) {
+                      ensureOutletPos(nextId);
+                    }
                   }}
                   data-testid="recipe-studio-outlet"
                 >
@@ -1075,47 +1119,54 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
                     if (!outletLocationId) return;
                     const value = e.target.value;
                     markDirty();
-                    setOutletPrices((current) => {
-                      if (value.trim() === "") {
+                    if (value.trim() === "") {
+                      setOutletPrices((current) => {
                         const next = { ...current };
                         delete next[outletLocationId];
                         return next;
-                      }
-                      return { ...current, [outletLocationId]: value };
-                    });
+                      });
+                      setOutletPos((current) => {
+                        const next = { ...current };
+                        delete next[outletLocationId];
+                        return next;
+                      });
+                      return;
+                    }
+                    setOutletPrices((current) => ({ ...current, [outletLocationId]: value }));
+                    ensureOutletPos(outletLocationId);
                   }}
                 />
               </div>
               <div className="rstudio-field">
-                <label htmlFor="rstudio-pos-code">POS code</label>
+                <label htmlFor="rstudio-pos-code">POS code (this outlet)</label>
                 <input
                   id="rstudio-pos-code"
-                  value={posCode}
-                  placeholder="Same as menu item"
-                  disabled={!canEdit}
+                  value={outletLocationId ? selectedOutletPosValue : posCode}
+                  placeholder="Outlet POS code"
+                  disabled={!canEdit || !outletLocationId}
                   maxLength={50}
                   data-testid="recipe-studio-pos-code"
-                  onChange={(e) => setPosIdentity(e.target.value)}
+                  onChange={(e) => setSelectedOutletPos(e.target.value)}
                 />
               </div>
               <div className="rstudio-field">
-                <label htmlFor="rstudio-pos-item">POS item</label>
+                <label htmlFor="rstudio-pos-item">POS item (this outlet)</label>
                 <input
                   id="rstudio-pos-item"
-                  value={posItem}
-                  placeholder="Same as menu item"
-                  disabled={!canEdit}
+                  value={outletLocationId ? selectedOutletPosValue : posItem}
+                  placeholder="Same as POS code / menu item"
+                  disabled={!canEdit || !outletLocationId}
                   maxLength={200}
                   data-testid="recipe-studio-pos-item"
-                  onChange={(e) => setPosIdentity(e.target.value)}
+                  onChange={(e) => setSelectedOutletPos(e.target.value)}
                 />
               </div>
               <div className="rstudio-field">
-                <label htmlFor="rstudio-menu">Linked menu item</label>
+                <label htmlFor="rstudio-menu">Linked menu item (default)</label>
                 <input
                   id="rstudio-menu"
                   value={menuItem}
-                  placeholder="Same as POS code / POS item"
+                  placeholder="Default POS / menu identity for new outlets"
                   disabled={!canEdit}
                   data-testid="recipe-studio-menu-item"
                   onChange={(e) => setPosIdentity(e.target.value)}
@@ -1123,7 +1174,7 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
               </div>
               {Object.keys(outletPrices).length > 0 && (
                 <div className="rstudio-field rstudio-field--wide" data-testid="recipe-studio-outlet-prices">
-                  <label>Assigned outlet menu prices</label>
+                  <label>Assigned outlets (price · POS)</label>
                   <ul className="rstudio-outlet-price-list">
                     {Object.entries(outletPrices).map(([outletId, price]) => {
                       const outlet = outlets.find((item) => item.id === outletId)
@@ -1131,6 +1182,10 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
                       const label = outlet
                         ? `${outlet.locationCode ? `${outlet.locationCode} · ` : ""}${outlet.locationName}`
                         : outletId;
+                      const outletIdentity = outletPos[outletId]?.posCode
+                        || outletPos[outletId]?.posItem
+                        || defaultPosIdentity()
+                        || "—";
                       return (
                         <li key={outletId}>
                           <button
@@ -1138,7 +1193,7 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
                             className="rstudio-outlet-price-list__pick"
                             onClick={() => setOutletLocationId(outletId)}
                           >
-                            {label}: {price}{currency ? ` ${currency}` : ""}
+                            {label}: {price}{currency ? ` ${currency}` : ""} · POS {outletIdentity}
                           </button>
                           {canEdit && (
                             <button
@@ -1148,6 +1203,11 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
                               onClick={() => {
                                 markDirty();
                                 setOutletPrices((current) => {
+                                  const next = { ...current };
+                                  delete next[outletId];
+                                  return next;
+                                });
+                                setOutletPos((current) => {
                                   const next = { ...current };
                                   delete next[outletId];
                                   return next;
@@ -1166,8 +1226,8 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
             </div>
             <p className="rstudio-panel__hint">
               {selectedOutlet
-                ? `Stock/costing uses ${selectedOutlet.locationCode || ""} ${selectedOutlet.locationName}. Enter a menu price for this outlet, then Save Draft to persist it on the recipe.`
-                : "Select an outlet (e.g. FL10), enter its menu item price, then Save Draft."}
+                ? `Stock/costing uses ${selectedOutlet.locationCode || ""} ${selectedOutlet.locationName}. Enter menu price and POS code/item for this outlet, then Save Draft.`
+                : "Select an outlet (e.g. FL10), enter menu price and POS code/item for that outlet, then Save Draft."}
             </p>
           </div>
         </section>

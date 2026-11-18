@@ -39,7 +39,13 @@ export interface StudioCreateRequest {
     quantity: number;
     uom: string | null;
   }[];
-  outletPrices: { outletLocationId: string; menuPrice: number; currency?: string | null }[];
+  outletPrices: {
+    outletLocationId: string;
+    menuPrice: number;
+    currency?: string | null;
+    posCode?: string | null;
+    posItem?: string | null;
+  }[];
 }
 
 export interface StudioSaveFieldErrors {
@@ -79,7 +85,13 @@ export const validateStudioDraft = (
 export const buildStudioCreateRequest = (
   header: StudioDraftHeader,
   lines: StudioDraftLine[],
-  outletPrices: { outletLocationId: string; menuPrice: number; currency?: string | null }[] = [],
+  outletPrices: {
+    outletLocationId: string;
+    menuPrice: number;
+    currency?: string | null;
+    posCode?: string | null;
+    posItem?: string | null;
+  }[] = [],
 ): StudioCreateRequest => ({
   name: header.name.trim(),
   description: header.description?.trim() || null,

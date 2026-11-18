@@ -81,9 +81,18 @@ const withPos = buildStudioCreateRequest({
   servingUom: "EA",
   posCode: "34567",
   posItem: "34567",
-}, lines);
+}, lines, [{
+  outletLocationId: "4ed928b7-d4d9-42bf-8f41-908e3b0fef54",
+  menuPrice: 190,
+  currency: "AED",
+  posCode: "34567",
+  posItem: "34567",
+}]);
 assert.equal(withPos.posCode, "34567");
 assert.equal(withPos.posItem, "34567");
+assert.equal(withPos.outletPrices.length, 1);
+assert.equal(withPos.outletPrices[0].posCode, "34567");
+assert.equal(withPos.outletPrices[0].posItem, "34567");
 
 assert.equal(verifyPersistedDraft({
   name: "Step 5 Draft Cocktail",

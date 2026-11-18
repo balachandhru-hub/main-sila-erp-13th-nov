@@ -129,6 +129,10 @@ export interface SilaRecipeOutletPrice {
   locationName?: string | null;
   menuPrice: number;
   currency?: string | null;
+  /** POS code for this outlet assignment. */
+  posCode?: string | null;
+  /** POS item for this outlet assignment. */
+  posItem?: string | null;
   /** Cost of one serving (recipe cost / serving qty). */
   costPerServing?: number;
   /** costPerServing / menuPrice x 100. */
@@ -217,6 +221,10 @@ export interface SilaRecipeOutletPriceWrite {
   outletLocationId: string;
   menuPrice: number;
   currency?: string | null;
+  /** Outlet-specific POS code (defaults to recipe header when omitted). */
+  posCode?: string | null;
+  /** Outlet-specific POS item (defaults to recipe header when omitted). */
+  posItem?: string | null;
 }
 
 export interface SilaRecipeWrite {
