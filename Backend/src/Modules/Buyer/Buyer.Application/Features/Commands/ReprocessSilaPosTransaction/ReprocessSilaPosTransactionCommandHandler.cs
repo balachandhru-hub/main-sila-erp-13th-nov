@@ -1,8 +1,10 @@
+using Buyer.Application.Features.Commands.ProcessSilaPosBatch;
 using Buyer.Application.Features.Shared;
 using Buyer.Domain.Common;
 using Buyer.Domain.Entities;
 using Buyer.Infrastructure.Contracts.IRepository;
 using MediatR;
+using Microsoft.Extensions.Configuration;
 using SharedKernel.ExceptionHandler;
 using SharedKernel.LoggerServices;
 
@@ -10,17 +12,19 @@ namespace Buyer.Application.Features.Commands.ReprocessSilaPosTransaction
 {
     /// <summary>
     /// Re-runs a failed POS sale from the failed step. A failed ERP posting is put back to PENDING for the
-    /// InventoryErpPostingJob; stock is never deducted twice.
+    /// InventoryErpPostingJob; stock is never deducted twice. ERP queue follows SilaPos:QueueErpPosting.
     /// </summary>
     public class ReprocessSilaPosTransactionCommandHandler : IRequestHandler<ReprocessSilaPosTransactionCommand, Unit>
     {
         private readonly IRepositoryWrapper _repository;
         private readonly ILoggerManager _logger;
+        private readonly IConfiguration _configuration;
 
-        public ReprocessSilaPosTransactionCommandHandler(IRepositoryWrapper repository, ILoggerManager logger)
+        public ReprocessSilaPosTransactionCommandHandler(IRepositoryWrapper repository, ILoggerManager logger, IConfiguration configuration)
         {
             _repository = repository;
             _logger = logger;
+            _configuration = configuration;
         }
 
         public Task<Unit> Handle(ReprocessSilaPosTransactionCommand request, CancellationToken cancellationToken)
@@ -94,8 +98,9 @@ namespace Buyer.Application.Features.Commands.ReprocessSilaPosTransaction
             }
 
             ledger.AddEvent(Common.SILA_REF_POS_SALE, transaction.Id, SilaPosProcessing.EVENT_REPROCESS, $"Reprocess from step {transaction.FailedStep ?? Common.SILA_POS_STEP_MATCH}.");
+            bool queueErp = _configuration.GetValue(ProcessSilaPosBatchCommandHandler.CONFIG_QUEUE_ERP, true);
             int failed = await SilaPosProcessing.ProcessAsync(
-                _repository, _logger, buyer.Id, request.UserId, new List<PosSalesTransaction> { transaction }, cancellationToken);
+                _repository, _logger, buyer.Id, request.UserId, new List<PosSalesTransaction> { transaction }, queueErp, cancellationToken);
             await _repository.SaveAsync();
 
             _logger.LogInfo($"POS transaction reprocessed. TransactionId: {transaction.Id}, Status: {transaction.Status}, Failed: {failed}");

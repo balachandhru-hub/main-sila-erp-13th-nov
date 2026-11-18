@@ -5,24 +5,29 @@ using Buyer.Domain.Entities;
 using Buyer.Infrastructure.Contracts.IRepository;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using SharedKernel.ExceptionHandler;
 using SharedKernel.LoggerServices;
 
 namespace Buyer.Application.Features.Commands.ProcessSilaPosBatch
 {
     /// <summary>
-    /// Step 2 of the upload: processes the RECEIVED lines of a PREVIEW batch (match, deduct stock, queue the ERP posting) and marks
-    /// the batch PROCESSED. Lines that are not ready fail with their reason and can be reprocessed from the tracker.
+    /// Step 2 of the upload: processes selected (or all) RECEIVED lines of a PREVIEW batch (match, deduct stock, optionally queue ERP)
+    /// and marks the batch PROCESSED when no RECEIVED lines remain.
     /// </summary>
     public class ProcessSilaPosBatchCommandHandler : IRequestHandler<ProcessSilaPosBatchCommand, SilaPosImportResultDto>
     {
+        public const string CONFIG_QUEUE_ERP = "SilaPos:QueueErpPosting";
+
         private readonly IRepositoryWrapper _repository;
         private readonly ILoggerManager _logger;
+        private readonly IConfiguration _configuration;
 
-        public ProcessSilaPosBatchCommandHandler(IRepositoryWrapper repository, ILoggerManager logger)
+        public ProcessSilaPosBatchCommandHandler(IRepositoryWrapper repository, ILoggerManager logger, IConfiguration configuration)
         {
             _repository = repository;
             _logger = logger;
+            _configuration = configuration;
         }
 
         public Task<SilaPosImportResultDto> Handle(ProcessSilaPosBatchCommand request, CancellationToken cancellationToken)
@@ -49,20 +54,45 @@ namespace Buyer.Application.Features.Commands.ProcessSilaPosBatch
                 throw new BadRequestCustomException("This batch is already processed.", "Open the Transaction Tracker to follow its lines or reprocess failed ones.");
             }
 
-            List<PosSalesTransaction> lines = await _repository.PosSalesTransaction
+            List<PosSalesTransaction> allReceived = await _repository.PosSalesTransaction
                 .FindByCondition(x => x.BatchId == batch.Id && x.BuyerId == buyer.Id && x.IsActive && x.Status == Common.SILA_POS_RECEIVED)
                 .OrderBy(x => x.BusinessDate)
                 .ThenBy(x => x.SourceTransactionId)
                 .ThenBy(x => x.LineNumber)
                 .ToListAsync(cancellationToken);
+
+            HashSet<Guid>? selected = request.TransactionIds == null || request.TransactionIds.Count == 0
+                ? null
+                : request.TransactionIds.ToHashSet();
+            List<PosSalesTransaction> lines = selected == null
+                ? allReceived
+                : allReceived.Where(x => selected.Contains(x.Id)).ToList();
+            if (selected != null && lines.Count == 0)
+            {
+                throw new BadRequestCustomException(
+                    "No selected lines to process.",
+                    "Select ready RECEIVED lines from this preview batch, or omit the selection to process all.");
+            }
+
             _repository.PosSalesTransaction.UpdateRange(lines);
             int alreadyPosted = await _repository.PosSalesTransaction
                 .FindByCondition(x => x.BatchId == batch.Id && x.BuyerId == buyer.Id && x.IsActive
                     && (x.Status == Common.SILA_POS_INVENTORY_DEDUCTED || x.Status == Common.SILA_POS_POSTED))
                 .CountAsync(cancellationToken);
 
-            int failed = await SilaPosProcessing.ProcessAsync(_repository, _logger, buyer.Id, request.UserId, lines, cancellationToken);
-            batch.Status = Common.SILA_POS_BATCH_PROCESSED;
+            bool queueErp = request.QueueErpPosting
+                ?? _configuration.GetValue(CONFIG_QUEUE_ERP, true);
+            int failed = await SilaPosProcessing.ProcessAsync(
+                _repository, _logger, buyer.Id, request.UserId, lines, queueErp, cancellationToken);
+
+            int remaining = await _repository.PosSalesTransaction
+                .FindByCondition(x => x.BatchId == batch.Id && x.BuyerId == buyer.Id && x.IsActive && x.Status == Common.SILA_POS_RECEIVED)
+                .CountAsync(cancellationToken);
+            if (remaining <= 0)
+            {
+                batch.Status = Common.SILA_POS_BATCH_PROCESSED;
+            }
+
             batch.Accepted = lines.Count;
             await _repository.SaveAsync();
 

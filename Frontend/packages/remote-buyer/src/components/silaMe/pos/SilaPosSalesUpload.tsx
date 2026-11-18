@@ -2,8 +2,10 @@ import React, { useRef, useState } from "react";
 import { toastService } from "@vosox/shared-ui";
 import {
   discardPosBatch,
+  previewPosConsumption,
   previewPosSales,
   processPosBatch,
+  type SilaPosConsumptionPreview,
   type SilaPosImportResult,
   type SilaPosPreview,
 } from "../../../api/silaMe/silaPosApi";
@@ -24,8 +26,9 @@ interface SilaPosSalesUploadProps {
 const SilaPosSalesUpload: React.FC<SilaPosSalesUploadProps> = ({ sources, canManage, onProcessed }) => {
   const [sourceId, setSourceId] = useState("");
   const [file, setFile] = useState<File | null>(null);
-  const [busy, setBusy] = useState<"upload" | "process" | "discard" | null>(null);
+  const [busy, setBusy] = useState<"upload" | "process" | "discard" | "preview" | null>(null);
   const [preview, setPreview] = useState<SilaPosPreview | null>(null);
+  const [consumption, setConsumption] = useState<SilaPosConsumptionPreview | null>(null);
   const [result, setResult] = useState<SilaPosImportResult | null>(null);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -42,6 +45,7 @@ const SilaPosSalesUpload: React.FC<SilaPosSalesUploadProps> = ({ sources, canMan
     try {
       const checked = await previewPosSales(file, sourceId || undefined);
       setPreview(checked);
+      setConsumption(null);
       resetFile();
       toastService.success(`Batch ${checked.batchNumber}: ${checked.readyToProcess} of ${checked.totalRows} line${checked.totalRows === 1 ? "" : "s"} ready.`);
     } catch (err: unknown) {
@@ -51,13 +55,29 @@ const SilaPosSalesUpload: React.FC<SilaPosSalesUploadProps> = ({ sources, canMan
     }
   };
 
-  const handleProcess = async () => {
+  const handlePreviewConsumption = async (transactionIds: string[]) => {
+    if (!preview) return;
+    setBusy("preview");
+    try {
+      const next = await previewPosConsumption(preview.batchId, { transactionIds });
+      setConsumption(next);
+      toastService.success(`Consumption preview for ${next.lines.length} line${next.lines.length === 1 ? "" : "s"}.`);
+    } catch (err: unknown) {
+      toastService.error(errorText(err, "Could not preview consumption."));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleProcess = async (transactionIds: string[]) => {
     if (!preview) return;
     setBusy("process");
     try {
-      const processed = await processPosBatch(preview.batchId);
+      // QueueErpPosting follows server config (false in UAT until live SAP is authorized).
+      const processed = await processPosBatch(preview.batchId, { transactionIds });
       setResult(processed);
       setPreview(null);
+      setConsumption(null);
       onProcessed();
       toastService.success(`Batch ${processed.batchNumber}: ${processed.processed} line${processed.processed === 1 ? "" : "s"} processed.`);
     } catch (err: unknown) {
@@ -74,6 +94,7 @@ const SilaPosSalesUpload: React.FC<SilaPosSalesUploadProps> = ({ sources, canMan
       await discardPosBatch(preview.batchId);
       toastService.success(`Upload ${preview.batchNumber} discarded.`);
       setPreview(null);
+      setConsumption(null);
       setConfirmDiscard(false);
       onProcessed();
     } catch (err: unknown) {
@@ -112,10 +133,13 @@ const SilaPosSalesUpload: React.FC<SilaPosSalesUploadProps> = ({ sources, canMan
             disabled={preview !== null}
             onChange={(event) => setFile(event.target.files?.[0] ?? null)}
           />
-          <span className="sila-help">Columns: BusinessDate, TransactionId, LineId, PosCode, Qty, UOM, OutletCode, Currency, Amount.</span>
+          <span className="sila-help">
+            Mandatory: BusinessDate, TransactionId, LineId, PosCode, Qty, UOM, OutletCode, Currency, Amount.
+            Optional: SourceSystem, TransactionType, OriginalTransactionId, OriginalLineId. XLSX uses the SalesData sheet.
+          </span>
         </div>
         <div className="srec-actions">
-          <button type="button" className="sila-btn sila-btn--ghost" onClick={handleTemplate}>Template</button>
+          <button type="button" className="sila-btn sila-btn--ghost" onClick={handleTemplate}>Download POS Template</button>
           <button type="button" className="sila-btn sila-btn--primary" onClick={handleUpload} disabled={!file || busy !== null || preview !== null}>
             {busy === "upload" ? "Checking..." : "Upload and check"}
           </button>
@@ -126,7 +150,9 @@ const SilaPosSalesUpload: React.FC<SilaPosSalesUploadProps> = ({ sources, canMan
         <SilaPosPreviewTable
           preview={preview}
           busy={busy}
+          consumption={consumption}
           onProcess={handleProcess}
+          onPreviewConsumption={handlePreviewConsumption}
           onDiscard={() => setConfirmDiscard(true)}
         />
       )}

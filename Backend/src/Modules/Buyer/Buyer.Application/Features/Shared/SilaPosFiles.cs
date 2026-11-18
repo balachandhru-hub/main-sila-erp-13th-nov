@@ -61,6 +61,68 @@ namespace Buyer.Application.Features.Shared
         public static SilaPosFileDto BuildTemplate(string fileName, string sheetName, string[] header, List<string[]> examples)
         {
             using XLWorkbook workbook = new XLWorkbook();
+            WriteSheet(workbook, sheetName, header, examples);
+            using MemoryStream stream = new MemoryStream();
+            workbook.SaveAs(stream);
+            return new SilaPosFileDto { Content = stream.ToArray(), ContentType = XLSX_CONTENT_TYPE, FileName = fileName };
+        }
+
+        /// <summary>
+        /// Sales template: SalesData (mandatory 9 columns + optional enhanced columns) and FieldGuide descriptions.
+        /// Legacy nine-column files remain valid; optional columns are backward compatible.
+        /// </summary>
+        public static SilaPosFileDto BuildSalesTemplate()
+        {
+            string[] header =
+            {
+                "BusinessDate", "TransactionId", "LineId", "PosCode", "Qty", "UOM", "OutletCode", "Currency", "Amount",
+                "SourceSystem", "TransactionType", "OriginalTransactionId", "OriginalLineId"
+            };
+            List<string[]> examples = new List<string[]>
+            {
+                new[] { "2026-11-18", "100045", "1", "34567", "2", "EA", "FL10", "AED", "380.00", "FILE", "SALE", "", "" },
+                new[] { "2026-11-18", "100046", "1", "34567", "1", "EA", "FL10", "AED", "190.00", "FILE", "RETURN", "100045", "1" },
+            };
+            using XLWorkbook workbook = new XLWorkbook();
+            WriteSheet(workbook, "SalesData", header, examples);
+            IXLWorksheet guide = workbook.Worksheets.Add("FieldGuide");
+            string[,] fields =
+            {
+                { "Field", "Required", "Description", "Format / notes" },
+                { "BusinessDate", "Yes", "Business date of the sale (not the upload timestamp).", "yyyy-MM-dd preferred; also dd/MM/yyyy, yyyyMMdd" },
+                { "TransactionId", "Yes", "POS transaction identifier. Keep numeric-looking values as text.", "String, max 100" },
+                { "LineId", "No (defaults to 1)", "Line number within the transaction.", "Integer >= 1" },
+                { "PosCode", "Yes", "POS item code mapped to a SILA recipe / menu item.", "String, max 100" },
+                { "Qty", "Yes", "Quantity sold. Negative qty is not treated as a return unless TransactionType says so.", "Non-zero decimal; alias Quantity" },
+                { "UOM", "No", "Sold unit of measure; must match recipe selling UOM when set.", "e.g. EA" },
+                { "OutletCode", "Yes", "POS outlet code mapped to a SILA inventory location.", "String; alias OutletId" },
+                { "Currency", "No", "ISO currency of Amount.", "3 letters e.g. AED" },
+                { "Amount", "No", "POS sales amount for the line (source decides tax/discount semantics).", "Decimal" },
+                { "SourceSystem", "No", "Optional POS source system label; upload still uses the selected POS source.", "String" },
+                { "TransactionType", "No", "SALE (default for legacy files), RETURN or VOID.", "SALE | RETURN | VOID" },
+                { "OriginalTransactionId", "No", "For RETURN/VOID: original sale transaction id.", "Required when TransactionType is RETURN/VOID" },
+                { "OriginalLineId", "No", "For RETURN/VOID: original sale line id.", "Integer >= 1" },
+            };
+            for (int row = 0; row < fields.GetLength(0); row++)
+            {
+                for (int column = 0; column < fields.GetLength(1); column++)
+                {
+                    guide.Cell(row + 1, column + 1).Value = fields[row, column];
+                    if (row == 0)
+                    {
+                        guide.Cell(row + 1, column + 1).Style.Font.Bold = true;
+                    }
+                }
+            }
+
+            guide.Columns().AdjustToContents();
+            using MemoryStream stream = new MemoryStream();
+            workbook.SaveAs(stream);
+            return new SilaPosFileDto { Content = stream.ToArray(), ContentType = XLSX_CONTENT_TYPE, FileName = "pos-sales-template.xlsx" };
+        }
+
+        private static void WriteSheet(XLWorkbook workbook, string sheetName, string[] header, List<string[]> examples)
+        {
             IXLWorksheet sheet = workbook.Worksheets.Add(sheetName);
             for (int column = 0; column < header.Length; column++)
             {
@@ -79,9 +141,6 @@ namespace Buyer.Application.Features.Shared
             }
 
             sheet.Columns().AdjustToContents();
-            using MemoryStream stream = new MemoryStream();
-            workbook.SaveAs(stream);
-            return new SilaPosFileDto { Content = stream.ToArray(), ContentType = XLSX_CONTENT_TYPE, FileName = fileName };
         }
 
         public static string Normalize(string value)
@@ -95,7 +154,10 @@ namespace Buyer.Application.Features.Shared
             {
                 using MemoryStream stream = new MemoryStream(content);
                 using XLWorkbook workbook = new XLWorkbook(stream);
-                IXLWorksheet sheet = workbook.Worksheet(1);
+                // Prefer SalesData (authoritative POS sales sheet); otherwise first sheet.
+                IXLWorksheet sheet = workbook.Worksheets.FirstOrDefault(x =>
+                        string.Equals(x.Name, "SalesData", StringComparison.OrdinalIgnoreCase))
+                    ?? workbook.Worksheet(1);
                 IXLRange? used = sheet.RangeUsed();
                 List<List<string>> table = new List<List<string>>();
                 if (used == null)
