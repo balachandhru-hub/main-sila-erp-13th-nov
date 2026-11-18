@@ -1,6 +1,11 @@
 import axiosInstance from "../axiosInstance";
 import { readError } from "../readError";
 import type { SilaUomConversion } from "./silaInventoryApi";
+import { readSuccessId } from "./readSuccessId";
+import { canStartRevision, writeFromDetail } from "../../components/silaMe/recipes/recipeWriteModel";
+
+export { readSuccessId } from "./readSuccessId";
+export { canStartRevision, writeFromDetail };
 
 /** DIRECT (one material) | RECIPE (several materials) | BATCH (may contain another recipe). */
 export type SilaRecipeMode = "DIRECT" | "RECIPE" | "BATCH";
@@ -65,6 +70,8 @@ export interface SilaRecipeListItem {
   submittedOn?: string | null;
   approvedOn?: string | null;
   dateUpdated?: string | null;
+  /** Catalog/selling picture exists in managed file storage. */
+  hasPicture?: boolean;
 }
 
 export interface SilaRecipePage {
@@ -122,6 +129,10 @@ export interface SilaRecipeOutletPrice {
   locationName?: string | null;
   menuPrice: number;
   currency?: string | null;
+  /** POS code for this outlet assignment. */
+  posCode?: string | null;
+  /** POS item for this outlet assignment. */
+  posItem?: string | null;
   /** Cost of one serving (recipe cost / serving qty). */
   costPerServing?: number;
   /** costPerServing / menuPrice x 100. */
@@ -188,6 +199,15 @@ export interface SilaRecipeDetail
   /** Every version, newest first. */
   approvalSteps: SilaRecipeApprovalStep[];
   history: SilaRecipeEvent[];
+  /** Picture for the shown version (draft slot when revising). */
+  hasPicture?: boolean;
+  /** active | draft */
+  pictureSlot?: string | null;
+}
+
+export interface SilaRecipePictureInfo {
+  hasPicture: boolean;
+  slot?: string | null;
 }
 
 export interface SilaRecipeIngredientWrite {
@@ -201,6 +221,10 @@ export interface SilaRecipeOutletPriceWrite {
   outletLocationId: string;
   menuPrice: number;
   currency?: string | null;
+  /** Outlet-specific POS code (defaults to recipe header when omitted). */
+  posCode?: string | null;
+  /** Outlet-specific POS item (defaults to recipe header when omitted). */
+  posItem?: string | null;
 }
 
 export interface SilaRecipeWrite {
@@ -230,10 +254,6 @@ export interface SilaRecipeFilters {
   active?: boolean;
   index?: number;
   limit?: number;
-}
-
-interface SuccessResponse {
-  id: string;
 }
 
 const BASE = "/api/v1/buyer/sila";
@@ -283,11 +303,15 @@ export const getRecipe = async (recipeId: string, version?: number): Promise<Sil
   }
 };
 
-/** Creates a DRAFT recipe (version 1) and returns its id. */
+/** Creates a DRAFT recipe (version 1) and returns its persisted id. */
 export const createRecipe = async (request: SilaRecipeWrite): Promise<string> => {
   try {
-    const response = await axiosInstance.post<SuccessResponse>(`${BASE}/recipes`, request);
-    return response.data.id;
+    const response = await axiosInstance.post(`${BASE}/recipes`, request);
+    const id = readSuccessId(response.data);
+    if (!id) {
+      throw new Error("Recipe was created but the server did not return a persisted id.");
+    }
+    return id;
   } catch (error: unknown) {
     throw new Error(readError(error, "Could not create the recipe."));
   }
@@ -300,6 +324,22 @@ export const updateRecipe = async (recipeId: string, request: SilaRecipeWrite): 
   } catch (error: unknown) {
     throw new Error(readError(error, "Could not save the recipe."));
   }
+};
+
+/**
+ * Starts a new draft version from an APPROVED/REJECTED recipe by saving the current latest rows.
+ * The selling ActiveVersion is unchanged until the draft is approved.
+ */
+export const createRecipeRevision = async (detail: SilaRecipeDetail): Promise<number> => {
+  if (!canStartRevision(detail.status)) {
+    throw new Error("Only an approved or rejected recipe can start a new revision.");
+  }
+  if (!list(detail.ingredients).length) {
+    throw new Error("This recipe has no ingredients to copy into the new revision.");
+  }
+  const nextVersion = detail.version + 1;
+  await updateRecipe(detail.id, writeFromDetail(detail));
+  return nextVersion;
 };
 
 export const submitRecipe = async (recipeId: string): Promise<void> => {
@@ -331,6 +371,54 @@ export const deactivateRecipe = async (recipeId: string): Promise<void> => {
     await axiosInstance.post(`${BASE}/recipes/${recipeId}/deactivate`);
   } catch (error: unknown) {
     throw new Error(readError(error, "Could not deactivate the recipe."));
+  }
+};
+
+/**
+ * Deletes a DRAFT recipe (soft-delete) or discards a Draft revision of an approved recipe.
+ * Server refuses PENDING_APPROVAL / APPROVED / REJECTED / INACTIVE.
+ */
+export const deleteRecipeDraft = async (recipeId: string): Promise<void> => {
+  try {
+    await axiosInstance.post(`${BASE}/recipes/${recipeId}/draft/delete`);
+  } catch (error: unknown) {
+    throw new Error(readError(error, "Could not delete the draft recipe."));
+  }
+};
+
+/** Uploads or replaces the recipe picture (JPEG/PNG/WebP ≤ 5 MB) via managed file storage. */
+export const setRecipePicture = async (recipeId: string, file: File | Blob): Promise<SilaRecipePictureInfo> => {
+  const form = new FormData();
+  form.append("file", file, file instanceof File ? file.name : "recipe.webp");
+  try {
+    const response = await axiosInstance.post<SilaRecipePictureInfo>(`${BASE}/recipes/${recipeId}/picture`, form, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return response.data;
+  } catch (error: unknown) {
+    throw new Error(readError(error, "Could not save the recipe picture."));
+  }
+};
+
+/** Authenticated recipe picture blob (catalog uses preferDraft=false so approved images stay unchanged). */
+export const getRecipePicture = async (recipeId: string, preferDraft = false): Promise<Blob> => {
+  try {
+    const response = await axiosInstance.get<Blob>(`${BASE}/recipes/${recipeId}/picture`, {
+      params: preferDraft ? { preferDraft: true } : undefined,
+      responseType: "blob",
+    });
+    return response.data;
+  } catch (error: unknown) {
+    throw new Error(readError(error, "Could not load the recipe picture."));
+  }
+};
+
+export const removeRecipePicture = async (recipeId: string): Promise<SilaRecipePictureInfo> => {
+  try {
+    const response = await axiosInstance.delete<SilaRecipePictureInfo>(`${BASE}/recipes/${recipeId}/picture`);
+    return response.data;
+  } catch (error: unknown) {
+    throw new Error(readError(error, "Could not remove the recipe picture."));
   }
 };
 

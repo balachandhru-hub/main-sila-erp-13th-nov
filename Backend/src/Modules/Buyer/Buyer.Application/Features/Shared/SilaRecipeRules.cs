@@ -23,6 +23,7 @@ namespace Buyer.Application.Features.Shared
         public const string EVENT_APPROVED = "APPROVED";
         public const string EVENT_REJECTED = "REJECTED";
         public const string EVENT_DEACTIVATED = "DEACTIVATED";
+        public const string EVENT_DRAFT_DELETED = "DRAFT_DELETED";
 
         public const string VERSION_ACTIVE = "ACTIVE";
         public const string VERSION_SUPERSEDED = "SUPERSEDED";
@@ -200,6 +201,15 @@ namespace Buyer.Application.Features.Shared
 
             foreach (SilaRecipeOutletPriceWriteDto price in prices)
             {
+                string? outletPosCode = string.IsNullOrWhiteSpace(price.PosCode) ? posCode : price.PosCode.Trim();
+                string? outletPosItem = string.IsNullOrWhiteSpace(price.PosItem)
+                    ? recipe.PosItem
+                    : price.PosItem.Trim();
+                if (string.IsNullOrWhiteSpace(outletPosItem))
+                {
+                    outletPosItem = outletPosCode;
+                }
+
                 repository.RecipeOutletPrice.Create(new RecipeOutletPrice
                 {
                     Id = Guid.NewGuid(),
@@ -208,6 +218,8 @@ namespace Buyer.Application.Features.Shared
                     OutletLocationId = outlets[price.OutletLocationId].Id,
                     MenuPrice = price.MenuPrice,
                     Currency = string.IsNullOrWhiteSpace(price.Currency) ? recipe.Currency : price.Currency.Trim().ToUpperInvariant(),
+                    PosCode = outletPosCode,
+                    PosItem = outletPosItem,
                     IsActive = true
                 });
             }

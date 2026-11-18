@@ -10,6 +10,8 @@ interface SilaRecipeTableProps {
   openLabel?: string;
   /** Shows the approval event (CREATE / CHANGE) and version columns (recipe approvals). */
   showEvent?: boolean;
+  onEdit?: (recipeId: string) => void;
+  onDelete?: (recipe: SilaRecipeListItem) => void;
 }
 
 const Incomplete: React.FC = () => <span className="sila-me-flag">Incomplete</span>;
@@ -18,7 +20,7 @@ const Incomplete: React.FC = () => <span className="sila-me-flag">Incomplete</sp
  * Recipe master columns: POS code, title, serving, recipe id, family, category, menu price,
  * recipe cost, cost per serving, cost % and margin (or INCOMPLETE / NO MENU PRICE), status and readiness.
  */
-const SilaRecipeTable: React.FC<SilaRecipeTableProps> = ({ rows, onOpen, openLabel = "Open", showEvent = false }) => (
+const SilaRecipeTable: React.FC<SilaRecipeTableProps> = ({ rows, onOpen, openLabel = "Open", showEvent = false, onEdit, onDelete }) => (
   <div className="sila-table-wrap">
     <table className="sila-table">
       <thead>
@@ -108,14 +110,36 @@ const SilaRecipeTable: React.FC<SilaRecipeTableProps> = ({ rows, onOpen, openLab
             </td>
             <td>{formatDateTime(row.dateUpdated ?? row.submittedOn)}</td>
             <td>
-              <button
-                type="button"
-                className="sila-btn sila-btn--secondary sila-btn--sm"
-                aria-label={`${openLabel} ${row.recipeCode}`}
-                onClick={() => onOpen(row.id)}
-              >
-                {openLabel}
-              </button>
+              <div className="srec-actions">
+                <button
+                  type="button"
+                  className="sila-btn sila-btn--secondary sila-btn--sm"
+                  aria-label={`${openLabel} ${row.recipeCode}`}
+                  onClick={() => onOpen(row.id)}
+                >
+                  {openLabel}
+                </button>
+                {onEdit && row.status !== "INACTIVE" && row.status !== "PENDING_APPROVAL" && (
+                  <button
+                    type="button"
+                    className="sila-btn sila-btn--primary sila-btn--sm"
+                    aria-label={`Edit ${row.recipeCode}`}
+                    onClick={() => onEdit(row.id)}
+                  >
+                    Edit
+                  </button>
+                )}
+                {onDelete && row.status === "DRAFT" && (
+                  <button
+                    type="button"
+                    className="sila-btn sila-btn--danger sila-btn--sm"
+                    aria-label={`Delete Draft ${row.recipeCode}`}
+                    onClick={() => onDelete(row)}
+                  >
+                    Delete Draft
+                  </button>
+                )}
+              </div>
             </td>
           </tr>
         ))}

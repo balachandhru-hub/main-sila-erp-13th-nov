@@ -18,6 +18,8 @@ namespace Buyer.Application.Features.Queries.SearchSilaRecipeIngredients
         public string? MaterialType { get; set; }
         /// <summary>SILA supplier id: materials that supplier (or one of its aliases) delivered on a purchase order.</summary>
         public Guid? SupplierId { get; set; }
+        /// <summary>Optional authorized outlet/store InventoryLocation id for location-specific stock (ledger, not SAP overwrite).</summary>
+        public Guid? OutletLocationId { get; set; }
         public int Index { get; set; }
         public int Limit { get; set; } = 20;
     }
