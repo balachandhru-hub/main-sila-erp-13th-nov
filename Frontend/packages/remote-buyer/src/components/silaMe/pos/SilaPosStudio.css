@@ -1,0 +1,330 @@
+/* SILA POS Studio — Recipe Studio visual language adapted for POS operations */
+
+.pstudio-page {
+  gap: 1.25rem;
+  background:
+    radial-gradient(circle at top right, rgba(77, 163, 255, 0.08), transparent 28%),
+    radial-gradient(circle at 10% 20%, rgba(120, 210, 170, 0.1), transparent 26%),
+    #ffffff;
+}
+
+.pstudio-kicker {
+  margin: 0 0 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #2f7cc4;
+}
+
+.pstudio-hero {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem;
+  border-radius: 1.25rem;
+  background: linear-gradient(135deg, #f4f9ff 0%, #ffffff 55%, #f7fff9 100%);
+  border: 0.0625rem solid #d9e8f7;
+  box-shadow: 0 0.5rem 1.5rem rgba(24, 72, 120, 0.06);
+}
+
+.pstudio-hero__title {
+  margin: 0;
+  font-size: clamp(1.5rem, 2.2vw, 2rem);
+  line-height: 1.15;
+  color: #12355b;
+}
+
+.pstudio-hero__sub {
+  margin: 0.5rem 0 0;
+  max-width: 42rem;
+  color: #5b7a99;
+}
+
+.pstudio-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+
+.pstudio-tabs {
+  display: flex;
+  gap: 0.4rem;
+  overflow-x: auto;
+  padding: 0.35rem;
+  border-radius: 999px;
+  background: #f3f8fc;
+  border: 0.0625rem solid #d9e8f7;
+}
+
+.pstudio-tab {
+  flex: 0 0 auto;
+  padding: 0.55rem 0.95rem;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: #5b7a99;
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.8125rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.pstudio-tab[aria-selected="true"] {
+  background: #177db8;
+  color: #fff;
+  box-shadow: 0 0.25rem 0.75rem rgba(23, 125, 184, 0.28);
+}
+
+.pstudio-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  gap: 0.75rem;
+}
+
+.pstudio-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.9rem 1rem;
+  border-radius: 1rem;
+  border: 0.0625rem solid transparent;
+  box-shadow: 0 0.25rem 0.75rem rgba(18, 53, 91, 0.05);
+}
+
+.pstudio-kpi span {
+  font-size: 0.75rem;
+  color: #5b7a99;
+}
+
+.pstudio-kpi strong {
+  font-size: 1.2rem;
+  color: #12355b;
+}
+
+.pstudio-kpi--sky { background: #eaf6ff; border-color: #cfe8fb; }
+.pstudio-kpi--mint { background: #eafaf0; border-color: #cdead8; }
+.pstudio-kpi--lavender { background: #f3efff; border-color: #ddd4ff; }
+.pstudio-kpi--amber { background: #fff6e8; border-color: #ffe0b5; }
+.pstudio-kpi--blue { background: #eef4ff; border-color: #d4e2ff; }
+.pstudio-kpi--rose { background: #fff5f4; border-color: #efd1cf; }
+
+.pstudio-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.pstudio-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 1.15rem 1.25rem;
+  border-radius: 1.15rem;
+  background: #fff;
+  border: 0.0625rem solid #d9e8f7;
+  box-shadow: 0 0.35rem 1rem rgba(24, 72, 120, 0.05);
+}
+
+.pstudio-panel--mint {
+  background: linear-gradient(180deg, #f4fff8 0%, #ffffff 50%);
+  border-color: #cdead8;
+}
+
+.pstudio-panel--lavender {
+  background: linear-gradient(180deg, #f7f4ff 0%, #ffffff 55%);
+  border-color: #ddd4ff;
+}
+
+.pstudio-panel--amber {
+  background: linear-gradient(180deg, #fff9ef 0%, #ffffff 55%);
+  border-color: #ffe0b5;
+}
+
+.pstudio-panel__title {
+  margin: 0;
+  font-size: 1.05rem;
+  color: #12355b;
+}
+
+.pstudio-panel__hint {
+  margin: 0;
+  color: #5b7a99;
+  font-size: 0.8125rem;
+}
+
+.pstudio-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  min-height: 12rem;
+  padding: 1.5rem;
+  border-radius: 1.1rem;
+  border: 0.125rem dashed #9fc4e4;
+  background:
+    radial-gradient(circle at 30% 20%, rgba(77, 163, 255, 0.12), transparent 45%),
+    #f7fbff;
+  color: #3d5f7d;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.pstudio-drop[data-active="true"] {
+  border-color: #177db8;
+  background: #eaf6ff;
+}
+
+.pstudio-drop strong {
+  font-size: 1.05rem;
+  color: #12355b;
+}
+
+.pstudio-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.pstudio-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: 999px;
+  background: #f3f8fc;
+  border: 0.0625rem solid #d9e8f7;
+  color: #5b7a99;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.pstudio-step[data-active="true"] {
+  background: #177db8;
+  border-color: #177db8;
+  color: #fff;
+}
+
+.pstudio-step[data-done="true"] {
+  background: #eafaf0;
+  border-color: #cdead8;
+  color: #277c5b;
+}
+
+.pstudio-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pstudio-list__item {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: 0.85rem;
+  background: #f8fbfe;
+  border: 0.0625rem solid #e4eef7;
+}
+
+.pstudio-list__item strong {
+  color: #12355b;
+}
+
+.pstudio-list__item span {
+  color: #5b7a99;
+  font-size: 0.8125rem;
+}
+
+.pstudio-empty {
+  padding: 1.5rem 1rem;
+  text-align: center;
+  color: #5b7a99;
+  border-radius: 1rem;
+  background: #f8fbfe;
+  border: 0.0625rem dashed #d9e8f7;
+}
+
+.pstudio-drawer {
+  position: fixed;
+  inset: 0 0 0 auto;
+  width: min(26rem, 100%);
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 1.25rem;
+  background: #fff;
+  border-left: 0.0625rem solid #d9e8f7;
+  box-shadow: -0.5rem 0 1.5rem rgba(18, 53, 91, 0.12);
+  overflow: auto;
+}
+
+.pstudio-drawer__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 39;
+  background: rgba(18, 53, 91, 0.28);
+}
+
+.pstudio-lifecycle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.pstudio-lifecycle__node {
+  padding: 0.35rem 0.65rem;
+  border-radius: 999px;
+  background: #eef4ff;
+  border: 0.0625rem solid #d4e2ff;
+  color: #12355b;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.pstudio-lifecycle__node[data-state="done"] {
+  background: #eafaf0;
+  border-color: #cdead8;
+  color: #277c5b;
+}
+
+.pstudio-lifecycle__node[data-state="failed"] {
+  background: #fff5f4;
+  border-color: #efd1cf;
+  color: #b44943;
+}
+
+.pstudio-lifecycle__node[data-state="pending"] {
+  background: #fff6e8;
+  border-color: #ffe0b5;
+  color: #a26b12;
+}
+
+.pstudio-lifecycle__sep {
+  color: #9db4c9;
+  font-size: 0.75rem;
+}
+
+@media (max-width: 900px) {
+  .pstudio-grid-2 {
+    grid-template-columns: 1fr;
+  }
+
+  .pstudio-hero {
+    padding: 1rem;
+  }
+
+  .pstudio-tabs {
+    border-radius: 1rem;
+  }
+}

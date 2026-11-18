@@ -47,11 +47,26 @@ const upload = read("SilaPosSalesUpload.tsx");
 assert.match(upload, /Download POS Template/);
 assert.match(upload, /handlePreviewConsumption/);
 assert.match(upload, /TransactionType/);
+assert.match(upload, /studioMode/);
+assert.match(upload, /pstudio-drop/);
 
 const previewTable = read("SilaPosPreviewTable.tsx");
 assert.match(previewTable, /Select all ready/);
 assert.match(previewTable, /Consumption preview/);
 assert.match(previewTable, /Post selected/);
 assert.match(previewTable, /pos-consumption-preview/);
+assert.match(previewTable, /pstudio-line-drawer/);
+assert.match(previewTable, /Clear selection/);
+
+const integration = read("SilaPosIntegration.tsx");
+assert.match(integration, /SILA POS Studio/);
+assert.match(integration, /Confirm posting/);
+assert.match(integration, /SilaPosStudioExceptions/);
+assert.match(integration, /QueueErpPosting/);
+
+const studioCss = read("SilaPosStudio.css");
+assert.match(studioCss, /\.pstudio-page/);
+assert.match(studioCss, /\.pstudio-drop/);
+assert.match(studioCss, /\.pstudio-lifecycle/);
 
 console.log("silaPosSalesConsumption.test.ts: ok");

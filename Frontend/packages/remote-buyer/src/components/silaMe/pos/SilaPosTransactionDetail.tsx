@@ -7,6 +7,7 @@ import { errorText, posLabel, posStatusBadgeClass, stepBadgeClass } from "./posF
 import "../silaMeTheme.css";
 import "../recipes/SilaRecipes.css";
 import "./SilaPos.css";
+import "./SilaPosStudio.css";
 
 interface SilaPosTransactionDetailProps {
   transactionId: string;
@@ -82,12 +83,28 @@ const SilaPosTransactionDetail: React.FC<SilaPosTransactionDetailProps> = ({ tra
         />
       ) : (
         <>
-          <section className="sila-card">
+          <section className="sila-card pstudio-panel">
             <div className="sila-card-header">
               <h2 className="sila-card-title">Sale</h2>
               <span className={posStatusBadgeClass(tx.status)}>{posLabel(tx.status)}</span>
             </div>
             <div className="sila-card-body srec-stack">
+              <div className="pstudio-lifecycle" aria-label="POS posting journey">
+                {[
+                  ["POS Uploaded", tx.receivedState === "DONE" || tx.receivedState === "COMPLETED" ? "done" : tx.receivedState === "FAILED" ? "failed" : "pending"],
+                  ["Validated", tx.status === "FAILED" && tx.failedStep === "MATCH" ? "failed" : tx.recipeCode ? "done" : "pending"],
+                  ["Recipe Consumption", tx.deductState === "DONE" || tx.consumptionTransactionNumber ? "done" : tx.failedStep === "DEDUCT" ? "failed" : "pending"],
+                  ["User Confirmed", tx.deductState === "DONE" || tx.deductState === "FAILED" || tx.postState !== "PENDING" ? "done" : "pending"],
+                  ["SAP Posted", tx.postState === "DONE" || tx.erpPostingStatus === "POSTED" ? "done" : tx.postState === "FAILED" || tx.erpPostingStatus === "FAILED" ? "failed" : tx.erpPostingStatus === "UNKNOWN" ? "pending" : "pending"],
+                  ["SILA Reconciled", tx.erpPostingStatus === "POSTED" && tx.postState === "DONE" ? "done" : tx.erpPostingStatus === "UNKNOWN" ? "pending" : tx.postState === "SKIPPED" ? "done" : "pending"],
+                  ["Completed", tx.status === "POSTED" || (tx.deductState === "DONE" && (tx.postState === "DONE" || tx.postState === "SKIPPED")) ? "done" : tx.status === "FAILED" ? "failed" : "pending"],
+                ].map(([label, state], index, arr) => (
+                  <React.Fragment key={label}>
+                    <span className="pstudio-lifecycle__node" data-state={state}>{label}</span>
+                    {index < arr.length - 1 && <span className="pstudio-lifecycle__sep">→</span>}
+                  </React.Fragment>
+                ))}
+              </div>
               <div className="sila-meta-grid">
                 {[
                   ["Business date", formatDate(tx.businessDate)],
@@ -97,6 +114,8 @@ const SilaPosTransactionDetail: React.FC<SilaPosTransactionDetailProps> = ({ tra
                   ["Quantity", `${formatQty(tx.quantitySold)} ${tx.uom ?? ""}`],
                   ["Amount", tx.amount !== null && tx.amount !== undefined ? `${tx.amount} ${tx.currency ?? ""}` : "—"],
                   ["Batch", tx.batchNumber ? `${tx.batchNumber}${detail.posSourceName ? ` · ${detail.posSourceName}` : ""}` : "—"],
+                  ["SILA ledger", tx.consumptionTransactionNumber || "—"],
+                  ["SAP material doc", tx.erpReference || "—"],
                   ["Received", formatDateTime(tx.dateCreated)],
                 ].map(([label, value]) => (
                   <div className="sila-meta-item" key={label}>

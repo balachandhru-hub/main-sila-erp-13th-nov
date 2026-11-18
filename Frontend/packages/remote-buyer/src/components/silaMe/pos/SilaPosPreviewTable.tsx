@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import type {
   SilaPosConsumptionPreview,
   SilaPosPreview,
@@ -15,6 +15,8 @@ interface SilaPosPreviewTableProps {
   onProcess: (transactionIds: string[]) => void;
   onPreviewConsumption: (transactionIds: string[]) => void;
   onDiscard: () => void;
+  onSelectedIdsChange?: (ids: string[]) => void;
+  studioMode?: boolean;
 }
 
 const isSelectable = (row: SilaPosPreviewRow): boolean =>
@@ -28,8 +30,12 @@ const SilaPosPreviewTable: React.FC<SilaPosPreviewTableProps> = ({
   onProcess,
   onPreviewConsumption,
   onDiscard,
+  onSelectedIdsChange,
+  studioMode = false,
 }) => {
   const [filter, setFilter] = useState<RowFilter>("ALL");
+  const [search, setSearch] = useState("");
+  const [drawerRow, setDrawerRow] = useState<SilaPosPreviewRow | null>(null);
   const [selected, setSelected] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {};
     for (const row of preview.rows) {
@@ -48,11 +54,31 @@ const SilaPosPreviewTable: React.FC<SilaPosPreviewTableProps> = ({
     [selectableIds, selected],
   );
 
+  useEffect(() => {
+    onSelectedIdsChange?.(selectedIds);
+  }, [selectedIds, onSelectedIdsChange]);
+
   const rows = useMemo(() => {
-    if (filter === "READY") return preview.rows.filter((row) => row.status === "READY");
-    if (filter === "PROBLEMS") return preview.rows.filter((row) => row.status !== "READY");
-    return preview.rows;
-  }, [filter, preview.rows]);
+    const q = search.trim().toLowerCase();
+    return preview.rows.filter((row) => {
+      if (filter === "READY" && row.status !== "READY") return false;
+      if (filter === "PROBLEMS" && row.status === "READY") return false;
+      if (!q) return true;
+      const hay = [
+        row.businessDate,
+        row.transactionId,
+        row.posCode,
+        row.outletCode,
+        row.recipeCode,
+        row.message,
+        row.status,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return hay.includes(q);
+    });
+  }, [filter, preview.rows, search]);
 
   const notReady = preview.validRows - preview.readyToProcess;
   const toggleAllReady = (checked: boolean) => {
@@ -63,10 +89,13 @@ const SilaPosPreviewTable: React.FC<SilaPosPreviewTableProps> = ({
     });
   };
 
+  const consumptionFor = (row: SilaPosPreviewRow) =>
+    consumption?.lines.find((line) => line.saleTransactionId === row.saleTransactionId) ?? null;
+
   return (
-    <section className="sila-card" aria-live="polite">
-      <div className="sila-card-header">
-        <h2 className="sila-card-title">
+    <section className={studioMode ? "pstudio-panel" : "sila-card"} aria-live="polite" data-testid="pstudio-review-table">
+      <div className={studioMode ? undefined : "sila-card-header"} style={studioMode ? { display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: "0.75rem" } : undefined}>
+        <h2 className={studioMode ? "pstudio-panel__title" : "sila-card-title"}>
           Batch {preview.batchNumber}
           {preview.posSourceName ? ` · ${preview.posSourceName}` : ""}
         </h2>
@@ -94,32 +123,46 @@ const SilaPosPreviewTable: React.FC<SilaPosPreviewTableProps> = ({
           </button>
         </div>
       </div>
-      <div className="sila-card-body srec-stack">
-        <div className="srec-counts">
-          {[
-            ["Total rows", preview.totalRows],
-            ["Valid", preview.validRows],
-            ["Invalid", preview.invalidRows],
-            ["Duplicates", preview.duplicateRows],
-            ["Unmapped POS codes", preview.unmappedPosCodes],
-            ["Invalid outlets", preview.invalidOutlets],
-            ["Invalid UOM", preview.invalidUom],
-            ["Recipe not ready", preview.recipeNotReady],
-            ["Ready to process", preview.readyToProcess],
-            ["Selected", selectedIds.length],
-          ].map(([label, value]) => (
-            <div className="sila-meta-item" key={label}>
-              <span className="sila-meta-label">{label}</span>
-              <span className="sila-meta-value">{value}</span>
-            </div>
-          ))}
-        </div>
+
+      <div className={studioMode ? "srec-stack" : "sila-card-body srec-stack"}>
+        {studioMode ? (
+          <div className="pstudio-kpis">
+            <div className="pstudio-kpi pstudio-kpi--sky"><span>Uploaded lines</span><strong>{preview.totalRows}</strong></div>
+            <div className="pstudio-kpi pstudio-kpi--mint"><span>Valid</span><strong>{preview.validRows}</strong></div>
+            <div className="pstudio-kpi pstudio-kpi--amber"><span>Warning</span><strong>{Math.max(0, notReady)}</strong></div>
+            <div className="pstudio-kpi pstudio-kpi--rose"><span>Invalid</span><strong>{preview.invalidRows}</strong></div>
+            <div className="pstudio-kpi pstudio-kpi--blue"><span>Selected</span><strong>{selectedIds.length}</strong></div>
+            <div className="pstudio-kpi pstudio-kpi--lavender"><span>Ready</span><strong>{preview.readyToProcess}</strong></div>
+          </div>
+        ) : (
+          <div className="srec-counts">
+            {[
+              ["Total rows", preview.totalRows],
+              ["Valid", preview.validRows],
+              ["Invalid", preview.invalidRows],
+              ["Duplicates", preview.duplicateRows],
+              ["Unmapped POS codes", preview.unmappedPosCodes],
+              ["Invalid outlets", preview.invalidOutlets],
+              ["Invalid UOM", preview.invalidUom],
+              ["Recipe not ready", preview.recipeNotReady],
+              ["Ready to process", preview.readyToProcess],
+              ["Selected", selectedIds.length],
+            ].map(([label, value]) => (
+              <div className="sila-meta-item" key={label}>
+                <span className="sila-meta-label">{label}</span>
+                <span className="sila-meta-value">{value}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
         {notReady > 0 && (
           <div className="sila-alert sila-alert--warning" role="status">
             {notReady} stored line{notReady === 1 ? " is" : "s are"} not ready and cannot be selected for posting.
             Fix mapping or recipe, then re-upload or reprocess from the Transaction Tracker.
           </div>
         )}
+
         <div className="srec-actions" style={{ flexWrap: "wrap", gap: "0.75rem" }}>
           <label className="sila-choice" htmlFor="spos-select-all-ready">
             <input
@@ -130,36 +173,46 @@ const SilaPosPreviewTable: React.FC<SilaPosPreviewTableProps> = ({
             />
             Select all ready
           </label>
-          <label className="sila-label" htmlFor="spos-row-filter">Show</label>
-          <select
-            id="spos-row-filter"
+          <button type="button" className="sila-btn sila-btn--ghost sila-btn--sm" onClick={() => toggleAllReady(false)}>
+            Clear selection
+          </button>
+          <input
             className="sila-input"
-            value={filter}
-            onChange={(event) => setFilter(event.target.value as RowFilter)}
-          >
-            <option value="ALL">All</option>
-            <option value="READY">Valid / ready</option>
-            <option value="PROBLEMS">Warning / invalid</option>
-          </select>
+            style={{ minWidth: "12rem", maxWidth: "18rem" }}
+            placeholder="Search POS / outlet / recipe…"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            aria-label="Search sales lines"
+          />
+          {(["ALL", "READY", "PROBLEMS"] as RowFilter[]).map((chip) => (
+            <button
+              key={chip}
+              type="button"
+              className="pstudio-tab"
+              aria-selected={filter === chip}
+              onClick={() => setFilter(chip)}
+            >
+              {chip === "ALL" ? "All" : chip === "READY" ? "Valid / ready" : "Warning / invalid"}
+            </button>
+          ))}
         </div>
+
         {rows.length === 0 ? (
-          <p className="sila-cell-muted">No lines match this filter.</p>
+          <div className="pstudio-empty">No lines match this filter.</div>
         ) : (
           <div className="sila-table-wrap">
             <table className="sila-table">
               <thead>
                 <tr>
                   <th scope="col">Select</th>
-                  <th scope="col" className="srec-num">Row</th>
                   <th scope="col">Business date</th>
-                  <th scope="col">Transaction / line</th>
+                  <th scope="col">POS transaction</th>
                   <th scope="col">POS code</th>
-                  <th scope="col">Type</th>
-                  <th scope="col" className="srec-num">Qty</th>
+                  <th scope="col">Menu / recipe</th>
                   <th scope="col">Outlet</th>
-                  <th scope="col">Recipe</th>
-                  <th scope="col">Amount</th>
-                  <th scope="col">Status</th>
+                  <th scope="col" className="srec-num">Qty</th>
+                  <th scope="col">Sales amount</th>
+                  <th scope="col">Validation</th>
                   <th scope="col">Message</th>
                 </tr>
               </thead>
@@ -168,8 +221,12 @@ const SilaPosPreviewTable: React.FC<SilaPosPreviewTableProps> = ({
                   const id = row.saleTransactionId || "";
                   const canSelect = isSelectable(row);
                   return (
-                    <tr key={row.rowNumber}>
-                      <td>
+                    <tr
+                      key={row.rowNumber}
+                      style={{ cursor: "pointer" }}
+                      onClick={() => setDrawerRow(row)}
+                    >
+                      <td onClick={(event) => event.stopPropagation()}>
                         <input
                           type="checkbox"
                           aria-label={`Select row ${row.rowNumber}`}
@@ -181,20 +238,18 @@ const SilaPosPreviewTable: React.FC<SilaPosPreviewTableProps> = ({
                           }}
                         />
                       </td>
-                      <td className="srec-num">{row.rowNumber}</td>
                       <td>{row.businessDate || "—"}</td>
                       <td>{row.transactionId || "—"} / {row.lineId || "1"}</td>
                       <td>{row.posCode || "—"}</td>
-                      <td>{row.transactionType || "SALE"}</td>
-                      <td className="srec-num">{row.quantity || "—"} {row.uom || ""}</td>
-                      <td>
-                        {row.outletCode || "—"}
-                        {row.outletLocationName && <span className="srec-sub">{row.outletLocationName}</span>}
-                      </td>
                       <td>
                         {row.recipeCode || "—"}
                         {row.recipeVersion != null && <span className="srec-sub">v{row.recipeVersion}</span>}
                       </td>
+                      <td>
+                        {row.outletCode || "—"}
+                        {row.outletLocationName && <span className="srec-sub">{row.outletLocationName}</span>}
+                      </td>
+                      <td className="srec-num">{row.quantity || "—"} {row.uom || ""}</td>
                       <td>
                         {row.amount || "—"}
                         {row.currency && <span className="srec-sub">{row.currency}</span>}
@@ -210,7 +265,7 @@ const SilaPosPreviewTable: React.FC<SilaPosPreviewTableProps> = ({
         )}
         {preview.rowsTruncated && <span className="sila-help">Only the first 500 lines (problems first) are listed.</span>}
 
-        {consumption && (
+        {consumption && !studioMode && (
           <section className="sila-card" data-testid="pos-consumption-preview">
             <div className="sila-card-header">
               <h3 className="sila-card-title">Consumption preview · {consumption.batchNumber}</h3>
@@ -287,6 +342,50 @@ const SilaPosPreviewTable: React.FC<SilaPosPreviewTableProps> = ({
           </section>
         )}
       </div>
+
+      {drawerRow && (
+        <>
+          <div className="pstudio-drawer__backdrop" onClick={() => setDrawerRow(null)} aria-hidden />
+          <aside className="pstudio-drawer" role="dialog" aria-label="POS line details" data-testid="pstudio-line-drawer">
+            <div className="srec-actions" style={{ justifyContent: "space-between" }}>
+              <h3 className="pstudio-panel__title">Line detail</h3>
+              <button type="button" className="sila-btn sila-btn--ghost sila-btn--sm" onClick={() => setDrawerRow(null)}>Close</button>
+            </div>
+            <ul className="pstudio-list">
+              <li className="pstudio-list__item"><div><strong>POS source</strong><span className="srec-sub">{drawerRow.transactionId} / {drawerRow.lineId} · {drawerRow.businessDate}</span></div></li>
+              <li className="pstudio-list__item"><div><strong>Menu mapping</strong><span className="srec-sub">POS {drawerRow.posCode} → {drawerRow.recipeCode || "unmapped"}{drawerRow.recipeVersion != null ? ` v${drawerRow.recipeVersion}` : ""}</span></div></li>
+              <li className="pstudio-list__item"><div><strong>Outlet</strong><span className="srec-sub">{drawerRow.outletCode || "—"}{drawerRow.outletLocationName ? ` · ${drawerRow.outletLocationName}` : ""}</span></div></li>
+              <li className="pstudio-list__item"><div><strong>Validation</strong><span className="srec-sub">{posLabel(drawerRow.status)} · {drawerRow.message || "—"}</span></div></li>
+              <li className="pstudio-list__item"><div><strong>Posting eligibility</strong><span className="srec-sub">{isSelectable(drawerRow) ? "Ready to select and post" : "Not selectable until mapping / UOM / recipe is fixed"}</span></div></li>
+            </ul>
+            {(() => {
+              const line = consumptionFor(drawerRow);
+              if (!line) {
+                return <div className="pstudio-empty">Run Consumption preview for ingredient breakdown on this line.</div>;
+              }
+              return (
+                <div className="srec-stack">
+                  <h4 className="pstudio-panel__title">Ingredient breakdown</h4>
+                  <ul className="pstudio-list">
+                    {line.ingredients.map((ingredient) => (
+                      <li key={ingredient.materialId} className="pstudio-list__item">
+                        <div>
+                          <strong>{ingredient.materialCode || ingredient.materialId}</strong>
+                          <span className="srec-sub">{ingredient.materialDescription || "—"}</span>
+                        </div>
+                        <span>
+                          {ingredient.quantity} {ingredient.baseUom || ""}
+                          {ingredient.costPending ? " · COST PENDING" : ingredient.estimatedCost != null ? ` · ${ingredient.estimatedCost}` : ""}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })()}
+          </aside>
+        </>
+      )}
     </section>
   );
 };
