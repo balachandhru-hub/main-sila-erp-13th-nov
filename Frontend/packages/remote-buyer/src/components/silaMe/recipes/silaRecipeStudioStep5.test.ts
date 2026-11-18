@@ -69,7 +69,30 @@ assert.equal(request.ingredients.length, 1);
 assert.equal(request.ingredients[0].materialId, "162be6a1-4ffc-406c-baa4-c632b9eb0d1b");
 assert.equal(request.ingredients[0].quantity, 2);
 assert.equal(request.ingredients[0].uom, "EA");
+assert.equal(request.posCode, null);
+assert.equal(request.posItem, null);
 assert.deepEqual(request.outletPrices, []);
+
+const withPos = buildStudioCreateRequest({
+  name: "Step 5 Draft Cocktail",
+  familyId: "",
+  categoryId: "",
+  servingQty: "4",
+  servingUom: "EA",
+  posCode: "34567",
+  posItem: "34567",
+}, lines, [{
+  outletLocationId: "4ed928b7-d4d9-42bf-8f41-908e3b0fef54",
+  menuPrice: 190,
+  currency: "AED",
+  posCode: "34567",
+  posItem: "34567",
+}]);
+assert.equal(withPos.posCode, "34567");
+assert.equal(withPos.posItem, "34567");
+assert.equal(withPos.outletPrices.length, 1);
+assert.equal(withPos.outletPrices[0].posCode, "34567");
+assert.equal(withPos.outletPrices[0].posItem, "34567");
 
 assert.equal(verifyPersistedDraft({
   name: "Step 5 Draft Cocktail",

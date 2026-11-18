@@ -1,7 +1,7 @@
 import React from "react";
 import type { SilaRecipeListItem } from "../../../api/silaMe/silaRecipeApi";
 import { costPerServing, formatCost, formatQty, recipeBadgeClass, recipeLabel } from "./recipeFormat";
-import { resolveStudioKind, StudioCover } from "./recipeStudioVisuals";
+import SilaRecipePicture from "./SilaRecipePicture";
 
 interface SilaRecipeCatalogGridProps {
   rows: SilaRecipeListItem[];
@@ -15,15 +15,22 @@ interface SilaRecipeCatalogGridProps {
 const SilaRecipeCatalogGrid: React.FC<SilaRecipeCatalogGridProps> = ({ rows, canManage, onOpen, onEdit, onDelete }) => (
   <div className="rstudio-grid" role="list">
     {rows.map((row) => {
-      const kind = resolveStudioKind(row.category, row.familyName, row.name);
       const portionCost = row.costComplete || row.activeVersion > 0
         ? (row.costPerServing ?? costPerServing(row.totalCost, row.servingQty))
         : null;
-      const canDelete = canManage && row.status !== "INACTIVE" && Boolean(onDelete);
+      const canDelete = canManage && row.status === "DRAFT" && Boolean(onDelete);
       return (
         <article key={row.id} className="rstudio-card" role="listitem">
           <button type="button" className="rstudio-card__media" onClick={() => onOpen(row.id)} aria-label={`View ${row.name}`}>
-            <StudioCover kind={kind} title={row.name} subtitle={row.category || row.familyName || undefined} />
+            <SilaRecipePicture
+              recipeId={row.id}
+              hasPicture={Boolean(row.hasPicture)}
+              placeholderTitle={row.name}
+              placeholderCategory={row.category}
+              placeholderFamily={row.familyName}
+              variant="catalog"
+              locked
+            />
             <span className={`rstudio-card__status ${recipeBadgeClass(row.status)}`}>{recipeLabel(row.status)}</span>
           </button>
           <div className="rstudio-card__body">
@@ -47,8 +54,8 @@ const SilaRecipeCatalogGrid: React.FC<SilaRecipeCatalogGridProps> = ({ rows, can
                 <strong>{portionCost == null ? "COST PENDING" : formatCost(portionCost, row.currency)}</strong>
               </div>
               <div>
-                <em>Recipe cost</em>
-                <strong>{row.costComplete || row.activeVersion > 0 ? formatCost(row.totalCost, row.currency) : "COST PENDING"}</strong>
+                <em>Menu item</em>
+                <strong>{row.posItem || row.posCode || "—"}</strong>
               </div>
             </div>
             <div className="rstudio-card__actions">
@@ -57,7 +64,7 @@ const SilaRecipeCatalogGrid: React.FC<SilaRecipeCatalogGridProps> = ({ rows, can
                 <button type="button" className="sila-btn sila-btn--primary sila-btn--sm" onClick={() => onEdit(row.id)}>Edit</button>
               )}
               {canDelete && (
-                <button type="button" className="sila-btn sila-btn--danger sila-btn--sm" onClick={() => onDelete?.(row)}>Delete</button>
+                <button type="button" className="sila-btn sila-btn--danger sila-btn--sm" onClick={() => onDelete?.(row)}>Delete Draft</button>
               )}
             </div>
           </div>

@@ -301,6 +301,12 @@
 .rstudio-detail-hero__cover {
   min-height: 14rem;
   border-radius: 1rem;
+  overflow: hidden;
+}
+
+.rstudio-detail-hero__cover .rstudio-picture__frame {
+  min-height: 14rem;
+  border-radius: 1rem;
 }
 
 .rstudio-detail-hero__copy h1 {

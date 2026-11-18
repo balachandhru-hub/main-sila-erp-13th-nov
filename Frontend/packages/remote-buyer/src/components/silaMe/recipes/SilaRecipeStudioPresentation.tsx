@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { toastService } from "@vosox/shared-ui";
+import { Modal, toastService } from "@vosox/shared-ui";
 import {
   getLocations,
   getMyLocations,
@@ -8,7 +8,10 @@ import {
 import {
   createRecipe,
   createRecipeRevision,
+  deleteRecipeDraft,
   getRecipe,
+  removeRecipePicture,
+  setRecipePicture,
   submitRecipe,
   updateRecipe,
   type SilaRecipeDetail,
@@ -40,6 +43,14 @@ import {
   type StudioSaveFieldErrors,
 } from "./recipeStudioDraftSave";
 import { studioEditAccess } from "./recipeStudioEditAccess";
+import {
+  canDeleteDraftRecipe,
+  DELETE_DRAFT_BODY,
+  DELETE_DRAFT_CONFIRM_LABEL,
+  DELETE_DRAFT_SUCCESS,
+  DELETE_DRAFT_TITLE,
+  DISCARD_CHANGES_LABEL,
+} from "./recipeStudioDraftDelete";
 import { formFromRecipeDetail } from "./recipeStudioEditLoad";
 import {
   loadTargetFoodCostPercent,
@@ -50,6 +61,7 @@ import {
 } from "./recipeStudioSuggestions";
 import SilaRecipeCanvas from "./SilaRecipeCanvas";
 import SilaRecipeMaterialLibrary from "./SilaRecipeMaterialLibrary";
+import SilaRecipePicture from "./SilaRecipePicture";
 import { RECIPE_WORKSPACE_BACK_LABEL } from "./recipeWorkspaceShellCopy";
 import "./SilaRecipeStudioPresentation.css";
 
@@ -65,8 +77,8 @@ interface SilaRecipeStudioPresentationProps {
 }
 
 /**
- * Step 6 Recipe Studio presentation.
- * Create + Edit load/update, explicit revision for approved/rejected, and Submit.
+ * Step 7 Recipe Studio presentation.
+ * Create + Edit load/update, picture management, explicit revision, and Submit.
  */
 const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> = ({
   mode,
@@ -89,8 +101,11 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
   const [targetFoodCost, setTargetFoodCost] = useState(() => String(loadTargetFoodCostPercent()));
   const [classConfirmed, setClassConfirmed] = useState(false);
   const [menuItem, setMenuItem] = useState("");
+  const [posCode, setPosCode] = useState("");
+  const [posItem, setPosItem] = useState("");
   const [outletNote, setOutletNote] = useState("");
   const [outletPrices, setOutletPrices] = useState<Record<string, string>>({});
+  const [outletPos, setOutletPos] = useState<Record<string, { posCode: string; posItem: string }>>({});
 
   const [lines, setLines] = useState<IngredientLine[]>([]);
   const [replaceKey, setReplaceKey] = useState<string | null>(null);
@@ -110,11 +125,42 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
   const [loadingRecipe, setLoadingRecipe] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
+  const [localPictureFile, setLocalPictureFile] = useState<File | null>(null);
+  const [localPreviewUrl, setLocalPreviewUrl] = useState<string | null>(null);
+  const [hasPicture, setHasPicture] = useState(false);
+  const [pictureBusy, setPictureBusy] = useState(false);
+  const [pictureError, setPictureError] = useState<string | null>(null);
+  const [confirmDeleteDraft, setConfirmDeleteDraft] = useState(false);
+  const [deletingDraft, setDeletingDraft] = useState(false);
+  /** Full OUTLET catalog (not just authorized) used to resolve priced / newly selected outlets like FL10. */
+  const [outletCatalog, setOutletCatalog] = useState<SilaLocation[]>([]);
+  const outletCatalogRef = useRef<SilaLocation[]>([]);
+  const [pictureEpoch, setPictureEpoch] = useState(0);
   /** Prevents a second CREATE for the same local draft if navigation is slow. */
   const createdIdRef = useRef<string | null>(null);
   const revisionGuardRef = useRef(false);
+  const previewUrlRef = useRef<string | null>(null);
 
   const markDirty = () => setDirty(true);
+
+  const clearLocalPicture = () => {
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current);
+      previewUrlRef.current = null;
+    }
+    setLocalPreviewUrl(null);
+    setLocalPictureFile(null);
+  };
+
+  const assignLocalPicture = (file: File) => {
+    clearLocalPicture();
+    const url = URL.createObjectURL(file);
+    previewUrlRef.current = url;
+    setLocalPreviewUrl(url);
+    setLocalPictureFile(file);
+    setPictureError(null);
+    markDirty();
+  };
 
   const applyLoadedForm = (detail: SilaRecipeDetail) => {
     const form = formFromRecipeDetail(detail, []);
@@ -128,14 +174,25 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
     setServingUom(form.servingUom);
     setPrepTime(form.prepTime);
     setMenuItem(form.menuItem);
+    setPosCode(form.posCode);
+    setPosItem(form.posItem);
     setOutletNote(form.outletNote);
     setClassConfirmed(form.classConfirmed);
     setLines(form.lines);
     setOutletPrices(form.outletPrices);
+    setOutletPos(form.outletPos);
+    setHasPicture(Boolean(detail.hasPicture));
+    clearLocalPicture();
+    setPictureError(null);
+    setPictureEpoch((value) => value + 1);
     setDirty(false);
     setFieldErrors({});
     setReplaceKey(null);
   };
+
+  useEffect(() => () => {
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -156,12 +213,19 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
           })),
         ]);
         if (!active) return;
+        const allOutlets = allLocations.filter((location) => location.locationType === "OUTLET");
         const scoped = (myLocations.ok ? myLocations.items : allLocations)
           .filter((location) => location.locationType === "OUTLET");
-        const sorted = scoped.length > 0
-          ? scoped
-          : allLocations.filter((location) => location.locationType === "OUTLET");
-        setOutlets(sorted.sort((a, b) => a.locationName.localeCompare(b.locationName)));
+        // Prefer authorized outlets; keep full OUTLET catalog as fallback so FL* codes stay selectable.
+        const sorted = (scoped.length > 0 ? scoped : allOutlets)
+          .slice()
+          .sort((a, b) => a.locationName.localeCompare(b.locationName));
+        const catalog = (allOutlets.length > 0 ? allOutlets : sorted)
+          .slice()
+          .sort((a, b) => a.locationName.localeCompare(b.locationName));
+        outletCatalogRef.current = catalog;
+        setOutletCatalog(catalog);
+        setOutlets(sorted);
         setFamilies(loadedFamilies);
         setCategories(loadedCategories);
         setCatalogPool(browse.items);
@@ -200,6 +264,17 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
         if (!active) return;
         setLoadedRecipe(detail);
         applyLoadedForm(detail);
+        // Ensure every saved outlet (and common codes like FL10) appears even if not in myLocations.
+        setOutlets((current) => {
+          const byId = new Map(current.map((outlet) => [outlet.id, outlet]));
+          for (const outlet of outletCatalogRef.current) byId.set(outlet.id, outlet);
+          for (const price of detail.outletPrices ?? []) {
+            if (byId.has(price.outletLocationId)) continue;
+            const found = outletCatalogRef.current.find((outlet) => outlet.id === price.outletLocationId);
+            if (found) byId.set(found.id, found);
+          }
+          return Array.from(byId.values()).sort((a, b) => a.locationName.localeCompare(b.locationName));
+        });
         const firstOutlet = detail.outletPrices?.[0]?.outletLocationId;
         if (firstOutlet) setOutletLocationId(firstOutlet);
       } catch (err: unknown) {
@@ -248,7 +323,9 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
   const status = loadedRecipe?.status ?? (isEdit ? "" : "DRAFT");
   const editAccess = isEdit ? studioEditAccess(status) : { kind: "editable" as const };
   const canEdit = !isEdit || editAccess.kind === "editable";
-  const busy = saving || submitting || revising || loadingRecipe;
+  const busy = saving || submitting || revising || loadingRecipe || deletingDraft || pictureBusy;
+  const showDeleteDraft = isEdit && Boolean(loadedRecipe) && canDeleteDraftRecipe(status);
+  const showDiscardChanges = !isEdit;
   const persistedEditId = (loadedRecipe?.id || idText || "").trim();
 
   const commitLines = (next: IngredientLine[] | ((current: IngredientLine[]) => IngredientLine[])) => {
@@ -268,7 +345,46 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
     return notes.join(" · ");
   };
 
+  const defaultPosIdentity = () => (posCode.trim() || posItem.trim() || menuItem.trim());
+
+  /** Recipe-level default POS / menu item (seeds new outlet assignments). */
+  const setPosIdentity = (value: string) => {
+    markDirty();
+    setMenuItem(value);
+    setPosCode(value);
+    setPosItem(value);
+  };
+
+  /** POS code / POS item for the selected outlet assignment (outlet-specific). */
+  const selectedOutletPosValue = outletLocationId
+    ? (outletPos[outletLocationId]?.posCode
+      || outletPos[outletLocationId]?.posItem
+      || defaultPosIdentity())
+    : defaultPosIdentity();
+
+  const setSelectedOutletPos = (value: string) => {
+    markDirty();
+    if (!outletLocationId) {
+      setPosIdentity(value);
+      return;
+    }
+    setOutletPos((current) => ({
+      ...current,
+      [outletLocationId]: { posCode: value, posItem: value },
+    }));
+  };
+
+  const ensureOutletPos = (outletId: string) => {
+    setOutletPos((current) => {
+      if (current[outletId]?.posCode || current[outletId]?.posItem) return current;
+      const identity = defaultPosIdentity();
+      if (!identity) return current;
+      return { ...current, [outletId]: { posCode: identity, posItem: identity } };
+    });
+  };
+
   const buildRequest = () => {
+    const posIdentity = defaultPosIdentity();
     const header = {
       name,
       description: buildOptionalDescription(),
@@ -279,6 +395,8 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
       servingUom,
       sellingUom: loadedRecipe?.sellingUom || "EA",
       currency: currency || loadedRecipe?.currency || undefined,
+      posCode: posIdentity,
+      posItem: posIdentity,
     };
     const draftLines = lines.map((line) => ({
       materialId: line.material?.id ?? null,
@@ -288,11 +406,20 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
     }));
     const prices = Object.entries(outletPrices)
       .filter(([, value]) => value.trim() !== "")
-      .map(([outletLocationIdKey, value]) => ({
-        outletLocationId: outletLocationIdKey,
-        menuPrice: toNumber(value),
-        currency: currency || loadedRecipe?.currency || null,
-      }));
+      .map(([outletLocationIdKey, value]) => {
+        const outletIdentity = (
+          outletPos[outletLocationIdKey]?.posCode
+          || outletPos[outletLocationIdKey]?.posItem
+          || posIdentity
+        ).trim();
+        return {
+          outletLocationId: outletLocationIdKey,
+          menuPrice: toNumber(value),
+          currency: currency || loadedRecipe?.currency || null,
+          posCode: outletIdentity || null,
+          posItem: outletIdentity || null,
+        };
+      });
     return {
       header,
       draftLines,
@@ -317,6 +444,78 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
     },
     request,
   );
+
+  const persistPendingPicture = async (recipeId: string): Promise<boolean> => {
+    if (!localPictureFile) return true;
+    setPictureBusy(true);
+    setPictureError(null);
+    try {
+      await setRecipePicture(recipeId, localPictureFile);
+      clearLocalPicture();
+      setHasPicture(true);
+      setPictureEpoch((value) => value + 1);
+      return true;
+    } catch (err: unknown) {
+      const message = err instanceof Error
+        ? `Recipe saved, but the picture was not stored: ${err.message}`
+        : "Recipe saved, but the picture was not stored.";
+      setPictureError(message);
+      toastService.error(message);
+      return false;
+    } finally {
+      setPictureBusy(false);
+    }
+  };
+
+  const handleChoosePicture = async (file: File) => {
+    if (!canEdit) return;
+    assignLocalPicture(file);
+    const targetId = isEdit ? persistedEditId : (createdIdRef.current || "");
+    if (!targetId) return;
+    setPictureBusy(true);
+    setPictureError(null);
+    try {
+      await setRecipePicture(targetId, file);
+      clearLocalPicture();
+      setHasPicture(true);
+      setPictureEpoch((value) => value + 1);
+      toastService.success("Recipe picture saved.");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Could not save the recipe picture.";
+      setPictureError(message);
+      toastService.error(message);
+    } finally {
+      setPictureBusy(false);
+    }
+  };
+
+  const handleRemovePicture = async () => {
+    if (!canEdit) return;
+    setPictureError(null);
+    if (localPictureFile || localPreviewUrl) {
+      clearLocalPicture();
+      markDirty();
+      return;
+    }
+    const targetId = isEdit ? persistedEditId : (createdIdRef.current || "");
+    if (!targetId || !hasPicture) {
+      setHasPicture(false);
+      return;
+    }
+    setPictureBusy(true);
+    try {
+      const info = await removeRecipePicture(targetId);
+      setHasPicture(Boolean(info.hasPicture));
+      setPictureEpoch((value) => value + 1);
+      toastService.success("Recipe picture removed.");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Could not remove the recipe picture.";
+      setPictureError(message);
+      toastService.error(message);
+    } finally {
+      setPictureBusy(false);
+    }
+  };
 
   const handleSaveDraft = async (options?: { skipNavigate?: boolean }): Promise<string | null> => {
     if (saving || submitting || revising) return null;
@@ -366,12 +565,14 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
         setSaving(false);
         return persistedId;
       }
-      setLoadedRecipe(detail);
-      applyLoadedForm(detail);
+      const pictureOk = await persistPendingPicture(persistedId);
+      const refreshed = pictureOk ? await getRecipe(persistedId).catch(() => detail) : detail;
+      setLoadedRecipe(refreshed);
+      applyLoadedForm(refreshed);
       toastService.success(
         isEdit
-          ? `Draft updated (${detail.recipeCode || persistedId}).`
-          : `Recipe saved as draft (${detail.recipeCode || persistedId}).`,
+          ? `Draft updated (${refreshed.recipeCode || persistedId}).`
+          : `Recipe saved as draft (${refreshed.recipeCode || persistedId}).`,
       );
       if (!isEdit && !options?.skipNavigate) onDraftSaved?.(persistedId);
       return persistedId;
@@ -381,6 +582,7 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
         : `Draft saved (${persistedId}) but could not be re-read.`;
       setVerifyWarning(message);
       toastService.error(message);
+      await persistPendingPicture(persistedId);
       return persistedId;
     } finally {
       setSaving(false);
@@ -441,6 +643,26 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
   const handleBack = () => {
     if (dirty && !window.confirm("You have unsaved changes. Leave Recipe Studio anyway?")) return;
     onBackToCatalog();
+  };
+
+  const handleDeleteDraft = async () => {
+    const targetId = (loadedRecipe?.id || idText).trim();
+    if (!targetId || !showDeleteDraft) return;
+    setDeletingDraft(true);
+    setSaveError(null);
+    try {
+      await deleteRecipeDraft(targetId);
+      toastService.success(DELETE_DRAFT_SUCCESS);
+      setConfirmDeleteDraft(false);
+      setDirty(false);
+      onBackToCatalog();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Could not delete the draft recipe.";
+      setSaveError(message);
+      toastService.error(message);
+    } finally {
+      setDeletingDraft(false);
+    }
   };
 
   const addMaterial = (option: SilaIngredientOption) => {
@@ -558,12 +780,12 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
 
       <header className="rstudio-build__top">
         <div>
-          <p className="rstudio-kicker">SILA Recipe Studio · Step 6 of 7</p>
+          <p className="rstudio-kicker">SILA Recipe Studio · Step 7 of 7</p>
           <h1>{heading}</h1>
           <p className="rstudio-build__top-meta">
             {isEdit
-              ? "Load, edit, revise, and submit using the existing Recipe Master APIs. Approved versions stay read-only until you create a Draft revision."
-              : "Live Material Catalog with Save Draft and Submit. Successful create opens Recipe Detail; Edit reuses this same Studio."}
+              ? "Load, edit, picture, revise, and submit using the existing Recipe Master APIs. Approved versions stay read-only until you create a Draft revision."
+              : "Live Material Catalog with picture, Save Draft and Submit. Successful create opens Recipe Detail; Edit reuses this same Studio."}
           </p>
           <div className="rstudio-build__badges">
             <span className={recipeBadgeClass(status || "DRAFT")} data-testid="recipe-studio-status">
@@ -734,11 +956,22 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
                   />
                 </div>
               </div>
-              <div className="rstudio-image-ph" aria-hidden="true">
-                Recipe image
-                <br />
-                placeholder
-              </div>
+              <SilaRecipePicture
+                key={`studio-pic-${persistedEditId || "new"}-${pictureEpoch}`}
+                recipeId={persistedEditId || createdIdRef.current}
+                preferDraft
+                hasPicture={hasPicture}
+                localPreviewUrl={localPreviewUrl}
+                placeholderTitle={name || "Recipe"}
+                placeholderCategory={categoryName}
+                placeholderFamily={familyName}
+                locked={!canEdit}
+                variant="studio"
+                busy={pictureBusy || busy}
+                error={pictureError}
+                onChooseFile={handleChoosePicture}
+                onRemove={handleRemovePicture}
+              />
             </div>
             {canEdit && classification && !classConfirmed && (
               <div className="rstudio-suggest" role="status">
@@ -837,60 +1070,164 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
             <p className="rstudio-section__label">Menu and outlet</p>
             <div className="rstudio-fields">
               <div className="rstudio-field rstudio-field--wide">
-                <label htmlFor="rstudio-stock-outlet">Outlet for stock / costing</label>
+                <label htmlFor="rstudio-stock-outlet">Outlet</label>
                 <select
                   id="rstudio-stock-outlet"
                   value={outletLocationId}
-                  onChange={(e) => setOutletLocationId(e.target.value)}
+                  onChange={(e) => {
+                    const nextId = e.target.value;
+                    setOutletLocationId(nextId);
+                    // Pull from full catalog when selecting an outlet not yet in the short list (e.g. FL10).
+                    if (nextId && !outlets.some((outlet) => outlet.id === nextId)) {
+                      const found = outletCatalogRef.current.find((outlet) => outlet.id === nextId);
+                      if (found) {
+                        setOutlets((current) => [...current, found].sort((a, b) => a.locationName.localeCompare(b.locationName)));
+                      }
+                    }
+                    if (nextId && Object.prototype.hasOwnProperty.call(outletPrices, nextId)) {
+                      ensureOutletPos(nextId);
+                    }
+                  }}
                   data-testid="recipe-studio-outlet"
                 >
-                  <option value="">Select outlet to view stock</option>
-                  {outlets.map((outlet) => (
-                    <option key={outlet.id} value={outlet.id}>
-                      {outlet.locationName}
-                      {outlet.plantCode || outlet.storageLocationCode
-                        ? ` · ${[outlet.plantCode, outlet.storageLocationCode].filter(Boolean).join("/")}`
-                        : ""}
-                    </option>
-                  ))}
+                  <option value="">Select outlet for stock and menu price</option>
+                  {(outletCatalog.length > 0 ? outletCatalog : outlets).map((outlet) => (
+                      <option key={outlet.id} value={outlet.id}>
+                        {outlet.locationCode ? `${outlet.locationCode} · ` : ""}
+                        {outlet.locationName}
+                        {outlet.plantCode || outlet.storageLocationCode
+                          ? ` · ${[outlet.plantCode, outlet.storageLocationCode].filter(Boolean).join("/")}`
+                          : ""}
+                      </option>
+                    ))}
                 </select>
               </div>
-              <div className="rstudio-field rstudio-field--wide">
-                <label htmlFor="rstudio-menu">Linked menu item</label>
+              <div className="rstudio-field">
+                <label htmlFor="rstudio-menu-price">Menu price for selected outlet</label>
+                <input
+                  id="rstudio-menu-price"
+                  inputMode="decimal"
+                  value={outletLocationId ? (outletPrices[outletLocationId] ?? "") : ""}
+                  placeholder={
+                    pricing.suggestedSellingPrice != null
+                      ? `e.g. ${pricing.suggestedSellingPrice.toFixed(2)}`
+                      : "Enter selling price"
+                  }
+                  disabled={!canEdit || !outletLocationId}
+                  data-testid="recipe-studio-outlet-menu-price"
+                  onChange={(e) => {
+                    if (!outletLocationId) return;
+                    const value = e.target.value;
+                    markDirty();
+                    if (value.trim() === "") {
+                      setOutletPrices((current) => {
+                        const next = { ...current };
+                        delete next[outletLocationId];
+                        return next;
+                      });
+                      setOutletPos((current) => {
+                        const next = { ...current };
+                        delete next[outletLocationId];
+                        return next;
+                      });
+                      return;
+                    }
+                    setOutletPrices((current) => ({ ...current, [outletLocationId]: value }));
+                    ensureOutletPos(outletLocationId);
+                  }}
+                />
+              </div>
+              <div className="rstudio-field">
+                <label htmlFor="rstudio-pos-code">POS code (this outlet)</label>
+                <input
+                  id="rstudio-pos-code"
+                  value={outletLocationId ? selectedOutletPosValue : posCode}
+                  placeholder="Outlet POS code"
+                  disabled={!canEdit || !outletLocationId}
+                  maxLength={50}
+                  data-testid="recipe-studio-pos-code"
+                  onChange={(e) => setSelectedOutletPos(e.target.value)}
+                />
+              </div>
+              <div className="rstudio-field">
+                <label htmlFor="rstudio-pos-item">POS item (this outlet)</label>
+                <input
+                  id="rstudio-pos-item"
+                  value={outletLocationId ? selectedOutletPosValue : posItem}
+                  placeholder="Same as POS code / menu item"
+                  disabled={!canEdit || !outletLocationId}
+                  maxLength={200}
+                  data-testid="recipe-studio-pos-item"
+                  onChange={(e) => setSelectedOutletPos(e.target.value)}
+                />
+              </div>
+              <div className="rstudio-field">
+                <label htmlFor="rstudio-menu">Linked menu item (default)</label>
                 <input
                   id="rstudio-menu"
                   value={menuItem}
-                  placeholder="Placeholder — Menu Engineering later"
+                  placeholder="Default POS / menu identity for new outlets"
                   disabled={!canEdit}
-                  onChange={(e) => setHeader(setMenuItem, e.target.value)}
-                />
-              </div>
-              <div className="rstudio-field rstudio-field--wide">
-                <label htmlFor="rstudio-outlets">Outlet assignments</label>
-                <input
-                  id="rstudio-outlets"
-                  value={outletNote}
-                  placeholder="Placeholder — outlet prices later"
-                  disabled={!canEdit}
-                  onChange={(e) => setHeader(setOutletNote, e.target.value)}
+                  data-testid="recipe-studio-menu-item"
+                  onChange={(e) => setPosIdentity(e.target.value)}
                 />
               </div>
               {Object.keys(outletPrices).length > 0 && (
                 <div className="rstudio-field rstudio-field--wide" data-testid="recipe-studio-outlet-prices">
-                  <label>Saved outlet menu prices</label>
-                  <p className="rstudio-panel__hint">
+                  <label>Assigned outlets (price · POS)</label>
+                  <ul className="rstudio-outlet-price-list">
                     {Object.entries(outletPrices).map(([outletId, price]) => {
-                      const outlet = outlets.find((item) => item.id === outletId);
-                      return `${outlet?.locationName || outletId}: ${price}`;
-                    }).join(" · ")}
-                  </p>
+                      const outlet = outlets.find((item) => item.id === outletId)
+                        || outletCatalogRef.current.find((item) => item.id === outletId);
+                      const label = outlet
+                        ? `${outlet.locationCode ? `${outlet.locationCode} · ` : ""}${outlet.locationName}`
+                        : outletId;
+                      const outletIdentity = outletPos[outletId]?.posCode
+                        || outletPos[outletId]?.posItem
+                        || defaultPosIdentity()
+                        || "—";
+                      return (
+                        <li key={outletId}>
+                          <button
+                            type="button"
+                            className="rstudio-outlet-price-list__pick"
+                            onClick={() => setOutletLocationId(outletId)}
+                          >
+                            {label}: {price}{currency ? ` ${currency}` : ""} · POS {outletIdentity}
+                          </button>
+                          {canEdit && (
+                            <button
+                              type="button"
+                              className="sila-btn sila-btn--ghost sila-btn--sm"
+                              aria-label={`Remove menu price for ${label}`}
+                              onClick={() => {
+                                markDirty();
+                                setOutletPrices((current) => {
+                                  const next = { ...current };
+                                  delete next[outletId];
+                                  return next;
+                                });
+                                setOutletPos((current) => {
+                                  const next = { ...current };
+                                  delete next[outletId];
+                                  return next;
+                                });
+                              }}
+                            >
+                              Remove
+                            </button>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
                 </div>
               )}
             </div>
             <p className="rstudio-panel__hint">
               {selectedOutlet
-                ? `Stock uses inventory at ${selectedOutlet.locationName}. Out-of-stock materials can still be added.`
-                : "Stock not determined until an authorized outlet is selected. No reservations or ledger writes."}
+                ? `Stock/costing uses ${selectedOutlet.locationCode || ""} ${selectedOutlet.locationName}. Enter menu price and POS code/item for this outlet, then Save Draft.`
+                : "Select an outlet (e.g. FL10), enter menu price and POS code/item for that outlet, then Save Draft."}
             </p>
           </div>
         </section>
@@ -940,6 +1277,17 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
         <button type="button" className="sila-btn sila-btn--secondary" onClick={handleBack} disabled={busy}>
           {RECIPE_WORKSPACE_BACK_LABEL}
         </button>
+        {showDiscardChanges && (
+          <button
+            type="button"
+            className="sila-btn sila-btn--secondary"
+            onClick={handleBack}
+            disabled={busy}
+            data-testid="recipe-studio-discard-changes"
+          >
+            {DISCARD_CHANGES_LABEL}
+          </button>
+        )}
         {editAccess.kind === "revision-required" && isEdit && (
           <button
             type="button"
@@ -971,6 +1319,17 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
         >
           {submitting ? "Submitting…" : "Submit for approval"}
         </button>
+        {showDeleteDraft && (
+          <button
+            type="button"
+            className="sila-btn sila-btn--danger"
+            onClick={() => setConfirmDeleteDraft(true)}
+            disabled={busy}
+            data-testid="recipe-studio-delete-draft"
+          >
+            Delete Draft
+          </button>
+        )}
         <p className="rstudio-actions__note">
           {isEdit
             ? canEdit
@@ -978,9 +1337,36 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
               : editAccess.kind === "revision-required"
                 ? "Create an explicit Draft revision before editing. The approved selling version stays unchanged until the revision is approved."
                 : editAccess.reason
-            : "Save Draft posts createRecipe (or updateRecipe after first save). Submit validates, saves, then calls submitRecipe. No auto-approve."}
+            : "Save Draft posts createRecipe (or updateRecipe after first save). Submit validates, saves, then calls submitRecipe. No auto-approve. Use Discard Changes for an unsaved new recipe."}
         </p>
       </div>
+
+      <Modal
+        isOpen={confirmDeleteDraft}
+        onClose={() => { if (!deletingDraft) setConfirmDeleteDraft(false); }}
+        variant="danger"
+        headerProps={{ heading: DELETE_DRAFT_TITLE }}
+        footerProps={{
+          secondaryButton: {
+            text: "Cancel",
+            onClick: () => setConfirmDeleteDraft(false),
+            disabled: deletingDraft,
+          },
+          primaryButton: {
+            text: DELETE_DRAFT_CONFIRM_LABEL,
+            loading: deletingDraft,
+            disabled: deletingDraft,
+            onClick: () => { void handleDeleteDraft(); },
+          },
+        }}
+      >
+        <p className="sila-modal-text">{DELETE_DRAFT_BODY}</p>
+        <p className="sila-modal-text">
+          <strong>{loadedRecipe?.name || name || "—"}</strong>
+          {" · "}
+          {loadedRecipe?.recipeCode || recipeCode || "—"}
+        </p>
+      </Modal>
     </div>
   );
 };

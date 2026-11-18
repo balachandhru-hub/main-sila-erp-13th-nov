@@ -57,6 +57,8 @@ namespace Buyer.Domain.Dtos
         public DateTime? SubmittedOn { get; set; }
         public DateTime? ApprovedOn { get; set; }
         public DateTime DateUpdated { get; set; }
+        /// <summary>Selling/catalog picture exists under managed file storage for this recipe.</summary>
+        public bool HasPicture { get; set; }
         /// <summary>Approval list only: CREATE (never approved) or CHANGE (new version of an approved recipe).</summary>
         public string? ApprovalEvent { get; set; }
         /// <summary>Approval list only: the level waiting for a decision (1-based) and the number of levels.</summary>

@@ -1,10 +1,14 @@
 using Buyer.Application.Features.Commands.CreateSilaRecipe;
 using Buyer.Application.Features.Commands.DeactivateSilaRecipe;
+using Buyer.Application.Features.Commands.DeleteSilaRecipeDraft;
 using Buyer.Application.Features.Commands.DecideSilaRecipe;
+using Buyer.Application.Features.Commands.RemoveSilaRecipePicture;
+using Buyer.Application.Features.Commands.SetSilaRecipePicture;
 using Buyer.Application.Features.Commands.SubmitSilaRecipe;
 using Buyer.Application.Features.Commands.UpdateSilaRecipe;
 using Buyer.Application.Features.Queries.GetSilaRecipe;
 using Buyer.Application.Features.Queries.GetSilaRecipeApprovals;
+using Buyer.Application.Features.Queries.GetSilaRecipePicture;
 using Buyer.Application.Features.Queries.GetSilaRecipes;
 using Buyer.Application.Features.Queries.GetSilaRecipeWorkflows;
 using Buyer.Domain.Dtos;
@@ -24,6 +28,8 @@ namespace Buyer.API.Controllers
     [ApiController]
     public class SilaRecipeController : BaseController
     {
+        private const long PICTURE_UPLOAD_LIMIT = 6 * 1024 * 1024;
+
         private readonly IMediator _mediator;
         private readonly ILoggerManager _logger;
 
@@ -204,6 +210,102 @@ namespace Buyer.API.Controllers
             });
             _logger.LogDebug($"Recipe deactivated. RecipeId: {recipeId}");
             return Ok(new SuccessResponseDto { Id = recipeId.ToString(), StatusCode = 200, Message = "Success", Description = "Recipe deactivated." });
+        }
+
+        /// <summary>
+        /// Deletes a Draft recipe (soft-delete) or discards a Draft revision of an approved recipe without touching the approved selling version.
+        /// </summary>
+        [HttpPost]
+        [Route("api/v1/buyer/sila/recipes/{recipeId}/draft/delete")]
+        [ApiAuthorization(Name = "MANAGE_SILA_RECIPE")]
+        [SwaggerOperation("DeleteSilaRecipeDraft")]
+        [SwaggerResponse(200, type: typeof(SuccessResponseDto))]
+        public async Task<IActionResult> DeleteDraft([FromRoute] Guid recipeId)
+        {
+            _logger.LogDebug($"Deleting recipe draft. RecipeId: {recipeId}");
+            await _mediator.Send(new DeleteSilaRecipeDraftCommand
+            {
+                OrganizationId = GetOrganizationId(),
+                UserId = GetUserId(),
+                RoleId = GetRoleId(),
+                RecipeId = recipeId
+            });
+            _logger.LogDebug($"Recipe draft deleted. RecipeId: {recipeId}");
+            return Ok(new SuccessResponseDto { Id = recipeId.ToString(), StatusCode = 200, Message = "Success", Description = "Draft recipe deleted." });
+        }
+
+        [HttpPost]
+        [Route("api/v1/buyer/sila/recipes/{recipeId:guid}/picture")]
+        [ApiAuthorization(Name = "MANAGE_SILA_RECIPE")]
+        [Consumes("multipart/form-data")]
+        [RequestSizeLimit(PICTURE_UPLOAD_LIMIT)]
+        [SwaggerOperation("SetSilaRecipePicture")]
+        [SwaggerResponse(200, type: typeof(SilaRecipePictureDto))]
+        public async Task<IActionResult> SetPicture([FromRoute] Guid recipeId, IFormFile file)
+        {
+            _logger.LogDebug($"Setting recipe picture. RecipeId: {recipeId}, Bytes: {file?.Length}");
+            byte[] content = Array.Empty<byte>();
+            if (file != null && file.Length > 0)
+            {
+                using MemoryStream stream = new MemoryStream();
+                await file.CopyToAsync(stream);
+                content = stream.ToArray();
+            }
+
+            SilaRecipePictureDto result = await _mediator.Send(new SetSilaRecipePictureCommand
+            {
+                OrganizationId = GetOrganizationId(),
+                UserId = GetUserId(),
+                RoleId = GetRoleId(),
+                RecipeId = recipeId,
+                Request = new SilaRecipePictureUploadDto
+                {
+                    FileName = file?.FileName ?? string.Empty,
+                    ContentType = file?.ContentType,
+                    Content = content
+                }
+            });
+            _logger.LogDebug($"Recipe picture saved. RecipeId: {recipeId}, Slot: {result.Slot}");
+            return Ok(result);
+        }
+
+        [HttpGet]
+        [Route("api/v1/buyer/sila/recipes/{recipeId:guid}/picture")]
+        [ApiAuthorization(Name = "VIEW_SILA_RECIPE")]
+        [SwaggerOperation("GetSilaRecipePicture")]
+        [SwaggerResponse(200, type: typeof(FileContentResult))]
+        public async Task<IActionResult> GetPicture([FromRoute] Guid recipeId, [FromQuery] bool preferDraft = false)
+        {
+            _logger.LogDebug($"Fetching recipe picture. RecipeId: {recipeId}, PreferDraft: {preferDraft}");
+            SilaRecipePictureFileDto result = await _mediator.Send(new GetSilaRecipePictureQuery
+            {
+                OrganizationId = GetOrganizationId(),
+                UserId = GetUserId(),
+                RoleId = GetRoleId(),
+                RecipeId = recipeId,
+                PreferDraft = preferDraft
+            });
+            _logger.LogDebug($"Recipe picture fetched. RecipeId: {recipeId}, Bytes: {result.Content.Length}");
+            return File(result.Content, result.ContentType, result.FileName);
+        }
+
+        [HttpDelete]
+        [Route("api/v1/buyer/sila/recipes/{recipeId:guid}/picture")]
+        [ApiAuthorization(Name = "MANAGE_SILA_RECIPE")]
+        [SwaggerOperation("RemoveSilaRecipePicture")]
+        [SwaggerResponse(200, type: typeof(SilaRecipePictureDto))]
+        public async Task<IActionResult> RemovePicture([FromRoute] Guid recipeId)
+        {
+            _logger.LogDebug($"Removing recipe picture. RecipeId: {recipeId}");
+            SilaRecipePictureDto result = await _mediator.Send(new RemoveSilaRecipePictureCommand
+            {
+                OrganizationId = GetOrganizationId(),
+                UserId = GetUserId(),
+                RoleId = GetRoleId(),
+                RecipeId = recipeId
+            });
+            _logger.LogDebug($"Recipe picture removed. RecipeId: {recipeId}");
+            return Ok(result);
         }
 
         [HttpGet]

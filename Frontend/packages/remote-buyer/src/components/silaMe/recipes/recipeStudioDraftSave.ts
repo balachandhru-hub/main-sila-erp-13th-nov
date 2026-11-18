@@ -16,6 +16,9 @@ export interface StudioDraftHeader {
   servingUom: string;
   sellingUom?: string;
   currency?: string;
+  /** POS identity — same as Linked menu item when both are set to the same value. */
+  posCode?: string;
+  posItem?: string;
 }
 
 export interface StudioCreateRequest {
@@ -36,7 +39,13 @@ export interface StudioCreateRequest {
     quantity: number;
     uom: string | null;
   }[];
-  outletPrices: { outletLocationId: string; menuPrice: number; currency?: string | null }[];
+  outletPrices: {
+    outletLocationId: string;
+    menuPrice: number;
+    currency?: string | null;
+    posCode?: string | null;
+    posItem?: string | null;
+  }[];
 }
 
 export interface StudioSaveFieldErrors {
@@ -76,7 +85,13 @@ export const validateStudioDraft = (
 export const buildStudioCreateRequest = (
   header: StudioDraftHeader,
   lines: StudioDraftLine[],
-  outletPrices: { outletLocationId: string; menuPrice: number; currency?: string | null }[] = [],
+  outletPrices: {
+    outletLocationId: string;
+    menuPrice: number;
+    currency?: string | null;
+    posCode?: string | null;
+    posItem?: string | null;
+  }[] = [],
 ): StudioCreateRequest => ({
   name: header.name.trim(),
   description: header.description?.trim() || null,
@@ -86,8 +101,8 @@ export const buildStudioCreateRequest = (
   servingQty: toNumber(header.servingQty),
   servingUom: header.servingUom.trim() || "EA",
   sellingUom: (header.sellingUom ?? "").trim() || "EA",
-  posCode: null,
-  posItem: null,
+  posCode: header.posCode?.trim() || null,
+  posItem: header.posItem?.trim() || null,
   currency: header.currency?.trim() || null,
   ingredients: lines.map((line) => ({
     materialId: line.materialId ?? null,

@@ -27,6 +27,26 @@ export const parseStudioDescriptionNotes = (description?: string | null): Studio
   };
 };
 
+/**
+ * POS code / POS item for display and Studio outlet fields.
+ * When header POS is empty, fall back to the Linked menu item note (they are the same identity).
+ */
+export const resolveRecipePos = (recipe: {
+  posCode?: string | null;
+  posItem?: string | null;
+  description?: string | null;
+}): { posCode: string; posItem: string; menuItem: string } => {
+  const notes = parseStudioDescriptionNotes(recipe.description);
+  const menuItem = notes.menuItem.trim();
+  const posCode = (recipe.posCode ?? "").trim() || menuItem;
+  const posItem = (recipe.posItem ?? "").trim() || menuItem || posCode;
+  return {
+    posCode,
+    posItem,
+    menuItem: menuItem || posItem || posCode,
+  };
+};
+
 export type StudioEditAccess =
   | { kind: "editable" }
   | { kind: "revision-required"; reason: string }

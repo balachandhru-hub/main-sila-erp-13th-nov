@@ -8693,6 +8693,16 @@ namespace Buyer.Infrastructure.Migrations
                         .HasColumnType("uniqueidentifier")
                         .HasColumnName("outlet_location_id");
 
+                    b.Property<string>("PosCode")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasColumnName("pos_code");
+
+                    b.Property<string>("PosItem")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)")
+                        .HasColumnName("pos_item");
+
                     b.Property<Guid>("RecipeId")
                         .HasColumnType("uniqueidentifier")
                         .HasColumnName("recipe_id");

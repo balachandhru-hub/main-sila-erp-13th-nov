@@ -129,14 +129,14 @@ const SilaRecipeTable: React.FC<SilaRecipeTableProps> = ({ rows, onOpen, openLab
                     Edit
                   </button>
                 )}
-                {onDelete && row.status !== "INACTIVE" && (
+                {onDelete && row.status === "DRAFT" && (
                   <button
                     type="button"
                     className="sila-btn sila-btn--danger sila-btn--sm"
-                    aria-label={`Delete ${row.recipeCode}`}
+                    aria-label={`Delete Draft ${row.recipeCode}`}
                     onClick={() => onDelete(row)}
                   >
-                    Delete
+                    Delete Draft
                   </button>
                 )}
               </div>

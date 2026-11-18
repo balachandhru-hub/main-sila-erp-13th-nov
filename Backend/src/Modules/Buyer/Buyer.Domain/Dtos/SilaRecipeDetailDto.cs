@@ -60,5 +60,9 @@ namespace Buyer.Domain.Dtos
         public List<SilaRecipeApprovalStepDto> ApprovalSteps { get; set; } = new();
         /// <summary>Created, new version, submitted, approved, rejected, deactivated.</summary>
         public List<SilaRecipeEventDto> History { get; set; } = new();
+        /// <summary>Picture available for the shown version (draft slot when revising; else active).</summary>
+        public bool HasPicture { get; set; }
+        /// <summary>active | draft when HasPicture.</summary>
+        public string? PictureSlot { get; set; }
     }
 }
