@@ -55,6 +55,10 @@ namespace Buyer.Application.Features.Shared
             Dictionary<(Guid BuyerId, string Prefix), SilaDocumentSequence> reserved = Reserved.GetOrCreateValue(repository);
             if (!reserved.TryGetValue((buyerId, prefix), out SilaDocumentSequence? sequence))
             {
+                // Align LastNumber to the highest existing document of this prefix. A stale sequence row
+                // (behind inventory_transaction / other tables) would keep issuing colliding numbers and
+                // SilaRetry cannot recover — each attempt would regenerate the same IT0000xx values.
+                int currentMax = await CurrentMaxAsync(repository, buyerId, prefix, cancellationToken);
                 sequence = await repository.SilaDocumentSequence.FindFirstByConditionAsync(x => x.BuyerId == buyerId && x.Prefix == prefix);
                 if (sequence == null)
                 {
@@ -63,10 +67,14 @@ namespace Buyer.Application.Features.Shared
                         Id = Guid.NewGuid(),
                         BuyerId = buyerId,
                         Prefix = prefix,
-                        LastNumber = await CurrentMaxAsync(repository, buyerId, prefix, cancellationToken),
+                        LastNumber = currentMax,
                         IsActive = true
                     };
                     repository.SilaDocumentSequence.Create(sequence);
+                }
+                else if (currentMax > sequence.LastNumber)
+                {
+                    sequence.LastNumber = currentMax;
                 }
 
                 reserved[(buyerId, prefix)] = sequence;

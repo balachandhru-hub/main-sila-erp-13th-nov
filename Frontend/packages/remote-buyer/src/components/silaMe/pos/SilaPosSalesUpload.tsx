@@ -122,13 +122,14 @@ const SilaPosSalesUpload: React.FC<SilaPosSalesUploadProps> = ({
   };
 
   const requestProcess = (transactionIds: string[]) => {
+    if (busy !== null) return;
     onSelectedIdsChange?.(transactionIds);
     setPendingIds(transactionIds);
     setConfirmPost(true);
   };
 
   const handleProcess = async () => {
-    if (!preview) return;
+    if (!preview || busy !== null) return;
     setBusy("process");
     setConfirmPost(false);
     try {

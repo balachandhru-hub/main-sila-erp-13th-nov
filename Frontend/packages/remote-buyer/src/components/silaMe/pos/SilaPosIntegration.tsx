@@ -108,7 +108,7 @@ const SilaPosIntegration: React.FC<SilaPosIntegrationProps> = ({ canManage }) =>
   };
 
   const handleConfirmPost = async () => {
-    if (!canManage || !preview || selectedIds.length === 0) return;
+    if (!canManage || !preview || selectedIds.length === 0 || posting) return;
     setPosting(true);
     setConfirmPost(false);
     try {
