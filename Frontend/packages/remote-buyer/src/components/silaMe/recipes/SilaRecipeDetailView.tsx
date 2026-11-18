@@ -23,6 +23,7 @@ import {
   DELETE_DRAFT_SUCCESS,
   DELETE_DRAFT_TITLE,
 } from "./recipeStudioDraftDelete";
+import { resolveRecipePos } from "./recipeStudioEditAccess";
 import { resolveStudioKind, StudioCover } from "./recipeStudioVisuals";
 import "./SilaRecipeStudio.css";
 
@@ -122,6 +123,7 @@ const SilaRecipeDetailView: React.FC<SilaRecipeDetailViewProps> = ({ recipeId, c
     ? null
     : Math.min(...recipe.outletPrices.map((price) => price.menuPrice));
   const portionCost = recipe.readiness.costComplete ? (recipe.costPerServing ?? (recipe.servingQty > 0 ? recipe.totalCost / recipe.servingQty : recipe.totalCost)) : null;
+  const pos = resolveRecipePos(recipe);
 
   return (
     <div className="sila-me srec-page rstudio-page">
@@ -245,8 +247,8 @@ const SilaRecipeDetailView: React.FC<SilaRecipeDetailViewProps> = ({ recipeId, c
               ["Mode", recipeLabel(recipe.itemMode)],
               ["Family", recipe.familyName || "—"],
               ["Category", recipe.categoryName || recipe.category || "—"],
-              ["POS code", recipe.posCode || "—"],
-              ["POS item", recipe.posItem || "—"],
+              ["POS code", pos.posCode || "—"],
+              ["POS item", pos.posItem || "—"],
               ["Last sale date", recipe.lastSaleDate ? recipe.lastSaleDate.slice(0, 10) : "—"],
               ["Serving", `${formatQty(recipe.servingQty)} ${recipe.servingUom}`],
               ["Selling unit", recipe.sellingUom],

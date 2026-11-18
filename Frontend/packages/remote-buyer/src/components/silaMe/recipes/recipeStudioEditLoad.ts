@@ -1,6 +1,6 @@
 import type { SilaRecipeDetail, SilaRecipeListItem } from "../../../api/silaMe/silaRecipeApi";
 import { linesFrom, type IngredientLine } from "./recipeEditorModel";
-import { parseStudioDescriptionNotes } from "./recipeStudioEditAccess";
+import { parseStudioDescriptionNotes, resolveRecipePos } from "./recipeStudioEditAccess";
 
 export interface StudioLoadedForm {
   name: string;
@@ -13,6 +13,8 @@ export interface StudioLoadedForm {
   servingUom: string;
   prepTime: string;
   menuItem: string;
+  posCode: string;
+  posItem: string;
   outletNote: string;
   classConfirmed: boolean;
   lines: IngredientLine[];
@@ -25,6 +27,7 @@ export const formFromRecipeDetail = (
   activeRecipes: SilaRecipeListItem[] = [],
 ): StudioLoadedForm => {
   const notes = parseStudioDescriptionNotes(detail.description);
+  const pos = resolveRecipePos(detail);
   return {
     name: detail.name ?? "",
     recipeCode: detail.recipeCode ?? "",
@@ -35,7 +38,9 @@ export const formFromRecipeDetail = (
     yieldQty: String(detail.servingQty ?? 1),
     servingUom: detail.servingUom || "EA",
     prepTime: notes.prepTime,
-    menuItem: notes.menuItem,
+    menuItem: pos.menuItem || notes.menuItem,
+    posCode: pos.posCode,
+    posItem: pos.posItem,
     outletNote: notes.outletNote
       || (detail.outletPrices ?? [])
         .map((price) => price.locationName || price.locationCode || price.outletLocationId)

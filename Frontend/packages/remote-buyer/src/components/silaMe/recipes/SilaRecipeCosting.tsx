@@ -1,6 +1,7 @@
 import React from "react";
 import type { SilaRecipeDetail } from "../../../api/silaMe/silaRecipeApi";
 import { conversionSummary, costPerServing, formatCost, formatPercent, formatQty, priceStatusBadgeClass, priceStatusLabel } from "./recipeFormat";
+import { resolveRecipePos } from "./recipeStudioEditAccess";
 
 interface SilaRecipeCostingProps {
   recipe: SilaRecipeDetail;
@@ -9,6 +10,7 @@ interface SilaRecipeCostingProps {
 /** Saved ingredients with their costs, and the menu price, cost per serving, cost % and margin per outlet. */
 const SilaRecipeCosting: React.FC<SilaRecipeCostingProps> = ({ recipe }) => {
   const perServing = recipe.costPerServing ?? costPerServing(recipe.totalCost, recipe.servingQty);
+  const pos = resolveRecipePos(recipe);
   return (
   <>
     <section className="sila-card">
@@ -80,9 +82,21 @@ const SilaRecipeCosting: React.FC<SilaRecipeCostingProps> = ({ recipe }) => {
       </div>
     </section>
 
-    <section className="sila-card">
+    <section className="sila-card" data-testid="recipe-outlet-pos">
       <div className="sila-card-header">
         <h2 className="sila-card-title">Menu price per outlet</h2>
+      </div>
+      <div className="sila-card-body">
+        <div className="sila-meta-grid">
+          <div className="sila-meta-item">
+            <span className="sila-meta-label">POS code</span>
+            <span className="sila-meta-value" data-testid="recipe-outlet-pos-code">{pos.posCode || "—"}</span>
+          </div>
+          <div className="sila-meta-item">
+            <span className="sila-meta-label">POS item</span>
+            <span className="sila-meta-value" data-testid="recipe-outlet-pos-item">{pos.posItem || "—"}</span>
+          </div>
+        </div>
       </div>
       {recipe.outletPrices.length === 0 ? (
         <div className="sila-card-body">

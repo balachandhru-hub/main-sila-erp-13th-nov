@@ -10,6 +10,7 @@ import {
   detectRecipePictureKind,
   RECIPE_PICTURE_MAX_BYTES,
 } from "./recipeStudioPicture";
+import { resolveRecipePos } from "./recipeStudioEditAccess";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const read = (name: string) => readFileSync(join(__dirname, name), "utf8");
@@ -31,8 +32,31 @@ assert.match(presentation, /Step 7 of 7/);
 assert.match(presentation, /persistPendingPicture/);
 assert.match(presentation, /recipe-studio-outlet-menu-price/);
 assert.match(presentation, /Menu price for selected outlet/);
+assert.match(presentation, /recipe-studio-pos-code/);
+assert.match(presentation, /recipe-studio-pos-item/);
+assert.match(presentation, /setPosIdentity/);
 assert.match(presentation, /outletCatalog/);
 assert.doesNotMatch(presentation, /import SilaRecipeEditor/);
+
+const editAccess = read("recipeStudioEditAccess.ts");
+assert.match(editAccess, /resolveRecipePos/);
+const resolvedPos = resolveRecipePos({
+  posCode: null,
+  posItem: null,
+  description: "Menu item note: 34567 · Outlet note: FL10",
+});
+assert.equal(resolvedPos.posCode, "34567");
+assert.equal(resolvedPos.posItem, "34567");
+assert.equal(resolvedPos.menuItem, "34567");
+
+const draftSave = read("recipeStudioDraftSave.ts");
+assert.match(draftSave, /posCode: header\.posCode/);
+assert.match(draftSave, /posItem: header\.posItem/);
+
+const costing = read("SilaRecipeCosting.tsx");
+assert.match(costing, /recipe-outlet-pos-code/);
+assert.match(costing, /recipe-outlet-pos-item/);
+assert.match(costing, /resolveRecipePos/);
 
 const catalog = read("SilaRecipeCatalogGrid.tsx");
 assert.match(catalog, /SilaRecipePicture/);

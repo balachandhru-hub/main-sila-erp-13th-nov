@@ -101,6 +101,8 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
   const [targetFoodCost, setTargetFoodCost] = useState(() => String(loadTargetFoodCostPercent()));
   const [classConfirmed, setClassConfirmed] = useState(false);
   const [menuItem, setMenuItem] = useState("");
+  const [posCode, setPosCode] = useState("");
+  const [posItem, setPosItem] = useState("");
   const [outletNote, setOutletNote] = useState("");
   const [outletPrices, setOutletPrices] = useState<Record<string, string>>({});
 
@@ -171,6 +173,8 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
     setServingUom(form.servingUom);
     setPrepTime(form.prepTime);
     setMenuItem(form.menuItem);
+    setPosCode(form.posCode);
+    setPosItem(form.posItem);
     setOutletNote(form.outletNote);
     setClassConfirmed(form.classConfirmed);
     setLines(form.lines);
@@ -339,7 +343,16 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
     return notes.join(" · ");
   };
 
+  /** Menu item and POS identity are the same value in Studio outlet area. */
+  const setPosIdentity = (value: string) => {
+    markDirty();
+    setMenuItem(value);
+    setPosCode(value);
+    setPosItem(value);
+  };
+
   const buildRequest = () => {
+    const posIdentity = (posCode.trim() || posItem.trim() || menuItem.trim());
     const header = {
       name,
       description: buildOptionalDescription(),
@@ -350,6 +363,8 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
       servingUom,
       sellingUom: loadedRecipe?.sellingUom || "EA",
       currency: currency || loadedRecipe?.currency || undefined,
+      posCode: posIdentity,
+      posItem: posIdentity,
     };
     const draftLines = lines.map((line) => ({
       materialId: line.material?.id ?? null,
@@ -1072,13 +1087,38 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
                 />
               </div>
               <div className="rstudio-field">
+                <label htmlFor="rstudio-pos-code">POS code</label>
+                <input
+                  id="rstudio-pos-code"
+                  value={posCode}
+                  placeholder="Same as menu item"
+                  disabled={!canEdit}
+                  maxLength={50}
+                  data-testid="recipe-studio-pos-code"
+                  onChange={(e) => setPosIdentity(e.target.value)}
+                />
+              </div>
+              <div className="rstudio-field">
+                <label htmlFor="rstudio-pos-item">POS item</label>
+                <input
+                  id="rstudio-pos-item"
+                  value={posItem}
+                  placeholder="Same as menu item"
+                  disabled={!canEdit}
+                  maxLength={200}
+                  data-testid="recipe-studio-pos-item"
+                  onChange={(e) => setPosIdentity(e.target.value)}
+                />
+              </div>
+              <div className="rstudio-field">
                 <label htmlFor="rstudio-menu">Linked menu item</label>
                 <input
                   id="rstudio-menu"
                   value={menuItem}
-                  placeholder="Optional note / menu item name"
+                  placeholder="Same as POS code / POS item"
                   disabled={!canEdit}
-                  onChange={(e) => setHeader(setMenuItem, e.target.value)}
+                  data-testid="recipe-studio-menu-item"
+                  onChange={(e) => setPosIdentity(e.target.value)}
                 />
               </div>
               {Object.keys(outletPrices).length > 0 && (

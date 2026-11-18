@@ -16,6 +16,9 @@ export interface StudioDraftHeader {
   servingUom: string;
   sellingUom?: string;
   currency?: string;
+  /** POS identity — same as Linked menu item when both are set to the same value. */
+  posCode?: string;
+  posItem?: string;
 }
 
 export interface StudioCreateRequest {
@@ -86,8 +89,8 @@ export const buildStudioCreateRequest = (
   servingQty: toNumber(header.servingQty),
   servingUom: header.servingUom.trim() || "EA",
   sellingUom: (header.sellingUom ?? "").trim() || "EA",
-  posCode: null,
-  posItem: null,
+  posCode: header.posCode?.trim() || null,
+  posItem: header.posItem?.trim() || null,
   currency: header.currency?.trim() || null,
   ingredients: lines.map((line) => ({
     materialId: line.materialId ?? null,
