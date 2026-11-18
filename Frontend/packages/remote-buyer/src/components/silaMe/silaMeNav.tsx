@@ -124,7 +124,7 @@ export const buildSilaMeNavItem = (role: SilaMeRole, access?: SilaHomeCapabiliti
         { key: "silaMenuPlanning", label: "Menu Planning" },
         { key: "silaMenuPortions", label: "Portion Planning" },
         { key: "silaMenuDemand", label: "Demand Planning" },
-        { key: "silaMenuPosSales", label: "POS Studio" },
+        { key: "silaMenuPosSales", label: "POS Sales" },
         { key: "silaMenuPosMapping", label: "POS Mapping" },
         { key: "silaMenuPerformance", label: "Menu Performance" },
         { key: "silaMenuConsumption", label: "Consumption Analysis" },
@@ -142,7 +142,7 @@ export const buildSilaMeNavItem = (role: SilaMeRole, access?: SilaHomeCapabiliti
         { key: "silaRecipes", label: "Recipes" },
         ...leaf(can.approveRecipe, "silaRecipeApprovals", "Recipe Approvals"),
         { key: "silaSubstitutions", label: "Ingredient Substitutions" },
-        ...leaf(can.managePos, "silaPos", "POS Integration"),
+        ...leaf(can.managePos, "silaPos", "POS Studio"),
       ],
     },
     {

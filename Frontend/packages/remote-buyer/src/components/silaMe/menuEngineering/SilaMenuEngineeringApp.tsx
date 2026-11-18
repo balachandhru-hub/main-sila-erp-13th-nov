@@ -51,7 +51,7 @@ const TITLES: Record<ViewKey, string> = {
   silaMenuPlanning: "Menu Planning",
   silaMenuPortions: "Portion Planning",
   silaMenuDemand: "Demand Planning",
-  silaMenuPosSales: "POS Studio",
+  silaMenuPosSales: "POS Sales",
   silaMenuPosMapping: "POS Mapping",
   silaMenuPerformance: "Menu Performance",
   silaMenuConsumption: "Consumption Analysis",
