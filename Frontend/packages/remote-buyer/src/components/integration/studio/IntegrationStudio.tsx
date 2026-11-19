@@ -20,7 +20,6 @@ import IntegrationStudioMatrix from "./IntegrationStudioMatrix";
 import IntegrationStudioMonitoring from "./IntegrationStudioMonitoring";
 import IntegrationStudioOverview from "./IntegrationStudioOverview";
 import IntegrationStudioProfiles from "./IntegrationStudioProfiles";
-import IntegrationStudioTesting from "./IntegrationStudioTesting";
 import IntegrationStudioWizard from "./IntegrationStudioWizard";
 import "./IntegrationStudio.css";
 
@@ -30,7 +29,6 @@ type StudioTab =
   | "profiles"
   | "matrix"
   | "wizard"
-  | "testing"
   | "monitoring"
   | "workflow";
 
@@ -54,7 +52,6 @@ const TABS: { key: StudioTab; label: string; workflowOnly?: boolean; connectionO
   { key: "profiles", label: "SAP Profiles" },
   { key: "matrix", label: "Movement Matrix" },
   { key: "wizard", label: "Configure Wizard", connectionOnly: true },
-  { key: "testing", label: "Testing" },
   { key: "monitoring", label: "Monitoring" },
   { key: "workflow", label: "All APIs", workflowOnly: true },
 ];
@@ -79,7 +76,6 @@ const IntegrationStudio: React.FC<IntegrationStudioProps> = ({
   const [deleting, setDeleting] = useState(false);
   const [testingId, setTestingId] = useState<string | null>(null);
   const [wizardProfile, setWizardProfile] = useState<SapMovementProfile | null>(null);
-  const [testFocusId, setTestFocusId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -156,8 +152,6 @@ const IntegrationStudio: React.FC<IntegrationStudioProps> = ({
       if (result.success) toastService.success(result.message || "Connection test succeeded.");
       else toastService.error(result.message || "Connection test failed.");
       await load();
-      setTestFocusId(configurationId);
-      setView({ name: "studio", tab: "testing" });
     } catch (err: unknown) {
       toastService.error(errorMessage(err, "The connection test could not be completed."));
     } finally {
@@ -273,7 +267,6 @@ const IntegrationStudio: React.FC<IntegrationStudioProps> = ({
               onOpenConnections={() => setView({ name: "studio", tab: "connections" })}
               onOpenProfiles={() => setView({ name: "studio", tab: "profiles" })}
               onOpenWizard={() => setView({ name: "studio", tab: "wizard" })}
-              onOpenTesting={() => setView({ name: "studio", tab: "testing" })}
               onOpenMonitoring={() => setView({ name: "studio", tab: "monitoring" })}
             />
           )}
@@ -312,18 +305,6 @@ const IntegrationStudio: React.FC<IntegrationStudioProps> = ({
               onSaved={(configuration) => {
                 setWizardProfile(null);
                 setView({ name: "open", configurationId: configuration.id, mode: "connection" });
-              }}
-            />
-          )}
-
-          {currentTab === "testing" && (
-            <IntegrationStudioTesting
-              rows={rows}
-              side={side}
-              selectedId={testFocusId}
-              readOnly={readOnly}
-              onConfigurationUpdated={(configuration) => {
-                setRows((current) => current.map((row) => (row.id === configuration.id ? configuration : row)));
               }}
             />
           )}

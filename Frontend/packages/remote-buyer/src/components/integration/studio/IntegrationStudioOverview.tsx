@@ -15,7 +15,6 @@ interface IntegrationStudioOverviewProps {
   onOpenConnections: () => void;
   onOpenProfiles: () => void;
   onOpenWizard: () => void;
-  onOpenTesting: () => void;
   onOpenMonitoring: () => void;
 }
 
@@ -25,7 +24,6 @@ const IntegrationStudioOverview: React.FC<IntegrationStudioOverviewProps> = ({
   onOpenConnections,
   onOpenProfiles,
   onOpenWizard,
-  onOpenTesting,
   onOpenMonitoring,
 }) => {
   const inventoryRows = rows.filter(isInventorySystem);
@@ -89,7 +87,6 @@ const IntegrationStudioOverview: React.FC<IntegrationStudioOverviewProps> = ({
           <div className="istudio-card__actions">
             <button type="button" className="sila-btn sila-btn--primary sila-btn--sm" onClick={onOpenWizard}>Configure wizard</button>
             <button type="button" className="sila-btn sila-btn--secondary sila-btn--sm" onClick={onOpenConnections}>View connections</button>
-            <button type="button" className="sila-btn sila-btn--ghost sila-btn--sm" onClick={onOpenTesting}>Safe test workspace</button>
           </div>
         </section>
 

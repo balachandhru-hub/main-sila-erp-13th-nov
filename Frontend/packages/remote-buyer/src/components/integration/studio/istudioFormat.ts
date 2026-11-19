@@ -74,6 +74,11 @@ export const isInventorySystem = (row: IntegrationConfiguration): boolean => {
     || name.includes("MATERIAL_DOCUMENT")
     || row.processType === "UPDATE_STOCK"
     || row.processType === "POST_GOODS_MOVEMENT"
+    || row.processType === "POST_STOCK_ISSUE"
+    || row.processType === "POST_POSITIVE_ADJ"
+    || row.processType === "POST_TRANSFER_311"
+    || row.processType === "POST_TRANSFER_301"
+    || row.processType === "POST_POS_REVERSAL"
     || row.processType === "POST_GRN"
     || row.processType === "POST_GRN_REVERSAL"
     || row.processType === "GET_MATERIAL_DOCUMENT"
