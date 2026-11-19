@@ -13,7 +13,6 @@ interface IntegrationStudioOverviewProps {
   rows: IntegrationConfiguration[];
   executions: IntegrationExecution[];
   onOpenConnections: () => void;
-  onOpenProfiles: () => void;
   onOpenWizard: () => void;
   onOpenMonitoring: () => void;
 }
@@ -22,7 +21,6 @@ const IntegrationStudioOverview: React.FC<IntegrationStudioOverviewProps> = ({
   rows,
   executions,
   onOpenConnections,
-  onOpenProfiles,
   onOpenWizard,
   onOpenMonitoring,
 }) => {
@@ -58,7 +56,7 @@ const IntegrationStudioOverview: React.FC<IntegrationStudioOverviewProps> = ({
         <div className="istudio-kpi istudio-kpi--mint"><span>Active integrations</span><strong>{active}</strong></div>
         <div className="istudio-kpi istudio-kpi--sky"><span>Connected (tested)</span><strong>{connected}</strong></div>
         <div className="istudio-kpi istudio-kpi--rose"><span>Connection errors</span><strong>{errors}</strong></div>
-        <div className="istudio-kpi istudio-kpi--lavender"><span>SAP posting profiles</span><strong>{SAP_MOVEMENT_PROFILES.length}</strong></div>
+        <div className="istudio-kpi istudio-kpi--lavender"><span>SAP inventory APIs</span><strong>{inventoryRows.length}</strong></div>
         <div className="istudio-kpi istudio-kpi--amber"><span>Failed transactions</span><strong>{failedExec}</strong></div>
         <div className="istudio-kpi istudio-kpi--mint"><span>Last successful sync</span><strong>{lastSuccess ? formatDateTime(lastSuccess.completedAt || lastSuccess.startedAt) : "—"}</strong></div>
         <div className="istudio-kpi istudio-kpi--amber"><span>Attention required</span><strong>{attention.length}</strong></div>
@@ -92,7 +90,7 @@ const IntegrationStudioOverview: React.FC<IntegrationStudioOverviewProps> = ({
 
         <section className="istudio-panel istudio-panel--amber">
           <h3 className="istudio-panel__title">Attention required</h3>
-          <p className="istudio-panel__hint">Unverified mappings, missing profiles, and connection test failures.</p>
+          <p className="istudio-panel__hint">Unverified mappings, missing APIs, and connection test failures.</p>
           {attention.length === 0 ? (
             <div className="istudio-empty">No attention items right now.</div>
           ) : (
@@ -112,7 +110,7 @@ const IntegrationStudioOverview: React.FC<IntegrationStudioOverviewProps> = ({
             </ul>
           )}
           <div className="istudio-card__actions">
-            <button type="button" className="sila-btn sila-btn--secondary sila-btn--sm" onClick={onOpenProfiles}>SAP profiles</button>
+            <button type="button" className="sila-btn sila-btn--secondary sila-btn--sm" onClick={onOpenConnections}>View connections</button>
             <button type="button" className="sila-btn sila-btn--ghost sila-btn--sm" onClick={onOpenMonitoring}>Transaction tracker</button>
           </div>
         </section>

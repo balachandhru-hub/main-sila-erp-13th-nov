@@ -19,14 +19,12 @@ import IntegrationStudioConnections from "./IntegrationStudioConnections";
 import IntegrationStudioMatrix from "./IntegrationStudioMatrix";
 import IntegrationStudioMonitoring from "./IntegrationStudioMonitoring";
 import IntegrationStudioOverview from "./IntegrationStudioOverview";
-import IntegrationStudioProfiles from "./IntegrationStudioProfiles";
 import IntegrationStudioWizard from "./IntegrationStudioWizard";
 import "./IntegrationStudio.css";
 
 type StudioTab =
   | "overview"
   | "connections"
-  | "profiles"
   | "matrix"
   | "wizard"
   | "monitoring"
@@ -49,7 +47,6 @@ interface IntegrationStudioProps {
 const TABS: { key: StudioTab; label: string; workflowOnly?: boolean; connectionOnly?: boolean }[] = [
   { key: "overview", label: "Overview" },
   { key: "connections", label: "Connections" },
-  { key: "profiles", label: "SAP Profiles" },
   { key: "matrix", label: "Movement Matrix" },
   { key: "wizard", label: "Configure Wizard", connectionOnly: true },
   { key: "monitoring", label: "Monitoring" },
@@ -265,7 +262,6 @@ const IntegrationStudio: React.FC<IntegrationStudioProps> = ({
               rows={rows}
               executions={executions}
               onOpenConnections={() => setView({ name: "studio", tab: "connections" })}
-              onOpenProfiles={() => setView({ name: "studio", tab: "profiles" })}
               onOpenWizard={() => setView({ name: "studio", tab: "wizard" })}
               onOpenMonitoring={() => setView({ name: "studio", tab: "monitoring" })}
             />
@@ -279,17 +275,8 @@ const IntegrationStudio: React.FC<IntegrationStudioProps> = ({
               onTest={handleTest}
               onCopy={handleCopy}
               onDelete={setPendingDelete}
+              onConfigureProfile={startConfigureProfile}
               testingId={testingId}
-            />
-          )}
-
-          {currentTab === "profiles" && (
-            <IntegrationStudioProfiles
-              rows={rows}
-              readOnly={readOnly}
-              onOpen={openConfiguration}
-              onConfigure={startConfigureProfile}
-              onTest={handleTest}
             />
           )}
 
@@ -301,7 +288,7 @@ const IntegrationStudio: React.FC<IntegrationStudioProps> = ({
             <IntegrationStudioWizard
               side={side}
               initialProfile={wizardProfile}
-              onCancel={() => backToStudio("profiles")}
+              onCancel={() => backToStudio("connections")}
               onSaved={(configuration) => {
                 setWizardProfile(null);
                 setView({ name: "open", configurationId: configuration.id, mode: "connection" });
