@@ -322,6 +322,20 @@
   min-height: 2.1rem;
   justify-content: center;
   white-space: nowrap;
+  padding-inline: 0.4rem;
+  font-size: 0.8125rem;
+  border-radius: 0.55rem;
+}
+
+.istudio-card__actions .sila-btn--ghost {
+  border: 0.0625rem solid #d9e8f7;
+  background: #fff;
+  color: #126896;
+}
+
+.istudio-card__actions .sila-btn--ghost:hover {
+  background: #f3f8fc;
+  border-color: #b7d4ef;
 }
 
 .istudio-card__actions--single {
