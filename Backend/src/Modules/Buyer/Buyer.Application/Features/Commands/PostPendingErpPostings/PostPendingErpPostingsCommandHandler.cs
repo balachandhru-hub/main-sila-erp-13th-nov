@@ -146,6 +146,16 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
                 return await PostConsumptionGroupAsync(posting, cancellationToken);
             }
 
+            // Direct goods issue uses the named Z02 inventory API (same Material Document engine as POS / adjustments).
+            if (posting.ReferenceType == Common.SILA_REF_GOODS_ISSUE
+                && (posting.MovementType == Common.SILA_MOVEMENT_GOODS_ISSUE
+                    || posting.MovementType == SilaInventorySap.TYPE_Z02
+                    || string.IsNullOrWhiteSpace(posting.MovementType)))
+            {
+                posting.MovementType = SilaInventorySap.TYPE_Z02;
+                return await PostStockEffectAsync(posting, cancellationToken);
+            }
+
             // Internal transfer is posted only through FIVE S4 - Transfer Stock. It must not use the goods-movement API.
             if (posting.ReferenceType == Common.SILA_REF_ITO)
             {
@@ -408,7 +418,7 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
                 BuyerProperty? property = location != null ? properties.GetValueOrDefault(location.PropertyId) : null;
                 string plant = property?.PlantCode?.Trim().ToUpperInvariant() ?? string.Empty;
                 string storage = location?.StorageLocationCode?.Trim().ToUpperInvariant() ?? string.Empty;
-                string movement = SilaInventorySap.MovementForSale(row.MovementType, sale?.QuantitySold ?? 0);
+                string movement = SilaPosReversal.MovementForSale(row.MovementType, sale);
                 return $"{date:yyyy-MM-dd}|{plant}|{storage}|{movement}";
             }
 
@@ -458,10 +468,13 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
                 return await FinishAsync(posting, Common.SILA_POSTING_FAILED, null, "The buyer of this document no longer exists.", cancellationToken);
             }
 
-            string movement = SilaInventorySap.MovementForSale(posting.MovementType, sales.GetValueOrDefault(posting.ReferenceId)?.QuantitySold ?? 0);
+            PosSalesTransaction? sale = sales.GetValueOrDefault(posting.ReferenceId);
+            string movement = SilaPosReversal.MovementForSale(posting.MovementType, sale);
             SilaInventorySap.Rule rule = movement == SilaInventorySap.TYPE_Z01 ? SilaInventorySap.PositiveAdjustment : SilaInventorySap.GoodsIssue;
             EffectPreparation prepared = await PrepareEffectAsync(
-                posting, pending.Select(x => x.ReferenceId).ToList(), headerLocation, headerProperty, rule, buyer.OrganizationId, cancellationToken);
+                posting, pending.Select(x => x.ReferenceId).ToList(), headerLocation, headerProperty, rule, buyer.OrganizationId, cancellationToken,
+                preferPosUpdateApi: movement == SilaInventorySap.TYPE_Z02,
+                preferPosReversalApi: movement == SilaInventorySap.TYPE_Z01);
             string? body = prepared.Body;
             ApiIntegrationConfiguration? api = prepared.Api;
             if (prepared.Error != null || body == null || api == null)
@@ -618,7 +631,9 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
             BuyerProperty? property,
             SilaInventorySap.Rule rule,
             Guid organizationId,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            bool preferPosUpdateApi = false,
+            bool preferPosReversalApi = false)
         {
             string? body = null;
             ApiIntegrationConfiguration? api = null;
@@ -663,10 +678,25 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
                 return new EffectPreparation("The document has no lines to post.", null, null);
             }
 
-            api = await SilaInventorySap.ResolveAsync(_repository, organizationId, rule.ApiName, posting.CompanyCode, cancellationToken);
+            // POS consumption prefers FIVE_POS_UPDATE when active; POS reversal prefers POS_CONSUMPTION_REVERSAL (Z01).
+            // Both fall back to the named Goods Issue / Positive Adjustment APIs.
+            string[] apiNames = preferPosUpdateApi
+                ? new[] { SilaStockCountSap.API_CONFIG_NAME, rule.ApiName }
+                : preferPosReversalApi
+                    ? new[] { "POS_CONSUMPTION_REVERSAL", rule.ApiName }
+                    : new[] { rule.ApiName };
+            foreach (string apiName in apiNames)
+            {
+                api = await SilaInventorySap.ResolveAsync(_repository, organizationId, apiName, posting.CompanyCode, cancellationToken);
+                if (api != null)
+                {
+                    break;
+                }
+            }
+
             if (api == null)
             {
-                return new EffectPreparation(SilaInventorySap.MissingApi(rule.ApiName), null, null);
+                return new EffectPreparation(SilaInventorySap.MissingApi(string.Join(" / ", apiNames)), null, null);
             }
 
             return new EffectPreparation(null, body, api);

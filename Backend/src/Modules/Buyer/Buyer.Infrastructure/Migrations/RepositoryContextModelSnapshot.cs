@@ -4731,6 +4731,21 @@ namespace Buyer.Infrastructure.Migrations
                         .HasColumnType("int")
                         .HasColumnName("recipe_version");
 
+                    b.Property<string>("TransactionType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasColumnName("transaction_type");
+
+                    b.Property<string>("OriginalTransactionId")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasColumnName("original_transaction_id");
+
+                    b.Property<int?>("OriginalLineId")
+                        .HasColumnType("int")
+                        .HasColumnName("original_line_id");
+
                     b.Property<string>("SourceTransactionId")
                         .IsRequired()
                         .HasColumnType("nvarchar(450)")
@@ -4766,6 +4781,9 @@ namespace Buyer.Infrastructure.Migrations
 
                     b.HasIndex("BuyerId", "Status")
                         .HasDatabaseName("ix_pos_sales_transaction_buyer_id_status");
+
+                    b.HasIndex("BuyerId", "OriginalTransactionId")
+                        .HasDatabaseName("ix_pos_sales_transaction_buyer_id_original_transaction_id");
 
                     b.HasIndex("BuyerId", "SourceTransactionId", "LineNumber")
                         .IsUnique()

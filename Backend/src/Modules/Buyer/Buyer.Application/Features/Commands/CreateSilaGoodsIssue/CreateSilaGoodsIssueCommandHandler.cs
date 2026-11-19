@@ -104,7 +104,8 @@ namespace Buyer.Application.Features.Commands.CreateSilaGoodsIssue
                 await ledger.PostAsync(Movement(issue, to.Id, material, Common.SILA_DIRECTION_IN, Common.SILA_TXN_GOODS_ISSUE_IN, baseQuantity, line.Quantity, enteredUom), cancellationToken);
             }
 
-            ledger.QueueErpPosting(Common.SILA_REF_GOODS_ISSUE, issue.Id, issue.IssueNumber, from.Id, Common.SILA_MOVEMENT_GOODS_ISSUE);
+            // Named Z02 inventory API (FIVE S4 - Goods Issue), not the generic POST_GOODS_MOVEMENT process.
+            ledger.QueueErpPosting(Common.SILA_REF_GOODS_ISSUE, issue.Id, issue.IssueNumber, from.Id, SilaInventorySap.TYPE_Z02);
             await _repository.SaveAsync();
 
             _logger.LogInfo($"Goods issue posted. GoodsIssueId: {issue.Id}, IssueNumber: {issue.IssueNumber}, Lines: {lines.Count}");

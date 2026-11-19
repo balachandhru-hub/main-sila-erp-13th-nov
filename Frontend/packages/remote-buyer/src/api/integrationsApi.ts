@@ -402,7 +402,7 @@ export const SAP_MOVEMENT_PROFILES: SapMovementProfile[] = [
     direction: "OUT",
     purpose: "POS ingredient consumption after recipe explosion",
     activationPolicy: "active_allowed",
-    statusNote: "Uses the existing FIVE_POS_UPDATE UPDATE_STOCK configuration.",
+    statusNote: "Preferred SAP API for POS Z02 consumption when ACTIVE; falls back to FIVE S4 - Goods Issue.",
   },
   {
     id: "stock-issue",
