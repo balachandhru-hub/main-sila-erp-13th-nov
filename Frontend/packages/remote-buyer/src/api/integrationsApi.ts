@@ -144,13 +144,13 @@ export const INVENTORY_INTEGRATION_DEFINITIONS: InventoryIntegrationDefinition[]
   },
   {
     id: "pos-reversal",
-    title: "POS Return / Reversal (pending)",
-    kind: "unimplemented",
+    title: "POS Return / Reversal (Z01)",
+    kind: "erp",
     configurationName: "POS_CONSUMPTION_REVERSAL",
     processType: "POST_POS_REVERSAL",
     suggestedSystem: "FIVE_S4_INVENTORY_MOVEMENTS",
-    mapping: "Profile POS_CONSUMPTION_REVERSAL. Candidate Z01 — blocked until SAP confirms vs Cancel.",
-    usedFor: "Not production-ready. Z03 remains unconfigured.",
+    mapping: "Profile POS_CONSUMPTION_REVERSAL. GoodsMovementCode 03, GoodsMovementType Z01.",
+    usedFor: "Reverse POS ingredient consumption with Z01. Z03 remains unconfigured.",
   },
   {
     id: "material-document-read",
@@ -368,7 +368,7 @@ export type SapProfileActivationPolicy = "active_allowed" | "validation_required
 /**
  * SILA Integration Studio SAP posting profiles.
  * Names match the inventory poster lookups (SilaInventorySap / SilaStockCountSap / SilaGrnSap).
- * Profile 4 (POS return) stays blocked until SAP confirms Z01 vs material-document Cancel.
+ * Profile 4 (POS return) uses Z01 positive adjustment.
  * Z03 is intentionally absent until its SAP purpose is confirmed.
  */
 export interface SapMovementProfile {
@@ -445,9 +445,9 @@ export const SAP_MOVEMENT_PROFILES: SapMovementProfile[] = [
     goodsMovementCode: "03",
     goodsMovementType: "Z01",
     direction: "IN",
-    purpose: "Reverse POS ingredient consumption — pending SAP verification",
-    activationPolicy: "blocked_unverified",
-    statusNote: "Do not activate until SAP confirms Z01 adjustment vs Cancel of the original material document.",
+    purpose: "Reverse POS ingredient consumption with Z01 positive adjustment",
+    activationPolicy: "active_allowed",
+    statusNote: "Uses GoodsMovementType Z01 (same family as positive stock adjustment). Cancel is not used for POS reversal.",
   },
   {
     id: "storage-location-transfer",
