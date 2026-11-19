@@ -322,6 +322,9 @@ const IntegrationStudio: React.FC<IntegrationStudioProps> = ({
               side={side}
               selectedId={testFocusId}
               readOnly={readOnly}
+              onConfigurationUpdated={(configuration) => {
+                setRows((current) => current.map((row) => (row.id === configuration.id ? configuration : row)));
+              }}
             />
           )}
 

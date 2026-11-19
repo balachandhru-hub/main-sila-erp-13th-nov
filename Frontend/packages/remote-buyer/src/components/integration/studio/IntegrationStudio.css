@@ -368,6 +368,21 @@
   text-align: center;
 }
 
+.istudio-checkbox {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #5b7a99;
+  cursor: pointer;
+}
+
+.istudio-checkbox input {
+  width: auto;
+  margin-top: 0.15rem;
+}
+
 @keyframes istudio-fade-up {
   from { opacity: 0; transform: translateY(0.4rem); }
   to { opacity: 1; transform: translateY(0); }
