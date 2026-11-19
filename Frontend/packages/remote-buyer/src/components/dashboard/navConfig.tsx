@@ -127,7 +127,7 @@ export const buildBuyerNavItems = ({
     leaf("contractTemplate", "Contract Templates"),
     ...(isAdmin
       ? [
-          leaf("apiConfiguration", "Integration"),
+          leaf("apiConfiguration", "Integration Studio"),
           leaf("workflowConfiguration", "Workflow & Configuration"),
           leaf("outlets", "Outlets & Properties"),
         ]
