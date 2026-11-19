@@ -5,9 +5,9 @@ import {
   type IntegrationConfiguration,
   type SapMovementProfile,
 } from "../../../api/integrationsApi";
-import { formatDateTime, statusBadgeClass, statusLabel } from "../integrationFormat";
+import { formatDateTime } from "../integrationFormat";
 import {
-  activationLabel,
+  connectionCornerStatus,
   directionChipClass,
   directionLabel,
   isInventorySystem,
@@ -67,17 +67,20 @@ const IntegrationStudioConnections: React.FC<IntegrationStudioConnectionsProps> 
           const profile = profileForRow(row);
           const inventory = isInventorySystem(row);
           const blocked = profile?.activationPolicy === "blocked_unverified";
-          const badge = profile ? activationLabel(profile.activationPolicy, row) : null;
+          const corner = connectionCornerStatus(row.status, { blocked });
           return (
             <article key={row.id} className="istudio-card" data-profile={profile?.profileCode}>
-              <div>
+              <span className={corner.className} aria-label={`Status ${corner.label}`}>
+                <span className="istudio-card__corner-dot" aria-hidden="true" />
+                {corner.label}
+              </span>
+              <div className="istudio-card__header">
                 <p className="istudio-kicker">
                   {profile?.profileCode || (inventory ? "Inventory / SAP" : "Integration")}
                 </p>
                 <h3 className="istudio-card__title">{profile?.title || row.name}</h3>
               </div>
               <div className="istudio-card__meta">
-                <span className={statusBadgeClass(row.status)}>{statusLabel(row.status)}</span>
                 {profile ? (
                   <span className={directionChipClass(profile.direction)}>{directionLabel(profile.direction)}</span>
                 ) : null}
@@ -88,7 +91,6 @@ const IntegrationStudioConnections: React.FC<IntegrationStudioConnectionsProps> 
                 {profile?.goodsMovementCode ? (
                   <span className="istudio-chip istudio-chip--muted">Code {profile.goodsMovementCode}</span>
                 ) : null}
-                {badge ? <span className={badge.className}>{badge.text}</span> : null}
               </div>
               <dl className="istudio-card__rows">
                 <dt>Configuration name</dt>
@@ -125,43 +127,51 @@ const IntegrationStudioConnections: React.FC<IntegrationStudioConnectionsProps> 
                   </>
                 ) : null}
               </dl>
-              <div className="istudio-card__actions">
-                <button type="button" className="sila-btn sila-btn--secondary sila-btn--sm" onClick={() => onOpen(row.id)}>
-                  {readOnly ? "View" : profile ? "Edit mapping" : "Configure"}
-                </button>
-                {!readOnly ? (
-                  <>
-                    {!blocked ? (
-                      <button
-                        type="button"
-                        className="sila-btn sila-btn--primary sila-btn--sm"
-                        onClick={() => onTest(row.id)}
-                        disabled={testingId === row.id}
-                      >
-                        {testingId === row.id ? "Testing…" : "Test connection"}
-                      </button>
-                    ) : (
-                      <span className="istudio-chip istudio-chip--blocked">Activation blocked</span>
-                    )}
-                    <button type="button" className="sila-btn sila-btn--ghost sila-btn--sm" onClick={() => onCopy(row)}>
-                      Copy
-                    </button>
-                    <button type="button" className="sila-btn sila-btn--danger sila-btn--sm" onClick={() => onDelete(row)}>
-                      Delete
-                    </button>
-                  </>
-                ) : null}
-              </div>
+              {readOnly ? (
+                <div className="istudio-card__actions istudio-card__actions--single">
+                  <button type="button" className="sila-btn sila-btn--secondary sila-btn--sm" onClick={() => onOpen(row.id)}>
+                    View
+                  </button>
+                </div>
+              ) : blocked ? (
+                <div className="istudio-card__actions istudio-card__actions--blocked">
+                  <span className="istudio-chip istudio-chip--blocked">Activation blocked</span>
+                </div>
+              ) : (
+                <div className="istudio-card__actions">
+                  <button type="button" className="sila-btn sila-btn--secondary sila-btn--sm" onClick={() => onOpen(row.id)}>
+                    Config
+                  </button>
+                  <button
+                    type="button"
+                    className="sila-btn sila-btn--primary sila-btn--sm"
+                    onClick={() => onTest(row.id)}
+                    disabled={testingId === row.id}
+                  >
+                    {testingId === row.id ? "…" : "Test"}
+                  </button>
+                  <button type="button" className="sila-btn sila-btn--ghost sila-btn--sm" onClick={() => onCopy(row)}>
+                    Copy
+                  </button>
+                  <button type="button" className="sila-btn sila-btn--danger sila-btn--sm" onClick={() => onDelete(row)}>
+                    Delete
+                  </button>
+                </div>
+              )}
             </article>
           );
         })}
 
         {missingProfiles.map((profile) => {
-          const badge = activationLabel(profile.activationPolicy, null);
           const blocked = profile.activationPolicy === "blocked_unverified";
+          const corner = connectionCornerStatus(null, { blocked, missing: !blocked });
           return (
             <article key={`missing-${profile.id}`} className="istudio-card" data-profile={profile.profileCode}>
-              <div>
+              <span className={corner.className} aria-label={`Status ${corner.label}`}>
+                <span className="istudio-card__corner-dot" aria-hidden="true" />
+                {corner.label}
+              </span>
+              <div className="istudio-card__header">
                 <p className="istudio-kicker">{profile.profileCode}</p>
                 <h3 className="istudio-card__title">{profile.title}</h3>
               </div>
@@ -171,7 +181,6 @@ const IntegrationStudioConnections: React.FC<IntegrationStudioConnectionsProps> 
                 {profile.goodsMovementType ? (
                   <span className="istudio-chip istudio-chip--muted">Type {profile.goodsMovementType}</span>
                 ) : null}
-                <span className={badge.className}>{badge.text}</span>
               </div>
               <dl className="istudio-card__rows">
                 <dt>Configuration name</dt>
@@ -180,19 +189,17 @@ const IntegrationStudioConnections: React.FC<IntegrationStudioConnectionsProps> 
                 <dd>{profile.resourcePath}</dd>
                 <dt>Purpose</dt>
                 <dd>{profile.purpose}</dd>
-                <dt>Saved status</dt>
-                <dd>Not saved yet</dd>
                 <dt>Note</dt>
                 <dd>{profile.statusNote}</dd>
               </dl>
-              <div className="istudio-card__actions">
+              <div className="istudio-card__actions istudio-card__actions--single">
                 {!readOnly && !blocked && onConfigureProfile ? (
                   <button
                     type="button"
                     className="sila-btn sila-btn--primary sila-btn--sm"
                     onClick={() => onConfigureProfile(profile)}
                   >
-                    Configure profile
+                    Config
                   </button>
                 ) : (
                   <span className="istudio-chip istudio-chip--blocked">

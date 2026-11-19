@@ -64,6 +64,39 @@ export const profileStatusSummary = (
 
 export const CONNECTED_STATUSES = ["TESTED", "ACTIVE", "INACTIVE"];
 
+/** Corner badge for connection cards: Live for ACTIVE, otherwise the saved status. */
+export const connectionCornerStatus = (
+  status?: string | null,
+  options?: { blocked?: boolean; missing?: boolean },
+): { label: string; className: string } => {
+  if (options?.blocked) {
+    return { label: "Blocked", className: "istudio-card__corner istudio-card__corner--blocked" };
+  }
+  if (options?.missing) {
+    return { label: "Not configured", className: "istudio-card__corner istudio-card__corner--draft" };
+  }
+  const code = (status || "").trim().toUpperCase();
+  if (code === "ACTIVE") {
+    return { label: "Live", className: "istudio-card__corner istudio-card__corner--live" };
+  }
+  if (code === "TESTED") {
+    return { label: "Tested", className: "istudio-card__corner istudio-card__corner--tested" };
+  }
+  if (code === "DRAFT") {
+    return { label: "Draft", className: "istudio-card__corner istudio-card__corner--draft" };
+  }
+  if (code === "INACTIVE") {
+    return { label: "Inactive", className: "istudio-card__corner istudio-card__corner--inactive" };
+  }
+  if (code === "ERROR" || code === "FAILED" || code === "TEST_FAILED") {
+    return { label: statusLabel(code), className: "istudio-card__corner istudio-card__corner--error" };
+  }
+  if (!code) {
+    return { label: "Unknown", className: "istudio-card__corner istudio-card__corner--draft" };
+  }
+  return { label: statusLabel(code), className: "istudio-card__corner istudio-card__corner--warn" };
+};
+
 export const isInventorySystem = (row: IntegrationConfiguration): boolean => {
   const system = (row.systemName || "").trim().toUpperCase();
   const name = (row.name || "").trim().toUpperCase();
