@@ -761,6 +761,26 @@ export const testIntegration = async (side: IntegrationSide, configurationId: st
   }
 };
 
+/**
+ * Copies base URL, auth, protected credentials and OData headers from a working connection onto
+ * another API of the same organization. Keeps the target process type, name and request body.
+ * Buyer APIs only.
+ */
+export const alignIntegrationConnection = async (
+  configurationId: string,
+  sourceConfigurationId: string,
+): Promise<IntegrationConfiguration> => {
+  try {
+    const response = await axiosInstance.post<IntegrationConfiguration>(
+      `${BASE.buyer}/${configurationId}/align-connection`,
+      { sourceConfigurationId },
+    );
+    return response.data;
+  } catch (error: unknown) {
+    throw new Error(readError(error, "Could not copy the connection settings."));
+  }
+};
+
 export const setIntegrationActive = async (side: IntegrationSide, configurationId: string, active: boolean): Promise<void> => {
   try {
     await axiosInstance.post(`${BASE[side]}/${configurationId}/${active ? "activate" : "deactivate"}`);

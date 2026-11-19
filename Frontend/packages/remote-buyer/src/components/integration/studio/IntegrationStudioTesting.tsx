@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { toastService } from "@vosox/shared-ui";
 import {
   INTEGRATION_AUTH_TYPES,
+  alignIntegrationConnection,
   getIntegration,
   testIntegration,
   updateIntegration,
@@ -90,7 +91,12 @@ const IntegrationStudioTesting: React.FC<IntegrationStudioTestingProps> = ({
   onConfigurationUpdated,
 }) => {
   const [configurationId, setConfigurationId] = useState(selectedId || rows[0]?.id || "");
+  const [alignSourceId, setAlignSourceId] = useState(() => {
+    const preferred = rows.find((row) => row.name === "FIVE S4 - GET MATERIAL" && row.status === "ACTIVE");
+    return preferred?.id || rows.find((row) => row.status === "ACTIVE" && row.credentialStatus === "Configured")?.id || "";
+  });
   const [busy, setBusy] = useState(false);
+  const [aligning, setAligning] = useState(false);
   const [result, setResult] = useState<IntegrationTestResult | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
   const [authenticationType, setAuthenticationType] = useState("BASIC");
@@ -156,6 +162,29 @@ const IntegrationStudioTesting: React.FC<IntegrationStudioTestingProps> = ({
     setApiKey("");
     setBearerToken("");
     setClientSecret("");
+  };
+
+  const alignSources = rows.filter((row) => row.id !== configurationId && row.credentialStatus === "Configured");
+
+  const alignFromWorking = async () => {
+    if (!configurationId || !alignSourceId || readOnly) return;
+    setAligning(true);
+    setLocalError(null);
+    setResult(null);
+    try {
+      const aligned = await alignIntegrationConnection(configurationId, alignSourceId);
+      onConfigurationUpdated?.(aligned);
+      setAuthenticationType(aligned.authenticationType || "BASIC");
+      setUsername(aligned.username || "");
+      clearSecrets();
+      toastService.success(`Connection settings copied from ${alignSources.find((row) => row.id === alignSourceId)?.name || "the working API"}.`);
+    } catch (err: unknown) {
+      const message = errorMessage(err, "Could not copy the connection settings.");
+      setLocalError(message);
+      toastService.error(message);
+    } finally {
+      setAligning(false);
+    }
   };
 
   const runSafeTest = async () => {
@@ -261,6 +290,42 @@ const IntegrationStudioTesting: React.FC<IntegrationStudioTestingProps> = ({
             <dt>Stored credentials</dt>
             <dd>{selected.credentialStatus || "—"}{selected.username ? ` · user ${selected.username}` : ""}</dd>
           </dl>
+
+          {!readOnly && alignSources.length > 0 ? (
+            <div className="istudio-form-grid" data-testid="istudio-align-connection">
+              <div className="istudio-field istudio-field--full">
+                <label htmlFor="istudio-align-source">Copy connection from working API</label>
+                <select
+                  id="istudio-align-source"
+                  className="sila-select"
+                  value={alignSourceId}
+                  onChange={(event) => setAlignSourceId(event.target.value)}
+                >
+                  <option value="">Select a working connection</option>
+                  {alignSources.map((row) => (
+                    <option key={row.id} value={row.id}>
+                      {row.name} · {statusLabel(row.status)} · {row.username || row.authenticationType}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="istudio-banner istudio-field--full">
+                Copies base URL, protocol, auth method, protected credentials, timeout and OData headers from the
+                source. Keeps this API’s name and process type. Material Document paths without
+                /A_MaterialDocumentHeader are corrected automatically.
+              </div>
+              <div className="istudio-card__actions istudio-field--full">
+                <button
+                  type="button"
+                  className="sila-btn sila-btn--secondary"
+                  disabled={!alignSourceId || aligning || busy}
+                  onClick={alignFromWorking}
+                >
+                  {aligning ? "Copying…" : "Align connection settings"}
+                </button>
+              </div>
+            </div>
+          ) : null}
 
           {needsSecrets && !readOnly ? (
             <div className="istudio-form-grid" data-testid="istudio-test-credentials">
