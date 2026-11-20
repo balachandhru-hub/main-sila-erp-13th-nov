@@ -252,7 +252,7 @@ namespace Buyer.Application.Features.Shared
 
                 if (queueErpPosting)
                 {
-                    // Recipe explosion ledger lines. POS consumption posts as Z01 via S4 - Goods Issue (user-confirmed).
+                    // Recipe explosion ledger lines. POS consumption posts as Z01 via FIVE_POS_UPDATE only.
                     InventoryErpPosting posting = ledger.QueueErpPosting(
                         Common.SILA_REF_POS_SALE,
                         transaction.Id,

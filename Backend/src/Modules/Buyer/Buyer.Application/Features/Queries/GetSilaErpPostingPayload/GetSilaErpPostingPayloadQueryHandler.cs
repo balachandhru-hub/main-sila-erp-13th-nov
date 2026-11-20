@@ -24,7 +24,6 @@ namespace Buyer.Application.Features.Queries.GetSilaErpPostingPayload
         {
             _logger.LogInfo($"Reading ERP posting payload. OrganizationId: {request.OrganizationId}, PostingId: {request.PostingId}");
             BuyerBusinessProfile buyer = await SilaAccess.GetBuyerAsync(_repository, _logger, request.OrganizationId);
-            // Include inactive rows — failed POS posts must still expose the request body.
             InventoryErpPosting? posting = await _repository.InventoryErpPosting.FindFirstByConditionAsync(
                 x => x.Id == request.PostingId && x.BuyerId == buyer.Id);
             if (posting == null)
@@ -33,35 +32,23 @@ namespace Buyer.Application.Features.Queries.GetSilaErpPostingPayload
                 throw new NotFoundCustomException("Transaction not found.", "Select a transaction from this tracker.");
             }
 
-            string? requestBody = SilaErpPayload.Sanitise(posting.ErpRequestPayload);
-            string? responseBody = SilaErpPayload.Sanitise(posting.ErpResponsePayload)
+            string? requestBody;
+            string? responseBody = SilaErpPayload.SanitiseForPersist(posting.ErpResponsePayload)
                 ?? SilaErpPayload.HttpBodyFromError(posting.ErrorMessage);
 
-            if (string.IsNullOrWhiteSpace(requestBody)
-                && posting.ReferenceType == Common.SILA_REF_POS_SALE)
+            if (posting.ReferenceType == Common.SILA_REF_POS_SALE)
             {
-                PosSalesTransaction? sale = await _repository.PosSalesTransaction
-                    .FindFirstByConditionAsync(x => x.Id == posting.ReferenceId && x.BuyerId == buyer.Id);
-                if (sale != null)
+                requestBody = SilaPosErpPayload.ReadCapturedRequest(posting);
+                if (string.IsNullOrWhiteSpace(responseBody))
                 {
-                    requestBody = await SilaPosErpPayload.EnsureRequestAsync(
-                        _repository, buyer.Id, sale, posting, cancellationToken);
-                    responseBody ??= SilaErpPayload.HttpBodyFromError(sale.FailureMessage ?? posting.ErrorMessage);
+                    PosSalesTransaction? sale = await _repository.PosSalesTransaction
+                        .FindFirstByConditionAsync(x => x.Id == posting.ReferenceId && x.BuyerId == buyer.Id);
+                    responseBody = SilaErpPayload.HttpBodyFromError(sale?.FailureMessage ?? posting.ErrorMessage);
                 }
             }
-
-            if (string.IsNullOrWhiteSpace(requestBody))
+            else
             {
-                requestBody = SilaPosErpPayload.RememberRequest(posting, null);
-                try
-                {
-                    _repository.InventoryErpPosting.Update(posting);
-                    await _repository.SaveAsync();
-                }
-                catch (Exception)
-                {
-                    // Still return the diagnostic body below.
-                }
+                requestBody = SilaErpPayload.Sanitise(posting.ErpRequestPayload);
             }
 
             return new SilaErpPostingPayloadDto

@@ -78,17 +78,13 @@ namespace Buyer.Application.Features.Shared
         }
 
         /// <summary>
-        /// POS SALE consumption is Z01 (via S4 - Goods Issue). Negative quantity / legacy rows that used Z02 keep their stored type.
-        /// Prefer the queued MovementType when already set.
+        /// POS SALE consumption always queues/posts as Z01 via FIVE_POS_UPDATE.
+        /// Legacy Z02 values on POS rows are corrected to Z01 — Z02 is reserved for non-POS goods issue.
         /// </summary>
         public static string MovementForSale(string? movementType, decimal quantitySold)
         {
-            if (movementType == TYPE_Z01 || movementType == TYPE_Z02)
-            {
-                return movementType;
-            }
-
-            // User-confirmed: POS consumption posts as Z01 (not Z02).
+            _ = movementType;
+            _ = quantitySold;
             return TYPE_Z01;
         }
 

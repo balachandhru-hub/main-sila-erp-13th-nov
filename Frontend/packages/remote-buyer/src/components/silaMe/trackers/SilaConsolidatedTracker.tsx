@@ -80,39 +80,32 @@ const httpBodyFromError = (error?: string | null): string => {
   return prettyPayload(text.slice(start));
 };
 
-/**
- * Last-resort request body when the API returns an empty technicalDetail for a POS sale.
- * Prefer the real FIVE_POS_UPDATE body from the backend; this only fills the Request panel so it is never blank.
- */
-const synthesizePosRequest = (detail: SilaTrackerDetail): string => {
-  if (detail.technicalDetail?.trim()) return detail.technicalDetail;
+/** True when technicalDetail is a real SAP material-document body (not a fabricated SILA note). */
+const isCapturedSapRequest = (value?: string | null): boolean => {
+  const text = value?.trim() ?? "";
+  if (!text) return false;
+  if (/Actual SAP request was not captured/i.test(text)) return false;
+  if (/SILA (UI )?built this request|SILA rebuilt this request|SILA recorded a diagnostic/i.test(text)) return false;
+  return text.includes("to_MaterialDocumentItem") && text.includes("GoodsMovementCode");
+};
+
+const NOT_CAPTURED_REQUEST = "Actual SAP request was not captured for this attempt.";
+
+/** Request panel text: real SAP JSON only; never invent sale metadata. */
+const resolveRequestPayload = (detail: SilaTrackerDetail): string => {
+  if (isCapturedSapRequest(detail.technicalDetail)) return prettyPayload(detail.technicalDetail);
+  const raw = detail.technicalDetail?.trim() ?? "";
+  if (raw && /Actual SAP request was not captured/i.test(raw)) return raw;
   const isPos = detail.source === "POS"
     || detail.transactionType === "POS_SALE"
     || detail.transactionType === "POS_POSITIVE_CORRECTION"
     || !!detail.posCode;
-  if (!isPos) return "";
-  return JSON.stringify({
-    note: "SILA UI built this request view because technicalDetail was blank.",
-    api: "FIVE_POS_UPDATE",
-    GoodsMovementCode: "03",
-    GoodsMovementType: detail.movementType || "Z01",
-    postingId: detail.erpPostingId || null,
-    saleId: detail.id?.includes("~") ? detail.id.split("~").pop() : detail.id,
-    posCode: detail.posCode || null,
-    outletCode: detail.outletCode || null,
-    quantitySold: detail.quantity ?? null,
-    uom: detail.uom || null,
-    businessDate: detail.businessDate || null,
-    plant: detail.plant || null,
-    storageLocation: detail.storageLocation || null,
-    sourceTransactionId: detail.businessReference || detail.localReference || null,
-    errorMessage: detail.lastError || detail.localError || null,
-  }, null, 2);
+  return isPos ? NOT_CAPTURED_REQUEST : prettyPayload(detail.technicalDetail);
 };
 
 const downloadPayload = (detail: SilaTrackerDetail) => {
-  const text = prettyPayload(detail.technicalDetail);
-  if (!text) return;
+  const text = resolveRequestPayload(detail);
+  if (!text || text === NOT_CAPTURED_REQUEST) return;
   const blob = new Blob([text], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -292,8 +285,14 @@ const SilaConsolidatedTracker: React.FC<SilaConsolidatedTrackerProps> = ({ track
           };
         }
       }
-      if (!next.technicalDetail?.trim()) {
-        next = { ...next, technicalDetail: synthesizePosRequest(next) || next.technicalDetail };
+      if (!isCapturedSapRequest(next.technicalDetail)) {
+        const isPos = next.source === "POS"
+          || next.transactionType === "POS_SALE"
+          || next.transactionType === "POS_POSITIVE_CORRECTION"
+          || !!next.posCode;
+        if (isPos) {
+          next = { ...next, technicalDetail: NOT_CAPTURED_REQUEST };
+        }
       }
       if (!next.erpMessage?.trim() && fromError) {
         next = { ...next, erpMessage: fromError };
@@ -568,14 +567,11 @@ const SilaConsolidatedTracker: React.FC<SilaConsolidatedTrackerProps> = ({ track
             <FlowChain steps={flow.steps} />
           ) : (
             <PayloadIcons
-              request={detail.technicalDetail?.trim() ? detail.technicalDetail : synthesizePosRequest(detail)}
+              request={resolveRequestPayload(detail)}
               response={detail.erpMessage || httpBodyFromError(detail.lastError)}
               onDownloadRequest={
-                (detail.technicalDetail?.trim() || synthesizePosRequest(detail))
-                  ? () => downloadPayload({
-                    ...detail,
-                    technicalDetail: detail.technicalDetail?.trim() ? detail.technicalDetail : synthesizePosRequest(detail),
-                  })
+                isCapturedSapRequest(detail.technicalDetail)
+                  ? () => downloadPayload(detail)
                   : undefined
               }
             />

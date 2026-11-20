@@ -112,20 +112,28 @@ namespace Buyer.Application.Features.Queries.GetSilaTransactionTracker
             detail.IntegrationName = posting.IntegrationSystem;
             detail.MovementType = posting.MovementType;
             detail.ErpPostingId = posting.Id;
-            detail.TechnicalDetail = SilaErpPayload.Sanitise(posting.ErpRequestPayload);
-            detail.ErpMessage = SilaErpPayload.Sanitise(posting.ErpResponsePayload)
+            if (posting.ReferenceType == Common.SILA_REF_POS_SALE)
+            {
+                detail.TechnicalDetail = SilaPosErpPayload.ReadCapturedRequest(posting);
+                detail.MovementType = string.IsNullOrWhiteSpace(posting.MovementType) || posting.MovementType == SilaInventorySap.TYPE_Z02
+                    ? SilaInventorySap.TYPE_Z01
+                    : posting.MovementType;
+                detail.IntegrationName = string.IsNullOrWhiteSpace(posting.IntegrationSystem)
+                    ? SilaStockCountSap.API_CONFIG_NAME
+                    : posting.IntegrationSystem;
+            }
+            else
+            {
+                detail.TechnicalDetail = SilaErpPayload.Sanitise(posting.ErpRequestPayload);
+            }
+
+            detail.ErpMessage = SilaErpPayload.SanitiseForPersist(posting.ErpResponsePayload)
                 ?? SilaErpPayload.HttpBodyFromError(posting.ErrorMessage);
-            if (string.IsNullOrWhiteSpace(detail.TechnicalDetail)
-                && posting.ReferenceType == Common.SILA_REF_POS_SALE)
+            if (string.IsNullOrWhiteSpace(detail.ErpMessage) && posting.ReferenceType == Common.SILA_REF_POS_SALE)
             {
                 PosSalesTransaction? sale = await _repository.PosSalesTransaction
                     .FindFirstByConditionAsync(x => x.Id == posting.ReferenceId && x.BuyerId == buyerId);
-                if (sale != null)
-                {
-                    detail.TechnicalDetail = await SilaPosErpPayload.EnsureRequestAsync(
-                        _repository, buyerId, sale, posting, cancellationToken);
-                    detail.ErpMessage ??= SilaErpPayload.HttpBodyFromError(sale.FailureMessage ?? posting.ErrorMessage);
-                }
+                detail.ErpMessage ??= SilaErpPayload.HttpBodyFromError(sale?.FailureMessage ?? posting.ErrorMessage);
             }
 
             detail.Attempts = await AttemptsAsync(buyerId, posting.ReferenceType, posting.ReferenceId, cancellationToken);
@@ -261,10 +269,11 @@ namespace Buyer.Application.Features.Queries.GetSilaTransactionTracker
             detail.Uom = sale.Uom;
             detail.RecipeVersion = sale.RecipeVersion;
             detail.RecipeId = sale.RecipeId;
-            // Never leave Request blank — rebuild from ledger or return a sale diagnostic.
-            detail.TechnicalDetail = await SilaPosErpPayload.EnsureRequestAsync(_repository, buyerId, sale, posting, cancellationToken)
-                ?? SilaPosErpPayload.BuildSaleDiagnostic(sale, posting, "Request payload was not stored; showing POS sale fields for FIVE_POS_UPDATE.");
-            detail.ErpMessage = SilaErpPayload.Sanitise(posting?.ErpResponsePayload)
+            // Only the captured HTTP body — never fabricate SILA sale metadata as an SAP request.
+            detail.TechnicalDetail = SilaPosErpPayload.ReadCapturedRequest(posting);
+            detail.MovementType = posting?.MovementType ?? SilaInventorySap.TYPE_Z01;
+            detail.IntegrationName = posting?.IntegrationSystem ?? SilaStockCountSap.API_CONFIG_NAME;
+            detail.ErpMessage = SilaErpPayload.SanitiseForPersist(posting?.ErpResponsePayload)
                 ?? SilaErpPayload.HttpBodyFromError(sale.FailureMessage ?? posting?.ErrorMessage);
             detail.Attempts = await AttemptsAsync(buyerId, Common.SILA_REF_POS_SALE, sale.Id, cancellationToken);
             return detail;

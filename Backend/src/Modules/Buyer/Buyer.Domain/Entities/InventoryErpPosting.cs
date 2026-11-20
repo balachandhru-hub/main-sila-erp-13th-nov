@@ -44,7 +44,7 @@ namespace Buyer.Domain.Entities
         public string? CompanyCode { get; set; }
 
         // SILA ME parity: the last call to the ERP, for the transaction tracker. Payloads are sanitised (credential
-        // values masked) and truncated to 4000 characters before they are stored.
+        // values masked). POS request/response persist up to SanitiseForPersist limits; display may still truncate.
         public int? ErpHttpStatus { get; set; }
 
         public string? ErpRequestPayload { get; set; }

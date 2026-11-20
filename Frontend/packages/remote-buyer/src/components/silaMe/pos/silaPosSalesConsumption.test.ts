@@ -66,6 +66,28 @@ assert.match(integration, /queueErpPosting:\s*true/);
 assert.match(integration, /Validate & update locally/);
 assert.match(integration, /Call SAP API/);
 assert.match(integration, /Transaction Tracker/);
+assert.match(integration, /FIVE_POS_UPDATE · Z01 \/ 03/);
+
+const sap = readBackend("Buyer.Application/Features/Shared/SilaInventorySap.cs");
+assert.match(sap, /PosConsumption = new Rule\(\s*\n?\s*SilaStockCountSap\.API_CONFIG_NAME/);
+assert.match(sap, /TYPE_Z01/);
+assert.doesNotMatch(sap, /PosConsumption = new Rule\([^)]*TYPE_Z02/);
+
+const stockCount = readBackend("Buyer.Application/Features/Shared/SilaStockCountSap.cs");
+assert.match(stockCount, /FIVE_POS_UPDATE/);
+
+const posPayload = readBackend("Buyer.Application/Features/Shared/SilaPosErpPayload.cs");
+assert.match(posPayload, /Actual SAP request was not captured/);
+assert.match(posPayload, /IsCapturedSapBody/);
+assert.match(posPayload, /Reject prior fabricated/);
+assert.doesNotMatch(posPayload, /\["note"\]\s*=/);
+assert.doesNotMatch(posPayload, /\["saleId"\]/);
+assert.doesNotMatch(posPayload, /\["posCode"\]/);
+
+const profiles = readFileSync(join(__dirname, "../../../api/integrationsApi.ts"), "utf8");
+assert.match(profiles, /configurationName: "FIVE_POS_UPDATE"/);
+assert.match(profiles, /goodsMovementType: "Z01"/);
+assert.doesNotMatch(profiles, /POS Sales Consumption \(Z02\)/);
 
 const studioCss = read("SilaPosStudio.css");
 assert.match(studioCss, /\.pstudio-page/);
