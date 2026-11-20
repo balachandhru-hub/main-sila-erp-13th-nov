@@ -55,20 +55,25 @@ namespace Buyer.Tests.Shared
             Assert.Null(problem);
             Assert.NotNull(body);
             using JsonDocument json = JsonDocument.Parse(body);
-            JsonElement line = json.RootElement.GetProperty("to_MaterialDocumentItem")[0];
+            JsonElement items = json.RootElement.GetProperty("to_MaterialDocumentItem").GetProperty("results");
+            JsonElement line = items[0];
             Assert.Equal("03", json.RootElement.GetProperty("GoodsMovementCode").GetString());
             Assert.Equal("POS~0833B2E7", json.RootElement.GetProperty("MaterialDocumentHeaderText").GetString());
+            Assert.Equal("S4 - Goods Issue", SilaInventorySap.API_GOODS_ISSUE);
             Assert.Equal(SilaInventorySap.API_GOODS_ISSUE, SilaInventorySap.GoodsIssue.ApiName);
+            Assert.Contains(SilaInventorySap.API_GOODS_ISSUE, SilaInventorySap.GoodsIssueApiNames);
+            Assert.DoesNotContain("FIVE_POS_UPDATE", SilaInventorySap.GoodsIssueApiNames);
             Assert.Equal("Z02", line.GetProperty("GoodsMovementType").GetString());
             Assert.Equal("0.400", line.GetProperty("QuantityInEntryUnit").GetString());
             Assert.Equal("BTL", line.GetProperty("EntryUnit").GetString());
             Assert.Equal("PL-A", line.GetProperty("Plant").GetString());
             Assert.Equal("BAR", line.GetProperty("StorageLocation").GetString());
             Assert.Equal("CC-FL10", line.GetProperty("CostCenter").GetString());
-            Assert.Equal(1, json.RootElement.GetProperty("to_MaterialDocumentItem").GetArrayLength());
+            Assert.Equal(1, items.GetArrayLength());
             Assert.Equal(
                 "sap/opu/odata/sap/API_MATERIAL_DOCUMENT_SRV/A_MaterialDocumentHeader",
                 SilaInventorySap.EnsureMaterialDocumentPath("sap/opu/odata/sap/API_MATERIAL_DOCUMENT_SRV"));
+            Assert.Equal("000000000000100001", SilaInventorySap.FormatSapMaterial("100001"));
         }
 
         [Fact]
@@ -128,8 +133,9 @@ namespace Buyer.Tests.Shared
             Assert.Null(problem);
             Assert.NotNull(body);
             using JsonDocument json = JsonDocument.Parse(body);
-            Assert.Equal("0.400", json.RootElement.GetProperty("to_MaterialDocumentItem")[0].GetProperty("QuantityInEntryUnit").GetString());
-            Assert.Equal("BTL", json.RootElement.GetProperty("to_MaterialDocumentItem")[0].GetProperty("EntryUnit").GetString());
+            JsonElement line = json.RootElement.GetProperty("to_MaterialDocumentItem").GetProperty("results")[0];
+            Assert.Equal("0.400", line.GetProperty("QuantityInEntryUnit").GetString());
+            Assert.Equal("BTL", line.GetProperty("EntryUnit").GetString());
         }
 
         private static ItemBuyerMaster Stock(string code, string unit)

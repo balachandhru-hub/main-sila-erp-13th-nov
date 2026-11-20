@@ -18,8 +18,17 @@ namespace Buyer.Application.Features.Shared
     {
         public const string API_TRANSFER = "FIVE S4 - Transfer Stock";
         public const string API_PLANT_TRANSFER = "FIVE S4 - Plant Transfer Stock";
-        public const string API_GOODS_ISSUE = "FIVE S4 - Goods Issue";
+        /// <summary>Canonical Integration Setup name for Z02 goods issue / POS sales consumption.</summary>
+        public const string API_GOODS_ISSUE = "S4 - Goods Issue";
+        /// <summary>Legacy display name still accepted when resolving the same Goods Issue connector.</summary>
+        public const string API_GOODS_ISSUE_LEGACY = "FIVE S4 - Goods Issue";
         public const string API_POSITIVE_ADJUSTMENT = "FIVE S4 - Positive Stock Adjustment";
+
+        /// <summary>
+        /// POS sales consumption and stock issue resolve only these Goods Issue configurations.
+        /// Never FIVE_POS_UPDATE / POS_UPDATE / a second POS-specific API.
+        /// </summary>
+        public static readonly string[] GoodsIssueApiNames = { API_GOODS_ISSUE, API_GOODS_ISSUE_LEGACY };
 
         public const string CODE_TRANSFER = "04";
         public const string CODE_ISSUE = "03";
@@ -37,6 +46,7 @@ namespace Buyer.Application.Features.Shared
         public const string MATERIAL_MAPPING_MISSING = "MATERIAL_MAPPING_MISSING";
         public const string MATERIAL_NOT_VALID = "MATERIAL_NOT_VALID";
         public const string SAP_API_CONFIGURATION_NOT_FOUND = "SAP_API_CONFIGURATION_NOT_FOUND";
+        public const string SAP_API_CONFIGURATION_INACTIVE = "SAP_API_CONFIGURATION_INACTIVE";
         public const string ALREADY_POSTED = "ALREADY_POSTED";
         public const string COST_CENTER_MISSING = "COST_CENTER_MISSING";
         public const string MATERIAL_DOCUMENT_ENTITY = "A_MaterialDocumentHeader";
@@ -151,7 +161,8 @@ namespace Buyer.Application.Features.Shared
                 UOM_CONVERSION_MISSING => "The material has no SAP unit of measure, or the quantity cannot be converted to it.",
                 MATERIAL_MAPPING_MISSING => "The material is not an active stock item with a material number.",
                 MATERIAL_NOT_VALID => "The material is not an active stock item.",
-                SAP_API_CONFIGURATION_NOT_FOUND => "The SAP API for this stock movement is not active. No other API is used.",
+                SAP_API_CONFIGURATION_NOT_FOUND => "The SAP Goods Issue API is not configured under Integration Setup. No other API is used.",
+                SAP_API_CONFIGURATION_INACTIVE => "The SAP Goods Issue API exists but is not ACTIVE under Integration Setup.",
                 ALREADY_POSTED => "This stock movement already has an SAP material document.",
                 COST_CENTER_MISSING => "The outlet has no SAP cost center. Maintain CostCenter on the inventory location before posting Z01/Z02.",
                 _ => "The stock movement cannot be posted."
@@ -165,7 +176,12 @@ namespace Buyer.Application.Features.Shared
 
         public static string MissingApi(string apiName)
         {
-            return SAP_API_CONFIGURATION_NOT_FOUND + ". Activate " + apiName + ". No other API is used.";
+            return SAP_API_CONFIGURATION_NOT_FOUND + ". Activate " + apiName + " under Integration Setup. No other API is used for POS consumption.";
+        }
+
+        public static string InactiveApi(string apiName)
+        {
+            return SAP_API_CONFIGURATION_INACTIVE + ". Activate " + apiName + " under Integration Setup. POS consumption does not use another API.";
         }
 
         /// <summary>One transfer, one material document. 311 stays in the source plant. 301 names the receiving plant.</summary>
@@ -355,17 +371,19 @@ namespace Buyer.Application.Features.Shared
                 })
                 .ToList();
 
+            // OData V2 deep-insert: to_MaterialDocumentItem.results[...]
             Dictionary<string, object?> header = new Dictionary<string, object?>
             {
                 ["PostingDate"] = postingDate,
                 ["DocumentDate"] = postingDate,
                 ["GoodsMovementCode"] = rule.GoodsMovementCode,
                 ["MaterialDocumentHeaderText"] = materialDocumentHeaderText,
-                ["to_MaterialDocumentItem"] = items
+                ["to_MaterialDocumentItem"] = new Dictionary<string, object?> { ["results"] = items }
             };
             if (!string.IsNullOrWhiteSpace(referenceDocument))
             {
-                header["ReferenceDocument"] = referenceDocument.Trim();
+                string reference = referenceDocument.Trim();
+                header["ReferenceDocument"] = reference.Length > 16 ? reference[..16] : reference;
             }
 
             body = JsonSerializer.Serialize(header);
@@ -472,12 +490,75 @@ namespace Buyer.Application.Features.Shared
             string? companyCode,
             CancellationToken cancellationToken)
         {
-            List<ApiIntegrationConfiguration> named = await repository.ApiIntegrationConfiguration
-                .FindByCondition(x => IntegrationLookup.BuyerIdsOf(repository, organizationId).Contains(x.BuyerId)
-                    && x.IsActive
-                    && x.Status == IntegrationConfigurationStatus.ACTIVE
-                    && x.Name == apiName)
+            return await ResolveAnyAsync(repository, organizationId, new[] { apiName }, companyCode, cancellationToken);
+        }
+
+        /// <summary>
+        /// Resolves the first ACTIVE configuration whose name matches any of <paramref name="apiNames"/> (case-insensitive),
+        /// preferring the company code then ALL.
+        /// </summary>
+        public static async Task<ApiIntegrationConfiguration?> ResolveAnyAsync(
+            IRepositoryWrapper repository,
+            Guid organizationId,
+            IReadOnlyList<string> apiNames,
+            string? companyCode,
+            CancellationToken cancellationToken)
+        {
+            List<ApiIntegrationConfiguration> matches = await LoadNamedAsync(repository, organizationId, apiNames, cancellationToken);
+            List<ApiIntegrationConfiguration> active = matches
+                .Where(x => x.Status == IntegrationConfigurationStatus.ACTIVE)
+                .ToList();
+            return PickForCompany(active, companyCode);
+        }
+
+        /// <summary>
+        /// Like <see cref="ResolveAnyAsync"/> but also returns an inactive match so the caller can report
+        /// SAP_API_CONFIGURATION_INACTIVE instead of NOT_FOUND.
+        /// </summary>
+        public static async Task<(ApiIntegrationConfiguration? Active, ApiIntegrationConfiguration? Inactive)> ResolveWithInactiveAsync(
+            IRepositoryWrapper repository,
+            Guid organizationId,
+            IReadOnlyList<string> apiNames,
+            string? companyCode,
+            CancellationToken cancellationToken)
+        {
+            List<ApiIntegrationConfiguration> matches = await LoadNamedAsync(repository, organizationId, apiNames, cancellationToken);
+            ApiIntegrationConfiguration? active = PickForCompany(
+                matches.Where(x => x.Status == IntegrationConfigurationStatus.ACTIVE).ToList(),
+                companyCode);
+            if (active != null)
+            {
+                return (active, null);
+            }
+
+            ApiIntegrationConfiguration? inactive = PickForCompany(matches, companyCode)
+                ?? matches.OrderBy(x => x.DateCreated).FirstOrDefault();
+            return (null, inactive);
+        }
+
+        private static async Task<List<ApiIntegrationConfiguration>> LoadNamedAsync(
+            IRepositoryWrapper repository,
+            Guid organizationId,
+            IReadOnlyList<string> apiNames,
+            CancellationToken cancellationToken)
+        {
+            if (apiNames.Count == 0)
+            {
+                return new List<ApiIntegrationConfiguration>();
+            }
+
+            HashSet<string> wanted = apiNames
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Select(x => x.Trim())
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            List<ApiIntegrationConfiguration> rows = await repository.ApiIntegrationConfiguration
+                .FindByCondition(x => IntegrationLookup.BuyerIdsOf(repository, organizationId).Contains(x.BuyerId) && x.IsActive)
                 .ToListAsync(cancellationToken);
+            return rows.Where(x => wanted.Contains(x.Name)).ToList();
+        }
+
+        private static ApiIntegrationConfiguration? PickForCompany(List<ApiIntegrationConfiguration> named, string? companyCode)
+        {
             return named.FirstOrDefault(x => companyCode != null && x.EntityCode.Equals(companyCode, StringComparison.OrdinalIgnoreCase))
                 ?? named.FirstOrDefault(x => x.EntityCode.Equals(IntegrationConstants.ENTITY_CODE_ALL, StringComparison.OrdinalIgnoreCase))
                 ?? (companyCode == null ? named.OrderBy(x => x.DateCreated).FirstOrDefault() : null);
@@ -512,10 +593,22 @@ namespace Buyer.Application.Features.Shared
                 return UOM_CONVERSION_MISSING;
             }
 
-            materialCode = material.MaterialCode.Trim();
+            materialCode = FormatSapMaterial(material.MaterialCode.Trim());
             entryUnit = unit;
             converted = baseQuantity.Value;
             return null;
+        }
+
+        /// <summary>SAP material numbers are often 18-character zero-padded numerics.</summary>
+        public static string FormatSapMaterial(string materialCode)
+        {
+            string code = materialCode.Trim();
+            if (code.Length > 0 && code.Length < 18 && code.All(char.IsDigit))
+            {
+                return code.PadLeft(18, '0');
+            }
+
+            return code;
         }
 
         private static string? Text(JsonElement root, string name)

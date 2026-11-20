@@ -470,18 +470,30 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
 
             PosSalesTransaction? sale = sales.GetValueOrDefault(posting.ReferenceId);
             string movement = SilaPosReversal.MovementForSale(posting.MovementType, sale);
+            // POS sales consumption (Z02) uses only S4 - Goods Issue — never FIVE_POS_UPDATE or another POS API.
             SilaInventorySap.Rule rule = movement == SilaInventorySap.TYPE_Z01 ? SilaInventorySap.PositiveAdjustment : SilaInventorySap.GoodsIssue;
             EffectPreparation prepared = await PrepareEffectAsync(
                 posting, pending.Select(x => x.ReferenceId).ToList(), headerLocation, headerProperty, rule, buyer.OrganizationId, cancellationToken,
-                preferPosUpdateApi: movement == SilaInventorySap.TYPE_Z02,
-                preferPosReversalApi: movement == SilaInventorySap.TYPE_Z01);
+                preferPosUpdateApi: false,
+                preferPosReversalApi: movement == SilaInventorySap.TYPE_Z01,
+                useGoodsIssueNamesOnly: movement == SilaInventorySap.TYPE_Z02);
             string? body = prepared.Body;
             ApiIntegrationConfiguration? api = prepared.Api;
             if (prepared.Error != null || body == null || api == null)
             {
-                string message = prepared.Error ?? "The document has no lines to post.";
+                string message = prepared.Error
+                    ?? (body == null
+                        ? "Payload not generated — mapping validation failed."
+                        : "The document has no lines to post.");
                 foreach (InventoryErpPosting row in pending)
                 {
+                    // Persist the built request (or mapping failure note) before leaving so the tracker is never blank.
+                    row.MovementType = rule.GoodsMovementType;
+                    row.ErpRequestPayload = body == null
+                        ? SilaErpPayload.Sanitise("{\"error\":\"Payload not generated — mapping validation failed.\",\"detail\":"
+                            + JsonSerializer.Serialize(message) + "}")
+                        : SilaErpPayload.Sanitise(body);
+                    _repository.InventoryErpPosting.Update(row);
                     await FinishAsync(row, Common.SILA_POSTING_FAILED, null, message, cancellationToken);
                 }
 
@@ -588,12 +600,31 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
 
                 SilaInventorySap.Rule rule = movement == SilaInventorySap.TYPE_Z01 ? SilaInventorySap.PositiveAdjustment : SilaInventorySap.GoodsIssue;
                 EffectPreparation prepared = await PrepareEffectAsync(
-                    posting, new List<Guid> { posting.ReferenceId }, location, property, rule, buyer.OrganizationId, cancellationToken);
+                    posting,
+                    new List<Guid> { posting.ReferenceId },
+                    location,
+                    property,
+                    rule,
+                    buyer.OrganizationId,
+                    cancellationToken,
+                    useGoodsIssueNamesOnly: movement == SilaInventorySap.TYPE_Z02);
                 string? body = prepared.Body;
                 ApiIntegrationConfiguration? api = prepared.Api;
                 if (prepared.Error != null || body == null || api == null)
                 {
-                    return await FinishAsync(posting, Common.SILA_POSTING_FAILED, null, prepared.Error ?? "The document has no lines to post.", cancellationToken);
+                    if (body != null)
+                    {
+                        posting.ErpRequestPayload = SilaErpPayload.Sanitise(body);
+                        posting.MovementType = rule.GoodsMovementType;
+                        _repository.InventoryErpPosting.Update(posting);
+                    }
+
+                    return await FinishAsync(
+                        posting,
+                        Common.SILA_POSTING_FAILED,
+                        null,
+                        prepared.Error ?? (body == null ? "Payload not generated — mapping validation failed." : "The document has no lines to post."),
+                        cancellationToken);
                 }
 
                 posting.IntegrationSystem = api.Name;
@@ -662,7 +693,8 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
             Guid organizationId,
             CancellationToken cancellationToken,
             bool preferPosUpdateApi = false,
-            bool preferPosReversalApi = false)
+            bool preferPosReversalApi = false,
+            bool useGoodsIssueNamesOnly = false)
         {
             string? body = null;
             ApiIntegrationConfiguration? api = null;
@@ -718,25 +750,32 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
                 return new EffectPreparation("The document has no lines to post.", null, null);
             }
 
-            // POS consumption prefers FIVE_POS_UPDATE when active; POS reversal prefers POS_CONSUMPTION_REVERSAL (Z01).
-            // Both fall back to the named Goods Issue / Positive Adjustment APIs.
-            string[] apiNames = preferPosUpdateApi
-                ? new[] { SilaStockCountSap.API_CONFIG_NAME, rule.ApiName }
-                : preferPosReversalApi
-                    ? new[] { "POS_CONSUMPTION_REVERSAL", rule.ApiName }
-                    : new[] { rule.ApiName };
-            foreach (string apiName in apiNames)
-            {
-                api = await SilaInventorySap.ResolveAsync(_repository, organizationId, apiName, posting.CompanyCode, cancellationToken);
-                if (api != null)
-                {
-                    break;
-                }
-            }
+            // POS Z02: only S4 - Goods Issue (plus legacy name). Never FIVE_POS_UPDATE / a POS-specific API.
+            // Stock-count may still prefer FIVE_POS_UPDATE via preferPosUpdateApi.
+            // POS Z01 reversal may try POS_CONSUMPTION_REVERSAL then Positive Adjustment.
+            string[] apiNames = useGoodsIssueNamesOnly || rule.GoodsMovementType == SilaInventorySap.TYPE_Z02
+                ? SilaInventorySap.GoodsIssueApiNames
+                : preferPosUpdateApi
+                    ? new[] { SilaStockCountSap.API_CONFIG_NAME, rule.ApiName }
+                    : preferPosReversalApi
+                        ? new[] { "POS_CONSUMPTION_REVERSAL", rule.ApiName }
+                        : new[] { rule.ApiName };
 
+            (ApiIntegrationConfiguration? active, ApiIntegrationConfiguration? inactive) =
+                await SilaInventorySap.ResolveWithInactiveAsync(
+                    _repository, organizationId, apiNames, posting.CompanyCode, cancellationToken);
+            api = active;
             if (api == null)
             {
-                return new EffectPreparation(SilaInventorySap.MissingApi(string.Join(" / ", apiNames)), null, null);
+                string missingName = useGoodsIssueNamesOnly || rule.GoodsMovementType == SilaInventorySap.TYPE_Z02
+                    ? SilaInventorySap.API_GOODS_ISSUE
+                    : apiNames[0];
+                if (inactive != null)
+                {
+                    return new EffectPreparation(SilaInventorySap.InactiveApi(inactive.Name), body, null);
+                }
+
+                return new EffectPreparation(SilaInventorySap.MissingApi(missingName), body, null);
             }
 
             return new EffectPreparation(null, body, api);
