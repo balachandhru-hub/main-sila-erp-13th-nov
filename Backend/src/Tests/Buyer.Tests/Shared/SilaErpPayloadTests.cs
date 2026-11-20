@@ -60,5 +60,29 @@ namespace Buyer.Tests.Shared
             Assert.Contains("ML", kept);
             Assert.Equal(kept, posting.ErpRequestPayload);
         }
+
+        [Fact]
+        public void BuildSaleDiagnostic_AlwaysReturnsRequestBodyWhenPostingMissing()
+        {
+            PosSalesTransaction sale = new PosSalesTransaction
+            {
+                Id = Guid.Parse("2d51e37d-8c1a-4c19-adfe-3a01f4dd65f4"),
+                PosCode = "100048",
+                OutletCode = "FL10",
+                QuantitySold = 1m,
+                Uom = "EA",
+                BusinessDate = new DateTime(2026, 11, 20),
+                SourceTransactionId = "TX-2d51",
+                FailureMessage = "The ERP returned HTTP 400. {\"error\":\"Material Document processing failed\"}"
+            };
+
+            string body = SilaPosErpPayload.BuildSaleDiagnostic(sale, null, "No InventoryErpPosting row is linked.");
+            Assert.False(string.IsNullOrWhiteSpace(body));
+            Assert.Contains("2d51e37d-8c1a-4c19-adfe-3a01f4dd65f4", body, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("FIVE_POS_UPDATE", body);
+            Assert.Contains("100048", body);
+            Assert.Contains("GoodsMovementCode", body);
+            Assert.Contains("03", body);
+        }
     }
 }

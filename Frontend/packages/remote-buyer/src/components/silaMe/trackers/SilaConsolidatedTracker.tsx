@@ -80,6 +80,36 @@ const httpBodyFromError = (error?: string | null): string => {
   return prettyPayload(text.slice(start));
 };
 
+/**
+ * Last-resort request body when the API returns an empty technicalDetail for a POS sale.
+ * Prefer the real FIVE_POS_UPDATE body from the backend; this only fills the Request panel so it is never blank.
+ */
+const synthesizePosRequest = (detail: SilaTrackerDetail): string => {
+  if (detail.technicalDetail?.trim()) return detail.technicalDetail;
+  const isPos = detail.source === "POS"
+    || detail.transactionType === "POS_SALE"
+    || detail.transactionType === "POS_POSITIVE_CORRECTION"
+    || !!detail.posCode;
+  if (!isPos) return "";
+  return JSON.stringify({
+    note: "SILA UI built this request view because technicalDetail was blank.",
+    api: "FIVE_POS_UPDATE",
+    GoodsMovementCode: "03",
+    GoodsMovementType: detail.movementType || "Z01",
+    postingId: detail.erpPostingId || null,
+    saleId: detail.id?.includes("~") ? detail.id.split("~").pop() : detail.id,
+    posCode: detail.posCode || null,
+    outletCode: detail.outletCode || null,
+    quantitySold: detail.quantity ?? null,
+    uom: detail.uom || null,
+    businessDate: detail.businessDate || null,
+    plant: detail.plant || null,
+    storageLocation: detail.storageLocation || null,
+    sourceTransactionId: detail.businessReference || detail.localReference || null,
+    errorMessage: detail.lastError || detail.localError || null,
+  }, null, 2);
+};
+
 const downloadPayload = (detail: SilaTrackerDetail) => {
   const text = prettyPayload(detail.technicalDetail);
   if (!text) return;
@@ -233,21 +263,42 @@ const SilaConsolidatedTracker: React.FC<SilaConsolidatedTrackerProps> = ({ track
     setDetailError(null);
     setFlow(null);
     const withPayload = async (detail: SilaTrackerDetail): Promise<SilaTrackerDetail> => {
-      const fromError = httpBodyFromError(detail.lastError);
+      const fromError = httpBodyFromError(detail.lastError || row.lastError);
       let next: SilaTrackerDetail = {
         ...detail,
+        source: detail.source || row.source,
+        transactionType: detail.transactionType || row.transactionType,
+        posCode: detail.posCode ?? row.posCode,
+        outletCode: detail.outletCode ?? row.outletCode,
+        quantity: detail.quantity ?? row.quantity,
+        uom: detail.uom ?? row.uom,
+        movementType: detail.movementType ?? row.movementType,
+        erpPostingId: detail.erpPostingId ?? row.erpPostingId,
+        businessDate: detail.businessDate ?? row.businessDate,
+        plant: detail.plant ?? row.plant,
+        storageLocation: detail.storageLocation ?? row.storageLocation,
+        businessReference: detail.businessReference ?? row.businessReference,
+        lastError: detail.lastError ?? row.lastError,
         erpMessage: detail.erpMessage?.trim() ? detail.erpMessage : fromError || detail.erpMessage,
       };
-      if (!row.erpPostingId) return next;
-      if (next.technicalDetail?.trim() && next.erpMessage?.trim()) return next;
-      const payload = await getErpPostingPayload(row.erpPostingId);
-      if (!payload) return next;
-      return {
-        ...next,
-        technicalDetail: next.technicalDetail?.trim() ? next.technicalDetail : payload.technicalDetail,
-        erpMessage: next.erpMessage?.trim() ? next.erpMessage : payload.erpMessage,
-        erpHttpStatus: next.erpHttpStatus != null ? next.erpHttpStatus : payload.erpHttpStatus,
-      };
+      if (row.erpPostingId && (!next.technicalDetail?.trim() || !next.erpMessage?.trim())) {
+        const payload = await getErpPostingPayload(row.erpPostingId);
+        if (payload) {
+          next = {
+            ...next,
+            technicalDetail: next.technicalDetail?.trim() ? next.technicalDetail : payload.technicalDetail,
+            erpMessage: next.erpMessage?.trim() ? next.erpMessage : payload.erpMessage,
+            erpHttpStatus: next.erpHttpStatus != null ? next.erpHttpStatus : payload.erpHttpStatus,
+          };
+        }
+      }
+      if (!next.technicalDetail?.trim()) {
+        next = { ...next, technicalDetail: synthesizePosRequest(next) || next.technicalDetail };
+      }
+      if (!next.erpMessage?.trim() && fromError) {
+        next = { ...next, erpMessage: fromError };
+      }
+      return next;
     };
     try {
       const loaded = await getTrackerDetail(tracker, row.id);
@@ -517,9 +568,16 @@ const SilaConsolidatedTracker: React.FC<SilaConsolidatedTrackerProps> = ({ track
             <FlowChain steps={flow.steps} />
           ) : (
             <PayloadIcons
-              request={detail.technicalDetail}
+              request={detail.technicalDetail?.trim() ? detail.technicalDetail : synthesizePosRequest(detail)}
               response={detail.erpMessage || httpBodyFromError(detail.lastError)}
-              onDownloadRequest={detail.technicalDetail?.trim() ? () => downloadPayload(detail) : undefined}
+              onDownloadRequest={
+                (detail.technicalDetail?.trim() || synthesizePosRequest(detail))
+                  ? () => downloadPayload({
+                    ...detail,
+                    technicalDetail: detail.technicalDetail?.trim() ? detail.technicalDetail : synthesizePosRequest(detail),
+                  })
+                  : undefined
+              }
             />
           )}
         </section>

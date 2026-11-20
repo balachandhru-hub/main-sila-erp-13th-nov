@@ -261,7 +261,9 @@ namespace Buyer.Application.Features.Queries.GetSilaTransactionTracker
             detail.Uom = sale.Uom;
             detail.RecipeVersion = sale.RecipeVersion;
             detail.RecipeId = sale.RecipeId;
-            detail.TechnicalDetail = await SilaPosErpPayload.EnsureRequestAsync(_repository, buyerId, sale, posting, cancellationToken);
+            // Never leave Request blank — rebuild from ledger or return a sale diagnostic.
+            detail.TechnicalDetail = await SilaPosErpPayload.EnsureRequestAsync(_repository, buyerId, sale, posting, cancellationToken)
+                ?? SilaPosErpPayload.BuildSaleDiagnostic(sale, posting, "Request payload was not stored; showing POS sale fields for FIVE_POS_UPDATE.");
             detail.ErpMessage = SilaErpPayload.Sanitise(posting?.ErpResponsePayload)
                 ?? SilaErpPayload.HttpBodyFromError(sale.FailureMessage ?? posting?.ErrorMessage);
             detail.Attempts = await AttemptsAsync(buyerId, Common.SILA_REF_POS_SALE, sale.Id, cancellationToken);
@@ -285,11 +287,12 @@ namespace Buyer.Application.Features.Queries.GetSilaTransactionTracker
                 return linked;
             }
 
+            // Prefer any posting (active or not) that already has the request body.
             InventoryErpPosting? withPayload = await _repository.InventoryErpPosting
-                .FindByCondition(x => x.BuyerId == buyerId && x.IsActive
+                .FindByCondition(x => x.BuyerId == buyerId
                     && x.ReferenceType == Common.SILA_REF_POS_SALE
                     && x.ReferenceId == sale.Id
-                    && x.ErpRequestPayload != null)
+                    && x.ErpRequestPayload != null && x.ErpRequestPayload != "")
                 .OrderByDescending(x => x.DateUpdated)
                 .FirstOrDefaultAsync(cancellationToken);
             if (withPayload != null)
@@ -302,11 +305,13 @@ namespace Buyer.Application.Features.Queries.GetSilaTransactionTracker
                 return linked;
             }
 
+            // Last resort: latest posting for this sale, including inactive rows.
             return await _repository.InventoryErpPosting
-                .FindByCondition(x => x.BuyerId == buyerId && x.IsActive
+                .FindByCondition(x => x.BuyerId == buyerId
                     && x.ReferenceType == Common.SILA_REF_POS_SALE
                     && x.ReferenceId == sale.Id)
-                .OrderByDescending(x => x.DateCreated)
+                .OrderByDescending(x => x.DateUpdated)
+                .ThenByDescending(x => x.DateCreated)
                 .FirstOrDefaultAsync(cancellationToken);
         }
 

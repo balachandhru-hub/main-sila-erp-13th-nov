@@ -24,9 +24,10 @@ namespace Buyer.Application.Features.Shared
             InventoryErpPosting? posting,
             CancellationToken cancellationToken)
         {
+            // Always return a request body for the tracker — even when the posting row is missing.
             if (posting == null)
             {
-                return null;
+                return BuildSaleDiagnostic(sale, null, "No InventoryErpPosting row is linked to this POS sale. Showing sale fields that would feed FIVE_POS_UPDATE.");
             }
 
             string? existing = Store(posting.ErpRequestPayload);
@@ -35,21 +36,80 @@ namespace Buyer.Application.Features.Shared
                 return existing;
             }
 
-            string rebuilt = await RebuildRequestAsync(repository, buyerId, sale, posting, cancellationToken)
-                ?? BuildDiagnostic(sale, posting, "No RECIPE_CONSUMPTION ledger lines were found to rebuild the SAP request.");
-            posting.ErpRequestPayload = rebuilt;
-            if (string.IsNullOrWhiteSpace(posting.ErpResponsePayload))
+            string rebuilt;
+            try
             {
-                string? response = SilaErpPayload.HttpBodyFromError(sale.FailureMessage ?? posting.ErrorMessage);
-                if (!string.IsNullOrWhiteSpace(response))
-                {
-                    posting.ErpResponsePayload = response;
-                }
+                rebuilt = await RebuildRequestAsync(repository, buyerId, sale, posting, cancellationToken)
+                    ?? BuildDiagnostic(sale, posting, "No RECIPE_CONSUMPTION ledger lines were found to rebuild the SAP request.");
+            }
+            catch (Exception)
+            {
+                rebuilt = BuildDiagnostic(sale, posting, "Could not rebuild the SAP request from ledger lines.");
             }
 
-            repository.InventoryErpPosting.Update(posting);
-            await repository.SaveAsync();
+            string? response = null;
+            if (string.IsNullOrWhiteSpace(posting.ErpResponsePayload))
+            {
+                response = SilaErpPayload.HttpBodyFromError(sale.FailureMessage ?? posting.ErrorMessage);
+            }
+
+            posting.ErpRequestPayload = rebuilt;
+            if (!string.IsNullOrWhiteSpace(response))
+            {
+                posting.ErpResponsePayload = response;
+            }
+
+            try
+            {
+                // Resolve may hand us an AsNoTracking instance — reload a tracked row so Save persists.
+                InventoryErpPosting? tracked = await repository.InventoryErpPosting
+                    .FindFirstByConditionAsync(x => x.Id == posting.Id && x.BuyerId == buyerId);
+                if (tracked != null)
+                {
+                    tracked.ErpRequestPayload = rebuilt;
+                    if (!string.IsNullOrWhiteSpace(response))
+                    {
+                        tracked.ErpResponsePayload = response;
+                    }
+
+                    repository.InventoryErpPosting.Update(tracked);
+                }
+                else
+                {
+                    repository.InventoryErpPosting.Update(posting);
+                }
+
+                await repository.SaveAsync();
+            }
+            catch (Exception)
+            {
+                // Display still returns the rebuilt body even if persistence fails.
+            }
+
             return rebuilt;
+        }
+
+        /// <summary>Sale-only diagnostic when no posting row exists (still shows in the tracker Request panel).</summary>
+        public static string BuildSaleDiagnostic(PosSalesTransaction sale, InventoryErpPosting? posting, string detail)
+        {
+            return Store(JsonSerializer.Serialize(new Dictionary<string, object?>
+            {
+                ["note"] = "SILA built this request view for the tracker because ErpRequestPayload was blank.",
+                ["detail"] = detail,
+                ["api"] = SilaStockCountSap.API_CONFIG_NAME,
+                ["GoodsMovementCode"] = SilaInventorySap.CODE_ISSUE,
+                ["GoodsMovementType"] = posting?.MovementType ?? SilaInventorySap.TYPE_Z01,
+                ["postingId"] = posting?.Id,
+                ["saleId"] = sale.Id,
+                ["posCode"] = sale.PosCode,
+                ["outletCode"] = sale.OutletCode,
+                ["quantitySold"] = sale.QuantitySold,
+                ["uom"] = sale.Uom,
+                ["businessDate"] = sale.BusinessDate.ToString("yyyy-MM-dd"),
+                ["sourceTransactionId"] = sale.SourceTransactionId,
+                ["referenceNumber"] = posting?.ReferenceNumber ?? sale.SourceTransactionId,
+                ["errorMessage"] = posting?.ErrorMessage ?? sale.FailureMessage
+            })) ?? detail;
         }
 
         /// <summary>
