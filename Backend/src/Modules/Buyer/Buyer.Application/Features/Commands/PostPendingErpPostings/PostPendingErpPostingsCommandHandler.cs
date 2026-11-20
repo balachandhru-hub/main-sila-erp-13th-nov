@@ -138,11 +138,11 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
                 return await SilaPostingRecovery.FinalizeLocalAsync(_repository, _logger, posting, Guid.Empty, posting.ErrorMessage, cancellationToken, _configuration[Common.BASE_FOLDER_PATH], _mediator, _configuration[SilaInvoiceAttachment.PUBLIC_BASE]);
             }
 
-            if (posting.ReferenceType == Common.SILA_REF_POS_SALE
-                && (posting.MovementType == Common.SILA_MOVEMENT_CONSUMPTION
-                    || posting.MovementType == SilaInventorySap.TYPE_Z01
-                    || posting.MovementType == SilaInventorySap.TYPE_Z02))
+            // Every POS_SALE posts through FIVE_POS_UPDATE / Z01 only — never S4 - Goods Issue / POST_GOODS_MOVEMENT.
+            if (posting.ReferenceType == Common.SILA_REF_POS_SALE)
             {
+                posting.MovementType = SilaInventorySap.TYPE_Z01;
+                posting.IntegrationSystem = SilaStockCountSap.API_CONFIG_NAME;
                 return await PostConsumptionGroupAsync(posting, cancellationToken);
             }
 
@@ -885,37 +885,49 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
                 return new EffectPreparation("The document has no lines to post.", null, null);
             }
 
-            // POS sales (preferPosUpdateApi / PosConsumption / PosReversal): FIVE_POS_UPDATE only.
-            // Non-POS Z02 goods issue: S4 - Goods Issue. Stock-count may also prefer FIVE_POS_UPDATE.
-            string[] apiNames = preferPosUpdateApi
-                || rule.ApiName == SilaStockCountSap.API_CONFIG_NAME
+            // POS sales: FIVE_POS_UPDATE only. Never resolve S4 - Goods Issue for POS_SALE.
+            bool forcePosUpdate = isPosSale
+                || preferPosUpdateApi
+                || rule.ApiName == SilaStockCountSap.API_CONFIG_NAME;
+            string[] apiNames = forcePosUpdate
                 ? SilaInventorySap.PosUpdateApiNames
                 : useGoodsIssueNamesOnly
                     || rule.ApiName == SilaInventorySap.API_GOODS_ISSUE
-                    || rule.GoodsMovementType == SilaInventorySap.TYPE_Z02
+                    || (rule.GoodsMovementType == SilaInventorySap.TYPE_Z02 && !isPosSale)
                     ? SilaInventorySap.GoodsIssueApiNames
                     : preferPosReversalApi
                         ? new[] { "POS_CONSUMPTION_REVERSAL", rule.ApiName }
                         : new[] { rule.ApiName };
 
-            (ApiIntegrationConfiguration? active, ApiIntegrationConfiguration? inactive) =
-                await SilaInventorySap.ResolveWithInactiveAsync(
+            (ApiIntegrationConfiguration? active, ApiIntegrationConfiguration? inactive) = forcePosUpdate
+                ? await SilaInventorySap.ResolvePosUpdateApiAsync(
+                    _repository, organizationId, posting.CompanyCode, cancellationToken)
+                : await SilaInventorySap.ResolveWithInactiveAsync(
                     _repository, organizationId, apiNames, posting.CompanyCode, cancellationToken);
             api = active;
             if (api == null)
             {
-                string missingName = preferPosUpdateApi || rule.ApiName == SilaStockCountSap.API_CONFIG_NAME
+                string missingName = forcePosUpdate
                     ? SilaStockCountSap.API_CONFIG_NAME
                     : useGoodsIssueNamesOnly || rule.GoodsMovementType == SilaInventorySap.TYPE_Z02
                         ? SilaInventorySap.API_GOODS_ISSUE
                         : apiNames[0];
-                // Persist the built payload even when the API config is missing so the tracker is never blank.
                 if (inactive != null)
                 {
                     return new EffectPreparation(SilaInventorySap.InactiveApi(inactive.Name), body, null);
                 }
 
                 return new EffectPreparation(SilaInventorySap.MissingApi(missingName), body, null);
+            }
+
+            if (forcePosUpdate
+                && !string.Equals(api.Name, SilaStockCountSap.API_CONFIG_NAME, StringComparison.OrdinalIgnoreCase))
+            {
+                return new EffectPreparation(
+                    SilaInventorySap.MissingApi(SilaStockCountSap.API_CONFIG_NAME)
+                    + $" Resolved '{api.Name}' is not allowed for POS sales.",
+                    body,
+                    null);
             }
 
             return new EffectPreparation(null, body, api);

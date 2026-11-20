@@ -89,8 +89,15 @@ namespace Buyer.Tests.Shared
             Assert.Equal(SilaInventorySap.TYPE_Z01, SilaInventorySap.MovementForSale(null, 2m));
             Assert.Equal(SilaInventorySap.TYPE_Z01, SilaPosReversal.MovementForSale(SilaInventorySap.TYPE_Z02, null));
             Assert.Equal(SilaStockCountSap.API_CONFIG_NAME, SilaInventorySap.PosConsumption.ApiName);
+            Assert.Equal("FIVE_POS_UPDATE", SilaInventorySap.PosConsumption.ApiName);
             Assert.Equal(SilaInventorySap.TYPE_Z01, SilaInventorySap.PosConsumption.GoodsMovementType);
             Assert.Equal(SilaInventorySap.CODE_ISSUE, SilaInventorySap.PosConsumption.GoodsMovementCode);
+            Assert.Single(SilaInventorySap.PosUpdateApiNames);
+            Assert.Equal("FIVE_POS_UPDATE", SilaInventorySap.PosUpdateApiNames[0]);
+            Assert.DoesNotContain(SilaInventorySap.API_GOODS_ISSUE, SilaInventorySap.PosUpdateApiNames);
+            string missing = SilaInventorySap.MissingApi(SilaStockCountSap.API_CONFIG_NAME);
+            Assert.Contains("FIVE_POS_UPDATE", missing);
+            Assert.DoesNotContain("S4 - Goods Issue", missing);
         }
     }
 }

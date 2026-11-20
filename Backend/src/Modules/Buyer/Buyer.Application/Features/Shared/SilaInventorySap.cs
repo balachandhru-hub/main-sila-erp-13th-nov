@@ -208,8 +208,8 @@ namespace Buyer.Application.Features.Shared
                 UOM_CONVERSION_MISSING => "The material has no SAP unit of measure, or the quantity cannot be converted to it.",
                 MATERIAL_MAPPING_MISSING => "The material is not an active stock item with a material number.",
                 MATERIAL_NOT_VALID => "The material is not an active stock item.",
-                SAP_API_CONFIGURATION_NOT_FOUND => "The SAP Goods Issue API is not configured under Integration Setup. No other API is used.",
-                SAP_API_CONFIGURATION_INACTIVE => "The SAP Goods Issue API exists but is not ACTIVE under Integration Setup.",
+                SAP_API_CONFIGURATION_NOT_FOUND => "The required SAP API is not configured under Integration Setup. No other API is substituted.",
+                SAP_API_CONFIGURATION_INACTIVE => "The required SAP API exists but is not ACTIVE under Integration Setup.",
                 ALREADY_POSTED => "This stock movement already has an SAP material document.",
                 COST_CENTER_MISSING => "Cost Center missing for the resolved plant / storage location. Maintain Cost Center in Storage Location Setup before posting POS consumption.",
                 _ => "The stock movement cannot be posted."
@@ -223,12 +223,44 @@ namespace Buyer.Application.Features.Shared
 
         public static string MissingApi(string apiName)
         {
-            return SAP_API_CONFIGURATION_NOT_FOUND + ". Activate " + apiName + " under Integration Setup. No other API is used for POS consumption.";
+            string name = string.IsNullOrWhiteSpace(apiName) ? SilaStockCountSap.API_CONFIG_NAME : apiName.Trim();
+            return SAP_API_CONFIGURATION_NOT_FOUND + ". Activate " + name + " under Integration Setup. No other API is used.";
         }
 
         public static string InactiveApi(string apiName)
         {
-            return SAP_API_CONFIGURATION_INACTIVE + ". Activate " + apiName + " under Integration Setup. POS consumption does not use another API.";
+            string name = string.IsNullOrWhiteSpace(apiName) ? SilaStockCountSap.API_CONFIG_NAME : apiName.Trim();
+            return SAP_API_CONFIGURATION_INACTIVE + ". Activate " + name + " under Integration Setup. No other API is used.";
+        }
+
+        /// <summary>
+        /// Resolves FIVE_POS_UPDATE for POS sales: company match, then ALL, then any active row with that name.
+        /// Never falls back to S4 - Goods Issue.
+        /// </summary>
+        public static async Task<(ApiIntegrationConfiguration? Active, ApiIntegrationConfiguration? Inactive)> ResolvePosUpdateApiAsync(
+            IRepositoryWrapper repository,
+            Guid organizationId,
+            string? companyCode,
+            CancellationToken cancellationToken)
+        {
+            List<ApiIntegrationConfiguration> matches = await LoadNamedAsync(
+                repository, organizationId, PosUpdateApiNames, cancellationToken);
+            ApiIntegrationConfiguration? active = PickForCompany(
+                matches.Where(x => x.Status == IntegrationConfigurationStatus.ACTIVE).ToList(),
+                companyCode);
+            // POS must not fail solely because EntityCode is not ALL / company — use any active FIVE_POS_UPDATE.
+            active ??= matches
+                .Where(x => x.Status == IntegrationConfigurationStatus.ACTIVE)
+                .OrderBy(x => x.DateCreated)
+                .FirstOrDefault();
+            if (active != null)
+            {
+                return (active, null);
+            }
+
+            ApiIntegrationConfiguration? inactive = PickForCompany(matches, companyCode)
+                ?? matches.OrderBy(x => x.DateCreated).FirstOrDefault();
+            return (null, inactive);
         }
 
         /// <summary>One transfer, one material document. 311 stays in the source plant. 301 names the receiving plant.</summary>
