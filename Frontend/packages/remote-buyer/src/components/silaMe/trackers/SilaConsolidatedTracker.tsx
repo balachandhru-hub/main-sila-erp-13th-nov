@@ -16,6 +16,8 @@ import { getErpPostingPayload, reconcileErpPosting } from "../../../api/silaMe/s
 import { formatDateTime } from "../../cart/lineFormat";
 import "../silaMeTheme.css";
 import "../receiving/SilaReceiving.css";
+import "../recipes/SilaRecipes.css";
+import "../pos/SilaPosStudio.css";
 import "./SilaTracker.css";
 
 const PAGE_SIZE = 25;
@@ -332,25 +334,55 @@ const SilaConsolidatedTracker: React.FC<SilaConsolidatedTrackerProps> = ({ track
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const fromLabel = confirming?.[0]?.reprocessFrom;
+  const studio = tracker === "SILA_ME";
 
   return (
-    <div className="sila-me srcv-page">
-      <PageHeader
-        className="pud-page-header"
-        title="Transaction Tracker"
-        description={title}
-      />
-      <section className="strk-kpis" aria-label="Tracker summary">
-        <Kpi label="Total" value={summary.total} />
-        <Kpi label="Processing" value={summary.processing} />
-        <Kpi label="Successful" value={summary.successful} />
-        <Kpi label="Failed" value={summary.failed} />
-        <Kpi label="Reprocessing" value={summary.reprocessing} />
-        <Kpi label="Needs attention" value={summary.needsAttention} />
+    <div className={studio ? "sila-me srec-page rstudio-page pstudio-page" : "sila-me srcv-page"}>
+      {studio ? (
+        <header className="pstudio-hero">
+          <div>
+            <p className="pstudio-kicker">Transaction Tracker</p>
+            <h1 className="pstudio-hero__title">{title}</h1>
+            <p className="pstudio-hero__sub">
+              Live inventory and ERP postings — receive, SAP call, and local finalization with request/response payloads in one place.
+            </p>
+          </div>
+          <div className="pstudio-hero__actions">
+            <button type="button" className="sila-btn sila-btn--secondary" onClick={load} disabled={loading}>
+              Refresh
+            </button>
+            {canReprocess && (
+              <button
+                type="button"
+                className="sila-btn sila-btn--primary"
+                disabled={eligibleSelected.length === 0 || busy}
+                onClick={() => setConfirming(eligibleSelected)}
+              >
+                Reprocess selected ({eligibleSelected.length})
+              </button>
+            )}
+          </div>
+        </header>
+      ) : (
+        <PageHeader className="pud-page-header" title="Transaction Tracker" description={title} />
+      )}
+      <section className={studio ? "pstudio-kpis" : "strk-kpis"} aria-label="Tracker summary">
+        <Kpi label="Total" value={summary.total} tone={studio ? "sky" : undefined} />
+        <Kpi label="Processing" value={summary.processing} tone={studio ? "blue" : undefined} />
+        <Kpi label="Successful" value={summary.successful} tone={studio ? "mint" : undefined} />
+        <Kpi label="Failed" value={summary.failed} tone={studio ? "rose" : undefined} />
+        <Kpi label="Reprocessing" value={summary.reprocessing} tone={studio ? "lavender" : undefined} />
+        <Kpi label="Needs attention" value={summary.needsAttention} tone={studio ? "amber" : undefined} />
       </section>
-      <section className="sila-card">
-        <div className="srcv-filters">
-          <Field id="strk-search" label="Search">
+      <section className={studio ? "pstudio-panel strk-studio-panel" : "sila-card"}>
+        {studio && (
+          <div className="strk-studio-panel__head">
+            <h2 className="pstudio-panel__title">Transactions</h2>
+            <p className="pstudio-panel__hint">Filter by type, plant, status, or integration — then open a row for SAP request and response.</p>
+          </div>
+        )}
+        <div className={studio ? "srec-filters srec-filters--flush strk-studio-filters" : "srcv-filters"}>
+          <Field id="strk-search" label="Search" grow={studio}>
             <input id="strk-search" className="sila-input" type="search" placeholder="Invoice, reference, PO, GRN, transfer, POS" value={search} onChange={(event) => setSearch(event.target.value)} />
           </Field>
           <Field id="strk-type" label="Transaction type">
@@ -412,7 +444,7 @@ const SilaConsolidatedTracker: React.FC<SilaConsolidatedTrackerProps> = ({ track
             <input id="strk-api" className="sila-input" value={integration} onChange={(event) => { setIntegration(event.target.value); setPage(1); }} />
           </Field>
         </div>
-        {canReprocess && (
+        {canReprocess && !studio && (
           <div className="strk-actions" style={{ padding: "0 1rem 0.75rem" }}>
             <button type="button" className="sila-btn sila-btn--primary" disabled={eligibleSelected.length === 0 || busy} onClick={() => setConfirming(eligibleSelected)}>
               Reprocess selected ({eligibleSelected.length})
@@ -420,15 +452,24 @@ const SilaConsolidatedTracker: React.FC<SilaConsolidatedTrackerProps> = ({ track
             <span className="srcv-sub">{selected.length - eligibleSelected.length} selected row{selected.length - eligibleSelected.length === 1 ? "" : "s"} cannot be retried, including unknown ERP results.</span>
           </div>
         )}
+        {canReprocess && studio && selected.length > 0 && (
+          <p className="pstudio-panel__hint strk-studio-hint">
+            {eligibleSelected.length} eligible · {selected.length - eligibleSelected.length} selected row{selected.length - eligibleSelected.length === 1 ? "" : "s"} cannot be retried (including unknown ERP results).
+          </p>
+        )}
         {loading && rows.length === 0 ? (
           <Loader size={24} message="Loading transactions..." />
         ) : error ? (
           <EmptyState variant="error" title="Couldn't load transactions" description={error} action={<button type="button" className="sila-btn sila-btn--secondary" onClick={load}>Try again</button>} />
         ) : rows.length === 0 ? (
-          <EmptyState title="No transactions match" description="Adjust the filters. The default view is the last 30 days." />
+          studio ? (
+            <div className="pstudio-empty">No transactions match these filters. Try widening the date range or clearing status.</div>
+          ) : (
+            <EmptyState title="No transactions match" description="Adjust the filters. The default view is the last 30 days." />
+          )
         ) : (
           <>
-            <div className="sila-table-wrap">
+            <div className={`sila-table-wrap${studio ? " strk-studio-table" : ""}`}>
               <table className="sila-table">
                 <thead>
                   <tr>
@@ -511,18 +552,36 @@ const SilaConsolidatedTracker: React.FC<SilaConsolidatedTrackerProps> = ({ track
         )}
       </section>
       {detail && (
-        <section className="sila-card strk-detail">
+        <section className={studio ? "pstudio-panel pstudio-panel--lavender strk-detail strk-studio-detail" : "sila-card strk-detail"}>
           <div className="strk-actions">
             <button type="button" className="sila-btn sila-btn--secondary" onClick={() => { setDetail(null); setFlow(null); }}>Back to list</button>
-            <h2 className="sila-section-title">{labelOf(detail.transactionType)}</h2>
+            {studio ? (
+              <div className="strk-studio-detail__title">
+                <p className="pstudio-kicker">Transaction detail</p>
+                <h2 className="pstudio-panel__title">{labelOf(detail.transactionType)}</h2>
+              </div>
+            ) : (
+              <h2 className="sila-section-title">{labelOf(detail.transactionType)}</h2>
+            )}
             {canReprocess && detail.action === "REPROCESS" && (
               <button type="button" className="sila-btn sila-btn--primary sila-btn--sm" disabled={busy} onClick={() => setConfirming([detail])}>
                 Reprocess
               </button>
             )}
           </div>
+          {studio && (
+            <div className="pstudio-lifecycle" aria-label="Lifecycle">
+              <span className="pstudio-lifecycle__node" data-state={lifecycleState(detail.receiveStatus)}>Receive · {labelOf(detail.receiveStatus)}</span>
+              <span className="pstudio-lifecycle__sep" aria-hidden>→</span>
+              <span className="pstudio-lifecycle__node" data-state={lifecycleState(detail.erpStatus)}>ERP · {labelOf(detail.erpStatus)}</span>
+              <span className="pstudio-lifecycle__sep" aria-hidden>→</span>
+              <span className="pstudio-lifecycle__node" data-state={lifecycleState(detail.localStatus)}>Local · {labelOf(detail.localStatus)}</span>
+              <span className="pstudio-lifecycle__sep" aria-hidden>→</span>
+              <span className="pstudio-lifecycle__node" data-state={lifecycleState(detail.overallStatus)}>Overall · {labelOf(detail.overallStatus)}</span>
+            </div>
+          )}
           {detailError && <p className="srcv-error">{detailError}</p>}
-          <dl className="srcv-facts">
+          <dl className={studio ? "srcv-facts strk-studio-facts" : "srcv-facts"}>
             <Fact label="Transaction ID" value={detail.id} />
             <Fact label="Type" value={labelOf(detail.transactionType)} />
             <Fact label="Created" value={formatDateTime(detail.occurredOn)} />
@@ -639,19 +698,41 @@ const ResultCell: React.FC<{ row: SilaTrackerRow }> = ({ row }) => {
   );
 };
 
-const Kpi: React.FC<{ label: string; value: number }> = ({ label, value }) => (
-  <div className="strk-kpi">
+type KpiTone = "sky" | "mint" | "lavender" | "amber" | "blue" | "rose";
+
+const Kpi: React.FC<{ label: string; value: number; tone?: KpiTone }> = ({ label, value, tone }) => (
+  <div className={tone ? `pstudio-kpi pstudio-kpi--${tone}` : "strk-kpi"}>
     <span>{label}</span>
     <strong>{value}</strong>
   </div>
 );
 
-const Field: React.FC<{ id: string; label: string; children: React.ReactNode }> = ({ id, label, children }) => (
-  <div className="sila-field">
+const Field: React.FC<{ id: string; label: string; children: React.ReactNode; grow?: boolean }> = ({ id, label, children, grow }) => (
+  <div className={`sila-field${grow ? " srec-grow" : ""}`}>
     <label className="sila-label" htmlFor={id}>{label}</label>
     {children}
   </div>
 );
+
+const lifecycleState = (status?: string | null): "done" | "failed" | "pending" | undefined => {
+  switch (status) {
+    case "SUCCESS":
+    case "RECEIVED":
+      return "done";
+    case "FAILED":
+    case "FAILED_LOCAL":
+      return "failed";
+    case "PROCESSING":
+    case "REPROCESSING":
+    case "POSTING_UNKNOWN":
+    case "PARTIAL":
+    case "UNKNOWN":
+    case "NOT_STARTED":
+      return "pending";
+    default:
+      return undefined;
+  }
+};
 
 const flowTone = (status?: string | null): string => {
   switch (status) {
