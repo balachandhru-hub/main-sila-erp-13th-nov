@@ -489,7 +489,25 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
             }
 
             InventoryErpPosting leader = pending[0];
-            IntegrationSendResultDto sent = await SendAsync(buyer.OrganizationId, api.Id, leader, body, cancellationToken);
+            // Persist the request payload before the HTTP call so the tracker never shows "payload missing" after a 400.
+            foreach (InventoryErpPosting row in pending)
+            {
+                row.IntegrationSystem = api.Name;
+                row.MovementType = rule.GoodsMovementType;
+                row.ErpRequestPayload = SilaErpPayload.Sanitise(body);
+                row.CompanyCode ??= posting.CompanyCode;
+                _repository.InventoryErpPosting.Update(row);
+            }
+
+            await _repository.SaveAsync();
+
+            IntegrationSendResultDto sent = await SendAsync(
+                buyer.OrganizationId,
+                api.Id,
+                leader,
+                body,
+                cancellationToken,
+                SilaInventorySap.EnsureMaterialDocumentPath(api.ResourcePath));
             bool succeeded = sent.Answered && sent.StatusCode >= 200 && sent.StatusCode < 300;
             string status = succeeded
                 ? Common.SILA_POSTING_POSTED
@@ -514,6 +532,7 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
                 row.ErpRequestPayload = SilaErpPayload.Sanitise(body);
                 row.ErpResponsePayload = SilaErpPayload.Sanitise(sent.ResponseBody);
                 row.CompanyCode ??= posting.CompanyCode;
+                _repository.InventoryErpPosting.Update(row);
                 await FinishAsync(row, status, reference, error, cancellationToken);
             }
 
@@ -577,8 +596,18 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
                     return await FinishAsync(posting, Common.SILA_POSTING_FAILED, null, prepared.Error ?? "The document has no lines to post.", cancellationToken);
                 }
 
-                IntegrationSendResultDto sent = await SendAsync(buyer.OrganizationId, api.Id, posting, body, cancellationToken);
                 posting.IntegrationSystem = api.Name;
+                posting.ErpRequestPayload = SilaErpPayload.Sanitise(body);
+                _repository.InventoryErpPosting.Update(posting);
+                await _repository.SaveAsync();
+
+                IntegrationSendResultDto sent = await SendAsync(
+                    buyer.OrganizationId,
+                    api.Id,
+                    posting,
+                    body,
+                    cancellationToken,
+                    SilaInventorySap.EnsureMaterialDocumentPath(api.ResourcePath));
                 posting.ErpHttpStatus = sent.Answered ? sent.StatusCode : null;
                 posting.ErpRequestPayload = SilaErpPayload.Sanitise(body);
                 posting.ErpResponsePayload = SilaErpPayload.Sanitise(sent.ResponseBody);
@@ -667,7 +696,18 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
             }
 
             DateTime businessDate = transactions.Max(x => x.BusinessDate);
-            string? problem = SilaInventorySap.TryBuildEffect(businessDate, property?.PlantCode, location?.StorageLocationCode, rule, lines, conversions, out body);
+            string? problem = SilaInventorySap.TryBuildEffect(
+                businessDate,
+                property?.PlantCode,
+                location?.StorageLocationCode,
+                rule,
+                lines,
+                conversions,
+                out body,
+                headerText: posting.ReferenceNumber,
+                costCenter: location?.CostCenter,
+                referenceDocument: posting.ReferenceNumber,
+                glAccount: location?.GlAccount);
             if (problem != null)
             {
                 return new EffectPreparation(SilaInventorySap.Failure(problem), null, null);
@@ -704,7 +744,13 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
 
         private readonly record struct EffectPreparation(string? Error, string? Body, ApiIntegrationConfiguration? Api);
 
-        private async Task<IntegrationSendResultDto> SendAsync(Guid organizationId, Guid configurationId, InventoryErpPosting posting, string body, CancellationToken cancellationToken)
+        private async Task<IntegrationSendResultDto> SendAsync(
+            Guid organizationId,
+            Guid configurationId,
+            InventoryErpPosting posting,
+            string body,
+            CancellationToken cancellationToken,
+            string? resourcePathOverride = null)
         {
             Dictionary<string, string> headers = new Dictionary<string, string>
             {
@@ -719,7 +765,8 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
                     OrganizationId = organizationId,
                     ConfigurationId = configurationId,
                     Body = body,
-                    Headers = headers
+                    Headers = headers,
+                    ResourcePathOverride = resourcePathOverride
                 }, cancellationToken);
             }
             catch (BaseCustomException exception)
@@ -1405,8 +1452,8 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
                 return string.Empty;
             }
 
-            string text = body.Trim();
-            return " " + (text.Length > 300 ? text[..300] : text);
+            string text = body.Trim().Replace('\r', ' ').Replace('\n', ' ');
+            return " " + (text.Length > 800 ? text[..800] : text);
         }
 
         private static bool Same(string left, string right)

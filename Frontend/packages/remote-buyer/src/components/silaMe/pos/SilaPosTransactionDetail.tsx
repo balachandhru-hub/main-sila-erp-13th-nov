@@ -168,18 +168,14 @@ const SilaPosTransactionDetail: React.FC<SilaPosTransactionDetailProps> = ({ tra
                       <span className="sila-meta-value">{value}</span>
                     </div>
                   ))}
-                  {detail.erpRequest && (
-                    <details className="sila-meta-item spos-payload-block">
-                      <summary className="sila-meta-label">ERP request (credentials masked)</summary>
-                      <pre className="spos-payload">{detail.erpRequest}</pre>
-                    </details>
-                  )}
-                  {detail.erpResponse && (
-                    <details className="sila-meta-item spos-payload-block">
-                      <summary className="sila-meta-label">ERP response</summary>
-                      <pre className="spos-payload">{detail.erpResponse}</pre>
-                    </details>
-                  )}
+                  <details className="sila-meta-item spos-payload-block" open={Boolean(detail.erpErrorMessage) || tx.postState === "FAILED"}>
+                    <summary className="sila-meta-label">ERP request payload (credentials masked)</summary>
+                    <pre className="spos-payload">{detail.erpRequest || "No request payload was stored for this posting."}</pre>
+                  </details>
+                  <details className="sila-meta-item spos-payload-block" open={Boolean(detail.erpErrorMessage) || tx.postState === "FAILED"}>
+                    <summary className="sila-meta-label">ERP response payload</summary>
+                    <pre className="spos-payload">{detail.erpResponse || "No response payload was stored for this posting."}</pre>
+                  </details>
                 </div>
               ) : (
                 <p className="sila-cell-muted">

@@ -48,20 +48,27 @@ namespace Buyer.Tests.Shared
                 SilaInventorySap.GoodsIssue,
                 lines,
                 new Dictionary<Guid, List<MaterialUomConversion>>(),
-                out string? body);
+                out string? body,
+                headerText: "POS~0833B2E7",
+                costCenter: "CC-FL10");
 
             Assert.Null(problem);
             Assert.NotNull(body);
             using JsonDocument json = JsonDocument.Parse(body);
             JsonElement line = json.RootElement.GetProperty("to_MaterialDocumentItem")[0];
             Assert.Equal("03", json.RootElement.GetProperty("GoodsMovementCode").GetString());
+            Assert.Equal("POS~0833B2E7", json.RootElement.GetProperty("MaterialDocumentHeaderText").GetString());
             Assert.Equal(SilaInventorySap.API_GOODS_ISSUE, SilaInventorySap.GoodsIssue.ApiName);
             Assert.Equal("Z02", line.GetProperty("GoodsMovementType").GetString());
             Assert.Equal("0.400", line.GetProperty("QuantityInEntryUnit").GetString());
             Assert.Equal("BTL", line.GetProperty("EntryUnit").GetString());
             Assert.Equal("PL-A", line.GetProperty("Plant").GetString());
             Assert.Equal("BAR", line.GetProperty("StorageLocation").GetString());
+            Assert.Equal("CC-FL10", line.GetProperty("CostCenter").GetString());
             Assert.Equal(1, json.RootElement.GetProperty("to_MaterialDocumentItem").GetArrayLength());
+            Assert.Equal(
+                "sap/opu/odata/sap/API_MATERIAL_DOCUMENT_SRV/A_MaterialDocumentHeader",
+                SilaInventorySap.EnsureMaterialDocumentPath("sap/opu/odata/sap/API_MATERIAL_DOCUMENT_SRV"));
         }
 
         [Fact]
@@ -74,6 +81,17 @@ namespace Buyer.Tests.Shared
 
             ItemBuyerMaster material = Stock("MAT-1", "BTL");
             material.BaseUnitOfMeasure = "";
+            Assert.Equal(
+                SilaInventorySap.COST_CENTER_MISSING,
+                SilaInventorySap.TryBuildEffect(
+                    DateTime.UtcNow,
+                    "PL-A",
+                    "BAR",
+                    SilaInventorySap.PositiveAdjustment,
+                    new[] { new SilaInventorySap.TransferLine(Stock("MAT-2", "BTL"), 2m, "BTL") },
+                    new Dictionary<Guid, List<MaterialUomConversion>>(),
+                    out _));
+
             string? missing = SilaInventorySap.TryBuildEffect(
                 DateTime.UtcNow,
                 "PL-A",
@@ -81,7 +99,8 @@ namespace Buyer.Tests.Shared
                 SilaInventorySap.PositiveAdjustment,
                 new[] { new SilaInventorySap.TransferLine(material, 2m, "BTL") },
                 new Dictionary<Guid, List<MaterialUomConversion>>(),
-                out string? body);
+                out string? body,
+                costCenter: "CC-1");
             Assert.Equal(SilaInventorySap.UOM_CONVERSION_MISSING, missing);
             Assert.Null(body);
             Assert.Throws<ArgumentOutOfRangeException>(() => SilaInventorySap.FormatQuantity(-5m));
@@ -94,7 +113,7 @@ namespace Buyer.Tests.Shared
             Dictionary<Guid, List<MaterialUomConversion>> missing = new Dictionary<Guid, List<MaterialUomConversion>>();
             Assert.Equal(SilaInventorySap.UOM_CONVERSION_MISSING, SilaInventorySap.TryBuildEffect(
                 DateTime.UtcNow, "PL-A", "BAR", SilaInventorySap.GoodsIssue,
-                new[] { new SilaInventorySap.TransferLine(material, 300m, "ML") }, missing, out _));
+                new[] { new SilaInventorySap.TransferLine(material, 300m, "ML") }, missing, out _, costCenter: "CC-1"));
 
             Dictionary<Guid, List<MaterialUomConversion>> conversions = new Dictionary<Guid, List<MaterialUomConversion>>
             {
@@ -105,7 +124,7 @@ namespace Buyer.Tests.Shared
             };
             string? problem = SilaInventorySap.TryBuildEffect(
                 new DateTime(2026, 10, 16), "PL-A", "BAR", SilaInventorySap.GoodsIssue,
-                new[] { new SilaInventorySap.TransferLine(material, 300m, "ML") }, conversions, out string? body);
+                new[] { new SilaInventorySap.TransferLine(material, 300m, "ML") }, conversions, out string? body, costCenter: "CC-1");
             Assert.Null(problem);
             Assert.NotNull(body);
             using JsonDocument json = JsonDocument.Parse(body);

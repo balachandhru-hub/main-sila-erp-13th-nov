@@ -38,6 +38,8 @@ namespace Buyer.Application.Features.Shared
         public const string MATERIAL_NOT_VALID = "MATERIAL_NOT_VALID";
         public const string SAP_API_CONFIGURATION_NOT_FOUND = "SAP_API_CONFIGURATION_NOT_FOUND";
         public const string ALREADY_POSTED = "ALREADY_POSTED";
+        public const string COST_CENTER_MISSING = "COST_CENTER_MISSING";
+        public const string MATERIAL_DOCUMENT_ENTITY = "A_MaterialDocumentHeader";
 
         public static readonly Rule SamePlantTransfer = new Rule(API_TRANSFER, CODE_TRANSFER, TYPE_311, false);
         public static readonly Rule PlantTransfer = new Rule(API_PLANT_TRANSFER, CODE_TRANSFER, TYPE_301, true);
@@ -151,6 +153,7 @@ namespace Buyer.Application.Features.Shared
                 MATERIAL_NOT_VALID => "The material is not an active stock item.",
                 SAP_API_CONFIGURATION_NOT_FOUND => "The SAP API for this stock movement is not active. No other API is used.",
                 ALREADY_POSTED => "This stock movement already has an SAP material document.",
+                COST_CENTER_MISSING => "The outlet has no SAP cost center. Maintain CostCenter on the inventory location before posting Z01/Z02.",
                 _ => "The stock movement cannot be posted."
             };
         }
@@ -260,7 +263,7 @@ namespace Buyer.Application.Features.Shared
 
         /// <summary>
         /// Goods issue or positive adjustment. Compatible lines (same material and SAP unit) are summed.
-        /// The quantity is always positive.
+        /// The quantity is always positive. Header text and cost center are required by SAP for Z01/Z02 account assignment.
         /// </summary>
         public static string? TryBuildEffect(
             DateTime businessDate,
@@ -269,7 +272,11 @@ namespace Buyer.Application.Features.Shared
             Rule rule,
             IReadOnlyList<TransferLine> lines,
             Dictionary<Guid, List<MaterialUomConversion>> conversions,
-            out string? body)
+            out string? body,
+            string? headerText = null,
+            string? costCenter = null,
+            string? referenceDocument = null,
+            string? glAccount = null)
         {
             body = null;
             if (string.IsNullOrWhiteSpace(plant) || string.IsNullOrWhiteSpace(storageLocation))
@@ -277,8 +284,16 @@ namespace Buyer.Application.Features.Shared
                 return INVENTORY_LOCATION_MAPPING_MISSING;
             }
 
+            bool needsCostCenter = rule.GoodsMovementType == TYPE_Z01 || rule.GoodsMovementType == TYPE_Z02;
+            if (needsCostCenter && string.IsNullOrWhiteSpace(costCenter))
+            {
+                return COST_CENTER_MISSING;
+            }
+
             string sapPlant = plant.Trim();
             string sapStorage = storageLocation.Trim();
+            string? sapCostCenter = string.IsNullOrWhiteSpace(costCenter) ? null : costCenter.Trim();
+            string? sapGlAccount = string.IsNullOrWhiteSpace(glAccount) ? null : glAccount.Trim();
             Dictionary<string, decimal> totals = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
             Dictionary<string, (string Material, string Unit)> keys = new Dictionary<string, (string, string)>(StringComparer.OrdinalIgnoreCase);
             foreach (TransferLine line in lines)
@@ -305,25 +320,81 @@ namespace Buyer.Application.Features.Shared
             }
 
             string postingDate = FormatDate(businessDate);
-            body = JsonSerializer.Serialize(new
+            string materialDocumentHeaderText = string.IsNullOrWhiteSpace(headerText)
+                ? $"SILA {rule.GoodsMovementType} {postingDate[..10]}"
+                : headerText.Trim();
+            if (materialDocumentHeaderText.Length > 25)
             {
-                PostingDate = postingDate,
-                DocumentDate = postingDate,
-                GoodsMovementCode = rule.GoodsMovementCode,
-                to_MaterialDocumentItem = totals
-                    .OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase)
-                    .Select(x => new
+                materialDocumentHeaderText = materialDocumentHeaderText[..25];
+            }
+
+            List<Dictionary<string, object?>> items = totals
+                .OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase)
+                .Select(x =>
+                {
+                    Dictionary<string, object?> item = new Dictionary<string, object?>
                     {
-                        Plant = sapPlant,
-                        StorageLocation = sapStorage,
-                        Material = keys[x.Key].Material,
-                        GoodsMovementType = rule.GoodsMovementType,
-                        QuantityInEntryUnit = FormatQuantity(x.Value),
-                        EntryUnit = keys[x.Key].Unit
-                    })
-                    .ToList()
-            });
+                        ["Plant"] = sapPlant,
+                        ["StorageLocation"] = sapStorage,
+                        ["Material"] = keys[x.Key].Material,
+                        ["GoodsMovementType"] = rule.GoodsMovementType,
+                        ["QuantityInEntryUnit"] = FormatQuantity(x.Value),
+                        ["EntryUnit"] = keys[x.Key].Unit
+                    };
+                    if (sapCostCenter != null)
+                    {
+                        item["CostCenter"] = sapCostCenter;
+                    }
+
+                    if (sapGlAccount != null)
+                    {
+                        item["GLAccount"] = sapGlAccount;
+                    }
+
+                    return item;
+                })
+                .ToList();
+
+            Dictionary<string, object?> header = new Dictionary<string, object?>
+            {
+                ["PostingDate"] = postingDate,
+                ["DocumentDate"] = postingDate,
+                ["GoodsMovementCode"] = rule.GoodsMovementCode,
+                ["MaterialDocumentHeaderText"] = materialDocumentHeaderText,
+                ["to_MaterialDocumentItem"] = items
+            };
+            if (!string.IsNullOrWhiteSpace(referenceDocument))
+            {
+                header["ReferenceDocument"] = referenceDocument.Trim();
+            }
+
+            body = JsonSerializer.Serialize(header);
             return null;
+        }
+
+        /// <summary>
+        /// SAP Material Document deep-insert must target A_MaterialDocumentHeader. Configurations that only store the
+        /// service root still post to the entity set.
+        /// </summary>
+        public static string? EnsureMaterialDocumentPath(string? resourcePath)
+        {
+            if (string.IsNullOrWhiteSpace(resourcePath))
+            {
+                return null;
+            }
+
+            string path = resourcePath.Trim().TrimEnd('/');
+            if (path.Contains(MATERIAL_DOCUMENT_ENTITY, StringComparison.OrdinalIgnoreCase))
+            {
+                return path;
+            }
+
+            if (path.EndsWith("API_MATERIAL_DOCUMENT_SRV", StringComparison.OrdinalIgnoreCase))
+            {
+                return path + "/" + MATERIAL_DOCUMENT_ENTITY;
+            }
+
+            return path;
         }
 
         public static string? ReadMaterialDocument(string? payload)
