@@ -80,10 +80,14 @@ const posPayload = readBackend("Buyer.Application/Features/Shared/SilaPosErpPayl
 assert.match(posPayload, /Actual SAP request was not captured/);
 assert.match(posPayload, /IsCapturedSapBody/);
 assert.match(posPayload, /RebuildRequestAsync/);
+assert.match(posPayload, /ExplodeTransferLinesAsync/);
 assert.match(posPayload, /to_MaterialDocumentItem/);
 assert.doesNotMatch(posPayload, /\["note"\]\s*=/);
 assert.doesNotMatch(posPayload, /\["saleId"\]/);
 assert.doesNotMatch(posPayload, /\["posCode"\]/);
+
+const processing = readBackend("Buyer.Application/Features/Shared/SilaPosProcessing.cs");
+assert.match(processing, /ExplodeTransferLinesAsync/);
 
 const profiles = readFileSync(join(__dirname, "../../../api/integrationsApi.ts"), "utf8");
 assert.match(profiles, /configurationName: "FIVE_POS_UPDATE"/);

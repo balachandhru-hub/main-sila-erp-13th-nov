@@ -111,9 +111,8 @@ namespace Buyer.Application.Features.Queries.GetSilaPosTransaction
             List<IdentityUserDto> users = userIds.Count == 0 ? new List<IdentityUserDto>() : await _identityApiClient.GetUsersByIds(userIds, cancellationToken);
             Func<Guid, string?> nameOf = id => id == Guid.Empty ? "Scheduler" : users.FirstOrDefault(u => u.UserId == id)?.Name;
 
-            string? erpRequest = posting == null
-                ? SilaPosErpPayload.NOT_CAPTURED
-                : await SilaPosErpPayload.EnsureRequestAsync(_repository, buyer.Id, transaction, posting, cancellationToken);
+            string? erpRequest = await SilaPosErpPayload.EnsureRequestAsync(
+                _repository, buyer.Id, transaction, posting, cancellationToken);
             string? erpResponse = SilaErpPayload.SanitiseForPersist(posting?.ErpResponsePayload)
                 ?? SilaErpPayload.HttpBodyFromError(posting?.ErrorMessage ?? transaction.FailureMessage)
                 ?? posting?.ErpResponsePayload;

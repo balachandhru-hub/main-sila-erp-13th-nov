@@ -268,10 +268,9 @@ namespace Buyer.Application.Features.Queries.GetSilaTransactionTracker
             detail.Uom = sale.Uom;
             detail.RecipeVersion = sale.RecipeVersion;
             detail.RecipeId = sale.RecipeId;
-            // Captured HTTP body, or rebuilt FIVE_POS_UPDATE OData JSON from RECIPE_CONSUMPTION ledger lines.
-            detail.TechnicalDetail = posting == null
-                ? SilaPosErpPayload.NOT_CAPTURED
-                : await SilaPosErpPayload.EnsureRequestAsync(_repository, buyerId, sale, posting, cancellationToken);
+            // Captured HTTP body, or rebuilt from ledger / recipe explosion — even when posting row is missing.
+            detail.TechnicalDetail = await SilaPosErpPayload.EnsureRequestAsync(
+                _repository, buyerId, sale, posting, cancellationToken);
             detail.MovementType = posting?.MovementType == SilaInventorySap.TYPE_Z02 || string.IsNullOrWhiteSpace(posting?.MovementType)
                 ? SilaInventorySap.TYPE_Z01
                 : posting!.MovementType;
@@ -301,14 +300,15 @@ namespace Buyer.Application.Features.Queries.GetSilaTransactionTracker
                 return linked;
             }
 
-            // Prefer any posting (active or not) that already has the request body.
-            InventoryErpPosting? withPayload = await _repository.InventoryErpPosting
+            // Prefer any posting that already has a real SAP OData body (skip NOT_CAPTURED placeholders).
+            List<InventoryErpPosting> candidates = await _repository.InventoryErpPosting
                 .FindByCondition(x => x.BuyerId == buyerId
                     && x.ReferenceType == Common.SILA_REF_POS_SALE
                     && x.ReferenceId == sale.Id
                     && x.ErpRequestPayload != null && x.ErpRequestPayload != "")
                 .OrderByDescending(x => x.DateUpdated)
-                .FirstOrDefaultAsync(cancellationToken);
+                .ToListAsync(cancellationToken);
+            InventoryErpPosting? withPayload = candidates.FirstOrDefault(x => SilaPosErpPayload.IsCapturedSapBody(x.ErpRequestPayload));
             if (withPayload != null)
             {
                 return withPayload;

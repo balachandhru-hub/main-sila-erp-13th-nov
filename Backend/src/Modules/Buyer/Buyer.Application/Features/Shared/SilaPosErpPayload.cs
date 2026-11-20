@@ -8,31 +8,25 @@ using MaterialEntity = Buyer.Domain.Entities.ItemBuyerMaster;
 namespace Buyer.Application.Features.Shared
 {
     /// <summary>
-    /// POS → FIVE_POS_UPDATE exchange for the Transaction Tracker.
-    /// Prefer the HTTP-captured body; when missing, rebuild the same OData material-document JSON from RECIPE_CONSUMPTION
-    /// ledger lines (never SILA sale-metadata objects with saleId/posCode).
+    /// POS → FIVE_POS_UPDATE request for the Transaction Tracker.
+    /// Prefer HTTP-captured body; else rebuild OData JSON from RECIPE_CONSUMPTION ledger lines;
+    /// else explode the approved recipe. Never returns SILA sale-metadata (saleId/posCode) as the SAP body.
     /// </summary>
     public static class SilaPosErpPayload
     {
-        /// <summary>Shown only when neither capture nor ledger rebuild can produce a SAP material-document body.</summary>
         public const string NOT_CAPTURED = "Actual SAP request was not captured for this attempt.";
 
         /// <summary>
-        /// Returns the SAP request JSON: captured HTTP body first, otherwise rebuilt from ledger and persisted.
+        /// Returns SAP request JSON for the tracker. Works even when <paramref name="posting"/> is null.
         /// </summary>
-        public static async Task<string?> EnsureRequestAsync(
+        public static async Task<string> EnsureRequestAsync(
             IRepositoryWrapper repository,
             Guid buyerId,
             PosSalesTransaction sale,
             InventoryErpPosting? posting,
             CancellationToken cancellationToken)
         {
-            if (posting == null)
-            {
-                return NOT_CAPTURED;
-            }
-
-            if (IsCapturedSapBody(posting.ErpRequestPayload))
+            if (posting != null && IsCapturedSapBody(posting.ErpRequestPayload))
             {
                 return Store(posting.ErpRequestPayload!) ?? posting.ErpRequestPayload!.Trim();
             }
@@ -53,51 +47,53 @@ namespace Buyer.Application.Features.Shared
             }
 
             string stored = Store(rebuilt!) ?? rebuilt!.Trim();
-            posting.ErpRequestPayload = stored;
-            if (string.IsNullOrWhiteSpace(posting.ErpResponsePayload))
+            if (posting != null)
             {
-                string? response = SilaErpPayload.HttpBodyFromError(sale.FailureMessage ?? posting.ErrorMessage);
-                if (!string.IsNullOrWhiteSpace(response))
+                posting.ErpRequestPayload = stored;
+                posting.MovementType = SilaInventorySap.TYPE_Z01;
+                posting.IntegrationSystem = SilaStockCountSap.API_CONFIG_NAME;
+                if (string.IsNullOrWhiteSpace(posting.ErpResponsePayload))
                 {
-                    posting.ErpResponsePayload = response;
-                }
-            }
-
-            try
-            {
-                InventoryErpPosting? tracked = await repository.InventoryErpPosting
-                    .FindFirstByConditionAsync(x => x.Id == posting.Id && x.BuyerId == buyerId);
-                if (tracked != null)
-                {
-                    tracked.ErpRequestPayload = stored;
-                    if (!string.IsNullOrWhiteSpace(posting.ErpResponsePayload)
-                        && string.IsNullOrWhiteSpace(tracked.ErpResponsePayload))
+                    string? response = SilaErpPayload.HttpBodyFromError(sale.FailureMessage ?? posting.ErrorMessage);
+                    if (!string.IsNullOrWhiteSpace(response))
                     {
-                        tracked.ErpResponsePayload = posting.ErpResponsePayload;
+                        posting.ErpResponsePayload = response;
+                    }
+                }
+
+                try
+                {
+                    InventoryErpPosting? tracked = await repository.InventoryErpPosting
+                        .FindFirstByConditionAsync(x => x.Id == posting.Id && x.BuyerId == buyerId);
+                    if (tracked != null)
+                    {
+                        tracked.ErpRequestPayload = stored;
+                        tracked.MovementType = SilaInventorySap.TYPE_Z01;
+                        tracked.IntegrationSystem = SilaStockCountSap.API_CONFIG_NAME;
+                        if (!string.IsNullOrWhiteSpace(posting.ErpResponsePayload)
+                            && string.IsNullOrWhiteSpace(tracked.ErpResponsePayload))
+                        {
+                            tracked.ErpResponsePayload = posting.ErpResponsePayload;
+                        }
+
+                        repository.InventoryErpPosting.Update(tracked);
+                    }
+                    else
+                    {
+                        repository.InventoryErpPosting.Update(posting);
                     }
 
-                    tracked.MovementType = SilaInventorySap.TYPE_Z01;
-                    tracked.IntegrationSystem = SilaStockCountSap.API_CONFIG_NAME;
-                    repository.InventoryErpPosting.Update(tracked);
+                    await repository.SaveAsync();
                 }
-                else
+                catch (Exception)
                 {
-                    posting.MovementType = SilaInventorySap.TYPE_Z01;
-                    posting.IntegrationSystem = SilaStockCountSap.API_CONFIG_NAME;
-                    repository.InventoryErpPosting.Update(posting);
+                    // Still return the rebuilt body for download.
                 }
-
-                await repository.SaveAsync();
-            }
-            catch (Exception)
-            {
-                // Still return the rebuilt SAP body for download even if persistence fails.
             }
 
             return stored;
         }
 
-        /// <summary>Sync read of stored capture only (no rebuild).</summary>
         public static string ReadCapturedRequest(InventoryErpPosting? posting)
         {
             string? stored = posting?.ErpRequestPayload;
@@ -109,9 +105,6 @@ namespace Buyer.Application.Features.Shared
             return NOT_CAPTURED;
         }
 
-        /// <summary>
-        /// True when the text is OData material-document JSON — not SILA diagnostic / UI-synthesized metadata.
-        /// </summary>
         public static bool IsCapturedSapBody(string? body)
         {
             if (string.IsNullOrWhiteSpace(body))
@@ -133,7 +126,6 @@ namespace Buyer.Application.Features.Shared
                 return false;
             }
 
-            // Reject SILA-only metadata objects that lack the OData deep-insert shape.
             if (text.Contains("\"saleId\"", StringComparison.Ordinal)
                 && text.Contains("\"posCode\"", StringComparison.Ordinal)
                 && !text.Contains("to_MaterialDocumentItem", StringComparison.Ordinal))
@@ -145,10 +137,6 @@ namespace Buyer.Application.Features.Shared
                 && text.Contains("GoodsMovementCode", StringComparison.Ordinal);
         }
 
-        /// <summary>
-        /// Persists the exact body that is about to be (or was) sent to SAP.
-        /// Empty / non-SAP bodies become <see cref="NOT_CAPTURED"/>.
-        /// </summary>
         public static string RememberRequest(InventoryErpPosting posting, string? requestBody)
         {
             if (IsCapturedSapBody(requestBody))
@@ -163,50 +151,24 @@ namespace Buyer.Application.Features.Shared
         }
 
         /// <summary>
-        /// Rebuilds the FIVE_POS_UPDATE material-document JSON from RECIPE_CONSUMPTION lines + outlet/plant/CC setup.
-        /// Returns pure SAP OData JSON only.
+        /// Builds FIVE_POS_UPDATE OData JSON from ledger lines, or recipe explosion when ledger is empty.
         /// </summary>
         public static async Task<string?> RebuildRequestAsync(
             IRepositoryWrapper repository,
             Guid buyerId,
             PosSalesTransaction sale,
-            InventoryErpPosting posting,
+            InventoryErpPosting? posting,
             CancellationToken cancellationToken)
         {
-            List<InventoryTransaction> lines = await repository.InventoryTransaction
-                .FindByCondition(x => x.BuyerId == buyerId && x.IsActive
-                    && x.ReferenceType == Common.SILA_REF_POS_SALE
-                    && x.ReferenceId == sale.Id
-                    && x.Quantity > 0)
-                .ToListAsync(cancellationToken);
-            if (lines.Count == 0)
+            List<SilaInventorySap.TransferLine> transferLines = await LoadLedgerTransferLinesAsync(
+                repository, buyerId, sale.Id, cancellationToken);
+
+            if (transferLines.Count == 0)
             {
-                return null;
-            }
-
-            List<Guid> materialIds = lines.Select(x => x.MaterialId).Distinct().ToList();
-            Dictionary<Guid, MaterialEntity> materials = await repository.ItemBuyerMaster
-                .FindByCondition(x => materialIds.Contains(x.Id))
-                .ToDictionaryAsync(x => x.Id, cancellationToken);
-            Dictionary<Guid, List<MaterialUomConversion>> conversions =
-                await UomConverter.GetConversionsAsync(repository, materialIds, cancellationToken);
-
-            List<SilaInventorySap.TransferLine> transferLines = new List<SilaInventorySap.TransferLine>();
-            foreach (InventoryTransaction line in lines)
-            {
-                if (!materials.TryGetValue(line.MaterialId, out MaterialEntity? material))
-                {
-                    continue;
-                }
-
-                if (line.EnteredQuantity > 0 && !string.IsNullOrWhiteSpace(line.EnteredUom))
-                {
-                    transferLines.Add(new SilaInventorySap.TransferLine(material, line.EnteredQuantity, line.EnteredUom));
-                }
-                else
-                {
-                    transferLines.Add(new SilaInventorySap.TransferLine(material, line.Quantity, line.BaseUom));
-                }
+                (List<SilaInventorySap.TransferLine> exploded, string? explodeError) =
+                    await SilaPosProcessing.ExplodeTransferLinesAsync(repository, buyerId, sale, cancellationToken);
+                _ = explodeError;
+                transferLines = exploded;
             }
 
             if (transferLines.Count == 0)
@@ -214,33 +176,53 @@ namespace Buyer.Application.Features.Shared
                 return null;
             }
 
-            InventoryLocation? location = posting.LocationId == null
-                ? (sale.OutletLocationId == null
-                    ? null
-                    : await repository.InventoryLocation.FindFirstByConditionAsync(x => x.Id == sale.OutletLocationId.Value))
-                : await repository.InventoryLocation.FindFirstByConditionAsync(x => x.Id == posting.LocationId.Value);
+            Dictionary<Guid, List<MaterialUomConversion>> conversions = await UomConverter.GetConversionsAsync(
+                repository,
+                transferLines.Select(x => x.Material.Id).Distinct().ToList(),
+                cancellationToken);
+
+            InventoryLocation? location = null;
+            if (posting?.LocationId != null)
+            {
+                location = await repository.InventoryLocation.FindFirstByConditionAsync(x => x.Id == posting.LocationId.Value);
+            }
+
+            if (location == null && sale.OutletLocationId != null)
+            {
+                location = await repository.InventoryLocation.FindFirstByConditionAsync(x => x.Id == sale.OutletLocationId.Value);
+            }
+
+            if (location == null && !string.IsNullOrWhiteSpace(sale.OutletCode))
+            {
+                string outlet = sale.OutletCode.Trim();
+                location = await repository.InventoryLocation
+                    .FindByCondition(x => x.BuyerId == buyerId && x.IsActive
+                        && (x.LocationCode == outlet || x.StorageLocationCode == outlet))
+                    .OrderByDescending(x => x.StorageLocationCode == outlet)
+                    .FirstOrDefaultAsync(cancellationToken);
+            }
+
             BuyerProperty? property = location == null
                 ? null
                 : await repository.BuyerProperty.FindFirstByConditionAsync(x => x.Id == location.PropertyId);
 
-            string? plant = string.IsNullOrWhiteSpace(property?.PlantCode) ? null : property!.PlantCode.Trim();
-            string? storage = !string.IsNullOrWhiteSpace(location?.StorageLocationCode)
+            string plant = string.IsNullOrWhiteSpace(property?.PlantCode) ? "UNMAPPED" : property!.PlantCode.Trim();
+            string storage = !string.IsNullOrWhiteSpace(location?.StorageLocationCode)
                 ? location!.StorageLocationCode!.Trim()
-                : location?.LocationCode?.Trim();
-            string? costCenter = string.IsNullOrWhiteSpace(location?.CostCenter) ? null : location!.CostCenter!.Trim();
-            if (string.IsNullOrWhiteSpace(plant) || string.IsNullOrWhiteSpace(storage) || string.IsNullOrWhiteSpace(costCenter))
-            {
-                // Still build a SAP-shaped body for tracker download when mappings are incomplete —
-                // use placeholders only inside the SAP structure (not SILA sale metadata).
-                plant = string.IsNullOrWhiteSpace(plant) ? "UNMAPPED" : plant;
-                storage = string.IsNullOrWhiteSpace(storage) ? "UNMAPPED" : storage;
-                costCenter = string.IsNullOrWhiteSpace(costCenter) ? "UNMAPPED" : costCenter;
-            }
+                : !string.IsNullOrWhiteSpace(location?.LocationCode)
+                    ? location!.LocationCode!.Trim()
+                    : !string.IsNullOrWhiteSpace(sale.OutletCode)
+                        ? sale.OutletCode.Trim()
+                        : "UNMAPPED";
+            string costCenter = string.IsNullOrWhiteSpace(location?.CostCenter) ? "UNMAPPED" : location!.CostCenter!.Trim();
 
             bool isReversal = SilaPosReversal.IsReversal(sale.TransactionType);
             SilaInventorySap.Rule rule = isReversal ? SilaInventorySap.PosReversal : SilaInventorySap.PosConsumption;
             DateTime documentDate = sale.BusinessDate == default ? DateTime.UtcNow.Date : sale.BusinessDate.Date;
-            DateTime postingDate = posting.DateUpdated != default ? posting.DateUpdated.Date : DateTime.UtcNow.Date;
+            DateTime postingDate = posting != null && posting.DateUpdated != default
+                ? posting.DateUpdated.Date
+                : DateTime.UtcNow.Date;
+            string? referenceNumber = posting?.ReferenceNumber ?? sale.SourceTransactionId;
 
             string? problem = SilaInventorySap.TryBuildEffect(
                 documentDate,
@@ -250,7 +232,7 @@ namespace Buyer.Application.Features.Shared
                 transferLines,
                 conversions,
                 out string? body,
-                headerText: SilaInventorySap.BuildPosHeaderText(posting.ReferenceNumber),
+                headerText: SilaInventorySap.BuildPosHeaderText(referenceNumber),
                 costCenter: costCenter,
                 referenceDocument: SilaInventorySap.BuildPosReferenceDocument(storage, sale.SourceTransactionId),
                 glAccount: location?.GlAccount,
@@ -265,14 +247,58 @@ namespace Buyer.Application.Features.Shared
             return BuildFallbackBody(
                 documentDate,
                 postingDate,
-                plant!,
-                storage!,
+                plant,
+                storage,
                 costCenter,
                 rule,
                 transferLines,
                 location?.GlAccount,
-                posting.ReferenceNumber,
+                referenceNumber,
                 sale.SourceTransactionId);
+        }
+
+        private static async Task<List<SilaInventorySap.TransferLine>> LoadLedgerTransferLinesAsync(
+            IRepositoryWrapper repository,
+            Guid buyerId,
+            Guid saleId,
+            CancellationToken cancellationToken)
+        {
+            // Include inactive rows — failed/reprocessed sales may soft-delete ledger lines.
+            List<InventoryTransaction> lines = await repository.InventoryTransaction
+                .FindByCondition(x => x.BuyerId == buyerId
+                    && x.ReferenceType == Common.SILA_REF_POS_SALE
+                    && x.ReferenceId == saleId
+                    && (x.Quantity > 0 || x.EnteredQuantity > 0))
+                .ToListAsync(cancellationToken);
+            if (lines.Count == 0)
+            {
+                return new List<SilaInventorySap.TransferLine>();
+            }
+
+            List<Guid> materialIds = lines.Select(x => x.MaterialId).Distinct().ToList();
+            Dictionary<Guid, MaterialEntity> materials = await repository.ItemBuyerMaster
+                .FindByCondition(x => materialIds.Contains(x.Id))
+                .ToDictionaryAsync(x => x.Id, cancellationToken);
+
+            List<SilaInventorySap.TransferLine> transferLines = new List<SilaInventorySap.TransferLine>();
+            foreach (InventoryTransaction line in lines)
+            {
+                if (!materials.TryGetValue(line.MaterialId, out MaterialEntity? material))
+                {
+                    continue;
+                }
+
+                if (line.EnteredQuantity > 0 && !string.IsNullOrWhiteSpace(line.EnteredUom))
+                {
+                    transferLines.Add(new SilaInventorySap.TransferLine(material, line.EnteredQuantity, line.EnteredUom));
+                }
+                else if (line.Quantity > 0)
+                {
+                    transferLines.Add(new SilaInventorySap.TransferLine(material, line.Quantity, line.BaseUom));
+                }
+            }
+
+            return transferLines;
         }
 
         public static string? Store(string? body)
