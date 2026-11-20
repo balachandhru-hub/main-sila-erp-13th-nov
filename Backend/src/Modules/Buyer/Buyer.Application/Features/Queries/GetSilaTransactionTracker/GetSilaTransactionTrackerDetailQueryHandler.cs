@@ -114,26 +114,25 @@ namespace Buyer.Application.Features.Queries.GetSilaTransactionTracker
             detail.ErpPostingId = posting.Id;
             if (posting.ReferenceType == Common.SILA_REF_POS_SALE)
             {
-                detail.TechnicalDetail = SilaPosErpPayload.ReadCapturedRequest(posting);
+                PosSalesTransaction? sale = await _repository.PosSalesTransaction
+                    .FindFirstByConditionAsync(x => x.Id == posting.ReferenceId && x.BuyerId == buyerId);
+                detail.TechnicalDetail = sale == null
+                    ? SilaPosErpPayload.ReadCapturedRequest(posting)
+                    : await SilaPosErpPayload.EnsureRequestAsync(_repository, buyerId, sale, posting, cancellationToken);
                 detail.MovementType = string.IsNullOrWhiteSpace(posting.MovementType) || posting.MovementType == SilaInventorySap.TYPE_Z02
                     ? SilaInventorySap.TYPE_Z01
                     : posting.MovementType;
                 detail.IntegrationName = string.IsNullOrWhiteSpace(posting.IntegrationSystem)
                     ? SilaStockCountSap.API_CONFIG_NAME
                     : posting.IntegrationSystem;
+                detail.ErpMessage = SilaErpPayload.SanitiseForPersist(posting.ErpResponsePayload)
+                    ?? SilaErpPayload.HttpBodyFromError(sale?.FailureMessage ?? posting.ErrorMessage);
             }
             else
             {
                 detail.TechnicalDetail = SilaErpPayload.Sanitise(posting.ErpRequestPayload);
-            }
-
-            detail.ErpMessage = SilaErpPayload.SanitiseForPersist(posting.ErpResponsePayload)
-                ?? SilaErpPayload.HttpBodyFromError(posting.ErrorMessage);
-            if (string.IsNullOrWhiteSpace(detail.ErpMessage) && posting.ReferenceType == Common.SILA_REF_POS_SALE)
-            {
-                PosSalesTransaction? sale = await _repository.PosSalesTransaction
-                    .FindFirstByConditionAsync(x => x.Id == posting.ReferenceId && x.BuyerId == buyerId);
-                detail.ErpMessage ??= SilaErpPayload.HttpBodyFromError(sale?.FailureMessage ?? posting.ErrorMessage);
+                detail.ErpMessage = SilaErpPayload.SanitiseForPersist(posting.ErpResponsePayload)
+                    ?? SilaErpPayload.HttpBodyFromError(posting.ErrorMessage);
             }
 
             detail.Attempts = await AttemptsAsync(buyerId, posting.ReferenceType, posting.ReferenceId, cancellationToken);
@@ -269,10 +268,16 @@ namespace Buyer.Application.Features.Queries.GetSilaTransactionTracker
             detail.Uom = sale.Uom;
             detail.RecipeVersion = sale.RecipeVersion;
             detail.RecipeId = sale.RecipeId;
-            // Only the captured HTTP body — never fabricate SILA sale metadata as an SAP request.
-            detail.TechnicalDetail = SilaPosErpPayload.ReadCapturedRequest(posting);
-            detail.MovementType = posting?.MovementType ?? SilaInventorySap.TYPE_Z01;
-            detail.IntegrationName = posting?.IntegrationSystem ?? SilaStockCountSap.API_CONFIG_NAME;
+            // Captured HTTP body, or rebuilt FIVE_POS_UPDATE OData JSON from RECIPE_CONSUMPTION ledger lines.
+            detail.TechnicalDetail = posting == null
+                ? SilaPosErpPayload.NOT_CAPTURED
+                : await SilaPosErpPayload.EnsureRequestAsync(_repository, buyerId, sale, posting, cancellationToken);
+            detail.MovementType = posting?.MovementType == SilaInventorySap.TYPE_Z02 || string.IsNullOrWhiteSpace(posting?.MovementType)
+                ? SilaInventorySap.TYPE_Z01
+                : posting!.MovementType;
+            detail.IntegrationName = string.IsNullOrWhiteSpace(posting?.IntegrationSystem)
+                ? SilaStockCountSap.API_CONFIG_NAME
+                : posting!.IntegrationSystem;
             detail.ErpMessage = SilaErpPayload.SanitiseForPersist(posting?.ErpResponsePayload)
                 ?? SilaErpPayload.HttpBodyFromError(sale.FailureMessage ?? posting?.ErrorMessage);
             detail.Attempts = await AttemptsAsync(buyerId, Common.SILA_REF_POS_SALE, sale.Id, cancellationToken);

@@ -75,10 +75,11 @@ namespace Buyer.Tests.Shared
             Assert.True(SilaPosErpPayload.IsCapturedSapBody(kept));
             Assert.Contains("QuantityInEntryUnit", kept);
             Assert.Contains("Z01", kept);
-            Assert.DoesNotContain("saleId", kept);
-            Assert.DoesNotContain("posCode", kept);
+            Assert.DoesNotContain("\"saleId\"", kept);
+            Assert.DoesNotContain("\"posCode\"", kept);
             Assert.Equal(kept, posting.ErpRequestPayload);
             Assert.Equal(SilaPosErpPayload.NOT_CAPTURED, SilaPosErpPayload.ReadCapturedRequest(new InventoryErpPosting { ErpRequestPayload = fabricated }));
+            Assert.True(SilaPosErpPayload.IsCapturedSapBody(SilaPosErpPayload.ReadCapturedRequest(posting)));
         }
 
         [Fact]

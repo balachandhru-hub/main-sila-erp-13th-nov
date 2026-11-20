@@ -285,15 +285,7 @@ const SilaConsolidatedTracker: React.FC<SilaConsolidatedTrackerProps> = ({ track
           };
         }
       }
-      if (!isCapturedSapRequest(next.technicalDetail)) {
-        const isPos = next.source === "POS"
-          || next.transactionType === "POS_SALE"
-          || next.transactionType === "POS_POSITIVE_CORRECTION"
-          || !!next.posCode;
-        if (isPos) {
-          next = { ...next, technicalDetail: NOT_CAPTURED_REQUEST };
-        }
-      }
+      // Do not invent SILA sale-metadata JSON. Keep API result (SAP body, not-captured, or rebuilt OData).
       if (!next.erpMessage?.trim() && fromError) {
         next = { ...next, erpMessage: fromError };
       }

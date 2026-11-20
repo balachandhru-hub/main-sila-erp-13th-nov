@@ -38,13 +38,12 @@ namespace Buyer.Application.Features.Queries.GetSilaErpPostingPayload
 
             if (posting.ReferenceType == Common.SILA_REF_POS_SALE)
             {
-                requestBody = SilaPosErpPayload.ReadCapturedRequest(posting);
-                if (string.IsNullOrWhiteSpace(responseBody))
-                {
-                    PosSalesTransaction? sale = await _repository.PosSalesTransaction
-                        .FindFirstByConditionAsync(x => x.Id == posting.ReferenceId && x.BuyerId == buyer.Id);
-                    responseBody = SilaErpPayload.HttpBodyFromError(sale?.FailureMessage ?? posting.ErrorMessage);
-                }
+                PosSalesTransaction? sale = await _repository.PosSalesTransaction
+                    .FindFirstByConditionAsync(x => x.Id == posting.ReferenceId && x.BuyerId == buyer.Id);
+                requestBody = sale == null
+                    ? SilaPosErpPayload.ReadCapturedRequest(posting)
+                    : await SilaPosErpPayload.EnsureRequestAsync(_repository, buyer.Id, sale, posting, cancellationToken);
+                responseBody ??= SilaErpPayload.HttpBodyFromError(sale?.FailureMessage ?? posting.ErrorMessage);
             }
             else
             {
