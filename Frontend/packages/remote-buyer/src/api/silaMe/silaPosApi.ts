@@ -23,6 +23,12 @@ export interface SilaPosImportResult {
   failed: number;
   /** Lines of the batch already deducted or posted before this run. */
   alreadyPosted?: number;
+  /** Step 1: lines whose SILA inventory was validated and updated locally. */
+  localUpdated?: number;
+  /** Step 2: lines whose SAP material document posted. */
+  sapPosted?: number;
+  /** Step 2: lines whose SAP material document failed. */
+  sapFailed?: number;
   /** Lines whose ERP posting outcome is unknown (reconcile under ERP postings). */
   postingUnknown?: number;
   errors: SilaPosRowError[];

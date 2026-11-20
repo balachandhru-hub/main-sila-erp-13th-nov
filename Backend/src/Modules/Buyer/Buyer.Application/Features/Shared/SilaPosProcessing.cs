@@ -140,6 +140,9 @@ namespace Buyer.Application.Features.Shared
                 transaction.Amount = row.Amount;
                 transaction.Uom = row.Uom;
                 transaction.Currency = row.Currency;
+                transaction.TransactionType = SilaPosReversal.NormalizeType(row.TransactionType);
+                transaction.OriginalTransactionId = string.IsNullOrWhiteSpace(row.OriginalTransactionId) ? null : row.OriginalTransactionId.Trim();
+                transaction.OriginalLineId = row.OriginalLineId;
                 transaction.Status = Common.SILA_POS_RECEIVED;
                 transaction.OutletLocationId = null;
                 transaction.RecipeId = null;
@@ -217,11 +220,22 @@ namespace Buyer.Application.Features.Shared
                         continue;
                     }
 
+                    string? reversalProblem = await ValidateReversalAsync(repository, buyerId, transaction, cancellationToken);
+                    if (reversalProblem != null)
+                    {
+                        Fail(ledger, transaction, Common.SILA_POS_STEP_MATCH, EVENT_MATCH_FAILED, reversalProblem);
+                        failed++;
+                        continue;
+                    }
+
                     ledger.AddEvent(
                         Common.SILA_REF_POS_SALE,
                         transaction.Id,
                         EVENT_MATCHED,
-                        $"Outlet {match.Outlet!.LocationCode}, recipe {match.Recipe!.RecipeCode} version {match.Recipe.ActiveVersion}.");
+                        $"Outlet {match.Outlet!.LocationCode}, recipe {match.Recipe!.RecipeCode} version {match.Recipe.ActiveVersion}"
+                            + (SilaPosReversal.IsReversal(transaction.TransactionType)
+                                ? $", {transaction.TransactionType} of {transaction.OriginalTransactionId}."
+                                : "."));
 
                     string? problem = await DeductAsync(context, ledger, transaction, cancellationToken);
                     if (problem != null)
@@ -244,7 +258,7 @@ namespace Buyer.Application.Features.Shared
                         transaction.Id,
                         transaction.SourceTransactionId,
                         transaction.OutletLocationId,
-                        SilaInventorySap.MovementForSale(null, transaction.QuantitySold));
+                        SilaPosReversal.MovementForSale(null, transaction));
                     transaction.ErpPostingId = posting.Id;
                     ledger.AddEvent(Common.SILA_REF_POS_SALE, transaction.Id, EVENT_POSTING_QUEUED, "Consumption queued for the ERP posting.");
                 }
@@ -462,7 +476,7 @@ namespace Buyer.Application.Features.Shared
             }
 
             Dictionary<Guid, decimal> quantities = new Dictionary<Guid, decimal>();
-            string? problem = Expand(context, transaction.RecipeId.Value, transaction.QuantitySold, quantities, 0);
+            string? problem = Expand(context, transaction.RecipeId.Value, SilaPosReversal.ExplosionQuantity(transaction), quantities, 0);
             if (problem != null)
             {
                 return problem;
@@ -486,7 +500,8 @@ namespace Buyer.Application.Features.Shared
                 return "NO_CONSUMPTION_LINES";
             }
 
-            string direction = transaction.QuantitySold < 0 ? Common.SILA_DIRECTION_IN : Common.SILA_DIRECTION_OUT;
+            string direction = SilaPosReversal.LedgerDirection(transaction);
+            string reasonPrefix = SilaPosReversal.IsReversal(transaction.TransactionType) ? "POS reversal" : "POS";
             int lines = 0;
             foreach (KeyValuePair<Guid, decimal> entry in quantities.Where(x => x.Value > 0))
             {
@@ -501,7 +516,7 @@ namespace Buyer.Application.Features.Shared
                     ReferenceType = Common.SILA_REF_POS_SALE,
                     ReferenceId = transaction.Id,
                     ReferenceNumber = transaction.SourceTransactionId,
-                    Reason = $"POS {transaction.PosCode} x {transaction.QuantitySold:0.####}",
+                    Reason = $"{reasonPrefix} {transaction.PosCode} x {SilaPosReversal.ExplosionQuantity(transaction):0.####}",
                     BusinessDate = transaction.BusinessDate
                 }, cancellationToken);
                 lines++;
@@ -509,6 +524,47 @@ namespace Buyer.Application.Features.Shared
 
             ledger.AddEvent(Common.SILA_REF_POS_SALE, transaction.Id, EVENT_DEDUCTED, $"{lines} ingredient consumption line{(lines == 1 ? string.Empty : "s")} posted.");
             return null;
+        }
+
+        private static async Task<string?> ValidateReversalAsync(
+            IRepositoryWrapper repository,
+            Guid buyerId,
+            PosSalesTransaction transaction,
+            CancellationToken cancellationToken)
+        {
+            if (!SilaPosReversal.IsReversal(transaction.TransactionType))
+            {
+                return null;
+            }
+
+            IQueryable<PosSalesTransaction> originals = repository.PosSalesTransaction.FindByCondition(x =>
+                x.BuyerId == buyerId
+                && x.IsActive
+                && x.SourceTransactionId == transaction.OriginalTransactionId);
+            if (transaction.OriginalLineId != null)
+            {
+                originals = originals.Where(x => x.LineNumber == transaction.OriginalLineId.Value);
+            }
+
+            PosSalesTransaction? original = await originals
+                .OrderByDescending(x => x.Status == Common.SILA_POS_POSTED)
+                .ThenByDescending(x => x.Status == Common.SILA_POS_INVENTORY_DEDUCTED)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            List<PosSalesTransaction> priorReversals = await repository.PosSalesTransaction
+                .FindByCondition(x =>
+                    x.BuyerId == buyerId
+                    && x.IsActive
+                    && x.Id != transaction.Id
+                    && x.OriginalTransactionId == transaction.OriginalTransactionId
+                    && (transaction.OriginalLineId == null || x.OriginalLineId == transaction.OriginalLineId)
+                    && (x.Status == Common.SILA_POS_INVENTORY_DEDUCTED || x.Status == Common.SILA_POS_POSTED))
+                .ToListAsync(cancellationToken);
+            decimal alreadyReversed = priorReversals
+                .Where(x => SilaPosReversal.IsReversal(x.TransactionType))
+                .Sum(x => Math.Abs(x.QuantitySold));
+
+            return SilaPosReversal.ValidateAgainstOriginal(transaction, original, alreadyReversed);
         }
 
         /// <summary>Adds the base quantity of every material of the recipe's approved version × factor; a batch is expanded per serving.</summary>

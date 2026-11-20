@@ -59,7 +59,7 @@ const SilaPosTransactionDetail: React.FC<SilaPosTransactionDetailProps> = ({ tra
       <PageHeader
         className="pud-page-header"
         title={tx ? `POS transaction ${tx.sourceTransactionId} / ${tx.lineNumber}` : "POS transaction"}
-        description="Step 1 deducts SILA inventory. Step 2 posts the consumption to the ERP (SAP)."
+        description="Step 1 validates and updates SILA inventory locally. Step 2 calls the SAP API and posts. Results and messages appear here in the tracker history."
         actions={
           <div className="srec-actions">
             <button type="button" className="sila-btn sila-btn--ghost" onClick={onBack}>Back</button>
@@ -94,8 +94,8 @@ const SilaPosTransactionDetail: React.FC<SilaPosTransactionDetailProps> = ({ tra
                   ["POS Uploaded", tx.receivedState === "DONE" || tx.receivedState === "COMPLETED" ? "done" : tx.receivedState === "FAILED" ? "failed" : "pending"],
                   ["Validated", tx.status === "FAILED" && tx.failedStep === "MATCH" ? "failed" : tx.recipeCode ? "done" : "pending"],
                   ["Recipe Consumption", tx.deductState === "DONE" || tx.consumptionTransactionNumber ? "done" : tx.failedStep === "DEDUCT" ? "failed" : "pending"],
-                  ["User Confirmed", tx.deductState === "DONE" || tx.deductState === "FAILED" || tx.postState !== "PENDING" ? "done" : "pending"],
-                  ["SAP Posted", tx.postState === "DONE" || tx.erpPostingStatus === "POSTED" ? "done" : tx.postState === "FAILED" || tx.erpPostingStatus === "FAILED" ? "failed" : tx.erpPostingStatus === "UNKNOWN" ? "pending" : "pending"],
+                  ["User Confirmed", tx.deductState === "DONE" || tx.deductState === "FAILED" || (tx.postState !== "PENDING" && tx.postState !== "NOT_STARTED") ? "done" : "pending"],
+                  ["SAP Posted", tx.postState === "DONE" || tx.erpPostingStatus === "POSTED" ? "done" : tx.postState === "FAILED" || tx.erpPostingStatus === "FAILED" ? "failed" : tx.postState === "NOT_STARTED" || tx.postState === "PENDING" || tx.erpPostingStatus === "UNKNOWN" ? "pending" : "pending"],
                   ["SILA Reconciled", tx.erpPostingStatus === "POSTED" && tx.postState === "DONE" ? "done" : tx.erpPostingStatus === "UNKNOWN" ? "pending" : tx.postState === "SKIPPED" ? "done" : "pending"],
                   ["Completed", tx.status === "POSTED" || (tx.deductState === "DONE" && (tx.postState === "DONE" || tx.postState === "SKIPPED")) ? "done" : tx.status === "FAILED" ? "failed" : "pending"],
                 ].map(([label, state], index, arr) => (
@@ -168,21 +168,19 @@ const SilaPosTransactionDetail: React.FC<SilaPosTransactionDetailProps> = ({ tra
                       <span className="sila-meta-value">{value}</span>
                     </div>
                   ))}
-                  {detail.erpRequest && (
-                    <details className="sila-meta-item spos-payload-block">
-                      <summary className="sila-meta-label">ERP request (credentials masked)</summary>
-                      <pre className="spos-payload">{detail.erpRequest}</pre>
-                    </details>
-                  )}
-                  {detail.erpResponse && (
-                    <details className="sila-meta-item spos-payload-block">
-                      <summary className="sila-meta-label">ERP response</summary>
-                      <pre className="spos-payload">{detail.erpResponse}</pre>
-                    </details>
-                  )}
+                  <details className="sila-meta-item spos-payload-block" open={Boolean(detail.erpErrorMessage) || tx.postState === "FAILED"}>
+                    <summary className="sila-meta-label">ERP request payload (credentials masked)</summary>
+                    <pre className="spos-payload">{detail.erpRequest || "No request payload was stored for this posting."}</pre>
+                  </details>
+                  <details className="sila-meta-item spos-payload-block" open={Boolean(detail.erpErrorMessage) || tx.postState === "FAILED"}>
+                    <summary className="sila-meta-label">ERP response payload</summary>
+                    <pre className="spos-payload">{detail.erpResponse || "No response payload was stored for this posting."}</pre>
+                  </details>
                 </div>
               ) : (
-                <p className="sila-cell-muted">Not queued yet: the sale is posted to SAP after its inventory is deducted.</p>
+                <p className="sila-cell-muted">
+                  ERP is not started. Use Reprocess to queue and post the SAP material document; results and messages appear here and in the transaction history.
+                </p>
               )}
             </div>
           </section>

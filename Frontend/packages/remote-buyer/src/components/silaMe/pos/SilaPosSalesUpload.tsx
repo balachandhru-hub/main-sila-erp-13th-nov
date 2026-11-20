@@ -133,7 +133,7 @@ const SilaPosSalesUpload: React.FC<SilaPosSalesUploadProps> = ({
     setBusy("process");
     setConfirmPost(false);
     try {
-      const processed = await processPosBatch(preview.batchId, { transactionIds: pendingIds });
+      const processed = await processPosBatch(preview.batchId, { transactionIds: pendingIds, queueErpPosting: true });
       setPreview(null);
       setConsumption(null);
       onProcessed?.(processed);
@@ -311,7 +311,7 @@ const SilaPosSalesUpload: React.FC<SilaPosSalesUploadProps> = ({
         <SilaPosConfirm
           heading="Confirm posting"
           content={`Process ${pendingIds.length} selected line${pendingIds.length === 1 ? "" : "s"} from batch ${preview.batchNumber}?`}
-          description="SILA inventory will be deducted for matched lines. SAP/ERP queue follows server configuration and stays disabled until authorized."
+          description="Step 1 validates and updates SILA inventory locally. Step 2 calls the SAP API and posts. Step 3 updates the Transaction Tracker."
           confirmText="Confirm posting"
           busy={busy === "process"}
           onConfirm={handleProcess}

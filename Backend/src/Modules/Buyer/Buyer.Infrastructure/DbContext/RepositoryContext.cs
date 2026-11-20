@@ -363,6 +363,7 @@ namespace Buyer.Infrastructure.DbContext
             _ = modelBuilder.Entity<PosSalesTransaction>().HasIndex(a => new { a.BuyerId, a.BusinessDate });
             _ = modelBuilder.Entity<PosSalesTransaction>().HasIndex(a => a.BatchId);
             _ = modelBuilder.Entity<PosSalesTransaction>().HasIndex(a => a.ErpPostingId);
+            _ = modelBuilder.Entity<PosSalesTransaction>().HasIndex(a => new { a.BuyerId, a.OriginalTransactionId });
             _ = modelBuilder.Entity<SilaApprovalStep>().HasIndex(a => new { a.BuyerId, a.ReferenceType, a.Status });
             _ = modelBuilder.Entity<Invoice>().HasIndex(a => new { a.BuyerId, a.Status });
             _ = modelBuilder.Entity<Invoice>().HasIndex(a => new { a.BuyerId, a.ContentHash });

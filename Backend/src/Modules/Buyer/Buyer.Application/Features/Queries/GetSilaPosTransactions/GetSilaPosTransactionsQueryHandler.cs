@@ -51,11 +51,15 @@ namespace Buyer.Application.Features.Queries.GetSilaPosTransactions
             }
             else
             {
-                // Lines of an upload still in preview are not sales yet.
+                // Hide only unprocessed RECEIVED lines still waiting in a PREVIEW batch.
+                // Deducted / posted / failed lines must remain visible even if the batch status was not flipped.
                 IQueryable<Guid> previewBatchIds = _repository.PosSalesBatch
                     .FindByCondition(x => x.BuyerId == buyerId && x.Status == Common.SILA_POS_BATCH_PREVIEW)
                     .Select(x => x.Id);
-                query = query.Where(x => x.BatchId == null || !previewBatchIds.Contains(x.BatchId.Value));
+                query = query.Where(x =>
+                    x.BatchId == null
+                    || x.Status != Common.SILA_POS_RECEIVED
+                    || !previewBatchIds.Contains(x.BatchId.Value));
             }
 
             if (!SilaAccess.HasFullAccess(request.RoleId))

@@ -1,3 +1,4 @@
+using Buyer.Application.Features.Commands.PostPendingErpPostings;
 using Buyer.Application.Features.Commands.ProcessSilaPosBatch;
 using Buyer.Application.Features.Shared;
 using Buyer.Domain.Common;
@@ -11,20 +12,26 @@ using SharedKernel.LoggerServices;
 namespace Buyer.Application.Features.Commands.ReprocessSilaPosTransaction
 {
     /// <summary>
-    /// Re-runs a failed POS sale from the failed step. A failed ERP posting is put back to PENDING for the
-    /// InventoryErpPostingJob; stock is never deducted twice. ERP queue follows SilaPos:QueueErpPosting.
+    /// Re-runs a failed POS sale from the failed step. A failed ERP posting is put back to PENDING and posted to SAP via API;
+    /// stock is never deducted twice. Deducted sales with no ERP posting queue and post SAP immediately.
     /// </summary>
     public class ReprocessSilaPosTransactionCommandHandler : IRequestHandler<ReprocessSilaPosTransactionCommand, Unit>
     {
         private readonly IRepositoryWrapper _repository;
         private readonly ILoggerManager _logger;
         private readonly IConfiguration _configuration;
+        private readonly IMediator _mediator;
 
-        public ReprocessSilaPosTransactionCommandHandler(IRepositoryWrapper repository, ILoggerManager logger, IConfiguration configuration)
+        public ReprocessSilaPosTransactionCommandHandler(
+            IRepositoryWrapper repository,
+            ILoggerManager logger,
+            IConfiguration configuration,
+            IMediator mediator)
         {
             _repository = repository;
             _logger = logger;
             _configuration = configuration;
+            _mediator = mediator;
         }
 
         public Task<Unit> Handle(ReprocessSilaPosTransactionCommand request, CancellationToken cancellationToken)
@@ -86,6 +93,7 @@ namespace Buyer.Application.Features.Commands.ReprocessSilaPosTransaction
                 posting.ErrorMessage = null;
                 SilaPostingRecovery.Record(_repository, posting, request.UserId, SilaTrackerRules.FROM_ERP, originalError, true, false, "ERP processing queued again. Inventory is not deducted again.");
                 await _repository.SaveAsync();
+                await PostSapNowAsync(buyer.Id, posting.Id, cancellationToken);
                 _logger.LogInfo($"POS transaction ERP posting queued again. TransactionId: {transaction.Id}, PostingId: {posting.Id}");
                 return Unit.Value;
             }
@@ -97,14 +105,34 @@ namespace Buyer.Application.Features.Commands.ReprocessSilaPosTransaction
                 throw new BadRequestCustomException("Nothing to reprocess.", "Only a failed sale, or one whose inventory was not updated, can be reprocessed.");
             }
 
+            _repository.PosSalesTransaction.Update(transaction);
             ledger.AddEvent(Common.SILA_REF_POS_SALE, transaction.Id, SilaPosProcessing.EVENT_REPROCESS, $"Reprocess from step {transaction.FailedStep ?? Common.SILA_POS_STEP_MATCH}.");
-            bool queueErp = _configuration.GetValue(ProcessSilaPosBatchCommandHandler.CONFIG_QUEUE_ERP, true);
+            // Deducted sales with no ERP posting must queue SAP when the user reprocesses from the tracker.
+            bool queueErp = needsPosting || _configuration.GetValue(ProcessSilaPosBatchCommandHandler.CONFIG_QUEUE_ERP, true);
             int failed = await SilaPosProcessing.ProcessAsync(
                 _repository, _logger, buyer.Id, request.UserId, new List<PosSalesTransaction> { transaction }, queueErp, cancellationToken);
             await _repository.SaveAsync();
 
-            _logger.LogInfo($"POS transaction reprocessed. TransactionId: {transaction.Id}, Status: {transaction.Status}, Failed: {failed}");
+            if (queueErp && transaction.ErpPostingId != null)
+            {
+                await PostSapNowAsync(buyer.Id, transaction.ErpPostingId.Value, cancellationToken);
+            }
+
+            _logger.LogInfo($"POS transaction reprocessed. TransactionId: {transaction.Id}, Status: {transaction.Status}, Failed: {failed}, ErpPostingId: {transaction.ErpPostingId}");
             return Unit.Value;
+        }
+
+        private async Task PostSapNowAsync(Guid buyerId, Guid postingId, CancellationToken cancellationToken)
+        {
+            try
+            {
+                await _mediator.Send(new PostPendingErpPostingsCommand { BuyerId = buyerId, PostingId = postingId }, cancellationToken);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                _logger.LogError(
+                    $"Immediate POS ERP post failed on reprocess. BuyerId: {buyerId}, PostingId: {postingId}, Error: {SilaLogText.FromException(exception)}");
+            }
         }
     }
 }

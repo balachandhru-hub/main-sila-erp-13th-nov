@@ -1,3 +1,4 @@
+using Buyer.Application.Features.Commands.PostPendingErpPostings;
 using Buyer.Application.Features.Shared;
 using Buyer.Domain.Common;
 using Buyer.Domain.Dtos;
@@ -5,29 +6,34 @@ using Buyer.Domain.Entities;
 using Buyer.Infrastructure.Contracts.IRepository;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using SharedKernel.ExceptionHandler;
 using SharedKernel.LoggerServices;
 
 namespace Buyer.Application.Features.Commands.ProcessSilaPosBatch
 {
     /// <summary>
-    /// Step 2 of the upload: processes selected (or all) RECEIVED lines of a PREVIEW batch (match, deduct stock, optionally queue ERP)
-    /// and marks the batch PROCESSED when no RECEIVED lines remain.
+    /// POS sales consumption confirm posting:
+    /// Step 1 — validate and update SILA inventory locally;
+    /// Step 2 — call the SAP Material Document API and post;
+    /// Step 3 — sale/posting status is updated so the Transaction Tracker shows results.
     /// </summary>
     public class ProcessSilaPosBatchCommandHandler : IRequestHandler<ProcessSilaPosBatchCommand, SilaPosImportResultDto>
     {
+        /// <summary>Shared with pull / reprocess. Confirm posting always posts SAP unless QueueErpPosting is explicitly false.</summary>
         public const string CONFIG_QUEUE_ERP = "SilaPos:QueueErpPosting";
 
         private readonly IRepositoryWrapper _repository;
         private readonly ILoggerManager _logger;
-        private readonly IConfiguration _configuration;
+        private readonly IMediator _mediator;
 
-        public ProcessSilaPosBatchCommandHandler(IRepositoryWrapper repository, ILoggerManager logger, IConfiguration configuration)
+        public ProcessSilaPosBatchCommandHandler(
+            IRepositoryWrapper repository,
+            ILoggerManager logger,
+            IMediator mediator)
         {
             _repository = repository;
             _logger = logger;
-            _configuration = configuration;
+            _mediator = mediator;
         }
 
         public Task<SilaPosImportResultDto> Handle(ProcessSilaPosBatchCommand request, CancellationToken cancellationToken)
@@ -80,8 +86,8 @@ namespace Buyer.Application.Features.Commands.ProcessSilaPosBatch
                     && (x.Status == Common.SILA_POS_INVENTORY_DEDUCTED || x.Status == Common.SILA_POS_POSTED))
                 .CountAsync(cancellationToken);
 
-            bool queueErp = request.QueueErpPosting
-                ?? _configuration.GetValue(CONFIG_QUEUE_ERP, true);
+            // Confirm posting always runs Step 2 (SAP) unless the caller explicitly opts out.
+            bool queueErp = request.QueueErpPosting != false;
             int failed = await SilaPosProcessing.ProcessAsync(
                 _repository, _logger, buyer.Id, request.UserId, lines, queueErp, cancellationToken);
 
@@ -94,7 +100,20 @@ namespace Buyer.Application.Features.Commands.ProcessSilaPosBatch
             }
 
             batch.Accepted = lines.Count;
+            _repository.PosSalesBatch.Update(batch);
             await _repository.SaveAsync();
+
+            int localUpdated = lines.Count(x =>
+                x.Status == Common.SILA_POS_INVENTORY_DEDUCTED
+                || x.Status == Common.SILA_POS_POSTED
+                || x.ErpPostingId != null);
+
+            if (queueErp)
+            {
+                await PostQueuedSapAsync(buyer.Id, lines, cancellationToken);
+            }
+
+            (int sapPosted, int sapFailed, int postingUnknown) = await CountSapOutcomesAsync(buyer.Id, lines, cancellationToken);
 
             SilaPosImportResultDto result = new SilaPosImportResultDto
             {
@@ -106,14 +125,53 @@ namespace Buyer.Application.Features.Commands.ProcessSilaPosBatch
                 Invalid = batch.Invalid,
                 Processed = lines.Count - failed,
                 Failed = failed,
-                AlreadyPosted = alreadyPosted
+                AlreadyPosted = alreadyPosted,
+                LocalUpdated = localUpdated,
+                SapPosted = sapPosted,
+                SapFailed = sapFailed,
+                PostingUnknown = postingUnknown
             };
-            SilaPosBatchDto counts = new SilaPosBatchDto { Id = batch.Id };
-            await SilaPosBatchCounts.AddAsync(_repository, buyer.Id, new List<SilaPosBatchDto> { counts }, cancellationToken);
-            result.PostingUnknown = counts.PostingUnknown;
 
-            _logger.LogInfo($"POS batch processed. BatchNumber: {batch.BatchNumber}, Lines: {lines.Count}, Failed: {failed}");
+            _logger.LogInfo(
+                $"POS batch processed. BatchNumber: {batch.BatchNumber}, LocalUpdated: {localUpdated}, SapPosted: {sapPosted}, SapFailed: {sapFailed}, Failed: {failed}");
             return result;
+        }
+
+        private async Task PostQueuedSapAsync(Guid buyerId, List<PosSalesTransaction> lines, CancellationToken cancellationToken)
+        {
+            foreach (Guid postingId in lines.Where(x => x.ErpPostingId != null).Select(x => x.ErpPostingId!.Value).Distinct())
+            {
+                try
+                {
+                    await _mediator.Send(new PostPendingErpPostingsCommand { BuyerId = buyerId, PostingId = postingId }, cancellationToken);
+                }
+                catch (Exception exception) when (exception is not OperationCanceledException)
+                {
+                    _logger.LogError(
+                        $"Immediate POS ERP post failed after inventory deduction. BuyerId: {buyerId}, PostingId: {postingId}, Error: {SilaLogText.FromException(exception)}");
+                }
+            }
+        }
+
+        private async Task<(int SapPosted, int SapFailed, int PostingUnknown)> CountSapOutcomesAsync(
+            Guid buyerId,
+            List<PosSalesTransaction> lines,
+            CancellationToken cancellationToken)
+        {
+            List<Guid> postingIds = lines.Where(x => x.ErpPostingId != null).Select(x => x.ErpPostingId!.Value).Distinct().ToList();
+            if (postingIds.Count == 0)
+            {
+                return (0, 0, 0);
+            }
+
+            List<InventoryErpPosting> postings = await _repository.InventoryErpPosting
+                .FindByCondition(x => x.BuyerId == buyerId && postingIds.Contains(x.Id))
+                .ToListAsync(cancellationToken);
+
+            int sapPosted = postings.Count(x => x.Status == Common.SILA_POSTING_POSTED || SilaTrackerRules.ErpAlreadyAccepted(x));
+            int sapFailed = postings.Count(x => x.Status == Common.SILA_POSTING_FAILED || x.Status == Common.SILA_POSTING_SKIPPED);
+            int postingUnknown = postings.Count(x => x.Status == Common.SILA_POSTING_UNKNOWN);
+            return (sapPosted, sapFailed, postingUnknown);
         }
     }
 }

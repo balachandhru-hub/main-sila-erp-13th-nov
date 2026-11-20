@@ -66,6 +66,7 @@ const SilaPosIntegration: React.FC<SilaPosIntegrationProps> = ({ canManage }) =>
   const [pulling, setPulling] = useState(false);
   const [pullResult, setPullResult] = useState<SilaPosImportResult | null>(null);
   const [batchesVersion, setBatchesVersion] = useState(0);
+  const [trackerVersion, setTrackerVersion] = useState(0);
   const [preview, setPreview] = useState<SilaPosPreview | null>(null);
   const [consumption, setConsumption] = useState<SilaPosConsumptionPreview | null>(null);
   const [processResult, setProcessResult] = useState<SilaPosImportResult | null>(null);
@@ -112,14 +113,22 @@ const SilaPosIntegration: React.FC<SilaPosIntegrationProps> = ({ canManage }) =>
     setPosting(true);
     setConfirmPost(false);
     try {
-      const result = await processPosBatch(preview.batchId, { transactionIds: selectedIds });
+      // Step 1 local validate/update → Step 2 SAP API post → Step 3 tracker statuses.
+      const result = await processPosBatch(preview.batchId, { transactionIds: selectedIds, queueErpPosting: true });
       setProcessResult(result);
       setPreview(null);
       setConsumption(null);
       setSelectedIds([]);
       setBatchesVersion((current) => current + 1);
-      setTab("results");
-      toastService.success(`Batch ${result.batchNumber}: ${result.processed} line${result.processed === 1 ? "" : "s"} processed.`);
+      setTrackerVersion((current) => current + 1);
+      setTab("tracker");
+      const sapPosted = result.sapPosted ?? 0;
+      const sapFailed = result.sapFailed ?? 0;
+      toastService.success(
+        `Batch ${result.batchNumber}: Step 1 local ${result.localUpdated ?? result.processed}, Step 2 SAP posted ${sapPosted}`
+          + (sapFailed > 0 ? `, failed ${sapFailed}` : "")
+          + ". Tracker updated.",
+      );
     } catch (err: unknown) {
       toastService.error(errorText(err, "Could not process the sales batch."));
     } finally {
@@ -130,11 +139,9 @@ const SilaPosIntegration: React.FC<SilaPosIntegrationProps> = ({ canManage }) =>
   const sourceProps = { sources, sourcesLoading, sourcesError, onReloadSources: loadSources, canManage };
 
   const postSteps = [
-    { key: "validate", label: "1 · Validate", done: Boolean(preview) },
-    { key: "review", label: "2 · Review", done: selectedIds.length > 0 },
-    { key: "confirm", label: "3 · Confirm", done: Boolean(consumption) },
-    { key: "post", label: "4 · Post", done: Boolean(processResult) },
-    { key: "reconcile", label: "5 · Reconcile", done: Boolean(processResult && (processResult.postingUnknown ?? 0) === 0 && processResult.failed === 0) },
+    { key: "local", label: "1 · Validate & update locally", done: Boolean(processResult) || Boolean(consumption) },
+    { key: "sap", label: "2 · Call SAP API & post", done: Boolean(processResult && ((processResult.sapPosted ?? 0) > 0 || (processResult.sapFailed ?? 0) > 0 || (processResult.postingUnknown ?? 0) > 0)) },
+    { key: "tracker", label: "3 · Update Transaction Tracker", done: Boolean(processResult) },
   ];
 
   return (
@@ -400,7 +407,7 @@ const SilaPosIntegration: React.FC<SilaPosIntegrationProps> = ({ canManage }) =>
           <section className="pstudio-panel" data-testid="pstudio-post">
             <h2 className="pstudio-panel__title">Post consumption</h2>
             <p className="pstudio-panel__hint">
-              Controlled posting. Live SAP queue follows server configuration (currently gated). Confirming calls the existing process API for selected lines only.
+              Three steps on confirm: (1) validate and update SILA inventory locally, (2) call the SAP Material Document API and post, (3) refresh the Transaction Tracker with results and messages.
             </p>
             <div className="pstudio-steps" aria-label="Posting steps">
               {postSteps.map((step) => (
@@ -408,7 +415,7 @@ const SilaPosIntegration: React.FC<SilaPosIntegrationProps> = ({ canManage }) =>
                   key={step.key}
                   className="pstudio-step"
                   data-done={step.done ? "true" : "false"}
-                  data-active={step.key === "post" && Boolean(preview) ? "true" : "false"}
+                  data-active={Boolean(preview) && !processResult ? "true" : "false"}
                 >
                   {step.label}
                 </span>
@@ -427,10 +434,10 @@ const SilaPosIntegration: React.FC<SilaPosIntegrationProps> = ({ canManage }) =>
                   <div className="pstudio-kpi pstudio-kpi--mint"><span>Ready in batch</span><strong>{preview.readyToProcess}</strong></div>
                   <div className="pstudio-kpi pstudio-kpi--lavender"><span>Total materials</span><strong>{consumption?.lines.reduce((n, line) => n + line.ingredientCount, 0) ?? "Preview first"}</strong></div>
                   <div className="pstudio-kpi pstudio-kpi--sky"><span>Estimated cost</span><strong>{consumption?.totalConsumptionCost ?? "—"}</strong></div>
-                  <div className="pstudio-kpi pstudio-kpi--amber"><span>SAP posting profile</span><strong>Server gated</strong></div>
+                  <div className="pstudio-kpi pstudio-kpi--amber"><span>SAP API</span><strong>S4 - Goods Issue</strong></div>
                 </div>
                 <div className="sila-alert sila-alert--warning" role="status">
-                  Posting deducts SILA inventory for selected lines. ERP/SAP queue stays disabled until authorized (`SilaPos:QueueErpPosting`). Nothing posts automatically from upload or preview.
+                  Confirm posting runs Step 1 (local validate &amp; inventory update), Step 2 (SAP API post), then opens the Transaction Tracker with results. Nothing posts from upload or preview alone.
                 </div>
                 <div className="srec-actions">
                   <button type="button" className="sila-btn sila-btn--ghost" onClick={() => setTab("preview")}>Back to preview</button>
@@ -450,7 +457,7 @@ const SilaPosIntegration: React.FC<SilaPosIntegrationProps> = ({ canManage }) =>
               <SilaPosConfirm
                 heading="Confirm posting"
                 content={`Process ${selectedIds.length} selected line${selectedIds.length === 1 ? "" : "s"} from batch ${preview.batchNumber}?`}
-                description="SILA inventory will be deducted for matched lines. SAP/ERP queue follows server configuration and stays disabled until authorized."
+                description="Step 1 validates and updates SILA inventory locally. Step 2 calls the SAP API and posts the material document. Step 3 updates the Transaction Tracker with results and messages."
                 confirmText="Confirm posting"
                 busy={posting}
                 onConfirm={handleConfirmPost}
@@ -466,9 +473,10 @@ const SilaPosIntegration: React.FC<SilaPosIntegrationProps> = ({ canManage }) =>
               <h2 className="pstudio-panel__title">Posting results · {processResult.batchNumber}</h2>
               <div className="pstudio-kpis">
                 <div className="pstudio-kpi pstudio-kpi--sky"><span>Selected / accepted</span><strong>{processResult.accepted}</strong></div>
-                <div className="pstudio-kpi pstudio-kpi--mint"><span>Processed</span><strong>{processResult.processed}</strong></div>
-                <div className="pstudio-kpi pstudio-kpi--rose"><span>Failed</span><strong>{processResult.failed}</strong></div>
-                <div className="pstudio-kpi pstudio-kpi--amber"><span>Pending reconciliation (ERP unknown)</span><strong>{processResult.postingUnknown ?? 0}</strong></div>
+                <div className="pstudio-kpi pstudio-kpi--mint"><span>Step 1 · Local updated</span><strong>{processResult.localUpdated ?? processResult.processed}</strong></div>
+                <div className="pstudio-kpi pstudio-kpi--lavender"><span>Step 2 · SAP posted</span><strong>{processResult.sapPosted ?? 0}</strong></div>
+                <div className="pstudio-kpi pstudio-kpi--rose"><span>Failed (local or SAP)</span><strong>{processResult.failed + (processResult.sapFailed ?? 0)}</strong></div>
+                <div className="pstudio-kpi pstudio-kpi--amber"><span>Pending reconciliation</span><strong>{processResult.postingUnknown ?? 0}</strong></div>
               </div>
               {(processResult.postingUnknown ?? 0) > 0 && (
                 <div className="sila-alert sila-alert--warning" role="status">
@@ -477,7 +485,9 @@ const SilaPosIntegration: React.FC<SilaPosIntegrationProps> = ({ canManage }) =>
               )}
               <SilaPosImportSummary result={processResult} onClose={() => setProcessResult(null)} />
               <div className="srec-actions">
-                <button type="button" className="sila-btn sila-btn--secondary" onClick={() => setTab("tracker")}>Transaction Tracker</button>
+                <button type="button" className="sila-btn sila-btn--secondary" onClick={() => { setTrackerVersion((n) => n + 1); setTab("tracker"); }}>
+                  Open Transaction Tracker
+                </button>
                 <button type="button" className="sila-btn sila-btn--ghost" onClick={() => setTab("exceptions")}>Exceptions</button>
               </div>
             </section>
@@ -499,16 +509,22 @@ const SilaPosIntegration: React.FC<SilaPosIntegrationProps> = ({ canManage }) =>
         {tab === "tracker" && (
           <section className="pstudio-panel" data-testid="pstudio-tracker">
             <h2 className="pstudio-panel__title">Transaction Tracker</h2>
-            <p className="pstudio-panel__hint">Existing POS transaction lineage — upload → validate → deduct → ERP post → reconcile.</p>
+            <p className="pstudio-panel__hint">
+              Step 3 of POS sales consumption — local inventory, SAP material document, HTTP status, and history for every posted sale.
+            </p>
+            {processResult && (
+              <div className="pstudio-kpis" aria-label="Last posting summary">
+                <div className="pstudio-kpi pstudio-kpi--mint"><span>Step 1 · Local</span><strong>{processResult.localUpdated ?? processResult.processed}</strong></div>
+                <div className="pstudio-kpi pstudio-kpi--lavender"><span>Step 2 · SAP posted</span><strong>{processResult.sapPosted ?? 0}</strong></div>
+                <div className="pstudio-kpi pstudio-kpi--rose"><span>SAP failed</span><strong>{processResult.sapFailed ?? 0}</strong></div>
+                <div className="pstudio-kpi pstudio-kpi--amber"><span>Unknown</span><strong>{processResult.postingUnknown ?? 0}</strong></div>
+              </div>
+            )}
             <div className="pstudio-lifecycle" aria-label="POS posting journey">
               {[
-                ["Uploaded", "done"],
-                ["Validated", "done"],
-                ["Consumption", "pending"],
-                ["Confirmed", "pending"],
-                ["SAP Posted", "pending"],
-                ["SILA Reconciled", "pending"],
-                ["Completed", "pending"],
+                ["1 · Local validate & update", processResult ? "done" : "pending"],
+                ["2 · SAP API post", (processResult?.sapPosted ?? 0) > 0 ? "done" : (processResult?.sapFailed ?? 0) > 0 ? "failed" : processResult ? "pending" : "pending"],
+                ["3 · Tracker updated", processResult ? "done" : "pending"],
               ].map(([label, state], index, arr) => (
                 <React.Fragment key={label}>
                   <span className="pstudio-lifecycle__node" data-state={state}>{label}</span>
@@ -516,7 +532,7 @@ const SilaPosIntegration: React.FC<SilaPosIntegrationProps> = ({ canManage }) =>
                 </React.Fragment>
               ))}
             </div>
-            <SilaTransactionTracker />
+            <SilaTransactionTracker key={trackerVersion} />
           </section>
         )}
 

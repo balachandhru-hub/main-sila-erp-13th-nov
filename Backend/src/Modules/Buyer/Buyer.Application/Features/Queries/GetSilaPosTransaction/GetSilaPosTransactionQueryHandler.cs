@@ -104,8 +104,8 @@ namespace Buyer.Application.Features.Queries.GetSilaPosTransaction
             SilaPosTransactionDetailDto result = new SilaPosTransactionDetailDto
             {
                 Transaction = SilaPosTracker.ToDto(transaction, posting, location?.LocationName, recipe, batch?.BatchNumber, location?.LocationType),
-                ErpRequest = posting?.ErpRequestPayload,
-                ErpResponse = posting?.ErpResponsePayload,
+                ErpRequest = SilaErpPayload.Sanitise(posting?.ErpRequestPayload) ?? posting?.ErpRequestPayload,
+                ErpResponse = SilaErpPayload.Sanitise(posting?.ErpResponsePayload) ?? posting?.ErpResponsePayload,
                 ErpHttpStatus = posting?.ErpHttpStatus,
                 PosSourceName = sourceName,
                 BatchStatus = batch == null ? null : (string.IsNullOrWhiteSpace(batch.Status) ? Common.SILA_POS_BATCH_PROCESSED : batch.Status),
