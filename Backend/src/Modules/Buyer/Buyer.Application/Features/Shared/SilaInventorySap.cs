@@ -25,11 +25,11 @@ namespace Buyer.Application.Features.Shared
         public const string API_GOODS_ISSUE_LEGACY = "FIVE S4 - Goods Issue";
         public const string API_POSITIVE_ADJUSTMENT = "FIVE S4 - Positive Stock Adjustment";
 
-        /// <summary>
-        /// POS sales consumption and stock issue resolve only these Goods Issue configurations.
-        /// Never FIVE_POS_UPDATE / POS_UPDATE / a second POS-specific API.
-        /// </summary>
+        /// <summary>Non-POS goods issue configurations (S4 - Goods Issue). POS sales use <see cref="PosUpdateApiNames"/>.</summary>
         public static readonly string[] GoodsIssueApiNames = { API_GOODS_ISSUE, API_GOODS_ISSUE_LEGACY };
+
+        /// <summary>All POS sales postings (consumption and RETURN/VOID) use this Integration Setup name only.</summary>
+        public static readonly string[] PosUpdateApiNames = { SilaStockCountSap.API_CONFIG_NAME };
 
         /// <summary>Configurable POS MaterialDocumentHeaderText prefix (SAP length limit applied later).</summary>
         public const string POS_HEADER_PREFIX = "POSSALES";
@@ -60,11 +60,15 @@ namespace Buyer.Application.Features.Shared
         /// <summary>Non-POS goods issue (stock decrease) via S4 - Goods Issue with customer Z02 where configured.</summary>
         public static readonly Rule GoodsIssue = new Rule(API_GOODS_ISSUE, CODE_ISSUE, TYPE_Z02, false, increasesStock: false);
         /// <summary>
-        /// POS sales consumption: S4 - Goods Issue, GoodsMovementCode 03, GoodsMovementType Z01 (user-confirmed).
+        /// POS sales consumption via FIVE_POS_UPDATE: GoodsMovementCode 03, GoodsMovementType Z01.
         /// Stock decreases (IncreasesStock = false) even though the movement type is Z01.
         /// </summary>
-        public static readonly Rule PosConsumption = new Rule(API_GOODS_ISSUE, CODE_ISSUE, TYPE_Z01, false, increasesStock: false);
-        /// <summary>POS RETURN/VOID and positive stock adjustments restore stock (IN).</summary>
+        public static readonly Rule PosConsumption = new Rule(
+            SilaStockCountSap.API_CONFIG_NAME, CODE_ISSUE, TYPE_Z01, false, increasesStock: false);
+        /// <summary>POS RETURN/VOID via FIVE_POS_UPDATE restores stock (IN) with Z01.</summary>
+        public static readonly Rule PosReversal = new Rule(
+            SilaStockCountSap.API_CONFIG_NAME, CODE_ISSUE, TYPE_Z01, false, increasesStock: true);
+        /// <summary>Non-POS positive stock adjustments restore stock (IN).</summary>
         public static readonly Rule PositiveAdjustment = new Rule(API_POSITIVE_ADJUSTMENT, CODE_ISSUE, TYPE_Z01, false, increasesStock: true);
 
         /// <summary>OUT uses GoodsIssue (Z02) for non-POS; IN uses PositiveAdjustment (Z01).</summary>

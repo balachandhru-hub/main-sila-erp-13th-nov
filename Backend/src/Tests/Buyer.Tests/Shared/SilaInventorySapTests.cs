@@ -62,7 +62,8 @@ namespace Buyer.Tests.Shared
             Assert.Equal("S4 - Goods Issue", SilaInventorySap.API_GOODS_ISSUE);
             Assert.Equal(SilaInventorySap.API_GOODS_ISSUE, SilaInventorySap.GoodsIssue.ApiName);
             Assert.Contains(SilaInventorySap.API_GOODS_ISSUE, SilaInventorySap.GoodsIssueApiNames);
-            Assert.DoesNotContain("FIVE_POS_UPDATE", SilaInventorySap.GoodsIssueApiNames);
+            Assert.Contains(SilaStockCountSap.API_CONFIG_NAME, SilaInventorySap.PosUpdateApiNames);
+            Assert.Equal("FIVE_POS_UPDATE", SilaStockCountSap.API_CONFIG_NAME);
             Assert.Equal("Z02", line.GetProperty("GoodsMovementType").GetString());
             Assert.Equal("0.400", line.GetProperty("QuantityInEntryUnit").GetString());
             Assert.Equal("BTL", line.GetProperty("EntryUnit").GetString());
@@ -77,7 +78,7 @@ namespace Buyer.Tests.Shared
         }
 
         [Fact]
-        public void PosConsumption_UsesZ01ViaS4GoodsIssue_WithoutHardcodedCostCenter()
+        public void PosConsumption_UsesZ01ViaFivePosUpdate_WithoutHardcodedCostCenter()
         {
             ItemBuyerMaster materialA = Stock("1000001", "ML");
             ItemBuyerMaster materialB = Stock("1000000", "ML");
@@ -103,9 +104,10 @@ namespace Buyer.Tests.Shared
             Assert.Equal("03", json.RootElement.GetProperty("GoodsMovementCode").GetString());
             Assert.Equal("POSSALES2", json.RootElement.GetProperty("MaterialDocumentHeaderText").GetString());
             Assert.Equal("POS-FL10-100046", json.RootElement.GetProperty("ReferenceDocument").GetString());
-            Assert.Equal(SilaInventorySap.API_GOODS_ISSUE, SilaInventorySap.PosConsumption.ApiName);
+            Assert.Equal(SilaStockCountSap.API_CONFIG_NAME, SilaInventorySap.PosConsumption.ApiName);
+            Assert.Equal(SilaStockCountSap.API_CONFIG_NAME, SilaInventorySap.PosReversal.ApiName);
             Assert.False(SilaInventorySap.PosConsumption.IncreasesStock);
-            Assert.True(SilaInventorySap.PositiveAdjustment.IncreasesStock);
+            Assert.True(SilaInventorySap.PosReversal.IncreasesStock);
             JsonElement items = json.RootElement.GetProperty("to_MaterialDocumentItem").GetProperty("results");
             Assert.Equal(2, items.GetArrayLength());
             foreach (JsonElement line in items.EnumerateArray())

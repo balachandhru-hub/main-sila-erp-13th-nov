@@ -470,14 +470,14 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
 
             PosSalesTransaction? sale = sales.GetValueOrDefault(posting.ReferenceId);
             string movement = SilaPosReversal.MovementForSale(posting.MovementType, sale);
-            // POS SALE consumption: S4 - Goods Issue with Z01 / code 03. RETURN/VOID: Positive Adjustment (stock restore).
+            // All POS sales postings use FIVE_POS_UPDATE. SALE consumes (OUT/Z01); RETURN/VOID restores (IN/Z01).
             bool isReversal = sale != null && SilaPosReversal.IsReversal(sale.TransactionType);
-            SilaInventorySap.Rule rule = isReversal ? SilaInventorySap.PositiveAdjustment : SilaInventorySap.PosConsumption;
+            SilaInventorySap.Rule rule = isReversal ? SilaInventorySap.PosReversal : SilaInventorySap.PosConsumption;
             EffectPreparation prepared = await PrepareEffectAsync(
                 posting, pending.Select(x => x.ReferenceId).ToList(), headerLocation, headerProperty, rule, buyer.OrganizationId, cancellationToken,
-                preferPosUpdateApi: false,
-                preferPosReversalApi: isReversal,
-                useGoodsIssueNamesOnly: !isReversal,
+                preferPosUpdateApi: true,
+                preferPosReversalApi: false,
+                useGoodsIssueNamesOnly: false,
                 posSale: sale);
             string? body = prepared.Body;
             ApiIntegrationConfiguration? api = prepared.Api;
@@ -788,15 +788,15 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
                 return new EffectPreparation("The document has no lines to post.", null, null);
             }
 
-            // POS consumption (Z01 via PosConsumption) and Z02 goods issue: only S4 - Goods Issue.
-            // Stock-count may still prefer FIVE_POS_UPDATE via preferPosUpdateApi.
-            // POS RETURN/VOID may try POS_CONSUMPTION_REVERSAL then Positive Adjustment.
-            string[] apiNames = useGoodsIssueNamesOnly
-                || rule.ApiName == SilaInventorySap.API_GOODS_ISSUE
-                || rule.GoodsMovementType == SilaInventorySap.TYPE_Z02
-                ? SilaInventorySap.GoodsIssueApiNames
-                : preferPosUpdateApi
-                    ? new[] { SilaStockCountSap.API_CONFIG_NAME, rule.ApiName }
+            // POS sales (preferPosUpdateApi / PosConsumption / PosReversal): FIVE_POS_UPDATE only.
+            // Non-POS Z02 goods issue: S4 - Goods Issue. Stock-count may also prefer FIVE_POS_UPDATE.
+            string[] apiNames = preferPosUpdateApi
+                || rule.ApiName == SilaStockCountSap.API_CONFIG_NAME
+                ? SilaInventorySap.PosUpdateApiNames
+                : useGoodsIssueNamesOnly
+                    || rule.ApiName == SilaInventorySap.API_GOODS_ISSUE
+                    || rule.GoodsMovementType == SilaInventorySap.TYPE_Z02
+                    ? SilaInventorySap.GoodsIssueApiNames
                     : preferPosReversalApi
                         ? new[] { "POS_CONSUMPTION_REVERSAL", rule.ApiName }
                         : new[] { rule.ApiName };
@@ -807,9 +807,12 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
             api = active;
             if (api == null)
             {
-                string missingName = useGoodsIssueNamesOnly || rule.GoodsMovementType == SilaInventorySap.TYPE_Z02
-                    ? SilaInventorySap.API_GOODS_ISSUE
-                    : apiNames[0];
+                string missingName = preferPosUpdateApi || rule.ApiName == SilaStockCountSap.API_CONFIG_NAME
+                    ? SilaStockCountSap.API_CONFIG_NAME
+                    : useGoodsIssueNamesOnly || rule.GoodsMovementType == SilaInventorySap.TYPE_Z02
+                        ? SilaInventorySap.API_GOODS_ISSUE
+                        : apiNames[0];
+                // Persist the built payload even when the API config is missing so the tracker is never blank.
                 if (inactive != null)
                 {
                     return new EffectPreparation(SilaInventorySap.InactiveApi(inactive.Name), body, null);
