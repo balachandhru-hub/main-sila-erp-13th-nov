@@ -552,3 +552,9 @@
     grid-template-columns: 1fr;
   }
 }
+
+.srec-gi-cc { display: flex; flex-direction: column; gap: 1rem; padding: 1rem 0; }
+.srec-gi-cc__intro p { margin: 0; color: #5b7a99; font-size: 0.9rem; line-height: 1.45; }
+.srec-gi-cc__actions { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: flex-end; margin-left: auto; }
+.srec-gi-cc__form-actions { display: flex; gap: 0.5rem; justify-content: flex-end; grid-column: 1 / -1; margin-top: 0.5rem; }
+.sila-hint { display: block; margin-top: 0.25rem; color: #5b7a99; font-size: 0.75rem; }

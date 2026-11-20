@@ -728,6 +728,14 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
             }
 
             DateTime businessDate = transactions.Max(x => x.BusinessDate);
+            string? resolvedCostCenter = await SilaGoodsIssueCostCenterRules.ResolveAsync(
+                _repository,
+                posting.BuyerId,
+                location?.PropertyId ?? property?.Id,
+                property?.PlantCode,
+                location?.StorageLocationCode ?? location?.LocationCode,
+                location?.CostCenter,
+                cancellationToken);
             string? problem = SilaInventorySap.TryBuildEffect(
                 businessDate,
                 property?.PlantCode,
@@ -737,7 +745,7 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
                 conversions,
                 out body,
                 headerText: posting.ReferenceNumber,
-                costCenter: location?.CostCenter,
+                costCenter: resolvedCostCenter,
                 referenceDocument: posting.ReferenceNumber,
                 glAccount: location?.GlAccount);
             if (problem != null)

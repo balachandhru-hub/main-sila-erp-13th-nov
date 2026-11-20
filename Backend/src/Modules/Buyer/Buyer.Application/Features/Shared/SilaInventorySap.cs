@@ -164,7 +164,7 @@ namespace Buyer.Application.Features.Shared
                 SAP_API_CONFIGURATION_NOT_FOUND => "The SAP Goods Issue API is not configured under Integration Setup. No other API is used.",
                 SAP_API_CONFIGURATION_INACTIVE => "The SAP Goods Issue API exists but is not ACTIVE under Integration Setup.",
                 ALREADY_POSTED => "This stock movement already has an SAP material document.",
-                COST_CENTER_MISSING => "The outlet has no SAP cost center. Maintain CostCenter on the inventory location before posting Z01/Z02.",
+                COST_CENTER_MISSING => "The outlet has no SAP cost center. Maintain it under Recipe Master Data → Goods Issue Cost Centers (Property-Plant or Property-Plant-StorageLocation), or on the inventory location, before posting Z01/Z02.",
                 _ => "The stock movement cannot be posted."
             };
         }
