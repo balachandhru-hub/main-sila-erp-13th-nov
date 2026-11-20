@@ -1,4 +1,5 @@
 using Buyer.Application.Features.Shared;
+using Buyer.Domain.Entities;
 
 namespace Buyer.Tests.Shared
 {
@@ -37,6 +38,27 @@ namespace Buyer.Tests.Shared
             Assert.Contains("MM_IM_ODATA_API_MDOC/014", body);
             Assert.Null(SilaErpPayload.HttpBodyFromError("The ERP could not be reached."));
             Assert.Null(SilaErpPayload.HttpBodyFromError(null));
+        }
+
+        [Fact]
+        public void RememberRequest_NeverLeavesPosPostingBlank()
+        {
+            InventoryErpPosting posting = new InventoryErpPosting
+            {
+                Id = Guid.Parse("a2e2e805-f94a-4852-86c5-451fa8032536"),
+                ReferenceNumber = "100046",
+                MovementType = "Z01"
+            };
+            string stored = SilaPosErpPayload.RememberRequest(posting, null);
+            Assert.False(string.IsNullOrWhiteSpace(stored));
+            Assert.Equal(stored, posting.ErpRequestPayload);
+            Assert.Contains("a2e2e805-f94a-4852-86c5-451fa8032536", stored, StringComparison.OrdinalIgnoreCase);
+
+            string sapBody = "{\"PostingDate\":\"2026-11-20T00:00:00\",\"GoodsMovementCode\":\"03\",\"to_MaterialDocumentItem\":{\"results\":[{\"Material\":\"000000000000100000\",\"QuantityInEntryUnit\":\"60.000\",\"EntryUnit\":\"ML\",\"GoodsMovementType\":\"Z01\"}]}}";
+            string kept = SilaPosErpPayload.RememberRequest(posting, sapBody);
+            Assert.Contains("QuantityInEntryUnit", kept);
+            Assert.Contains("ML", kept);
+            Assert.Equal(kept, posting.ErpRequestPayload);
         }
     }
 }

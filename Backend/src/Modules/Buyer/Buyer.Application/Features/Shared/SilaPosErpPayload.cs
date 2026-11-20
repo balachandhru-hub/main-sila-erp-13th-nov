@@ -14,7 +14,8 @@ namespace Buyer.Application.Features.Shared
     public static class SilaPosErpPayload
     {
         /// <summary>
-        /// Returns the sanitised request payload, rebuilding and persisting it from ledger lines when missing.
+        /// Returns the request payload, rebuilding and persisting it when missing.
+        /// Never leaves the tracker blank when a posting exists: falls back to a diagnostic body.
         /// </summary>
         public static async Task<string?> EnsureRequestAsync(
             IRepositoryWrapper repository,
@@ -28,27 +29,38 @@ namespace Buyer.Application.Features.Shared
                 return null;
             }
 
-            string? existing = SilaErpPayload.Sanitise(posting.ErpRequestPayload) ?? posting.ErpRequestPayload;
+            string? existing = Store(posting.ErpRequestPayload);
             if (!string.IsNullOrWhiteSpace(existing))
             {
                 return existing;
             }
 
-            string? rebuilt = await RebuildRequestAsync(repository, buyerId, sale, posting, cancellationToken);
-            if (string.IsNullOrWhiteSpace(rebuilt))
-            {
-                return null;
-            }
-
+            string rebuilt = await RebuildRequestAsync(repository, buyerId, sale, posting, cancellationToken)
+                ?? BuildDiagnostic(sale, posting, "No RECIPE_CONSUMPTION ledger lines were found to rebuild the SAP request.");
             posting.ErpRequestPayload = rebuilt;
             if (string.IsNullOrWhiteSpace(posting.ErpResponsePayload))
             {
-                posting.ErpResponsePayload = SilaErpPayload.HttpBodyFromError(sale.FailureMessage ?? posting.ErrorMessage);
+                string? response = SilaErpPayload.HttpBodyFromError(sale.FailureMessage ?? posting.ErrorMessage);
+                if (!string.IsNullOrWhiteSpace(response))
+                {
+                    posting.ErpResponsePayload = response;
+                }
             }
 
             repository.InventoryErpPosting.Update(posting);
             await repository.SaveAsync();
             return rebuilt;
+        }
+
+        /// <summary>
+        /// Persists the exact body that is about to be (or was) sent to SAP onto every posting row.
+        /// </summary>
+        public static string RememberRequest(InventoryErpPosting posting, string? requestBody)
+        {
+            string stored = Store(requestBody)
+                ?? BuildDiagnosticBody(posting, "SAP request body was empty when the posting was recorded.");
+            posting.ErpRequestPayload = stored;
+            return stored;
         }
 
         /// <summary>Rebuilds the material-document JSON from RECIPE_CONSUMPTION lines + outlet/plant/CC setup.</summary>
@@ -96,7 +108,7 @@ namespace Buyer.Application.Features.Shared
 
             if (transferLines.Count == 0)
             {
-                return null;
+                return BuildDiagnostic(sale, posting, "Ingredient materials for the exploded sale could not be loaded.");
             }
 
             InventoryLocation? location = posting.LocationId == null
@@ -114,7 +126,7 @@ namespace Buyer.Application.Features.Shared
                 : !string.IsNullOrWhiteSpace(location?.LocationCode)
                     ? location!.LocationCode!.Trim()
                     : "UNMAPPED";
-            string? costCenter = string.IsNullOrWhiteSpace(location?.CostCenter) ? "UNMAPPED" : location!.CostCenter!.Trim();
+            string costCenter = string.IsNullOrWhiteSpace(location?.CostCenter) ? "UNMAPPED" : location!.CostCenter!.Trim();
 
             bool isReversal = SilaPosReversal.IsReversal(sale.TransactionType);
             SilaInventorySap.Rule rule = isReversal ? SilaInventorySap.PosReversal : SilaInventorySap.PosConsumption;
@@ -138,11 +150,66 @@ namespace Buyer.Application.Features.Shared
                 allowMissingConversion: true);
             if (problem == null && !string.IsNullOrWhiteSpace(body))
             {
-                return SilaErpPayload.Sanitise(body) ?? body;
+                return Store(body) ?? body;
             }
 
-            // Last resort: still show the lines that went (or would go) to SAP even if conversion failed.
-            return SilaErpPayload.Sanitise(BuildFallbackBody(documentDate, postingDate, plant, storage, costCenter, rule, transferLines, location?.GlAccount, posting.ReferenceNumber, sale.SourceTransactionId));
+            return Store(BuildFallbackBody(
+                documentDate,
+                postingDate,
+                plant,
+                storage,
+                costCenter,
+                rule,
+                transferLines,
+                location?.GlAccount,
+                posting.ReferenceNumber,
+                sale.SourceTransactionId)) ?? BuildDiagnostic(sale, posting, problem ?? "Could not serialise the SAP request.");
+        }
+
+        public static string? Store(string? body)
+        {
+            if (string.IsNullOrWhiteSpace(body))
+            {
+                return null;
+            }
+
+            return SilaErpPayload.Sanitise(body) ?? body.Trim();
+        }
+
+        private static string BuildDiagnostic(PosSalesTransaction sale, InventoryErpPosting posting, string detail)
+        {
+            return Store(JsonSerializer.Serialize(new Dictionary<string, object?>
+            {
+                ["note"] = "SILA rebuilt this request for the tracker because ErpRequestPayload was blank after the SAP call.",
+                ["detail"] = detail,
+                ["api"] = SilaStockCountSap.API_CONFIG_NAME,
+                ["postingId"] = posting.Id,
+                ["saleId"] = sale.Id,
+                ["posCode"] = sale.PosCode,
+                ["outletCode"] = sale.OutletCode,
+                ["quantitySold"] = sale.QuantitySold,
+                ["uom"] = sale.Uom,
+                ["businessDate"] = sale.BusinessDate.ToString("yyyy-MM-dd"),
+                ["sourceTransactionId"] = sale.SourceTransactionId,
+                ["referenceNumber"] = posting.ReferenceNumber,
+                ["movementType"] = posting.MovementType,
+                ["goodsMovementCode"] = SilaInventorySap.CODE_ISSUE,
+                ["errorMessage"] = posting.ErrorMessage ?? sale.FailureMessage
+            })) ?? detail;
+        }
+
+        private static string BuildDiagnosticBody(InventoryErpPosting posting, string detail)
+        {
+            return Store(JsonSerializer.Serialize(new Dictionary<string, object?>
+            {
+                ["note"] = "SILA recorded a diagnostic request payload because the HTTP body was blank.",
+                ["detail"] = detail,
+                ["api"] = posting.IntegrationSystem ?? SilaStockCountSap.API_CONFIG_NAME,
+                ["postingId"] = posting.Id,
+                ["referenceNumber"] = posting.ReferenceNumber,
+                ["movementType"] = posting.MovementType,
+                ["errorMessage"] = posting.ErrorMessage
+            })) ?? detail;
         }
 
         private static string BuildFallbackBody(
