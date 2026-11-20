@@ -24,6 +24,7 @@ import SilaRecipeExcelPanel from "./SilaRecipeExcelPanel";
 import SilaRecipeTable from "./SilaRecipeTable";
 import SilaRecipeWorkspaceShell from "./SilaRecipeWorkspaceShell";
 import { RECIPE_STATUSES, formatCost, recipeLabel } from "./recipeFormat";
+import { PRODUCT_CLASSES } from "./recipeHospitality";
 import {
   parseSilaRecipePath,
   silaRecipeCatalogPath,
@@ -56,6 +57,7 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({ canManage, canRequestPrice: _
   const [status, setStatus] = useState("");
   const [familyId, setFamilyId] = useState("");
   const [categoryId, setCategoryId] = useState("");
+  const [productClass, setProductClass] = useState("");
   const [itemMode, setItemMode] = useState("");
   const [search, setSearch] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
@@ -81,6 +83,7 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({ canManage, canRequestPrice: _
         status,
         familyId,
         categoryId,
+        productClass: productClass || undefined,
         itemMode: itemMode || undefined,
         search: appliedSearch,
         index: page - 1,
@@ -94,7 +97,7 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({ canManage, canRequestPrice: _
     } finally {
       setLoading(false);
     }
-  }, [status, familyId, categoryId, itemMode, appliedSearch, page]);
+  }, [status, familyId, categoryId, productClass, itemMode, appliedSearch, page]);
 
   useEffect(() => {
     if (route.kind === "list") load();
@@ -234,7 +237,7 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({ canManage, canRequestPrice: _
   }
 
   // --- Catalog ---
-  const filtered = Boolean(status || familyId || categoryId || itemMode || appliedSearch);
+  const filtered = Boolean(status || familyId || categoryId || productClass || itemMode || appliedSearch);
 
   return (
     <div className="sila-me srec-page rstudio-page">
@@ -300,29 +303,52 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({ canManage, canRequestPrice: _
         </div>
       </div>
 
-      <nav className="rstudio-cats" aria-label="Recipe categories">
+      <nav className="rstudio-cats" aria-label="Hospitality product classes" data-testid="recipe-product-class-tabs">
+        <button
+          type="button"
+          className={`rstudio-chip${!productClass ? " is-active" : ""}`}
+          onClick={() => { setProductClass(""); setCategoryId(""); setPage(1); }}
+        >
+          <StudioCover kind="other" compact title="All" />
+          All
+        </button>
+        {PRODUCT_CLASSES.map((cls) => (
+          <button
+            key={cls.id}
+            type="button"
+            className={`rstudio-chip${productClass === cls.id ? " is-active" : ""}`}
+            onClick={() => { setProductClass(cls.id); setCategoryId(""); setPage(1); }}
+          >
+            <StudioCover kind={resolveStudioKind(cls.label, cls.id)} compact title={cls.label} />
+            {cls.label}
+          </button>
+        ))}
+      </nav>
+
+      <nav className="rstudio-cats rstudio-cats--sub" aria-label="Recipe subcategories">
         <button
           type="button"
           className={`rstudio-chip${!categoryId ? " is-active" : ""}`}
           onClick={() => { setCategoryId(""); setPage(1); }}
         >
-          <StudioCover kind="other" compact title="All" />
-          All Recipes
+          All subcategories
         </button>
-        {categories.map((category) => {
-          const kind = resolveStudioKind(category.name, category.code);
-          return (
-            <button
-              key={category.id}
-              type="button"
-              className={`rstudio-chip${categoryId === category.id ? " is-active" : ""}`}
-              onClick={() => { setCategoryId(category.id); setPage(1); }}
-            >
-              <StudioCover kind={kind} compact title={category.name} />
-              {category.name}
-            </button>
-          );
-        })}
+        {categories
+          .filter((category) => !productClass || !category.productClass || category.productClass === productClass)
+          .map((category) => {
+            const kind = resolveStudioKind(category.name, category.code);
+            return (
+              <button
+                key={category.id}
+                type="button"
+                className={`rstudio-chip${categoryId === category.id ? " is-active" : ""}`}
+                onClick={() => { setCategoryId(category.id); setPage(1); }}
+              >
+                <StudioCover kind={kind} compact title={category.name} />
+                {category.name}
+              </button>
+            );
+          })}
       </nav>
 
       <section className="rstudio-toolbar sila-card">

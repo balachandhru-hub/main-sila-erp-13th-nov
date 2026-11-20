@@ -14,8 +14,21 @@ import {
   setRecipePicture,
   submitRecipe,
   updateRecipe,
+  type SilaProductClass,
   type SilaRecipeDetail,
+  type SilaRecipeFormat,
+  type SilaRecipeMode,
 } from "../../../api/silaMe/silaRecipeApi";
+import {
+  PRODUCT_CLASSES,
+  RECIPE_FORMATS,
+  RECIPE_TEMPLATES,
+  defaultFormatForMode,
+  defaultItemModeForClass,
+  showChefYieldFields,
+  showPourSizeHint,
+  type RecipeTemplate,
+} from "./recipeHospitality";
 import {
   getRecipeMasters,
   searchIngredients,
@@ -93,11 +106,21 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
   const [recipeCode, setRecipeCode] = useState("");
   const [familyId, setFamilyId] = useState("");
   const [categoryId, setCategoryId] = useState("");
+  const [productClass, setProductClass] = useState<SilaProductClass>("FOOD");
+  const [recipeFormat, setRecipeFormat] = useState<SilaRecipeFormat>("STANDARD_RECIPE");
+  const [itemMode, setItemMode] = useState<SilaRecipeMode>("RECIPE");
+  const [subcategory, setSubcategory] = useState("");
   const [cuisine, setCuisine] = useState("");
   const [mealPeriod, setMealPeriod] = useState("");
   const [yieldQty, setYieldQty] = useState("1");
   const [servingUom, setServingUom] = useState("EA");
   const [prepTime, setPrepTime] = useState("");
+  const [cookTime, setCookTime] = useState("");
+  const [trimLoss, setTrimLoss] = useState("");
+  const [cookingLoss, setCookingLoss] = useState("");
+  const [wasteFactor, setWasteFactor] = useState("");
+  const [preparationSteps, setPreparationSteps] = useState("");
+  const [editorMode, setEditorMode] = useState<"quick" | "advanced">("advanced");
   const [targetFoodCost, setTargetFoodCost] = useState(() => String(loadTargetFoodCostPercent()));
   const [classConfirmed, setClassConfirmed] = useState(false);
   const [menuItem, setMenuItem] = useState("");
@@ -168,11 +191,20 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
     setRecipeCode(form.recipeCode);
     setFamilyId(form.familyId);
     setCategoryId(form.categoryId);
+    setProductClass((form.productClass as SilaProductClass) || "FOOD");
+    setRecipeFormat((form.recipeFormat as SilaRecipeFormat) || "STANDARD_RECIPE");
+    setItemMode(form.itemMode);
+    setSubcategory(form.subcategory);
     setCuisine(form.cuisine);
     setMealPeriod(form.mealPeriod);
     setYieldQty(form.yieldQty);
     setServingUom(form.servingUom);
     setPrepTime(form.prepTime);
+    setCookTime(form.cookTime);
+    setTrimLoss(form.trimLoss);
+    setCookingLoss(form.cookingLoss);
+    setWasteFactor(form.wasteFactor);
+    setPreparationSteps(form.preparationSteps);
     setMenuItem(form.menuItem);
     setPosCode(form.posCode);
     setPosItem(form.posItem);
@@ -383,6 +415,24 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
     });
   };
 
+  const applyTemplate = (template: RecipeTemplate) => {
+    markDirty();
+    setProductClass(template.productClass);
+    setRecipeFormat(template.recipeFormat);
+    setItemMode(template.itemMode);
+    setSubcategory(template.subcategory);
+    setYieldQty(template.servingQty);
+    setServingUom(template.servingUom);
+    setClassConfirmed(true);
+    if (template.prepHint) setHelperNotice(template.prepHint);
+    const match = categories.find(
+      (category) =>
+        category.productClass === template.productClass
+        && category.name.toLowerCase() === template.subcategory.toLowerCase(),
+    );
+    if (match) setCategoryId(match.id);
+  };
+
   const buildRequest = () => {
     const posIdentity = defaultPosIdentity();
     const header = {
@@ -390,13 +440,22 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
       description: buildOptionalDescription(),
       familyId,
       categoryId,
-      itemMode: "RECIPE" as const,
+      itemMode,
+      productClass,
+      recipeFormat,
+      subcategory,
       servingQty: yieldQty,
       servingUom,
       sellingUom: loadedRecipe?.sellingUom || "EA",
       currency: currency || loadedRecipe?.currency || undefined,
       posCode: posIdentity,
       posItem: posIdentity,
+      trimLossPercent: trimLoss,
+      cookingLossPercent: cookingLoss,
+      wasteFactorPercent: wasteFactor,
+      prepTimeMinutes: prepTime,
+      cookTimeMinutes: cookTime,
+      preparationSteps,
     };
     const draftLines = lines.map((line) => ({
       materialId: line.material?.id ?? null,
@@ -832,6 +891,41 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
 
           <div className="rstudio-section rstudio-section--sky">
             <p className="rstudio-section__label">Recipe header</p>
+            <div className="rstudio-mode-toggle" role="group" aria-label="Creation mode">
+              <button
+                type="button"
+                className={`sila-btn sila-btn--sm${editorMode === "quick" ? " sila-btn--primary" : " sila-btn--secondary"}`}
+                disabled={!canEdit}
+                onClick={() => setEditorMode("quick")}
+              >
+                Quick mode
+              </button>
+              <button
+                type="button"
+                className={`sila-btn sila-btn--sm${editorMode === "advanced" ? " sila-btn--primary" : " sila-btn--secondary"}`}
+                disabled={!canEdit}
+                onClick={() => setEditorMode("advanced")}
+              >
+                Advanced mode
+              </button>
+            </div>
+            {!isEdit && canEdit && (
+              <div className="rstudio-templates" data-testid="recipe-templates">
+                <p className="rstudio-section__hint">Start from a template (saves as draft only):</p>
+                <div className="rstudio-template-row">
+                  {RECIPE_TEMPLATES.map((template) => (
+                    <button
+                      key={template.id}
+                      type="button"
+                      className="sila-btn sila-btn--secondary sila-btn--sm"
+                      onClick={() => applyTemplate(template)}
+                    >
+                      {template.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="rstudio-header-grid">
               <div className="rstudio-fields">
                 <div className="rstudio-field rstudio-field--wide">
@@ -861,6 +955,46 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
                   />
                 </div>
                 <div className="rstudio-field">
+                  <label htmlFor="rstudio-product-class">Product class</label>
+                  <select
+                    id="rstudio-product-class"
+                    value={productClass}
+                    disabled={!canEdit}
+                    onChange={(e) => {
+                      const next = e.target.value as SilaProductClass;
+                      setHeader(setProductClass, next);
+                      const mode = defaultItemModeForClass(next);
+                      setItemMode(mode);
+                      setRecipeFormat(defaultFormatForMode(mode));
+                      setClassConfirmed(true);
+                    }}
+                  >
+                    {PRODUCT_CLASSES.map((item) => (
+                      <option key={item.id} value={item.id}>{item.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="rstudio-field">
+                  <label htmlFor="rstudio-format">Recipe format</label>
+                  <select
+                    id="rstudio-format"
+                    value={recipeFormat}
+                    disabled={!canEdit}
+                    onChange={(e) => {
+                      const next = e.target.value as SilaRecipeFormat;
+                      const found = RECIPE_FORMATS.find((item) => item.id === next);
+                      setHeader(setRecipeFormat, next);
+                      if (found) setItemMode(found.itemMode);
+                      setClassConfirmed(true);
+                    }}
+                  >
+                    {RECIPE_FORMATS.map((item) => (
+                      <option key={item.id} value={item.id}>{item.label}</option>
+                    ))}
+                  </select>
+                </div>
+                {editorMode === "advanced" && (
+                <div className="rstudio-field">
                   <label htmlFor="rstudio-family">Family</label>
                   <select
                     id="rstudio-family"
@@ -877,6 +1011,7 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
                     ))}
                   </select>
                 </div>
+                )}
                 <div className="rstudio-field">
                   <label htmlFor="rstudio-category">Category</label>
                   <select
@@ -884,36 +1019,59 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
                     value={categoryId}
                     disabled={!canEdit}
                     onChange={(e) => {
-                      setHeader(setCategoryId, e.target.value);
+                      const id = e.target.value;
+                      setHeader(setCategoryId, id);
+                      const cat = categories.find((item) => item.id === id);
+                      if (cat?.productClass) {
+                        setProductClass(cat.productClass as SilaProductClass);
+                      }
+                      if (cat?.name) setSubcategory(cat.name);
                       setClassConfirmed(true);
                     }}
                   >
                     <option value="">Select category</option>
-                    {categories.map((item) => (
-                      <option key={item.id} value={item.id}>{item.name}</option>
-                    ))}
+                    {categories
+                      .filter((item) => !item.productClass || item.productClass === productClass)
+                      .map((item) => (
+                        <option key={item.id} value={item.id}>{item.name}</option>
+                      ))}
                   </select>
                 </div>
                 <div className="rstudio-field">
-                  <label htmlFor="rstudio-cuisine">Cuisine</label>
+                  <label htmlFor="rstudio-subcategory">Subcategory</label>
                   <input
-                    id="rstudio-cuisine"
-                    value={cuisine}
+                    id="rstudio-subcategory"
+                    value={subcategory}
                     placeholder="Optional"
                     disabled={!canEdit}
-                    onChange={(e) => setHeader(setCuisine, e.target.value)}
+                    onChange={(e) => setHeader(setSubcategory, e.target.value)}
+                    maxLength={100}
                   />
                 </div>
-                <div className="rstudio-field">
-                  <label htmlFor="rstudio-meal">Meal period</label>
-                  <input
-                    id="rstudio-meal"
-                    value={mealPeriod}
-                    placeholder="Optional"
-                    disabled={!canEdit}
-                    onChange={(e) => setHeader(setMealPeriod, e.target.value)}
-                  />
-                </div>
+                {editorMode === "advanced" && productClass === "FOOD" && (
+                  <>
+                    <div className="rstudio-field">
+                      <label htmlFor="rstudio-cuisine">Cuisine</label>
+                      <input
+                        id="rstudio-cuisine"
+                        value={cuisine}
+                        placeholder="Optional"
+                        disabled={!canEdit}
+                        onChange={(e) => setHeader(setCuisine, e.target.value)}
+                      />
+                    </div>
+                    <div className="rstudio-field">
+                      <label htmlFor="rstudio-meal">Meal period</label>
+                      <input
+                        id="rstudio-meal"
+                        value={mealPeriod}
+                        placeholder="Optional"
+                        disabled={!canEdit}
+                        onChange={(e) => setHeader(setMealPeriod, e.target.value)}
+                      />
+                    </div>
+                  </>
+                )}
                 <div className="rstudio-field">
                   <label htmlFor="rstudio-yield">Yield / portions</label>
                   <input
@@ -944,17 +1102,81 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
                     aria-invalid={Boolean(fieldErrors.serving)}
                   />
                   {fieldErrors.serving && <span className="rstudio-field-error">{fieldErrors.serving}</span>}
+                  {showPourSizeHint(productClass) && (
+                    <span className="rstudio-field-hint">Beverage pour sizes: use ML / L / EA as applicable.</span>
+                  )}
                 </div>
-                <div className="rstudio-field">
-                  <label htmlFor="rstudio-prep">Preparation time</label>
-                  <input
-                    id="rstudio-prep"
-                    value={prepTime}
-                    placeholder="e.g. 12 min (local note)"
-                    disabled={!canEdit}
-                    onChange={(e) => setHeader(setPrepTime, e.target.value)}
-                  />
-                </div>
+                {showChefYieldFields(productClass, recipeFormat, itemMode) && (
+                  <>
+                    <div className="rstudio-field">
+                      <label htmlFor="rstudio-prep">Prep time (min)</label>
+                      <input
+                        id="rstudio-prep"
+                        type="number"
+                        min="0"
+                        value={prepTime}
+                        placeholder="Minutes"
+                        disabled={!canEdit}
+                        onChange={(e) => setHeader(setPrepTime, e.target.value)}
+                      />
+                    </div>
+                    {editorMode === "advanced" && (
+                      <>
+                        <div className="rstudio-field">
+                          <label htmlFor="rstudio-cook">Cook time (min)</label>
+                          <input
+                            id="rstudio-cook"
+                            type="number"
+                            min="0"
+                            value={cookTime}
+                            placeholder="Minutes"
+                            disabled={!canEdit}
+                            onChange={(e) => setHeader(setCookTime, e.target.value)}
+                          />
+                        </div>
+                        <div className="rstudio-field">
+                          <label htmlFor="rstudio-trim">Trim loss %</label>
+                          <input
+                            id="rstudio-trim"
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="any"
+                            value={trimLoss}
+                            disabled={!canEdit}
+                            onChange={(e) => setHeader(setTrimLoss, e.target.value)}
+                          />
+                        </div>
+                        <div className="rstudio-field">
+                          <label htmlFor="rstudio-cooking-loss">Cooking loss %</label>
+                          <input
+                            id="rstudio-cooking-loss"
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="any"
+                            value={cookingLoss}
+                            disabled={!canEdit}
+                            onChange={(e) => setHeader(setCookingLoss, e.target.value)}
+                          />
+                        </div>
+                        <div className="rstudio-field">
+                          <label htmlFor="rstudio-waste">Waste factor %</label>
+                          <input
+                            id="rstudio-waste"
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="any"
+                            value={wasteFactor}
+                            disabled={!canEdit}
+                            onChange={(e) => setHeader(setWasteFactor, e.target.value)}
+                          />
+                        </div>
+                      </>
+                    )}
+                  </>
+                )}
               </div>
               <SilaRecipePicture
                 key={`studio-pic-${persistedEditId || "new"}-${pictureEpoch}`}
@@ -989,15 +1211,39 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
             )}
           </div>
 
+          {editorMode === "advanced" && showChefYieldFields(productClass, recipeFormat, itemMode) && (
+            <div className="rstudio-section rstudio-section--lavender">
+              <p className="rstudio-section__label">Preparation steps</p>
+              <p className="rstudio-panel__hint">
+                Inventory consumption = ingredient qty × (1 + trim%) × (1 + cooking%) × (1 + waste%), applied once per recipe level.
+              </p>
+              <textarea
+                className="sila-input rstudio-prep-steps"
+                rows={5}
+                value={preparationSteps}
+                placeholder={"1. Prep mise en place\n2. Cook\n3. Plate"}
+                disabled={!canEdit}
+                onChange={(e) => setHeader(setPreparationSteps, e.target.value)}
+              />
+            </div>
+          )}
+
           <div className="rstudio-section rstudio-section--canvas">
-            <p className="rstudio-section__label">Ingredient canvas</p>
+            <p className="rstudio-section__label">
+              {itemMode === "DIRECT" ? "Direct material mapping" : "Ingredient canvas"}
+            </p>
+            {itemMode === "DIRECT" && (
+              <p className="rstudio-panel__hint">
+                Minibar / tobacco / packaged items map one Material Master item — no multi-ingredient recipe required.
+              </p>
+            )}
             {fieldErrors.ingredients && (
               <div className="sila-alert sila-alert--warning" role="alert">{fieldErrors.ingredients}</div>
             )}
             <SilaRecipeCanvas
               lines={lines}
               costs={costs}
-              mode="RECIPE"
+              mode={itemMode}
               currency={currency}
               locked={!canEdit}
               onReorder={commitLines}

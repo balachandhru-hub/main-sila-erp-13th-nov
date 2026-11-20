@@ -47,6 +47,7 @@ namespace Buyer.API.Controllers
         public async Task<IActionResult> Recipes(
             [FromQuery] string? status,
             [FromQuery] string? itemMode,
+            [FromQuery] string? productClass,
             [FromQuery] string? search,
             [FromQuery] Guid? familyId,
             [FromQuery] Guid? categoryId,
@@ -54,7 +55,7 @@ namespace Buyer.API.Controllers
             [FromQuery] int index = 0,
             [FromQuery] int limit = 50)
         {
-            _logger.LogDebug($"Fetching recipes. Status: {status}, ItemMode: {itemMode}, Search: {search}, Index: {index}, Limit: {limit}");
+            _logger.LogDebug($"Fetching recipes. Status: {status}, ItemMode: {itemMode}, ProductClass: {productClass}, Search: {search}, Index: {index}, Limit: {limit}");
             SilaRecipePageDto result = await _mediator.Send(new GetSilaRecipesQuery
             {
                 OrganizationId = GetOrganizationId(),
@@ -62,6 +63,7 @@ namespace Buyer.API.Controllers
                 RoleId = GetRoleId(),
                 Status = status,
                 ItemMode = itemMode,
+                ProductClass = productClass,
                 Search = search,
                 FamilyId = familyId,
                 CategoryId = categoryId,

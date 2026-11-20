@@ -588,11 +588,14 @@ namespace Buyer.Application.Features.Shared
             }
 
             decimal scale = SaleFactor(recipe.ServingQty, factor);
+            // Apply trim/cooking/waste once at this recipe level for leaf materials only (sub-recipes apply their own).
+            decimal loss = SilaHospitalityRules.LossMultiplier(recipe);
             foreach (RecipeIngredient ingredient in ingredients)
             {
                 if (ingredient.MaterialId != null)
                 {
-                    quantities[ingredient.MaterialId.Value] = quantities.GetValueOrDefault(ingredient.MaterialId.Value) + ingredient.BaseQuantity * scale;
+                    quantities[ingredient.MaterialId.Value] = quantities.GetValueOrDefault(ingredient.MaterialId.Value)
+                        + ingredient.BaseQuantity * scale * loss;
                     continue;
                 }
 

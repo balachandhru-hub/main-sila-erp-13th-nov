@@ -229,6 +229,12 @@ namespace Buyer.Domain.Common
                 public const string SILA_RECIPE_APPROVED = "APPROVED";
                 public const string SILA_RECIPE_REJECTED = "REJECTED";
                 public const string SILA_RECIPE_INACTIVE = "INACTIVE";
+
+                /// <summary>Hospitality product class on Recipe.ProductClass (tenant categories remain free-form).</summary>
+                public const string SILA_PRODUCT_FOOD = "FOOD";
+                public const string SILA_PRODUCT_BEVERAGE = "BEVERAGE";
+                public const string SILA_PRODUCT_MINIBAR = "MINIBAR";
+                public const string SILA_PRODUCT_TOBACCO = "TOBACCO";
                 public const string SILA_APPROVAL_PENDING = "PENDING";
                 public const string SILA_APPROVAL_APPROVED = "APPROVED";
                 public const string SILA_APPROVAL_REJECTED = "REJECTED";

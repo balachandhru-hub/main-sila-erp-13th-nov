@@ -585,3 +585,10 @@
     order: 1;
   }
 }
+
+.rstudio-mode-toggle { display: flex; gap: 0.5rem; margin: 0 0 0.75rem; }
+.rstudio-templates { margin: 0 0 0.85rem; }
+.rstudio-template-row { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.rstudio-field-hint { display: block; margin-top: 0.25rem; color: #5b7a99; font-size: 0.75rem; }
+.rstudio-prep-steps { width: 100%; min-height: 6rem; resize: vertical; }
+.rstudio-cats--sub { margin-top: 0.35rem; opacity: 0.95; }
