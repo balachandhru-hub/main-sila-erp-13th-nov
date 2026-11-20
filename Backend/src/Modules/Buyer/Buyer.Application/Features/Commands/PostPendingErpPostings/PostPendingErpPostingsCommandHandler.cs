@@ -470,13 +470,15 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
 
             PosSalesTransaction? sale = sales.GetValueOrDefault(posting.ReferenceId);
             string movement = SilaPosReversal.MovementForSale(posting.MovementType, sale);
-            // POS sales consumption (Z02) uses only S4 - Goods Issue — never FIVE_POS_UPDATE or another POS API.
-            SilaInventorySap.Rule rule = movement == SilaInventorySap.TYPE_Z01 ? SilaInventorySap.PositiveAdjustment : SilaInventorySap.GoodsIssue;
+            // POS SALE consumption: S4 - Goods Issue with Z01 / code 03. RETURN/VOID: Positive Adjustment (stock restore).
+            bool isReversal = sale != null && SilaPosReversal.IsReversal(sale.TransactionType);
+            SilaInventorySap.Rule rule = isReversal ? SilaInventorySap.PositiveAdjustment : SilaInventorySap.PosConsumption;
             EffectPreparation prepared = await PrepareEffectAsync(
                 posting, pending.Select(x => x.ReferenceId).ToList(), headerLocation, headerProperty, rule, buyer.OrganizationId, cancellationToken,
                 preferPosUpdateApi: false,
-                preferPosReversalApi: movement == SilaInventorySap.TYPE_Z01,
-                useGoodsIssueNamesOnly: movement == SilaInventorySap.TYPE_Z02);
+                preferPosReversalApi: isReversal,
+                useGoodsIssueNamesOnly: !isReversal,
+                posSale: sale);
             string? body = prepared.Body;
             ApiIntegrationConfiguration? api = prepared.Api;
             if (prepared.Error != null || body == null || api == null)
@@ -694,11 +696,13 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
             CancellationToken cancellationToken,
             bool preferPosUpdateApi = false,
             bool preferPosReversalApi = false,
-            bool useGoodsIssueNamesOnly = false)
+            bool useGoodsIssueNamesOnly = false,
+            PosSalesTransaction? posSale = null)
         {
             string? body = null;
             ApiIntegrationConfiguration? api = null;
-            string direction = rule.GoodsMovementType == SilaInventorySap.TYPE_Z01 ? Common.SILA_DIRECTION_IN : Common.SILA_DIRECTION_OUT;
+            // Direction follows ledger impact, not movement-type letter (POS consumption is Z01 but OUT).
+            string direction = rule.IncreasesStock ? Common.SILA_DIRECTION_IN : Common.SILA_DIRECTION_OUT;
             List<InventoryTransaction> transactions = await _repository.InventoryTransaction
                 .FindByCondition(x => x.BuyerId == posting.BuyerId && x.IsActive
                     && x.ReferenceType == posting.ReferenceType
@@ -727,30 +731,56 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
                 lines.Add(new SilaInventorySap.TransferLine(material, transaction.Quantity, transaction.BaseUom));
             }
 
-            DateTime businessDate = transactions.Max(x => x.BusinessDate);
-            string? resolvedCostCenter = await SilaGoodsIssueCostCenterRules.ResolveAsync(
-                _repository,
-                posting.BuyerId,
-                location?.PropertyId ?? property?.Id,
-                property?.PlantCode,
-                location?.StorageLocationCode ?? location?.LocationCode,
-                location?.CostCenter,
-                cancellationToken);
+            DateTime businessDate = posSale?.BusinessDate
+                ?? transactions.Max(x => x.BusinessDate);
+            string? plant = string.IsNullOrWhiteSpace(property?.PlantCode) ? null : property!.PlantCode.Trim();
+            string? storage = !string.IsNullOrWhiteSpace(location?.StorageLocationCode)
+                ? location!.StorageLocationCode!.Trim()
+                : location?.LocationCode?.Trim();
+            // POS Cost Center is authoritative from Storage Location Setup (InventoryLocation.CostCenter) only.
+            string? costCenter = string.IsNullOrWhiteSpace(location?.CostCenter) ? null : location!.CostCenter!.Trim();
+            if (posting.ReferenceType == Common.SILA_REF_POS_SALE && string.IsNullOrWhiteSpace(costCenter))
+            {
+                return new EffectPreparation(SilaInventorySap.CostCenterMissingMessage(plant, storage), null, null);
+            }
+
+            if (posting.ReferenceType == Common.SILA_REF_POS_SALE && (string.IsNullOrWhiteSpace(plant) || string.IsNullOrWhiteSpace(storage)))
+            {
+                return new EffectPreparation(
+                    $"Plant or storage location is not mapped for the POS outlet. Maintain plant and storage location for outlet {location?.LocationCode ?? "(unknown)"} in Storage Location Setup.",
+                    null,
+                    null);
+            }
+
+            string? headerText = posting.ReferenceType == Common.SILA_REF_POS_SALE
+                ? SilaInventorySap.BuildPosHeaderText(posting.ReferenceNumber)
+                : posting.ReferenceNumber;
+            string? referenceDocument = posting.ReferenceType == Common.SILA_REF_POS_SALE
+                ? SilaInventorySap.BuildPosReferenceDocument(
+                    storage ?? location?.LocationCode,
+                    posSale?.SourceTransactionId ?? posting.ReferenceNumber)
+                : posting.ReferenceNumber;
+
             string? problem = SilaInventorySap.TryBuildEffect(
                 businessDate,
-                property?.PlantCode,
-                location?.StorageLocationCode,
+                plant,
+                storage,
                 rule,
                 lines,
                 conversions,
                 out body,
-                headerText: posting.ReferenceNumber,
-                costCenter: resolvedCostCenter,
-                referenceDocument: posting.ReferenceNumber,
+                headerText: headerText,
+                costCenter: costCenter,
+                referenceDocument: referenceDocument,
                 glAccount: location?.GlAccount);
             if (problem != null)
             {
-                return new EffectPreparation(SilaInventorySap.Failure(problem), null, null);
+                string message = problem == SilaInventorySap.COST_CENTER_MISSING
+                    ? SilaInventorySap.CostCenterMissingMessage(plant, storage)
+                    : problem == SilaInventorySap.INVENTORY_LOCATION_MAPPING_MISSING
+                        ? $"Plant or storage location is not mapped for the POS outlet. Maintain plant and storage location for outlet {location?.LocationCode ?? "(unknown)"} in Storage Location Setup."
+                        : SilaInventorySap.Failure(problem);
+                return new EffectPreparation(message, null, null);
             }
 
             if (body == null)
@@ -758,10 +788,12 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
                 return new EffectPreparation("The document has no lines to post.", null, null);
             }
 
-            // POS Z02: only S4 - Goods Issue (plus legacy name). Never FIVE_POS_UPDATE / a POS-specific API.
+            // POS consumption (Z01 via PosConsumption) and Z02 goods issue: only S4 - Goods Issue.
             // Stock-count may still prefer FIVE_POS_UPDATE via preferPosUpdateApi.
-            // POS Z01 reversal may try POS_CONSUMPTION_REVERSAL then Positive Adjustment.
-            string[] apiNames = useGoodsIssueNamesOnly || rule.GoodsMovementType == SilaInventorySap.TYPE_Z02
+            // POS RETURN/VOID may try POS_CONSUMPTION_REVERSAL then Positive Adjustment.
+            string[] apiNames = useGoodsIssueNamesOnly
+                || rule.ApiName == SilaInventorySap.API_GOODS_ISSUE
+                || rule.GoodsMovementType == SilaInventorySap.TYPE_Z02
                 ? SilaInventorySap.GoodsIssueApiNames
                 : preferPosUpdateApi
                     ? new[] { SilaStockCountSap.API_CONFIG_NAME, rule.ApiName }

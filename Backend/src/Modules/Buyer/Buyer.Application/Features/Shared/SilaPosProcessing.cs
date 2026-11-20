@@ -252,7 +252,7 @@ namespace Buyer.Application.Features.Shared
 
                 if (queueErpPosting)
                 {
-                    // The ledger lines are the recipe explosion (or the single DIRECT material). Z02 consumes, Z01 returns stock.
+                    // Recipe explosion ledger lines. POS consumption posts as Z01 via S4 - Goods Issue (user-confirmed).
                     InventoryErpPosting posting = ledger.QueueErpPosting(
                         Common.SILA_REF_POS_SALE,
                         transaction.Id,

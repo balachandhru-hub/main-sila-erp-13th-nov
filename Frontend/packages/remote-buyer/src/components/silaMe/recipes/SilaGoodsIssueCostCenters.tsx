@@ -152,9 +152,9 @@ const SilaGoodsIssueCostCenters: React.FC<SilaGoodsIssueCostCentersProps> = ({ c
     <div className="srec-gi-cc" data-testid="goods-issue-cost-centers">
       <div className="srec-gi-cc__intro">
         <p>
-          Maintain SAP cost centers used for Goods Issue (Z02) recipe / POS consumption.
-          Storage-level mappings override plant-level. Example: Property <strong>1060</strong>, Plant{" "}
-          <strong>1060</strong>, Storage <strong>FL10</strong> → Cost center <strong>1060050124</strong>.
+          Optional plant/storage cost-center helpers. <strong>POS consumption uses Cost Center from Storage Location Setup</strong>
+          {" "}(Inventory Location → Cost Center) as the authoritative source. Saving a STORAGE mapping here also syncs that
+          location&apos;s Cost Center (e.g. Plant <strong>1060</strong> / FL10 → <strong>1060050124</strong>).
         </p>
       </div>
 

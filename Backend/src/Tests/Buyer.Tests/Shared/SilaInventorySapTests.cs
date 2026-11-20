@@ -77,12 +77,61 @@ namespace Buyer.Tests.Shared
         }
 
         [Fact]
+        public void PosConsumption_UsesZ01ViaS4GoodsIssue_WithoutHardcodedCostCenter()
+        {
+            ItemBuyerMaster materialA = Stock("1000001", "ML");
+            ItemBuyerMaster materialB = Stock("1000000", "ML");
+            string? problem = SilaInventorySap.TryBuildEffect(
+                new DateTime(2026, 11, 20),
+                "1060",
+                "FL10",
+                SilaInventorySap.PosConsumption,
+                new[]
+                {
+                    new SilaInventorySap.TransferLine(materialA, 30m, "ML"),
+                    new SilaInventorySap.TransferLine(materialB, 60m, "ML")
+                },
+                new Dictionary<Guid, List<MaterialUomConversion>>(),
+                out string? body,
+                headerText: SilaInventorySap.BuildPosHeaderText("2"),
+                costCenter: "1060050124",
+                referenceDocument: SilaInventorySap.BuildPosReferenceDocument("FL10", "100046"));
+
+            Assert.Null(problem);
+            Assert.NotNull(body);
+            using JsonDocument json = JsonDocument.Parse(body!);
+            Assert.Equal("03", json.RootElement.GetProperty("GoodsMovementCode").GetString());
+            Assert.Equal("POSSALES2", json.RootElement.GetProperty("MaterialDocumentHeaderText").GetString());
+            Assert.Equal("POS-FL10-100046", json.RootElement.GetProperty("ReferenceDocument").GetString());
+            Assert.Equal(SilaInventorySap.API_GOODS_ISSUE, SilaInventorySap.PosConsumption.ApiName);
+            Assert.False(SilaInventorySap.PosConsumption.IncreasesStock);
+            Assert.True(SilaInventorySap.PositiveAdjustment.IncreasesStock);
+            JsonElement items = json.RootElement.GetProperty("to_MaterialDocumentItem").GetProperty("results");
+            Assert.Equal(2, items.GetArrayLength());
+            foreach (JsonElement line in items.EnumerateArray())
+            {
+                Assert.Equal("Z01", line.GetProperty("GoodsMovementType").GetString());
+                Assert.Equal("1060", line.GetProperty("Plant").GetString());
+                Assert.Equal("FL10", line.GetProperty("StorageLocation").GetString());
+                Assert.Equal("1060050124", line.GetProperty("CostCenter").GetString());
+            }
+
+            Assert.Contains(
+                "Storage Location Setup",
+                SilaInventorySap.CostCenterMissingMessage("1060", "FL10"));
+            Assert.DoesNotContain("1060050124", SilaInventorySap.CostCenterMissingMessage("1060", "FL10"));
+        }
+
+        [Fact]
         public void Effect_RoutesAPositiveCorrectionToZ01AndRefusesAMissingUnit()
         {
-            Assert.Equal("Z02", SilaInventorySap.MovementForSale(null, 10m));
+            // POS consumption (and returns) queue as Z01; API selection uses transaction type + IncreasesStock.
+            Assert.Equal("Z01", SilaInventorySap.MovementForSale(null, 10m));
             Assert.Equal("Z01", SilaInventorySap.MovementForSale(null, -2m));
             Assert.Equal(SilaInventorySap.API_POSITIVE_ADJUSTMENT, SilaInventorySap.ForDirection(Common.SILA_DIRECTION_IN).ApiName);
             Assert.Equal(SilaInventorySap.API_GOODS_ISSUE, SilaInventorySap.ForDirection(Common.SILA_DIRECTION_OUT).ApiName);
+            Assert.Equal(SilaInventorySap.TYPE_Z01, SilaInventorySap.PosConsumption.GoodsMovementType);
+            Assert.Equal("03", SilaInventorySap.PosConsumption.GoodsMovementCode);
 
             ItemBuyerMaster material = Stock("MAT-1", "BTL");
             material.BaseUnitOfMeasure = "";
