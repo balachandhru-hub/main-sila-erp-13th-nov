@@ -387,14 +387,18 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
         /// </summary>
         private async Task<string> PostConsumptionGroupAsync(InventoryErpPosting posting, CancellationToken cancellationToken)
         {
-            List<InventoryErpPosting> related = await _repository.InventoryErpPosting
+            // FindByCondition is AsNoTracking. Re-querying the already-tracked `posting` yields a second
+            // CLR instance; InventoryErpPosting.Update on that clone throws. Keep the tracked instance.
+            List<InventoryErpPosting> related = (await _repository.InventoryErpPosting
                 .FindByCondition(x => x.BuyerId == posting.BuyerId && x.IsActive
                     && x.ReferenceType == Common.SILA_REF_POS_SALE
                     && (x.MovementType == Common.SILA_MOVEMENT_CONSUMPTION
                         || x.MovementType == SilaInventorySap.TYPE_Z01
                         || x.MovementType == SilaInventorySap.TYPE_Z02)
                     && (x.Status == Common.SILA_POSTING_PENDING || x.Status == Common.SILA_POSTING_UNKNOWN || x.Status == Common.SILA_POSTING_POSTED))
-                .ToListAsync(cancellationToken);
+                .ToListAsync(cancellationToken))
+                .Select(x => x.Id == posting.Id ? posting : x)
+                .ToList();
             List<Guid> saleIds = related.Select(x => x.ReferenceId).Distinct().ToList();
             Dictionary<Guid, PosSalesTransaction> sales = saleIds.Count == 0
                 ? new Dictionary<Guid, PosSalesTransaction>()
