@@ -67,6 +67,7 @@ namespace Buyer.Application.Features.Commands.SendIntegrationRequest
             {
                 // Empty body = no content (OData function imports such as CreateUrlAsAttachment).
                 string? requestBody = string.IsNullOrWhiteSpace(request.Body) ? null : request.Body;
+                result.RequestBody = requestBody;
                 using HttpResponseMessage response = await _executor.SendOnceAsync(
                     configuration,
                     _executor.ResourceUrl(configuration),

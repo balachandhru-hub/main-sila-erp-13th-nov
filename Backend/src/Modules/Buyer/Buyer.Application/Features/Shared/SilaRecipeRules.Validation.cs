@@ -172,6 +172,19 @@ namespace Buyer.Application.Features.Shared
 
             recipe.CategoryId = request.CategoryId;
             recipe.Category = categoryName;
+
+            // When the write omits ProductClass, inherit from the category master if set.
+            if (string.IsNullOrWhiteSpace(request.ProductClass))
+            {
+                string? categoryClass = await repository.RecipeCategory
+                    .FindByCondition(x => x.Id == request.CategoryId && x.BuyerId == buyerId)
+                    .Select(x => x.ProductClass)
+                    .FirstOrDefaultAsync(cancellationToken);
+                if (!string.IsNullOrWhiteSpace(categoryClass) && string.IsNullOrWhiteSpace(recipe.ProductClass))
+                {
+                    recipe.ProductClass = categoryClass.Trim().ToUpperInvariant();
+                }
+            }
         }
 
         /// <summary>Retires (IsActive = false) the ingredient and price rows of one version before it is rewritten.</summary>

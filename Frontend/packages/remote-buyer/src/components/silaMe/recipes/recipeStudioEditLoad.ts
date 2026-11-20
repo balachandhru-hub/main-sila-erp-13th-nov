@@ -7,11 +7,20 @@ export interface StudioLoadedForm {
   recipeCode: string;
   familyId: string;
   categoryId: string;
+  productClass: string;
+  recipeFormat: string;
+  subcategory: string;
+  itemMode: "DIRECT" | "RECIPE" | "BATCH";
   cuisine: string;
   mealPeriod: string;
   yieldQty: string;
   servingUom: string;
   prepTime: string;
+  cookTime: string;
+  trimLoss: string;
+  cookingLoss: string;
+  wasteFactor: string;
+  preparationSteps: string;
   menuItem: string;
   posCode: string;
   posItem: string;
@@ -35,11 +44,20 @@ export const formFromRecipeDetail = (
     recipeCode: detail.recipeCode ?? "",
     familyId: detail.familyId ?? "",
     categoryId: detail.categoryId ?? "",
+    productClass: detail.productClass ?? "FOOD",
+    recipeFormat: detail.recipeFormat ?? "STANDARD_RECIPE",
+    subcategory: detail.subcategory ?? "",
+    itemMode: detail.itemMode ?? "RECIPE",
     cuisine: notes.cuisine,
     mealPeriod: notes.mealPeriod,
     yieldQty: String(detail.servingQty ?? 1),
     servingUom: detail.servingUom || "EA",
-    prepTime: notes.prepTime,
+    prepTime: detail.prepTimeMinutes != null ? String(detail.prepTimeMinutes) : notes.prepTime,
+    cookTime: detail.cookTimeMinutes != null ? String(detail.cookTimeMinutes) : "",
+    trimLoss: detail.trimLossPercent != null ? String(detail.trimLossPercent) : "",
+    cookingLoss: detail.cookingLossPercent != null ? String(detail.cookingLossPercent) : "",
+    wasteFactor: detail.wasteFactorPercent != null ? String(detail.wasteFactorPercent) : "",
+    preparationSteps: detail.preparationSteps ?? "",
     menuItem: pos.menuItem || notes.menuItem,
     posCode: pos.posCode,
     posItem: pos.posItem,

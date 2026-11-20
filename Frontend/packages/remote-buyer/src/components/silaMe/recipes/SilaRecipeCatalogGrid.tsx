@@ -1,6 +1,7 @@
 import React from "react";
 import type { SilaRecipeListItem } from "../../../api/silaMe/silaRecipeApi";
 import { costPerServing, formatCost, formatQty, recipeBadgeClass, recipeLabel } from "./recipeFormat";
+import { formatProductClassLabel } from "./recipeHospitality";
 import SilaRecipePicture from "./SilaRecipePicture";
 
 interface SilaRecipeCatalogGridProps {
@@ -39,6 +40,8 @@ const SilaRecipeCatalogGrid: React.FC<SilaRecipeCatalogGridProps> = ({ rows, can
             </h3>
             <p className="rstudio-card__meta">
               {row.recipeCode}
+              {row.productClass ? ` · ${formatProductClassLabel(row.productClass)}` : ""}
+              {row.recipeFormat ? ` · ${row.recipeFormat.replace(/_/g, " ")}` : ""}
               {row.category ? ` · ${row.category}` : ""}
               {row.familyName ? ` · ${row.familyName}` : ""}
               {row.posCode ? ` · POS ${row.posCode}` : ""}

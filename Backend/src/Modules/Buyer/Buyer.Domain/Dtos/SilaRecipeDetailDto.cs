@@ -12,6 +12,17 @@ namespace Buyer.Domain.Dtos
         public Guid? CategoryId { get; set; }
         public string? CategoryName { get; set; }
         public string ItemMode { get; set; } = string.Empty;
+        /// <summary>FOOD | BEVERAGE | MINIBAR | TOBACCO (inferred when unset on legacy rows).</summary>
+        public string ProductClass { get; set; } = string.Empty;
+        /// <summary>STANDARD_RECIPE | DIRECT_ITEM | BATCH_RECIPE | SUB_RECIPE | COMBO | VARIANT_RECIPE</summary>
+        public string RecipeFormat { get; set; } = string.Empty;
+        public string? Subcategory { get; set; }
+        public decimal? TrimLossPercent { get; set; }
+        public decimal? CookingLossPercent { get; set; }
+        public decimal? WasteFactorPercent { get; set; }
+        public int? PrepTimeMinutes { get; set; }
+        public int? CookTimeMinutes { get; set; }
+        public string? PreparationSteps { get; set; }
         public decimal ServingQty { get; set; }
         public string ServingUom { get; set; } = string.Empty;
         public string SellingUom { get; set; } = string.Empty;

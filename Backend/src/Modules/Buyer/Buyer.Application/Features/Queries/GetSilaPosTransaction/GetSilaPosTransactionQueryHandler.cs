@@ -60,6 +60,16 @@ namespace Buyer.Application.Features.Queries.GetSilaPosTransaction
                 : await _repository.InventoryErpPosting
                     .FindByCondition(x => x.Id == transaction.ErpPostingId.Value && x.BuyerId == buyer.Id)
                     .FirstOrDefaultAsync(cancellationToken);
+            if (posting == null)
+            {
+                posting = await _repository.InventoryErpPosting
+                    .FindByCondition(x => x.BuyerId == buyer.Id && x.IsActive
+                        && x.ReferenceType == Common.SILA_REF_POS_SALE
+                        && x.ReferenceId == transaction.Id)
+                    .OrderByDescending(x => x.DateUpdated)
+                    .FirstOrDefaultAsync(cancellationToken);
+            }
+
             InventoryLocation? location = transaction.OutletLocationId == null
                 ? null
                 : await _repository.InventoryLocation
@@ -101,11 +111,16 @@ namespace Buyer.Application.Features.Queries.GetSilaPosTransaction
             List<IdentityUserDto> users = userIds.Count == 0 ? new List<IdentityUserDto>() : await _identityApiClient.GetUsersByIds(userIds, cancellationToken);
             Func<Guid, string?> nameOf = id => id == Guid.Empty ? "Scheduler" : users.FirstOrDefault(u => u.UserId == id)?.Name;
 
+            string? erpRequest = await SilaPosErpPayload.EnsureRequestAsync(_repository, buyer.Id, transaction, posting, cancellationToken);
+            string? erpResponse = SilaErpPayload.Sanitise(posting?.ErpResponsePayload)
+                ?? SilaErpPayload.HttpBodyFromError(posting?.ErrorMessage ?? transaction.FailureMessage)
+                ?? posting?.ErpResponsePayload;
+
             SilaPosTransactionDetailDto result = new SilaPosTransactionDetailDto
             {
                 Transaction = SilaPosTracker.ToDto(transaction, posting, location?.LocationName, recipe, batch?.BatchNumber, location?.LocationType),
-                ErpRequest = SilaErpPayload.Sanitise(posting?.ErpRequestPayload) ?? posting?.ErpRequestPayload,
-                ErpResponse = SilaErpPayload.Sanitise(posting?.ErpResponsePayload) ?? posting?.ErpResponsePayload,
+                ErpRequest = erpRequest,
+                ErpResponse = erpResponse,
                 ErpHttpStatus = posting?.ErpHttpStatus,
                 PosSourceName = sourceName,
                 BatchStatus = batch == null ? null : (string.IsNullOrWhiteSpace(batch.Status) ? Common.SILA_POS_BATCH_PROCESSED : batch.Status),

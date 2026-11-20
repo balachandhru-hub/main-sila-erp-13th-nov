@@ -97,6 +97,8 @@ export interface SilaRecipeMaster {
   code: string;
   name: string;
   description?: string | null;
+  /** FOOD | BEVERAGE | MINIBAR | TOBACCO when this is a category. */
+  productClass?: string | null;
   recipeCount: number;
   /** ACTIVE | INACTIVE */
   status?: string;

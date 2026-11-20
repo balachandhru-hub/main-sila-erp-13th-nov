@@ -434,7 +434,7 @@ const SilaPosIntegration: React.FC<SilaPosIntegrationProps> = ({ canManage }) =>
                   <div className="pstudio-kpi pstudio-kpi--mint"><span>Ready in batch</span><strong>{preview.readyToProcess}</strong></div>
                   <div className="pstudio-kpi pstudio-kpi--lavender"><span>Total materials</span><strong>{consumption?.lines.reduce((n, line) => n + line.ingredientCount, 0) ?? "Preview first"}</strong></div>
                   <div className="pstudio-kpi pstudio-kpi--sky"><span>Estimated cost</span><strong>{consumption?.totalConsumptionCost ?? "—"}</strong></div>
-                  <div className="pstudio-kpi pstudio-kpi--amber"><span>SAP API</span><strong>S4 - Goods Issue</strong></div>
+                  <div className="pstudio-kpi pstudio-kpi--amber"><span>SAP API</span><strong>FIVE_POS_UPDATE · Z01 / 03</strong></div>
                 </div>
                 <div className="sila-alert sila-alert--warning" role="status">
                   Confirm posting runs Step 1 (local validate &amp; inventory update), Step 2 (SAP API post), then opens the Transaction Tracker with results. Nothing posts from upload or preview alone.

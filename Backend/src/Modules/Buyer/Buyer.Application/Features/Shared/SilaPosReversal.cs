@@ -41,7 +41,11 @@ namespace Buyer.Application.Features.Shared
                 : Common.SILA_DIRECTION_OUT;
         }
 
-        /// <summary>Z02 consumes; Z01 restores. Prefer stored movement, then RETURN/VOID, then quantity sign.</summary>
+        /// <summary>
+        /// POS SALE consumption and RETURN/VOID both use movement type Z01 in this tenant's SAP profile.
+        /// SALE posts via S4 - Goods Issue (stock out); RETURN/VOID via Positive Adjustment (stock in).
+        /// Prefer the stored MovementType when already queued.
+        /// </summary>
         public static string MovementForSale(string? movementType, PosSalesTransaction? sale)
         {
             if (movementType == SilaInventorySap.TYPE_Z01 || movementType == SilaInventorySap.TYPE_Z02)
@@ -49,12 +53,7 @@ namespace Buyer.Application.Features.Shared
                 return movementType;
             }
 
-            if (sale != null && IsReversal(sale.TransactionType))
-            {
-                return SilaInventorySap.TYPE_Z01;
-            }
-
-            return SilaInventorySap.MovementForSale(null, sale?.QuantitySold ?? 0m);
+            return SilaInventorySap.TYPE_Z01;
         }
 
         /// <summary>

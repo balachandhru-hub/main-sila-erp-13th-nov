@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Linq;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Buyer.Domain.Common;
@@ -18,17 +19,20 @@ namespace Buyer.Application.Features.Shared
     {
         public const string API_TRANSFER = "FIVE S4 - Transfer Stock";
         public const string API_PLANT_TRANSFER = "FIVE S4 - Plant Transfer Stock";
-        /// <summary>Canonical Integration Setup name for Z02 goods issue / POS sales consumption.</summary>
+        /// <summary>Canonical Integration Setup name for Goods Issue (POS sales consumption uses this with Z01).</summary>
         public const string API_GOODS_ISSUE = "S4 - Goods Issue";
         /// <summary>Legacy display name still accepted when resolving the same Goods Issue connector.</summary>
         public const string API_GOODS_ISSUE_LEGACY = "FIVE S4 - Goods Issue";
         public const string API_POSITIVE_ADJUSTMENT = "FIVE S4 - Positive Stock Adjustment";
 
-        /// <summary>
-        /// POS sales consumption and stock issue resolve only these Goods Issue configurations.
-        /// Never FIVE_POS_UPDATE / POS_UPDATE / a second POS-specific API.
-        /// </summary>
+        /// <summary>Non-POS goods issue configurations (S4 - Goods Issue). POS sales use <see cref="PosUpdateApiNames"/>.</summary>
         public static readonly string[] GoodsIssueApiNames = { API_GOODS_ISSUE, API_GOODS_ISSUE_LEGACY };
+
+        /// <summary>All POS sales postings (consumption and RETURN/VOID) use this Integration Setup name only.</summary>
+        public static readonly string[] PosUpdateApiNames = { SilaStockCountSap.API_CONFIG_NAME };
+
+        /// <summary>Configurable POS MaterialDocumentHeaderText prefix (SAP length limit applied later).</summary>
+        public const string POS_HEADER_PREFIX = "POSSALES";
 
         public const string CODE_TRANSFER = "04";
         public const string CODE_ISSUE = "03";
@@ -53,16 +57,30 @@ namespace Buyer.Application.Features.Shared
 
         public static readonly Rule SamePlantTransfer = new Rule(API_TRANSFER, CODE_TRANSFER, TYPE_311, false);
         public static readonly Rule PlantTransfer = new Rule(API_PLANT_TRANSFER, CODE_TRANSFER, TYPE_301, true);
-        public static readonly Rule GoodsIssue = new Rule(API_GOODS_ISSUE, CODE_ISSUE, TYPE_Z02, false);
-        public static readonly Rule PositiveAdjustment = new Rule(API_POSITIVE_ADJUSTMENT, CODE_ISSUE, TYPE_Z01, false);
+        /// <summary>Non-POS goods issue (stock decrease) via S4 - Goods Issue with customer Z02 where configured.</summary>
+        public static readonly Rule GoodsIssue = new Rule(API_GOODS_ISSUE, CODE_ISSUE, TYPE_Z02, false, increasesStock: false);
+        /// <summary>
+        /// POS sales consumption via FIVE_POS_UPDATE: GoodsMovementCode 03, GoodsMovementType Z01.
+        /// Stock decreases (IncreasesStock = false) even though the movement type is Z01.
+        /// </summary>
+        public static readonly Rule PosConsumption = new Rule(
+            SilaStockCountSap.API_CONFIG_NAME, CODE_ISSUE, TYPE_Z01, false, increasesStock: false);
+        /// <summary>POS RETURN/VOID via FIVE_POS_UPDATE restores stock (IN) with Z01.</summary>
+        public static readonly Rule PosReversal = new Rule(
+            SilaStockCountSap.API_CONFIG_NAME, CODE_ISSUE, TYPE_Z01, false, increasesStock: true);
+        /// <summary>Non-POS positive stock adjustments restore stock (IN).</summary>
+        public static readonly Rule PositiveAdjustment = new Rule(API_POSITIVE_ADJUSTMENT, CODE_ISSUE, TYPE_Z01, false, increasesStock: true);
 
-        /// <summary>OUT consumes or reduces stock (Z02). IN returns or increases stock (Z01).</summary>
+        /// <summary>OUT uses GoodsIssue (Z02) for non-POS; IN uses PositiveAdjustment (Z01).</summary>
         public static Rule ForDirection(string? direction)
         {
             return direction == Common.SILA_DIRECTION_IN ? PositiveAdjustment : GoodsIssue;
         }
 
-        /// <summary>A POS sale keeps its movement once queued. Older rows are read from the sold-quantity sign.</summary>
+        /// <summary>
+        /// POS SALE consumption is Z01 (via S4 - Goods Issue). Negative quantity / legacy rows that used Z02 keep their stored type.
+        /// Prefer the queued MovementType when already set.
+        /// </summary>
         public static string MovementForSale(string? movementType, decimal quantitySold)
         {
             if (movementType == TYPE_Z01 || movementType == TYPE_Z02)
@@ -70,7 +88,40 @@ namespace Buyer.Application.Features.Shared
                 return movementType;
             }
 
-            return quantitySold < 0 ? TYPE_Z01 : TYPE_Z02;
+            // User-confirmed: POS consumption posts as Z01 (not Z02).
+            return TYPE_Z01;
+        }
+
+        /// <summary>Build SAP ReferenceDocument e.g. POS-FL10-100046 (max 16 chars).</summary>
+        public static string BuildPosReferenceDocument(string? outletOrStorageCode, string? sourceTransactionId)
+        {
+            string outlet = string.IsNullOrWhiteSpace(outletOrStorageCode) ? "POS" : outletOrStorageCode.Trim().ToUpperInvariant();
+            string txn = string.IsNullOrWhiteSpace(sourceTransactionId) ? "REF" : sourceTransactionId.Trim();
+            string value = $"POS-{outlet}-{txn}";
+            return value.Length > 16 ? value[..16] : value;
+        }
+
+        /// <summary>Build MaterialDocumentHeaderText e.g. POSSALES2 (max 25 chars).</summary>
+        public static string BuildPosHeaderText(string? batchOrSequenceHint = null)
+        {
+            string suffix = string.IsNullOrWhiteSpace(batchOrSequenceHint)
+                ? "2"
+                : new string(batchOrSequenceHint.Trim().Where(char.IsLetterOrDigit).Take(8).ToArray());
+            if (string.IsNullOrEmpty(suffix))
+            {
+                suffix = "2";
+            }
+
+            string value = POS_HEADER_PREFIX + suffix;
+            return value.Length > 25 ? value[..25] : value;
+        }
+
+        /// <summary>User-facing Cost Center missing error for a plant / storage location pair.</summary>
+        public static string CostCenterMissingMessage(string? plant, string? storageLocation)
+        {
+            string plantText = string.IsNullOrWhiteSpace(plant) ? "(unknown)" : plant.Trim();
+            string storageText = string.IsNullOrWhiteSpace(storageLocation) ? "(unknown)" : storageLocation.Trim();
+            return $"Cost Center missing for Plant {plantText} / Storage Location {storageText}. Maintain it in Storage Location Setup.";
         }
 
         public static string MovementForDirection(string? direction)
@@ -164,7 +215,7 @@ namespace Buyer.Application.Features.Shared
                 SAP_API_CONFIGURATION_NOT_FOUND => "The SAP Goods Issue API is not configured under Integration Setup. No other API is used.",
                 SAP_API_CONFIGURATION_INACTIVE => "The SAP Goods Issue API exists but is not ACTIVE under Integration Setup.",
                 ALREADY_POSTED => "This stock movement already has an SAP material document.",
-                COST_CENTER_MISSING => "The outlet has no SAP cost center. Maintain CostCenter on the inventory location before posting Z01/Z02.",
+                COST_CENTER_MISSING => "Cost Center missing for the resolved plant / storage location. Maintain Cost Center in Storage Location Setup before posting POS consumption.",
                 _ => "The stock movement cannot be posted."
             };
         }
@@ -280,9 +331,12 @@ namespace Buyer.Application.Features.Shared
         /// <summary>
         /// Goods issue or positive adjustment. Compatible lines (same material and SAP unit) are summed.
         /// The quantity is always positive. Header text and cost center are required by SAP for Z01/Z02 account assignment.
+        /// When <paramref name="keepEntryUnit"/> is true (POS recipe explosion), QuantityInEntryUnit / EntryUnit stay in the
+        /// recipe ingredient UOM (e.g. ML) instead of being forced to the material base UOM.
+        /// <paramref name="postingDate"/> defaults to <paramref name="documentDate"/>; POS sets posting to the current date.
         /// </summary>
         public static string? TryBuildEffect(
-            DateTime businessDate,
+            DateTime documentDate,
             string? plant,
             string? storageLocation,
             Rule rule,
@@ -292,7 +346,10 @@ namespace Buyer.Application.Features.Shared
             string? headerText = null,
             string? costCenter = null,
             string? referenceDocument = null,
-            string? glAccount = null)
+            string? glAccount = null,
+            DateTime? postingDate = null,
+            bool keepEntryUnit = false,
+            bool allowMissingConversion = false)
         {
             body = null;
             if (string.IsNullOrWhiteSpace(plant) || string.IsNullOrWhiteSpace(storageLocation))
@@ -319,7 +376,16 @@ namespace Buyer.Application.Features.Shared
                     continue;
                 }
 
-                string? convertedProblem = ConvertLine(line.Material, line.Quantity, line.QuantityUom, conversions, out string material, out string unit, out decimal quantity);
+                string? convertedProblem = ConvertLine(
+                    line.Material,
+                    line.Quantity,
+                    line.QuantityUom,
+                    conversions,
+                    out string material,
+                    out string unit,
+                    out decimal quantity,
+                    keepEntryUnit,
+                    allowMissingConversion);
                 if (convertedProblem != null)
                 {
                     return convertedProblem == MATERIAL_NOT_VALID ? MATERIAL_MAPPING_MISSING : convertedProblem;
@@ -335,9 +401,10 @@ namespace Buyer.Application.Features.Shared
                 return null;
             }
 
-            string postingDate = FormatDate(businessDate);
+            string sapPostingDate = FormatDate(postingDate ?? documentDate);
+            string sapDocumentDate = FormatDate(documentDate);
             string materialDocumentHeaderText = string.IsNullOrWhiteSpace(headerText)
-                ? $"SILA {rule.GoodsMovementType} {postingDate[..10]}"
+                ? $"SILA {rule.GoodsMovementType} {sapPostingDate[..10]}"
                 : headerText.Trim();
             if (materialDocumentHeaderText.Length > 25)
             {
@@ -374,8 +441,8 @@ namespace Buyer.Application.Features.Shared
             // OData V2 deep-insert: to_MaterialDocumentItem.results[...]
             Dictionary<string, object?> header = new Dictionary<string, object?>
             {
-                ["PostingDate"] = postingDate,
-                ["DocumentDate"] = postingDate,
+                ["PostingDate"] = sapPostingDate,
+                ["DocumentDate"] = sapDocumentDate,
                 ["GoodsMovementCode"] = rule.GoodsMovementCode,
                 ["MaterialDocumentHeaderText"] = materialDocumentHeaderText,
                 ["to_MaterialDocumentItem"] = new Dictionary<string, object?> { ["results"] = items }
@@ -571,7 +638,9 @@ namespace Buyer.Application.Features.Shared
             Dictionary<Guid, List<MaterialUomConversion>> conversions,
             out string materialCode,
             out string entryUnit,
-            out decimal converted)
+            out decimal converted,
+            bool keepEntryUnit = false,
+            bool allowMissingConversion = false)
         {
             materialCode = string.Empty;
             entryUnit = string.Empty;
@@ -581,21 +650,30 @@ namespace Buyer.Application.Features.Shared
                 return MATERIAL_NOT_VALID;
             }
 
-            string? unit = EntryUnitOf(material.BaseUnitOfMeasure);
-            if (unit == null)
+            string? baseUnit = EntryUnitOf(material.BaseUnitOfMeasure);
+            if (baseUnit == null && !allowMissingConversion)
             {
                 return UOM_CONVERSION_MISSING;
             }
 
             decimal? baseQuantity = UomConverter.TryToBase(material, quantity, quantityUom, conversions);
-            if (baseQuantity == null || baseQuantity.Value <= 0)
+            if ((baseQuantity == null || baseQuantity.Value <= 0) && !(keepEntryUnit && allowMissingConversion && quantity > 0))
             {
                 return UOM_CONVERSION_MISSING;
             }
 
             materialCode = FormatSapMaterial(material.MaterialCode.Trim());
-            entryUnit = unit;
-            converted = baseQuantity.Value;
+            if (keepEntryUnit)
+            {
+                // POS recipe explosion: keep the recipe ingredient UOM/qty (e.g. 30 ML) for SAP.
+                string? requested = EntryUnitOf(quantityUom) ?? baseUnit ?? "EA";
+                entryUnit = requested;
+                converted = Math.Abs(quantity);
+                return null;
+            }
+
+            entryUnit = baseUnit ?? "EA";
+            converted = baseQuantity!.Value;
             return null;
         }
 
@@ -629,18 +707,26 @@ namespace Buyer.Application.Features.Shared
 
         public sealed class Rule
         {
-            public Rule(string apiName, string goodsMovementCode, string goodsMovementType, bool receivingPlant)
+            public Rule(
+                string apiName,
+                string goodsMovementCode,
+                string goodsMovementType,
+                bool receivingPlant,
+                bool increasesStock = false)
             {
                 ApiName = apiName;
                 GoodsMovementCode = goodsMovementCode;
                 GoodsMovementType = goodsMovementType;
                 ReceivingPlant = receivingPlant;
+                IncreasesStock = increasesStock;
             }
 
             public string ApiName { get; }
             public string GoodsMovementCode { get; }
             public string GoodsMovementType { get; }
             public bool ReceivingPlant { get; }
+            /// <summary>True when the movement restores/increases stock (ledger IN). False for consumption/issue (ledger OUT).</summary>
+            public bool IncreasesStock { get; }
         }
 
         public readonly record struct TransferLine(ItemBuyerMaster Material, decimal Quantity, string? QuantityUom);

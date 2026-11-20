@@ -58,6 +58,26 @@ namespace Buyer.Application.Features.Queries.GetSilaRecipes
                 query = query.Where(x => x.ItemMode == mode);
             }
 
+            if (!string.IsNullOrWhiteSpace(request.ProductClass))
+            {
+                string productClass = SilaHospitalityRules.NormalizeProductClass(_logger, request.ProductClass)!;
+                // Legacy rows without ProductClass: DIRECT → MINIBAR, else FOOD
+                if (productClass == Common.SILA_PRODUCT_MINIBAR)
+                {
+                    query = query.Where(x => x.ProductClass == productClass
+                        || (x.ProductClass == null && x.ItemMode == Common.SILA_RECIPE_DIRECT));
+                }
+                else if (productClass == Common.SILA_PRODUCT_FOOD)
+                {
+                    query = query.Where(x => x.ProductClass == productClass
+                        || (x.ProductClass == null && x.ItemMode != Common.SILA_RECIPE_DIRECT));
+                }
+                else
+                {
+                    query = query.Where(x => x.ProductClass == productClass);
+                }
+            }
+
             if (request.FamilyId != null)
             {
                 query = query.Where(x => x.FamilyId == request.FamilyId);

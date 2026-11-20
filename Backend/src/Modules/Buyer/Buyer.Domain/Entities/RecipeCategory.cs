@@ -23,5 +23,9 @@ namespace Buyer.Domain.Entities
         public string Name { get; set; } = string.Empty;
 
         public string? Description { get; set; }
+
+        /// <summary>Optional hospitality class this subcategory belongs to: FOOD | BEVERAGE | MINIBAR | TOBACCO.</summary>
+        [MaxLength(20)]
+        public string? ProductClass { get; set; }
     }
 }

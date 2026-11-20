@@ -116,7 +116,6 @@ namespace Buyer.Application.Features.Shared
 
             string? posCode = string.IsNullOrWhiteSpace(request.PosCode) ? null : request.PosCode.Trim();
             await EnsurePosCodeFreeAsync(repository, logger, buyerId, recipe.Id, posCode, cancellationToken);
-            await ApplyFamilyAndCategoryAsync(repository, logger, buyerId, recipe, request, cancellationToken);
 
             // Materials with their conversions, and the sub-recipes of a batch with their active cost per serving.
             List<Guid> materialIds = lines.Where(x => x.MaterialId != null).Select(x => x.MaterialId!.Value).ToList();
@@ -132,6 +131,8 @@ namespace Buyer.Application.Features.Shared
             recipe.Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim();
             recipe.PosItem = string.IsNullOrWhiteSpace(request.PosItem) ? null : request.PosItem.Trim();
             recipe.ItemMode = mode;
+            SilaHospitalityRules.ApplyHospitalityFields(logger, recipe, request);
+            await ApplyFamilyAndCategoryAsync(repository, logger, buyerId, recipe, request, cancellationToken);
             WriteHeader(
                 recipe,
                 request.Name.Trim(),

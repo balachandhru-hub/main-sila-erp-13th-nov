@@ -12,6 +12,9 @@ export interface StudioDraftHeader {
   familyId: string;
   categoryId: string;
   itemMode?: "DIRECT" | "RECIPE" | "BATCH";
+  productClass?: string;
+  recipeFormat?: string;
+  subcategory?: string;
   servingQty: string;
   servingUom: string;
   sellingUom?: string;
@@ -19,6 +22,12 @@ export interface StudioDraftHeader {
   /** POS identity — same as Linked menu item when both are set to the same value. */
   posCode?: string;
   posItem?: string;
+  trimLossPercent?: string;
+  cookingLossPercent?: string;
+  wasteFactorPercent?: string;
+  prepTimeMinutes?: string;
+  cookTimeMinutes?: string;
+  preparationSteps?: string;
 }
 
 export interface StudioCreateRequest {
@@ -27,12 +36,21 @@ export interface StudioCreateRequest {
   familyId: string | null;
   categoryId: string | null;
   itemMode: "DIRECT" | "RECIPE" | "BATCH";
+  productClass: string | null;
+  recipeFormat: string | null;
+  subcategory: string | null;
   servingQty: number;
   servingUom: string;
   sellingUom: string;
   posCode: string | null;
   posItem: string | null;
   currency: string | null;
+  trimLossPercent: number | null;
+  cookingLossPercent: number | null;
+  wasteFactorPercent: number | null;
+  prepTimeMinutes: number | null;
+  cookTimeMinutes: number | null;
+  preparationSteps: string | null;
   ingredients: {
     materialId: string | null;
     subRecipeId: string | null;
@@ -92,26 +110,46 @@ export const buildStudioCreateRequest = (
     posCode?: string | null;
     posItem?: string | null;
   }[] = [],
-): StudioCreateRequest => ({
-  name: header.name.trim(),
-  description: header.description?.trim() || null,
-  familyId: header.familyId || null,
-  categoryId: header.categoryId || null,
-  itemMode: header.itemMode ?? "RECIPE",
-  servingQty: toNumber(header.servingQty),
-  servingUom: header.servingUom.trim() || "EA",
-  sellingUom: (header.sellingUom ?? "").trim() || "EA",
-  posCode: header.posCode?.trim() || null,
-  posItem: header.posItem?.trim() || null,
-  currency: header.currency?.trim() || null,
-  ingredients: lines.map((line) => ({
-    materialId: line.materialId ?? null,
-    subRecipeId: line.subRecipeId ?? null,
-    quantity: toNumber(line.quantity),
-    uom: line.uom || null,
-  })),
-  outletPrices,
-});
+): StudioCreateRequest => {
+  const optionalNumber = (value?: string): number | null => {
+    if (value == null || !String(value).trim()) return null;
+    const parsed = toNumber(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+  const optionalInt = (value?: string): number | null => {
+    const parsed = optionalNumber(value);
+    return parsed == null ? null : Math.round(parsed);
+  };
+  return {
+    name: header.name.trim(),
+    description: header.description?.trim() || null,
+    familyId: header.familyId || null,
+    categoryId: header.categoryId || null,
+    itemMode: header.itemMode ?? "RECIPE",
+    productClass: header.productClass?.trim() || null,
+    recipeFormat: header.recipeFormat?.trim() || null,
+    subcategory: header.subcategory?.trim() || null,
+    servingQty: toNumber(header.servingQty),
+    servingUom: header.servingUom.trim() || "EA",
+    sellingUom: (header.sellingUom ?? "").trim() || "EA",
+    posCode: header.posCode?.trim() || null,
+    posItem: header.posItem?.trim() || null,
+    currency: header.currency?.trim() || null,
+    trimLossPercent: optionalNumber(header.trimLossPercent),
+    cookingLossPercent: optionalNumber(header.cookingLossPercent),
+    wasteFactorPercent: optionalNumber(header.wasteFactorPercent),
+    prepTimeMinutes: optionalInt(header.prepTimeMinutes),
+    cookTimeMinutes: optionalInt(header.cookTimeMinutes),
+    preparationSteps: header.preparationSteps?.trim() || null,
+    ingredients: lines.map((line) => ({
+      materialId: line.materialId ?? null,
+      subRecipeId: line.subRecipeId ?? null,
+      quantity: toNumber(line.quantity),
+      uom: line.uom || null,
+    })),
+    outletPrices,
+  };
+};
 
 export interface StudioPersistCheck {
   ok: boolean;

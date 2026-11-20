@@ -10,6 +10,18 @@ export { canStartRevision, writeFromDetail };
 /** DIRECT (one material) | RECIPE (several materials) | BATCH (may contain another recipe). */
 export type SilaRecipeMode = "DIRECT" | "RECIPE" | "BATCH";
 
+/** Hospitality product class (Food / Beverage / Minibar / Tobacco). */
+export type SilaProductClass = "FOOD" | "BEVERAGE" | "MINIBAR" | "TOBACCO";
+
+/** Display/format layer on top of ItemMode. */
+export type SilaRecipeFormat =
+  | "STANDARD_RECIPE"
+  | "DIRECT_ITEM"
+  | "BATCH_RECIPE"
+  | "SUB_RECIPE"
+  | "COMBO"
+  | "VARIANT_RECIPE";
+
 /** DRAFT | PENDING_APPROVAL | APPROVED | REJECTED | INACTIVE */
 export type SilaRecipeStatus = string;
 
@@ -26,6 +38,10 @@ export interface SilaRecipeListItem {
   familyName?: string | null;
   categoryId?: string | null;
   itemMode: SilaRecipeMode;
+  /** FOOD | BEVERAGE | MINIBAR | TOBACCO (inferred for legacy rows). */
+  productClass?: SilaProductClass | string;
+  recipeFormat?: SilaRecipeFormat | string;
+  subcategory?: string | null;
   servingQty: number;
   servingUom: string;
   sellingUom: string;
@@ -182,6 +198,12 @@ export interface SilaRecipeDetail
   extends Omit<SilaRecipeListItem, "ingredientCount" | "outletCount" | "dateUpdated" | "ready" | "issueCount" | "costComplete"> {
   description?: string | null;
   categoryName?: string | null;
+  trimLossPercent?: number | null;
+  cookingLossPercent?: number | null;
+  wasteFactorPercent?: number | null;
+  prepTimeMinutes?: number | null;
+  cookTimeMinutes?: number | null;
+  preparationSteps?: string | null;
   /** totalCost / servingQty of the shown version. */
   costPerServing?: number;
   /** The version shown. */
@@ -233,6 +255,9 @@ export interface SilaRecipeWrite {
   familyId?: string | null;
   categoryId?: string | null;
   itemMode: SilaRecipeMode;
+  productClass?: SilaProductClass | string | null;
+  recipeFormat?: SilaRecipeFormat | string | null;
+  subcategory?: string | null;
   servingQty: number;
   servingUom: string;
   sellingUom?: string | null;
@@ -240,6 +265,12 @@ export interface SilaRecipeWrite {
   /** POS item description (display only). */
   posItem?: string | null;
   currency?: string | null;
+  trimLossPercent?: number | null;
+  cookingLossPercent?: number | null;
+  wasteFactorPercent?: number | null;
+  prepTimeMinutes?: number | null;
+  cookTimeMinutes?: number | null;
+  preparationSteps?: string | null;
   ingredients: SilaRecipeIngredientWrite[];
   outletPrices: SilaRecipeOutletPriceWrite[];
 }
@@ -247,6 +278,7 @@ export interface SilaRecipeWrite {
 export interface SilaRecipeFilters {
   status?: string;
   itemMode?: string;
+  productClass?: string;
   search?: string;
   familyId?: string;
   categoryId?: string;
@@ -280,6 +312,7 @@ export const getRecipes = async (filters: SilaRecipeFilters = {}): Promise<SilaR
     const params: Record<string, string | number | boolean> = { index: filters.index ?? 0, limit: filters.limit ?? 50 };
     if (filters.status) params.status = filters.status;
     if (filters.itemMode) params.itemMode = filters.itemMode;
+    if (filters.productClass) params.productClass = filters.productClass;
     if (filters.search?.trim()) params.search = filters.search.trim();
     if (filters.familyId) params.familyId = filters.familyId;
     if (filters.categoryId) params.categoryId = filters.categoryId;
