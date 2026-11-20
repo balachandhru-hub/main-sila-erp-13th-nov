@@ -1,3 +1,4 @@
+using Buyer.Application.Features.Commands.PostPendingErpPostings;
 using Buyer.Application.Features.Shared;
 using Buyer.Domain.Common;
 using Buyer.Domain.Dtos;
@@ -12,8 +13,8 @@ using SharedKernel.LoggerServices;
 namespace Buyer.Application.Features.Commands.ProcessSilaPosBatch
 {
     /// <summary>
-    /// Step 2 of the upload: processes selected (or all) RECEIVED lines of a PREVIEW batch (match, deduct stock, optionally queue ERP)
-    /// and marks the batch PROCESSED when no RECEIVED lines remain.
+    /// Step 2 of the upload: processes selected (or all) RECEIVED lines of a PREVIEW batch (match, deduct stock, optionally queue ERP),
+    /// posts queued SAP material documents immediately, and marks the batch PROCESSED when no RECEIVED lines remain.
     /// </summary>
     public class ProcessSilaPosBatchCommandHandler : IRequestHandler<ProcessSilaPosBatchCommand, SilaPosImportResultDto>
     {
@@ -22,12 +23,18 @@ namespace Buyer.Application.Features.Commands.ProcessSilaPosBatch
         private readonly IRepositoryWrapper _repository;
         private readonly ILoggerManager _logger;
         private readonly IConfiguration _configuration;
+        private readonly IMediator _mediator;
 
-        public ProcessSilaPosBatchCommandHandler(IRepositoryWrapper repository, ILoggerManager logger, IConfiguration configuration)
+        public ProcessSilaPosBatchCommandHandler(
+            IRepositoryWrapper repository,
+            ILoggerManager logger,
+            IConfiguration configuration,
+            IMediator mediator)
         {
             _repository = repository;
             _logger = logger;
             _configuration = configuration;
+            _mediator = mediator;
         }
 
         public Task<SilaPosImportResultDto> Handle(ProcessSilaPosBatchCommand request, CancellationToken cancellationToken)
@@ -94,7 +101,13 @@ namespace Buyer.Application.Features.Commands.ProcessSilaPosBatch
             }
 
             batch.Accepted = lines.Count;
+            _repository.PosSalesBatch.Update(batch);
             await _repository.SaveAsync();
+
+            if (queueErp)
+            {
+                await PostQueuedSapAsync(buyer.Id, lines, cancellationToken);
+            }
 
             SilaPosImportResultDto result = new SilaPosImportResultDto
             {
@@ -112,8 +125,24 @@ namespace Buyer.Application.Features.Commands.ProcessSilaPosBatch
             await SilaPosBatchCounts.AddAsync(_repository, buyer.Id, new List<SilaPosBatchDto> { counts }, cancellationToken);
             result.PostingUnknown = counts.PostingUnknown;
 
-            _logger.LogInfo($"POS batch processed. BatchNumber: {batch.BatchNumber}, Lines: {lines.Count}, Failed: {failed}");
+            _logger.LogInfo($"POS batch processed. BatchNumber: {batch.BatchNumber}, Lines: {lines.Count}, Failed: {failed}, QueueErp: {queueErp}");
             return result;
+        }
+
+        private async Task PostQueuedSapAsync(Guid buyerId, List<PosSalesTransaction> lines, CancellationToken cancellationToken)
+        {
+            foreach (Guid postingId in lines.Where(x => x.ErpPostingId != null).Select(x => x.ErpPostingId!.Value).Distinct())
+            {
+                try
+                {
+                    await _mediator.Send(new PostPendingErpPostingsCommand { BuyerId = buyerId, PostingId = postingId }, cancellationToken);
+                }
+                catch (Exception exception) when (exception is not OperationCanceledException)
+                {
+                    _logger.LogError(
+                        $"Immediate POS ERP post failed after inventory deduction. BuyerId: {buyerId}, PostingId: {postingId}, Error: {SilaLogText.FromException(exception)}");
+                }
+            }
         }
     }
 }

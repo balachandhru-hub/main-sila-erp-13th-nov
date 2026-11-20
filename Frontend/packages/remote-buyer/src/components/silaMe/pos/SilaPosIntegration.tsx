@@ -112,7 +112,7 @@ const SilaPosIntegration: React.FC<SilaPosIntegrationProps> = ({ canManage }) =>
     setPosting(true);
     setConfirmPost(false);
     try {
-      const result = await processPosBatch(preview.batchId, { transactionIds: selectedIds });
+      const result = await processPosBatch(preview.batchId, { transactionIds: selectedIds, queueErpPosting: true });
       setProcessResult(result);
       setPreview(null);
       setConsumption(null);
@@ -430,7 +430,7 @@ const SilaPosIntegration: React.FC<SilaPosIntegrationProps> = ({ canManage }) =>
                   <div className="pstudio-kpi pstudio-kpi--amber"><span>SAP posting profile</span><strong>Server gated</strong></div>
                 </div>
                 <div className="sila-alert sila-alert--warning" role="status">
-                  Posting deducts SILA inventory for selected lines. ERP/SAP queue stays disabled until authorized (`SilaPos:QueueErpPosting`). Nothing posts automatically from upload or preview.
+                  Confirm posting deducts SILA inventory and queues the SAP material-document posting for the selected lines. Nothing posts automatically from upload or preview.
                 </div>
                 <div className="srec-actions">
                   <button type="button" className="sila-btn sila-btn--ghost" onClick={() => setTab("preview")}>Back to preview</button>

@@ -62,7 +62,7 @@ const integration = read("SilaPosIntegration.tsx");
 assert.match(integration, /SILA POS Studio/);
 assert.match(integration, /Confirm posting/);
 assert.match(integration, /SilaPosStudioExceptions/);
-assert.match(integration, /QueueErpPosting/);
+assert.match(integration, /queueErpPosting:\s*true/);
 
 const studioCss = read("SilaPosStudio.css");
 assert.match(studioCss, /\.pstudio-page/);

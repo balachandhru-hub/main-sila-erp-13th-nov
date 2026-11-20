@@ -31,7 +31,15 @@ const classify = (tx: SilaPosTransaction): ExceptionGroup => {
   if (text.includes("uom")) return "Invalid UOM";
   if (text.includes("cost pending") || text.includes("unit cost")) return "Cost Pending";
   if (text.includes("stock") || text.includes("insufficient")) return "Insufficient Stock";
-  if (text.includes("sap") || (text.includes("erp") && text.includes("fail")) || tx.failureCode === "ERP_FAILED") return "SAP Posting Failure";
+  if (
+    tx.postState === "NOT_STARTED"
+    || text.includes("erp is not started")
+    || text.includes("sap")
+    || (text.includes("erp") && text.includes("fail"))
+    || tx.failureCode === "ERP_FAILED"
+  ) {
+    return "SAP Posting Failure";
+  }
   if (tx.erpPostingStatus === "UNKNOWN" || tx.failureCode === "ERP_UNKNOWN" || text.includes("reconcil")) return "SILA Reconciliation Failure";
   return "Other";
 };
@@ -53,7 +61,7 @@ const actionFor = (group: ExceptionGroup): { action: string; role: string; retry
     case "Insufficient Stock":
       return { action: "Adjust stock or investigate variance", role: "Storekeeper", retry: "Retry when stock available" };
     case "SAP Posting Failure":
-      return { action: "Inspect ERP posting result; do not duplicate post", role: "Integration admin", retry: "Eligible retry via tracker" };
+      return { action: "Open Transaction Tracker and Reprocess to queue/post SAP (or inspect failed ERP result)", role: "Integration admin", retry: "Eligible retry via tracker" };
     case "SILA Reconciliation Failure":
       return { action: "Reconcile ERP unknown under tracker / ERP postings", role: "Controller", retry: "Reconcile only" };
     default:
@@ -75,13 +83,25 @@ const SilaPosStudioExceptions: React.FC<SilaPosStudioExceptionsProps> = ({ onOpe
       setLoading(true);
       setError(null);
       try {
-        const [failed, unknown] = await Promise.all([
+        const [failed, unknown, deducted] = await Promise.all([
           getPosTransactions({ status: "FAILED", index: 0, limit: 100 }),
           getPosTransactions({ postingStatus: "UNKNOWN", index: 0, limit: 100 }),
+          getPosTransactions({ status: "INVENTORY_DEDUCTED", index: 0, limit: 100 }),
         ]);
         if (!active) return;
         const map = new Map<string, SilaPosTransaction>();
-        for (const row of [...(failed.items || []), ...(unknown.items || [])]) {
+        for (const row of [...(failed.items || []), ...(unknown.items || []), ...(deducted.items || [])]) {
+          // Deducted-only rows belong here when SAP was never started or is still waiting.
+          if (
+            row.status === "INVENTORY_DEDUCTED"
+            && row.postState !== "NOT_STARTED"
+            && row.postState !== "PENDING"
+            && row.postState !== "SKIPPED"
+            && row.erpPostingStatus !== "PENDING"
+            && row.erpPostingStatus !== "SKIPPED"
+          ) {
+            continue;
+          }
           map.set(row.id, row);
         }
         setRows([...map.values()]);

@@ -282,8 +282,7 @@ const SilaPosPreviewTable: React.FC<SilaPosPreviewTableProps> = ({
                 </div>
               </div>
               <p className="sila-help">
-                Preview only — stock is not reserved or deducted. Live SAP posting stays disabled until explicitly authorized
-                (SilaPos:QueueErpPosting).
+                Preview only — stock is not reserved or deducted. Confirm posting deducts SILA inventory and posts the SAP material document via API.
               </p>
               <div className="sila-table-wrap">
                 <table className="sila-table">
