@@ -331,9 +331,12 @@ namespace Buyer.Application.Features.Shared
         /// <summary>
         /// Goods issue or positive adjustment. Compatible lines (same material and SAP unit) are summed.
         /// The quantity is always positive. Header text and cost center are required by SAP for Z01/Z02 account assignment.
+        /// When <paramref name="keepEntryUnit"/> is true (POS recipe explosion), QuantityInEntryUnit / EntryUnit stay in the
+        /// recipe ingredient UOM (e.g. ML) instead of being forced to the material base UOM.
+        /// <paramref name="postingDate"/> defaults to <paramref name="documentDate"/>; POS sets posting to the current date.
         /// </summary>
         public static string? TryBuildEffect(
-            DateTime businessDate,
+            DateTime documentDate,
             string? plant,
             string? storageLocation,
             Rule rule,
@@ -343,7 +346,9 @@ namespace Buyer.Application.Features.Shared
             string? headerText = null,
             string? costCenter = null,
             string? referenceDocument = null,
-            string? glAccount = null)
+            string? glAccount = null,
+            DateTime? postingDate = null,
+            bool keepEntryUnit = false)
         {
             body = null;
             if (string.IsNullOrWhiteSpace(plant) || string.IsNullOrWhiteSpace(storageLocation))
@@ -370,7 +375,15 @@ namespace Buyer.Application.Features.Shared
                     continue;
                 }
 
-                string? convertedProblem = ConvertLine(line.Material, line.Quantity, line.QuantityUom, conversions, out string material, out string unit, out decimal quantity);
+                string? convertedProblem = ConvertLine(
+                    line.Material,
+                    line.Quantity,
+                    line.QuantityUom,
+                    conversions,
+                    out string material,
+                    out string unit,
+                    out decimal quantity,
+                    keepEntryUnit);
                 if (convertedProblem != null)
                 {
                     return convertedProblem == MATERIAL_NOT_VALID ? MATERIAL_MAPPING_MISSING : convertedProblem;
@@ -386,9 +399,10 @@ namespace Buyer.Application.Features.Shared
                 return null;
             }
 
-            string postingDate = FormatDate(businessDate);
+            string sapPostingDate = FormatDate(postingDate ?? documentDate);
+            string sapDocumentDate = FormatDate(documentDate);
             string materialDocumentHeaderText = string.IsNullOrWhiteSpace(headerText)
-                ? $"SILA {rule.GoodsMovementType} {postingDate[..10]}"
+                ? $"SILA {rule.GoodsMovementType} {sapPostingDate[..10]}"
                 : headerText.Trim();
             if (materialDocumentHeaderText.Length > 25)
             {
@@ -425,8 +439,8 @@ namespace Buyer.Application.Features.Shared
             // OData V2 deep-insert: to_MaterialDocumentItem.results[...]
             Dictionary<string, object?> header = new Dictionary<string, object?>
             {
-                ["PostingDate"] = postingDate,
-                ["DocumentDate"] = postingDate,
+                ["PostingDate"] = sapPostingDate,
+                ["DocumentDate"] = sapDocumentDate,
                 ["GoodsMovementCode"] = rule.GoodsMovementCode,
                 ["MaterialDocumentHeaderText"] = materialDocumentHeaderText,
                 ["to_MaterialDocumentItem"] = new Dictionary<string, object?> { ["results"] = items }
@@ -622,7 +636,8 @@ namespace Buyer.Application.Features.Shared
             Dictionary<Guid, List<MaterialUomConversion>> conversions,
             out string materialCode,
             out string entryUnit,
-            out decimal converted)
+            out decimal converted,
+            bool keepEntryUnit = false)
         {
             materialCode = string.Empty;
             entryUnit = string.Empty;
@@ -632,8 +647,8 @@ namespace Buyer.Application.Features.Shared
                 return MATERIAL_NOT_VALID;
             }
 
-            string? unit = EntryUnitOf(material.BaseUnitOfMeasure);
-            if (unit == null)
+            string? baseUnit = EntryUnitOf(material.BaseUnitOfMeasure);
+            if (baseUnit == null)
             {
                 return UOM_CONVERSION_MISSING;
             }
@@ -645,7 +660,16 @@ namespace Buyer.Application.Features.Shared
             }
 
             materialCode = FormatSapMaterial(material.MaterialCode.Trim());
-            entryUnit = unit;
+            if (keepEntryUnit)
+            {
+                // POS recipe explosion: keep the recipe ingredient UOM/qty (e.g. 30 ML) for SAP.
+                string? requested = EntryUnitOf(quantityUom) ?? baseUnit;
+                entryUnit = requested;
+                converted = Math.Abs(quantity);
+                return null;
+            }
+
+            entryUnit = baseUnit;
             converted = baseQuantity.Value;
             return null;
         }

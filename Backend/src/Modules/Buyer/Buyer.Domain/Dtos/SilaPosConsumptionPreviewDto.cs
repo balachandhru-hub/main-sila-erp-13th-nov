@@ -43,7 +43,12 @@ namespace Buyer.Domain.Dtos
         public Guid MaterialId { get; set; }
         public string? MaterialCode { get; set; }
         public string? MaterialDescription { get; set; }
+        /// <summary>Recipe ingredient quantity in entry UOM (what SAP posts, e.g. 60 ML).</summary>
         public decimal Quantity { get; set; }
+        /// <summary>Recipe ingredient UOM for SAP (e.g. ML).</summary>
+        public string? EntryUom { get; set; }
+        /// <summary>Material base quantity for ME stock / costing.</summary>
+        public decimal BaseQuantity { get; set; }
         public string? BaseUom { get; set; }
         public decimal? UnitCost { get; set; }
         public decimal? EstimatedCost { get; set; }

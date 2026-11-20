@@ -720,6 +720,7 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
                 .FindByCondition(x => materialIds.Contains(x.Id))
                 .ToDictionaryAsync(x => x.Id, cancellationToken);
             Dictionary<Guid, List<MaterialUomConversion>> conversions = await UomConverter.GetConversionsAsync(_repository, materialIds, cancellationToken);
+            bool isPosSale = posting.ReferenceType == Common.SILA_REF_POS_SALE;
             List<SilaInventorySap.TransferLine> lines = new List<SilaInventorySap.TransferLine>();
             foreach (InventoryTransaction transaction in transactions)
             {
@@ -728,23 +729,35 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
                     return new EffectPreparation(SilaInventorySap.Failure(SilaInventorySap.MATERIAL_MAPPING_MISSING), null, null);
                 }
 
-                lines.Add(new SilaInventorySap.TransferLine(material, transaction.Quantity, transaction.BaseUom));
+                // POS: SAP gets recipe ingredient qty/UOM (Entered*); ledger Quantity/BaseUom stays material base for ME stock.
+                if (isPosSale
+                    && transaction.EnteredQuantity > 0
+                    && !string.IsNullOrWhiteSpace(transaction.EnteredUom))
+                {
+                    lines.Add(new SilaInventorySap.TransferLine(material, transaction.EnteredQuantity, transaction.EnteredUom));
+                }
+                else
+                {
+                    lines.Add(new SilaInventorySap.TransferLine(material, transaction.Quantity, transaction.BaseUom));
+                }
             }
 
             DateTime businessDate = posSale?.BusinessDate
                 ?? transactions.Max(x => x.BusinessDate);
+            // POS posting date is the current date (when SILA posts to SAP); document date stays the POS business date.
+            DateTime? posPostingDate = isPosSale ? DateTime.UtcNow.Date : null;
             string? plant = string.IsNullOrWhiteSpace(property?.PlantCode) ? null : property!.PlantCode.Trim();
             string? storage = !string.IsNullOrWhiteSpace(location?.StorageLocationCode)
                 ? location!.StorageLocationCode!.Trim()
                 : location?.LocationCode?.Trim();
             // POS Cost Center is authoritative from Storage Location Setup (InventoryLocation.CostCenter) only.
             string? costCenter = string.IsNullOrWhiteSpace(location?.CostCenter) ? null : location!.CostCenter!.Trim();
-            if (posting.ReferenceType == Common.SILA_REF_POS_SALE && string.IsNullOrWhiteSpace(costCenter))
+            if (isPosSale && string.IsNullOrWhiteSpace(costCenter))
             {
                 return new EffectPreparation(SilaInventorySap.CostCenterMissingMessage(plant, storage), null, null);
             }
 
-            if (posting.ReferenceType == Common.SILA_REF_POS_SALE && (string.IsNullOrWhiteSpace(plant) || string.IsNullOrWhiteSpace(storage)))
+            if (isPosSale && (string.IsNullOrWhiteSpace(plant) || string.IsNullOrWhiteSpace(storage)))
             {
                 return new EffectPreparation(
                     $"Plant or storage location is not mapped for the POS outlet. Maintain plant and storage location for outlet {location?.LocationCode ?? "(unknown)"} in Storage Location Setup.",
@@ -752,10 +765,10 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
                     null);
             }
 
-            string? headerText = posting.ReferenceType == Common.SILA_REF_POS_SALE
+            string? headerText = isPosSale
                 ? SilaInventorySap.BuildPosHeaderText(posting.ReferenceNumber)
                 : posting.ReferenceNumber;
-            string? referenceDocument = posting.ReferenceType == Common.SILA_REF_POS_SALE
+            string? referenceDocument = isPosSale
                 ? SilaInventorySap.BuildPosReferenceDocument(
                     storage ?? location?.LocationCode,
                     posSale?.SourceTransactionId ?? posting.ReferenceNumber)
@@ -772,7 +785,9 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
                 headerText: headerText,
                 costCenter: costCenter,
                 referenceDocument: referenceDocument,
-                glAccount: location?.GlAccount);
+                glAccount: location?.GlAccount,
+                postingDate: posPostingDate,
+                keepEntryUnit: isPosSale);
             if (problem != null)
             {
                 string message = problem == SilaInventorySap.COST_CENTER_MISSING

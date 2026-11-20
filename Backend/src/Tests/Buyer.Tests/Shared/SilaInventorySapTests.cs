@@ -96,12 +96,16 @@ namespace Buyer.Tests.Shared
                 out string? body,
                 headerText: SilaInventorySap.BuildPosHeaderText("2"),
                 costCenter: "1060050124",
-                referenceDocument: SilaInventorySap.BuildPosReferenceDocument("FL10", "100046"));
+                referenceDocument: SilaInventorySap.BuildPosReferenceDocument("FL10", "100046"),
+                postingDate: new DateTime(2026, 11, 21),
+                keepEntryUnit: true);
 
             Assert.Null(problem);
             Assert.NotNull(body);
             using JsonDocument json = JsonDocument.Parse(body!);
             Assert.Equal("03", json.RootElement.GetProperty("GoodsMovementCode").GetString());
+            Assert.Equal("2026-11-21T00:00:00", json.RootElement.GetProperty("PostingDate").GetString());
+            Assert.Equal("2026-11-20T00:00:00", json.RootElement.GetProperty("DocumentDate").GetString());
             Assert.Equal("POSSALES2", json.RootElement.GetProperty("MaterialDocumentHeaderText").GetString());
             Assert.Equal("POS-FL10-100046", json.RootElement.GetProperty("ReferenceDocument").GetString());
             Assert.Equal(SilaStockCountSap.API_CONFIG_NAME, SilaInventorySap.PosConsumption.ApiName);
@@ -110,6 +114,12 @@ namespace Buyer.Tests.Shared
             Assert.True(SilaInventorySap.PosReversal.IncreasesStock);
             JsonElement items = json.RootElement.GetProperty("to_MaterialDocumentItem").GetProperty("results");
             Assert.Equal(2, items.GetArrayLength());
+            Dictionary<string, JsonElement> byMaterial = items.EnumerateArray()
+                .ToDictionary(x => x.GetProperty("Material").GetString()!, x => x);
+            Assert.Equal("30.000", byMaterial[SilaInventorySap.FormatSapMaterial("1000001")].GetProperty("QuantityInEntryUnit").GetString());
+            Assert.Equal("ML", byMaterial[SilaInventorySap.FormatSapMaterial("1000001")].GetProperty("EntryUnit").GetString());
+            Assert.Equal("60.000", byMaterial[SilaInventorySap.FormatSapMaterial("1000000")].GetProperty("QuantityInEntryUnit").GetString());
+            Assert.Equal("ML", byMaterial[SilaInventorySap.FormatSapMaterial("1000000")].GetProperty("EntryUnit").GetString());
             foreach (JsonElement line in items.EnumerateArray())
             {
                 Assert.Equal("Z01", line.GetProperty("GoodsMovementType").GetString());
@@ -122,6 +132,41 @@ namespace Buyer.Tests.Shared
                 "Storage Location Setup",
                 SilaInventorySap.CostCenterMissingMessage("1060", "FL10"));
             Assert.DoesNotContain("1060050124", SilaInventorySap.CostCenterMissingMessage("1060", "FL10"));
+        }
+
+        [Fact]
+        public void PosConsumption_KeepsRecipeEntryUomInsteadOfMaterialBase()
+        {
+            // Material base is BTL; recipe ingredient is 30 ML. SAP must receive 60 ML for 2 EA, not 0.08 BTL.
+            ItemBuyerMaster material = Stock("100000", "BTL");
+            Dictionary<Guid, List<MaterialUomConversion>> conversions = new Dictionary<Guid, List<MaterialUomConversion>>
+            {
+                [material.Id] = new List<MaterialUomConversion>
+                {
+                    new MaterialUomConversion { MaterialId = material.Id, FromUom = "ML", ToUom = "BTL", Factor = 1m / 750m, IsActive = true }
+                }
+            };
+
+            string? problem = SilaInventorySap.TryBuildEffect(
+                new DateTime(2026, 11, 15),
+                "1060",
+                "FL10",
+                SilaInventorySap.PosConsumption,
+                new[] { new SilaInventorySap.TransferLine(material, 60m, "ML") },
+                conversions,
+                out string? body,
+                costCenter: "1060050124",
+                postingDate: new DateTime(2026, 11, 20),
+                keepEntryUnit: true);
+
+            Assert.Null(problem);
+            using JsonDocument json = JsonDocument.Parse(body!);
+            JsonElement line = json.RootElement.GetProperty("to_MaterialDocumentItem").GetProperty("results")[0];
+            Assert.Equal("60.000", line.GetProperty("QuantityInEntryUnit").GetString());
+            Assert.Equal("ML", line.GetProperty("EntryUnit").GetString());
+            Assert.Equal("Z01", line.GetProperty("GoodsMovementType").GetString());
+            Assert.Equal("2026-11-20T00:00:00", json.RootElement.GetProperty("PostingDate").GetString());
+            Assert.Equal("2026-11-15T00:00:00", json.RootElement.GetProperty("DocumentDate").GetString());
         }
 
         [Fact]

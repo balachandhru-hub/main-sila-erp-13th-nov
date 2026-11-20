@@ -348,7 +348,7 @@ namespace Buyer.Application.Features.Shared
 
                 if (match.Status == SilaPosMatching.ROW_READY && match.Recipe != null)
                 {
-                    Dictionary<Guid, decimal> quantities = new Dictionary<Guid, decimal>();
+                    Dictionary<string, ExplosionLine> quantities = new Dictionary<string, ExplosionLine>(StringComparer.OrdinalIgnoreCase);
                     string? problem = Expand(context, match.Recipe.Id, transaction.QuantitySold, quantities, 0);
                     if (problem != null)
                     {
@@ -359,9 +359,9 @@ namespace Buyer.Application.Features.Shared
                     {
                         decimal consumptionCost = 0;
                         bool costPending = false;
-                        foreach (KeyValuePair<Guid, decimal> entry in quantities.Where(x => x.Value > 0))
+                        foreach (ExplosionLine entry in quantities.Values.Where(x => x.BaseQuantity > 0 && x.EnteredQuantity > 0))
                         {
-                            if (!context.Materials.TryGetValue(entry.Key, out ItemBuyerMaster? material) || !SilaMaterialRules.HoldsStock(material))
+                            if (!context.Materials.TryGetValue(entry.MaterialId, out ItemBuyerMaster? material) || !SilaMaterialRules.HoldsStock(material))
                             {
                                 continue;
                             }
@@ -373,7 +373,7 @@ namespace Buyer.Application.Features.Shared
                             }
                             else
                             {
-                                consumptionCost += Math.Round(unitCost.Value * entry.Value, 4);
+                                consumptionCost += Math.Round(unitCost.Value * entry.BaseQuantity, 4);
                             }
 
                             line.Ingredients.Add(new SilaPosConsumptionPreviewIngredientDto
@@ -381,10 +381,12 @@ namespace Buyer.Application.Features.Shared
                                 MaterialId = material.Id,
                                 MaterialCode = material.MaterialCode,
                                 MaterialDescription = material.Description,
-                                Quantity = Math.Round(entry.Value, 4),
+                                Quantity = Math.Round(entry.EnteredQuantity, 4),
+                                EntryUom = entry.EnteredUom,
+                                BaseQuantity = Math.Round(entry.BaseQuantity, 4),
                                 BaseUom = UomConverter.BaseUomOf(material),
                                 UnitCost = unitCost,
-                                EstimatedCost = unitCost == null ? null : Math.Round(unitCost.Value * entry.Value, 4),
+                                EstimatedCost = unitCost == null ? null : Math.Round(unitCost.Value * entry.BaseQuantity, 4),
                                 CostPending = unitCost == null
                             });
                         }
@@ -475,27 +477,28 @@ namespace Buyer.Application.Features.Shared
                 return null;
             }
 
-            Dictionary<Guid, decimal> quantities = new Dictionary<Guid, decimal>();
+            Dictionary<string, ExplosionLine> quantities = new Dictionary<string, ExplosionLine>(StringComparer.OrdinalIgnoreCase);
             string? problem = Expand(context, transaction.RecipeId.Value, SilaPosReversal.ExplosionQuantity(transaction), quantities, 0);
             if (problem != null)
             {
                 return problem;
             }
 
-            foreach (Guid materialId in quantities.Keys.ToList())
+            foreach (string key in quantities.Keys.ToList())
             {
-                if (!context.Materials.TryGetValue(materialId, out ItemBuyerMaster? material) || !material.IsActive)
+                ExplosionLine line = quantities[key];
+                if (!context.Materials.TryGetValue(line.MaterialId, out ItemBuyerMaster? material) || !material.IsActive)
                 {
                     return "An ingredient material is no longer active in the Item Master. Correct the recipe.";
                 }
 
                 if (!SilaMaterialRules.HoldsStock(material))
                 {
-                    quantities.Remove(materialId);
+                    quantities.Remove(key);
                 }
             }
 
-            if (quantities.Count == 0 || quantities.Values.All(x => x <= 0))
+            if (quantities.Count == 0 || quantities.Values.All(x => x.BaseQuantity <= 0))
             {
                 return "NO_CONSUMPTION_LINES";
             }
@@ -503,16 +506,18 @@ namespace Buyer.Application.Features.Shared
             string direction = SilaPosReversal.LedgerDirection(transaction);
             string reasonPrefix = SilaPosReversal.IsReversal(transaction.TransactionType) ? "POS reversal" : "POS";
             int lines = 0;
-            foreach (KeyValuePair<Guid, decimal> entry in quantities.Where(x => x.Value > 0))
+            foreach (ExplosionLine entry in quantities.Values.Where(x => x.BaseQuantity > 0 && x.EnteredQuantity > 0))
             {
                 await ledger.PostAsync(new InventoryMovement
                 {
                     LocationId = transaction.OutletLocationId.Value,
-                    Material = context.Materials[entry.Key],
+                    Material = context.Materials[entry.MaterialId],
                     Direction = direction,
                     TransactionType = Common.SILA_TXN_RECIPE_CONSUMPTION,
-                    BaseQuantity = entry.Value,
-                    EnteredQuantity = entry.Value,
+                    BaseQuantity = entry.BaseQuantity,
+                    // Recipe ingredient UOM/qty (e.g. 30 ML per EA) — SAP consumption uses these, not material base.
+                    EnteredQuantity = entry.EnteredQuantity,
+                    EnteredUom = entry.EnteredUom,
                     ReferenceType = Common.SILA_REF_POS_SALE,
                     ReferenceId = transaction.Id,
                     ReferenceNumber = transaction.SourceTransactionId,
@@ -567,8 +572,32 @@ namespace Buyer.Application.Features.Shared
             return SilaPosReversal.ValidateAgainstOriginal(transaction, original, alreadyReversed);
         }
 
-        /// <summary>Adds the base quantity of every material of the recipe's approved version × factor; a batch is expanded per serving.</summary>
-        private static string? Expand(SilaPosMatching context, Guid recipeId, decimal factor, Dictionary<Guid, decimal> quantities, int depth)
+        /// <summary>
+        /// Scales one recipe ingredient for sold qty: entry stays in recipe UOM (30 ML × 2 EA = 60 ML);
+        /// base is for ME stock (converted when the recipe was saved).
+        /// </summary>
+        public static (decimal EnteredQuantity, string EnteredUom, decimal BaseQuantity) ScaleIngredient(
+            decimal ingredientQuantity,
+            string ingredientUom,
+            decimal ingredientBaseQuantity,
+            decimal saleFactor,
+            decimal lossMultiplier = 1m)
+        {
+            decimal scale = saleFactor * lossMultiplier;
+            string uom = string.IsNullOrWhiteSpace(ingredientUom) ? string.Empty : ingredientUom.Trim().ToUpperInvariant();
+            return (ingredientQuantity * scale, uom, ingredientBaseQuantity * scale);
+        }
+
+        /// <summary>
+        /// Explodes every material of the recipe's approved version × sold factor.
+        /// Entry qty/UOM come from the recipe ingredient (what SAP posts); base qty updates ME stock.
+        /// </summary>
+        private static string? Expand(
+            SilaPosMatching context,
+            Guid recipeId,
+            decimal factor,
+            Dictionary<string, ExplosionLine> quantities,
+            int depth)
         {
             if (depth > MAX_RECIPE_DEPTH)
             {
@@ -594,8 +623,33 @@ namespace Buyer.Application.Features.Shared
             {
                 if (ingredient.MaterialId != null)
                 {
-                    quantities[ingredient.MaterialId.Value] = quantities.GetValueOrDefault(ingredient.MaterialId.Value)
-                        + ingredient.BaseQuantity * scale * loss;
+                    (decimal enteredQty, string enteredUom, decimal baseQty) = ScaleIngredient(
+                        ingredient.Quantity,
+                        ingredient.Uom,
+                        ingredient.BaseQuantity,
+                        scale,
+                        loss);
+                    if (string.IsNullOrWhiteSpace(enteredUom))
+                    {
+                        enteredUom = string.IsNullOrWhiteSpace(ingredient.BaseUom)
+                            ? string.Empty
+                            : ingredient.BaseUom.Trim().ToUpperInvariant();
+                    }
+
+                    string key = $"{ingredient.MaterialId.Value:N}|{enteredUom}";
+                    if (quantities.TryGetValue(key, out ExplosionLine existing))
+                    {
+                        quantities[key] = existing with
+                        {
+                            BaseQuantity = existing.BaseQuantity + baseQty,
+                            EnteredQuantity = existing.EnteredQuantity + enteredQty
+                        };
+                    }
+                    else
+                    {
+                        quantities[key] = new ExplosionLine(ingredient.MaterialId.Value, baseQty, enteredQty, enteredUom);
+                    }
+
                     continue;
                 }
 
@@ -614,6 +668,9 @@ namespace Buyer.Application.Features.Shared
 
             return null;
         }
+
+        /// <summary>One exploded ingredient line: ME stock in base UOM, SAP consumption in recipe entry UOM.</summary>
+        public readonly record struct ExplosionLine(Guid MaterialId, decimal BaseQuantity, decimal EnteredQuantity, string EnteredUom);
 
         private static void Fail(InventoryLedger ledger, PosSalesTransaction transaction, string step, string eventAction, string message)
         {
