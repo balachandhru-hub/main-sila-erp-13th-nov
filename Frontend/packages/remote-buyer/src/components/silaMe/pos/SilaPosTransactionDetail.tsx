@@ -59,7 +59,7 @@ const SilaPosTransactionDetail: React.FC<SilaPosTransactionDetailProps> = ({ tra
       <PageHeader
         className="pud-page-header"
         title={tx ? `POS transaction ${tx.sourceTransactionId} / ${tx.lineNumber}` : "POS transaction"}
-        description="Step 1 deducts SILA inventory. Step 2 posts the consumption to the ERP (SAP)."
+        description="Step 1 validates and updates SILA inventory locally. Step 2 calls the SAP API and posts. Results and messages appear here in the tracker history."
         actions={
           <div className="srec-actions">
             <button type="button" className="sila-btn sila-btn--ghost" onClick={onBack}>Back</button>

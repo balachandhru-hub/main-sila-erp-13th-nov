@@ -151,7 +151,7 @@ const SilaTransactionTracker: React.FC = () => {
       <PageHeader
         className="pud-page-header"
         title="Transaction tracker"
-        description="Step 1 updates SILA inventory from the sales file or POS API. Step 2 posts the consumption to the ERP (SAP). Reprocess only failed rows; open a transaction for its timeline and ERP posting."
+        description="Step 1 validates and updates SILA inventory locally. Step 2 calls the SAP API and posts. Step 3 is this tracker — statuses, material documents, and history. Reprocess failed or ERP-not-started rows."
       />
       <section className="sila-card">
         <div className="srec-filters">
