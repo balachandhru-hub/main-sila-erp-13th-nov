@@ -348,7 +348,8 @@ namespace Buyer.Application.Features.Shared
             string? referenceDocument = null,
             string? glAccount = null,
             DateTime? postingDate = null,
-            bool keepEntryUnit = false)
+            bool keepEntryUnit = false,
+            bool allowMissingConversion = false)
         {
             body = null;
             if (string.IsNullOrWhiteSpace(plant) || string.IsNullOrWhiteSpace(storageLocation))
@@ -383,7 +384,8 @@ namespace Buyer.Application.Features.Shared
                     out string material,
                     out string unit,
                     out decimal quantity,
-                    keepEntryUnit);
+                    keepEntryUnit,
+                    allowMissingConversion);
                 if (convertedProblem != null)
                 {
                     return convertedProblem == MATERIAL_NOT_VALID ? MATERIAL_MAPPING_MISSING : convertedProblem;
@@ -637,7 +639,8 @@ namespace Buyer.Application.Features.Shared
             out string materialCode,
             out string entryUnit,
             out decimal converted,
-            bool keepEntryUnit = false)
+            bool keepEntryUnit = false,
+            bool allowMissingConversion = false)
         {
             materialCode = string.Empty;
             entryUnit = string.Empty;
@@ -648,13 +651,13 @@ namespace Buyer.Application.Features.Shared
             }
 
             string? baseUnit = EntryUnitOf(material.BaseUnitOfMeasure);
-            if (baseUnit == null)
+            if (baseUnit == null && !allowMissingConversion)
             {
                 return UOM_CONVERSION_MISSING;
             }
 
             decimal? baseQuantity = UomConverter.TryToBase(material, quantity, quantityUom, conversions);
-            if (baseQuantity == null || baseQuantity.Value <= 0)
+            if ((baseQuantity == null || baseQuantity.Value <= 0) && !(keepEntryUnit && allowMissingConversion && quantity > 0))
             {
                 return UOM_CONVERSION_MISSING;
             }
@@ -663,14 +666,14 @@ namespace Buyer.Application.Features.Shared
             if (keepEntryUnit)
             {
                 // POS recipe explosion: keep the recipe ingredient UOM/qty (e.g. 30 ML) for SAP.
-                string? requested = EntryUnitOf(quantityUom) ?? baseUnit;
+                string? requested = EntryUnitOf(quantityUom) ?? baseUnit ?? "EA";
                 entryUnit = requested;
                 converted = Math.Abs(quantity);
                 return null;
             }
 
-            entryUnit = baseUnit;
-            converted = baseQuantity.Value;
+            entryUnit = baseUnit ?? "EA";
+            converted = baseQuantity!.Value;
             return null;
         }
 

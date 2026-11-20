@@ -545,8 +545,8 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
             foreach (InventoryErpPosting row in pending)
             {
                 // Re-apply payloads in case FinishAsync / side effects touch the tracked entity.
-                row.ErpRequestPayload = SilaErpPayload.Sanitise(sentBody);
-                row.ErpResponsePayload = SilaErpPayload.Sanitise(sent.ResponseBody);
+                row.ErpRequestPayload = SilaErpPayload.Sanitise(sentBody) ?? sentBody;
+                row.ErpResponsePayload = SilaErpPayload.Sanitise(sent.ResponseBody) ?? sent.ResponseBody;
                 row.ErpHttpStatus = sent.Answered ? sent.StatusCode : null;
                 _repository.InventoryErpPosting.Update(row);
                 await FinishAsync(row, status, reference, error, cancellationToken);
@@ -565,8 +565,9 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
             string? responseBody,
             string? companyCode)
         {
-            string? request = SilaErpPayload.Sanitise(requestBody);
-            string? response = SilaErpPayload.Sanitise(responseBody);
+            // Always keep what went to SAP — never leave request blank when a body was built/sent.
+            string? request = SilaErpPayload.Sanitise(requestBody) ?? (string.IsNullOrWhiteSpace(requestBody) ? null : requestBody);
+            string? response = SilaErpPayload.Sanitise(responseBody) ?? (string.IsNullOrWhiteSpace(responseBody) ? null : responseBody);
             foreach (InventoryErpPosting row in rows)
             {
                 row.IntegrationSystem = integrationName;
