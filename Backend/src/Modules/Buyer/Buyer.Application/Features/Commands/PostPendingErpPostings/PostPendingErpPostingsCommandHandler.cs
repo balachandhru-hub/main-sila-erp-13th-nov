@@ -504,15 +504,7 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
 
             InventoryErpPosting leader = pending[0];
             // Persist the request payload before the HTTP call so the tracker never shows "payload missing" after a 400.
-            foreach (InventoryErpPosting row in pending)
-            {
-                row.IntegrationSystem = api.Name;
-                row.MovementType = rule.GoodsMovementType;
-                row.ErpRequestPayload = SilaErpPayload.Sanitise(body);
-                row.CompanyCode ??= posting.CompanyCode;
-                _repository.InventoryErpPosting.Update(row);
-            }
-
+            RememberExchange(pending, api.Name, rule.GoodsMovementType, body, null, null, posting.CompanyCode);
             await _repository.SaveAsync();
 
             IntegrationSendResultDto sent = await SendAsync(
@@ -522,6 +514,18 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
                 body,
                 cancellationToken,
                 SilaInventorySap.EnsureMaterialDocumentPath(api.ResourcePath));
+            string? sentBody = string.IsNullOrWhiteSpace(sent.RequestBody) ? body : sent.RequestBody;
+            // Persist request + response before FinishAsync so a later exception cannot leave the tracker blank.
+            RememberExchange(
+                pending,
+                api.Name,
+                rule.GoodsMovementType,
+                sentBody,
+                sent.Answered ? sent.StatusCode : null,
+                sent.ResponseBody,
+                posting.CompanyCode);
+            await _repository.SaveAsync();
+
             bool succeeded = sent.Answered && sent.StatusCode >= 200 && sent.StatusCode < 300;
             string status = succeeded
                 ? Common.SILA_POSTING_POSTED
@@ -540,17 +544,51 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
 
             foreach (InventoryErpPosting row in pending)
             {
-                row.IntegrationSystem = api.Name;
-                row.MovementType = rule.GoodsMovementType;
-                row.ErpHttpStatus = sent.Answered ? sent.StatusCode : null;
-                row.ErpRequestPayload = SilaErpPayload.Sanitise(body);
+                // Re-apply payloads in case FinishAsync / side effects touch the tracked entity.
+                row.ErpRequestPayload = SilaErpPayload.Sanitise(sentBody);
                 row.ErpResponsePayload = SilaErpPayload.Sanitise(sent.ResponseBody);
-                row.CompanyCode ??= posting.CompanyCode;
+                row.ErpHttpStatus = sent.Answered ? sent.StatusCode : null;
                 _repository.InventoryErpPosting.Update(row);
                 await FinishAsync(row, status, reference, error, cancellationToken);
             }
 
             return status;
+        }
+
+        /// <summary>Writes the last SAP exchange onto every posting in the group (tracker source of truth).</summary>
+        private void RememberExchange(
+            IEnumerable<InventoryErpPosting> rows,
+            string? integrationName,
+            string movementType,
+            string? requestBody,
+            int? httpStatus,
+            string? responseBody,
+            string? companyCode)
+        {
+            string? request = SilaErpPayload.Sanitise(requestBody);
+            string? response = SilaErpPayload.Sanitise(responseBody);
+            foreach (InventoryErpPosting row in rows)
+            {
+                row.IntegrationSystem = integrationName;
+                row.MovementType = movementType;
+                if (request != null)
+                {
+                    row.ErpRequestPayload = request;
+                }
+
+                if (httpStatus != null)
+                {
+                    row.ErpHttpStatus = httpStatus;
+                }
+
+                if (response != null)
+                {
+                    row.ErpResponsePayload = response;
+                }
+
+                row.CompanyCode ??= companyCode;
+                _repository.InventoryErpPosting.Update(row);
+            }
         }
 
         /// <summary>
@@ -874,6 +912,7 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
                 {
                     Answered = false,
                     StatusCode = exception.Code,
+                    RequestBody = body,
                     ErrorCode = "INTEGRATION_REFUSED",
                     ErrorMessage = "The API is not active. Activate it under Integrations."
                 };
@@ -884,6 +923,7 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
                 return new IntegrationSendResultDto
                 {
                     Answered = false,
+                    RequestBody = body,
                     ErrorCode = "INTEGRATION_SEND_FAILED",
                     ErrorMessage = "The posting could not be sent. " + SilaLogText.Short(exception.Message)
                 };

@@ -26,5 +26,17 @@ namespace Buyer.Tests.Shared
             Assert.Null(SilaErpPayload.Sanitise(string.Empty));
             Assert.Equal(SilaErpPayload.MAX_LENGTH, SilaErpPayload.Sanitise(new string('x', 10000))!.Length);
         }
+
+        [Fact]
+        public void HttpBodyFromError_ExtractsJsonAfterHttpStatus()
+        {
+            string error = "The ERP returned HTTP 400. {\"error\":{\"code\":\"MM_IM_ODATA_API_MDOC/014\",\"message\":{\"value\":\"Material Document processing failed\"}}}";
+            string? body = SilaErpPayload.HttpBodyFromError(error);
+            Assert.NotNull(body);
+            Assert.StartsWith("{\"error\"", body);
+            Assert.Contains("MM_IM_ODATA_API_MDOC/014", body);
+            Assert.Null(SilaErpPayload.HttpBodyFromError("The ERP could not be reached."));
+            Assert.Null(SilaErpPayload.HttpBodyFromError(null));
+        }
     }
 }

@@ -46,5 +46,28 @@ namespace Buyer.Application.Features.Shared
 
             return text.Length > MAX_LENGTH ? text[..MAX_LENGTH] : text;
         }
+
+        /// <summary>
+        /// Pulls the ERP response JSON/XML out of an error like
+        /// "The ERP returned HTTP 400. {\"error\":...}" when ErpResponsePayload was not stored.
+        /// </summary>
+        public static string? HttpBodyFromError(string? errorMessage)
+        {
+            if (string.IsNullOrWhiteSpace(errorMessage))
+            {
+                return null;
+            }
+
+            string text = errorMessage.Trim();
+            int json = text.IndexOf('{');
+            int xml = text.IndexOf('<');
+            int start = json < 0 ? xml : xml < 0 ? json : Math.Min(json, xml);
+            if (start < 0)
+            {
+                return null;
+            }
+
+            return Sanitise(text[start..]);
+        }
     }
 }

@@ -69,6 +69,17 @@ const prettyPayload = (value?: string | null): string => {
   }
 };
 
+/** Pull JSON/XML out of "The ERP returned HTTP 400. {...}" when ErpResponsePayload was not stored. */
+const httpBodyFromError = (error?: string | null): string => {
+  const text = error?.trim();
+  if (!text) return "";
+  const json = text.indexOf("{");
+  const xml = text.indexOf("<");
+  const start = json < 0 ? xml : xml < 0 ? json : Math.min(json, xml);
+  if (start < 0) return "";
+  return prettyPayload(text.slice(start));
+};
+
 const downloadPayload = (detail: SilaTrackerDetail) => {
   const text = prettyPayload(detail.technicalDetail);
   if (!text) return;
@@ -222,15 +233,20 @@ const SilaConsolidatedTracker: React.FC<SilaConsolidatedTrackerProps> = ({ track
     setDetailError(null);
     setFlow(null);
     const withPayload = async (detail: SilaTrackerDetail): Promise<SilaTrackerDetail> => {
-      if (!row.erpPostingId) return detail;
-      if (detail.technicalDetail?.trim() && detail.erpMessage?.trim()) return detail;
-      const payload = await getErpPostingPayload(row.erpPostingId);
-      if (!payload) return detail;
-      return {
+      const fromError = httpBodyFromError(detail.lastError);
+      let next: SilaTrackerDetail = {
         ...detail,
-        technicalDetail: detail.technicalDetail?.trim() ? detail.technicalDetail : payload.technicalDetail,
-        erpMessage: detail.erpMessage?.trim() ? detail.erpMessage : payload.erpMessage,
-        erpHttpStatus: detail.erpHttpStatus != null ? detail.erpHttpStatus : payload.erpHttpStatus,
+        erpMessage: detail.erpMessage?.trim() ? detail.erpMessage : fromError || detail.erpMessage,
+      };
+      if (!row.erpPostingId) return next;
+      if (next.technicalDetail?.trim() && next.erpMessage?.trim()) return next;
+      const payload = await getErpPostingPayload(row.erpPostingId);
+      if (!payload) return next;
+      return {
+        ...next,
+        technicalDetail: next.technicalDetail?.trim() ? next.technicalDetail : payload.technicalDetail,
+        erpMessage: next.erpMessage?.trim() ? next.erpMessage : payload.erpMessage,
+        erpHttpStatus: next.erpHttpStatus != null ? next.erpHttpStatus : payload.erpHttpStatus,
       };
     };
     try {
@@ -502,7 +518,7 @@ const SilaConsolidatedTracker: React.FC<SilaConsolidatedTrackerProps> = ({ track
           ) : (
             <PayloadIcons
               request={detail.technicalDetail}
-              response={detail.erpMessage}
+              response={detail.erpMessage || httpBodyFromError(detail.lastError)}
               onDownloadRequest={detail.technicalDetail?.trim() ? () => downloadPayload(detail) : undefined}
             />
           )}

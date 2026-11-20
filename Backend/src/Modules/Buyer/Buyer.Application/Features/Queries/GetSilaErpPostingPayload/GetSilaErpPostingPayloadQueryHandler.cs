@@ -33,7 +33,10 @@ namespace Buyer.Application.Features.Queries.GetSilaErpPostingPayload
 
             return new SilaErpPostingPayloadDto
             {
-                TechnicalDetail = SilaErpPayload.Sanitise(posting.ErpRequestPayload)
+                TechnicalDetail = SilaErpPayload.Sanitise(posting.ErpRequestPayload),
+                ErpMessage = SilaErpPayload.Sanitise(posting.ErpResponsePayload)
+                    ?? SilaErpPayload.HttpBodyFromError(posting.ErrorMessage),
+                ErpHttpStatus = posting.ErpHttpStatus
             };
         }
     }
