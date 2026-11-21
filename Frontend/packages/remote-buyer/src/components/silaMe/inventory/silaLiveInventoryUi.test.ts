@@ -26,6 +26,11 @@ assert.match(live, /Stock Count/);
 assert.match(live, /Scan barcode/);
 assert.match(live, /Take photo/);
 assert.match(live, /SilaLiveStockCountPanel/);
+assert.match(live, /openStockCount/);
+assert.match(live, /Search inventory/);
+// Scanned / photo material goes into the main Search inventory box — no extra scan text box.
+assert.doesNotMatch(live, /liv-scan-input/);
+assert.doesNotMatch(live, /placeholder=\{scanMode === "barcode" \? "Scan barcode…"/);
 assert.doesNotMatch(live, /liv-lenses/);
 assert.doesNotMatch(live, /Day-to-day stock availability/);
 assert.doesNotMatch(live, /Cost Control/);

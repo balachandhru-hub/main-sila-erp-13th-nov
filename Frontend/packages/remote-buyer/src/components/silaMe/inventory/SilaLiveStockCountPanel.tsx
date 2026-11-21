@@ -6,78 +6,124 @@ import {
   searchLiveInventory,
   searchMaterials,
   type SilaLiveInventoryRow,
-  type SilaMaterial,
 } from "../../../api/silaMe/silaInventoryApi";
 
-type ScanMode = "barcode" | "photo";
+export type LiveStockCountTarget = {
+  materialId?: string;
+  materialCode: string;
+  description?: string;
+  onHandQty?: number | null;
+  uom?: string | null;
+};
 
 interface SilaLiveStockCountPanelProps {
   open: boolean;
   locationId: string;
   locationLabel: string;
+  /** Material number copied from Search inventory when no row targets. */
   initialCode?: string;
+  /** Selected materials — counted one by one. */
+  targets?: LiveStockCountTarget[];
   onClose: () => void;
   onPosted: () => void;
 }
 
+type ResolvedLine = {
+  materialId: string | null;
+  materialCode: string;
+  materialName: string;
+  uom: string;
+  onHand: number;
+};
+
 /**
- * Compact Live Inventory stock-count dialog: scan/photo → material code → physical count → 701/702 variance.
+ * Live Inventory stock-count dialog: physical count → SAP 701/702 variance.
+ * Walks a queue of materials one by one when several are selected.
  */
 const SilaLiveStockCountPanel: React.FC<SilaLiveStockCountPanelProps> = ({
   open,
   locationId,
   locationLabel,
   initialCode = "",
+  targets = [],
   onClose,
   onPosted,
 }) => {
-  const [scanMode, setScanMode] = useState<ScanMode>("barcode");
-  const [scanInput, setScanInput] = useState("");
-  const [materialCode, setMaterialCode] = useState("");
-  const [materialId, setMaterialId] = useState<string | null>(null);
-  const [materialName, setMaterialName] = useState("");
-  const [uom, setUom] = useState("EA");
-  const [onHand, setOnHand] = useState<number | null>(null);
+  const [queue, setQueue] = useState<LiveStockCountTarget[]>([]);
+  const [index, setIndex] = useState(0);
+  const [line, setLine] = useState<ResolvedLine | null>(null);
   const [physical, setPhysical] = useState("");
   const [resolving, setResolving] = useState(false);
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const barcodeRef = useRef<HTMLInputElement>(null);
-  const photoRef = useRef<HTMLInputElement>(null);
+  const [postedCount, setPostedCount] = useState(0);
+  const physicalRef = useRef<HTMLInputElement>(null);
 
   const variance = useMemo(() => {
-    if (onHand == null || physical.trim() === "" || Number.isNaN(Number(physical))) return null;
-    return Number(physical) - onHand;
-  }, [onHand, physical]);
+    if (!line || physical.trim() === "" || Number.isNaN(Number(physical))) return null;
+    return Number(physical) - line.onHand;
+  }, [line, physical]);
 
-  const applyMaterial = async (code: string) => {
-    const term = code.trim();
-    if (!term || !locationId) return;
-    setResolving(true);
-    setError(null);
-    try {
+  const resolveTarget = async (target: LiveStockCountTarget): Promise<ResolvedLine> => {
+    const term = target.materialCode.trim();
+    if (!term) {
+      throw new Error("Material code is required.");
+    }
+
+    let materialId = target.materialId ?? null;
+    let materialCode = term;
+    let materialName = target.description || term;
+    let uom = (target.uom || "EA").trim() || "EA";
+    let onHand = target.onHandQty;
+
+    if (materialId == null || onHand == null) {
       const page = await searchMaterials(term);
       const material =
         page.find((row) => row.materialCode === term || row.barcode === term) ??
         page.find((row) => row.materialCode?.endsWith(term.replace(/^0+/, ""))) ??
         page[0];
       if (!material) {
-        throw new Error("No material matches that code or barcode.");
+        throw new Error(`No material matches ${term}.`);
       }
-      setMaterialCode(material.materialCode);
-      setMaterialId(material.id);
-      setMaterialName(material.description || material.materialCode);
-      setUom(material.baseUnitOfMeasure || "EA");
-      setScanInput(material.materialCode);
+      materialId = material.id;
+      materialCode = material.materialCode;
+      materialName = material.description || material.materialCode;
+      uom = material.baseUnitOfMeasure || uom;
+    }
 
-      const rows: SilaLiveInventoryRow[] = await searchLiveInventory(material.materialCode, locationId, 0);
-      const row = rows.find((item) => item.materialId === material.id) ?? rows[0];
-      setOnHand(row?.onHandQty ?? 0);
-      setPhysical(String(row?.onHandQty ?? 0));
+    if (onHand == null && locationId) {
+      const rows: SilaLiveInventoryRow[] = await searchLiveInventory(materialCode, locationId, 0);
+      const row =
+        (materialId ? rows.find((item) => item.materialId === materialId) : undefined) ?? rows[0];
+      onHand = row?.onHandQty ?? 0;
+      if (row?.baseUom) uom = row.baseUom;
+    }
+
+    return {
+      materialId,
+      materialCode,
+      materialName,
+      uom,
+      onHand: onHand ?? 0,
+    };
+  };
+
+  const loadIndex = async (list: LiveStockCountTarget[], at: number) => {
+    const target = list[at];
+    if (!target) {
+      setLine(null);
+      return;
+    }
+    setResolving(true);
+    setError(null);
+    setPhysical("");
+    try {
+      const resolved = await resolveTarget(target);
+      setLine(resolved);
+      setPhysical(String(resolved.onHand));
+      setTimeout(() => physicalRef.current?.focus(), 50);
     } catch (err: unknown) {
-      setMaterialCode("");
-      setMaterialId(null);
-      setOnHand(null);
+      setLine(null);
       setError(err instanceof Error ? err.message : "Could not resolve the material.");
     } finally {
       setResolving(false);
@@ -86,40 +132,57 @@ const SilaLiveStockCountPanel: React.FC<SilaLiveStockCountPanelProps> = ({
 
   useEffect(() => {
     if (!open) return;
-    setScanMode("barcode");
-    setScanInput(initialCode.trim());
-    setMaterialCode("");
-    setMaterialId(null);
-    setMaterialName("");
-    setUom("EA");
-    setOnHand(null);
-    setPhysical("");
+    const fromTargets = targets
+      .map((item) => ({
+        ...item,
+        materialCode: (item.materialCode || "").trim(),
+      }))
+      .filter((item) => item.materialCode.length > 0);
+    const code = initialCode.trim();
+    const list =
+      fromTargets.length > 0
+        ? fromTargets
+        : code
+          ? [{ materialCode: code }]
+          : [];
+    setQueue(list);
+    setIndex(0);
+    setPostedCount(0);
     setError(null);
-    setTimeout(() => barcodeRef.current?.focus(), 50);
-    if (initialCode.trim() && locationId) {
-      void applyMaterial(initialCode.trim());
+    setLine(null);
+    setPhysical("");
+    if (list.length === 0) {
+      setError("Select materials in Material availability, or enter a material in Search inventory.");
+      return;
     }
+    void loadIndex(list, 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, initialCode, locationId]);
+  }, [open, initialCode, locationId, targets]);
 
-  const onScanSubmit = (event: React.FormEvent) => {
-    event.preventDefault();
-    void applyMaterial(scanInput);
+  const finishAll = () => {
+    if (postedCount > 0 || queue.length > 0) {
+      onPosted();
+    }
+    onClose();
   };
 
-  const onPhotoPicked = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) return;
-    setScanMode("photo");
-    setError(null);
-    toastService.info("Photo captured. Enter or confirm the material code.");
-    barcodeRef.current?.focus();
+  const advanceOrClose = (nextPosted: number) => {
+    const next = index + 1;
+    if (next < queue.length) {
+      setIndex(next);
+      void loadIndex(queue, next);
+      return;
+    }
+    toastService.success(
+      nextPosted === 1 ? "Stock count posted." : `${nextPosted} stock count variances posted.`,
+    );
+    onPosted();
+    onClose();
   };
 
   const onPost = async () => {
-    if (!locationId || !materialCode || physical.trim() === "") {
-      setError("Scan a material and enter the physical count.");
+    if (!locationId || !line || physical.trim() === "") {
+      setError("Enter the physical count.");
       return;
     }
     const qty = Number(physical);
@@ -127,22 +190,29 @@ const SilaLiveStockCountPanel: React.FC<SilaLiveStockCountPanelProps> = ({
       setError("Physical count must be zero or greater.");
       return;
     }
+    if (variance === 0) {
+      // No SAP post — skip to next material in the queue.
+      toastService.info(`${line.materialCode}: no variance.`);
+      advanceOrClose(postedCount);
+      return;
+    }
     setPosting(true);
     setError(null);
     try {
       const result = await createLiveStockCount({
         locationId,
-        materialId,
-        materialCodeOrBarcode: materialCode,
+        materialId: line.materialId,
+        materialCodeOrBarcode: line.materialCode,
         physicalQty: qty,
-        uom,
+        uom: line.uom,
         reason: `Live Inventory stock count at ${locationLabel}`,
       });
       toastService.success(
         `${result.materialCode}: variance ${formatQty(result.varianceQty)} → SAP ${result.movementType}`,
       );
-      onPosted();
-      onClose();
+      const nextPosted = postedCount + 1;
+      setPostedCount(nextPosted);
+      advanceOrClose(nextPosted);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Could not post the stock count.");
     } finally {
@@ -152,8 +222,11 @@ const SilaLiveStockCountPanel: React.FC<SilaLiveStockCountPanelProps> = ({
 
   if (!open) return null;
 
+  const progress =
+    queue.length > 1 ? `Material ${Math.min(index + 1, queue.length)} of ${queue.length}` : null;
+
   return (
-    <div className="liv-sc-backdrop" role="presentation" onClick={onClose}>
+    <div className="liv-sc-backdrop" role="presentation" onClick={finishAll}>
       <div
         className="liv-sc-dialog"
         role="dialog"
@@ -164,92 +237,66 @@ const SilaLiveStockCountPanel: React.FC<SilaLiveStockCountPanelProps> = ({
         <header className="liv-sc-head">
           <div>
             <h2 id="liv-sc-title">Stock Count</h2>
-            <p>{locationLabel}</p>
+            <p>{locationLabel}{progress ? ` · ${progress}` : ""}</p>
           </div>
-          <button type="button" className="sila-btn sila-btn--ghost sila-btn--sm" onClick={onClose}>
+          <button type="button" className="sila-btn sila-btn--ghost sila-btn--sm" onClick={finishAll}>
             Close
           </button>
         </header>
 
-        <div className="liv-sc-modes" role="tablist" aria-label="Scan method">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={scanMode === "barcode"}
-            className={`liv-sc-mode${scanMode === "barcode" ? " liv-sc-mode--on" : ""}`}
-            onClick={() => {
-              setScanMode("barcode");
-              barcodeRef.current?.focus();
-            }}
-          >
-            Scan barcode
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={scanMode === "photo"}
-            className={`liv-sc-mode${scanMode === "photo" ? " liv-sc-mode--on" : ""}`}
-            onClick={() => photoRef.current?.click()}
-          >
-            Take photo
-          </button>
-          <input
-            ref={photoRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            className="liv-sc-file"
-            onChange={onPhotoPicked}
-          />
-        </div>
-
-        <form className="liv-sc-scan" onSubmit={onScanSubmit}>
-          <label className="sila-field">
-            <span className="sila-label">{scanMode === "photo" ? "Material code (from photo)" : "Barcode / material code"}</span>
-            <input
-              ref={barcodeRef}
-              className="sila-input"
-              value={scanInput}
-              onChange={(event) => setScanInput(event.target.value)}
-              placeholder={scanMode === "barcode" ? "Scan or type barcode / material…" : "Enter material code…"}
-              autoComplete="off"
-            />
-          </label>
-          <button type="submit" className="sila-btn sila-btn--secondary" disabled={resolving || !scanInput.trim()}>
-            {resolving ? "Resolving…" : "Apply"}
-          </button>
-        </form>
+        {resolving && <p className="liv-sc-sub">Resolving material…</p>}
 
         <div className="liv-sc-grid">
           <div>
             <span className="sila-label">Material</span>
-            <strong className="liv-sc-value">{materialCode || "—"}</strong>
-            {materialName && <p className="liv-sc-sub">{materialName}</p>}
+            <strong className="liv-sc-value">{line?.materialCode || "—"}</strong>
+            {line?.materialName && <p className="liv-sc-sub">{line.materialName}</p>}
           </div>
           <div>
             <span className="sila-label">Stock in hand</span>
-            <strong className="liv-sc-value">{onHand == null ? "—" : formatQty(onHand)}</strong>
-            <p className="liv-sc-sub">{uom}</p>
+            <strong className="liv-sc-value">{line == null ? "—" : formatQty(line.onHand)}</strong>
+            <p className="liv-sc-sub">{line?.uom || ""}</p>
           </div>
           <label className="sila-field">
             <span className="sila-label">Physical stock count</span>
             <input
+              ref={physicalRef}
               className="sila-input"
               type="number"
               min={0}
               step="any"
               value={physical}
-              disabled={!materialCode}
+              disabled={!line || posting}
               onChange={(event) => setPhysical(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  void onPost();
+                }
+              }}
             />
           </label>
           <div>
             <span className="sila-label">Variance</span>
-            <strong className={`liv-sc-value${variance != null && variance < 0 ? " liv-sc-value--neg" : variance != null && variance > 0 ? " liv-sc-value--pos" : ""}`}>
+            <strong
+              className={`liv-sc-value${
+                variance != null && variance < 0
+                  ? " liv-sc-value--neg"
+                  : variance != null && variance > 0
+                    ? " liv-sc-value--pos"
+                    : ""
+              }`}
+            >
               {variance == null ? "—" : formatQty(variance)}
             </strong>
             <p className="liv-sc-sub">
-              {variance == null ? "Enter physical count" : variance > 0 ? "SAP 701 (surplus)" : variance < 0 ? "SAP 702 (shortage)" : "No variance"}
+              {variance == null
+                ? "Enter physical count"
+                : variance > 0
+                  ? "SAP 701 (surplus)"
+                  : variance < 0
+                    ? "SAP 702 (shortage)"
+                    : "No variance — skip to next"}
             </p>
           </div>
         </div>
@@ -257,16 +304,38 @@ const SilaLiveStockCountPanel: React.FC<SilaLiveStockCountPanelProps> = ({
         {error && <p className="liv-sc-error">{error}</p>}
 
         <footer className="liv-sc-foot">
-          <button type="button" className="sila-btn sila-btn--secondary" onClick={onClose}>
+          <button type="button" className="sila-btn sila-btn--secondary" onClick={finishAll}>
             Cancel
           </button>
+          {queue.length > 1 && index + 1 < queue.length && (
+            <button
+              type="button"
+              className="sila-btn sila-btn--secondary"
+              disabled={posting || resolving}
+              onClick={() => {
+                const next = index + 1;
+                setIndex(next);
+                void loadIndex(queue, next);
+              }}
+            >
+              Skip
+            </button>
+          )}
           <button
             type="button"
             className="sila-btn sila-btn--primary"
-            disabled={posting || !materialCode || variance == null || variance === 0}
+            disabled={posting || resolving || !line || variance == null}
             onClick={() => void onPost()}
           >
-            {posting ? "Posting…" : "Post variance"}
+            {posting
+              ? "Posting…"
+              : variance === 0
+                ? queue.length > 1 && index + 1 < queue.length
+                  ? "Next material"
+                  : "Done"
+                : queue.length > 1 && index + 1 < queue.length
+                  ? "Post & next"
+                  : "Post variance"}
           </button>
         </footer>
       </div>
