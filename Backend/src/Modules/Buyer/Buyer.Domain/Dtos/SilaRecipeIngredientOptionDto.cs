@@ -19,5 +19,19 @@ namespace Buyer.Domain.Dtos
         public List<SilaUomConversionDto> Conversions { get; set; } = new();
         /// <summary>Suppliers that delivered it on purchase orders.</summary>
         public List<string> Suppliers { get; set; } = new();
+
+        /// <summary>SILA ledger on-hand at the requested outlet/location context; null when no outlet selected.</summary>
+        public decimal? StockOnHand { get; set; }
+
+        /// <summary>In-transit quantity at the requested location context.</summary>
+        public decimal? StockInTransit { get; set; }
+
+        /// <summary>Available = on-hand (ledger); quality/blocked are never treated as free stock here.</summary>
+        public decimal? StockAvailable { get; set; }
+
+        /// <summary>FRESH | STALE | UNKNOWN | NOT_DETERMINED — based on last movement / ERP snapshot age.</summary>
+        public string StockFreshness { get; set; } = "NOT_DETERMINED";
+
+        public string? StockLocationName { get; set; }
     }
 }

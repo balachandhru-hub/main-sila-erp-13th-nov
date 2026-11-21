@@ -23,6 +23,12 @@ export interface SilaPosImportResult {
   failed: number;
   /** Lines of the batch already deducted or posted before this run. */
   alreadyPosted?: number;
+  /** Step 1: lines whose SILA inventory was validated and updated locally. */
+  localUpdated?: number;
+  /** Step 2: lines whose SAP material document posted. */
+  sapPosted?: number;
+  /** Step 2: lines whose SAP material document failed. */
+  sapFailed?: number;
   /** Lines whose ERP posting outcome is unknown (reconcile under ERP postings). */
   postingUnknown?: number;
   errors: SilaPosRowError[];
@@ -30,6 +36,8 @@ export interface SilaPosImportResult {
 
 export interface SilaPosPreviewRow {
   rowNumber: number;
+  /** Stored sale transaction id when the row was accepted into the PREVIEW batch. */
+  saleTransactionId?: string | null;
   /** READY | INVALID | DUPLICATE | UNMAPPED_POS_CODE | INVALID_OUTLET | INVALID_UOM | RECIPE_NOT_READY */
   status: string;
   businessDate?: string | null;
@@ -43,7 +51,64 @@ export interface SilaPosPreviewRow {
   amount?: string | null;
   outletLocationName?: string | null;
   recipeCode?: string | null;
+  recipeVersion?: number | null;
+  sourceSystem?: string | null;
+  transactionType?: string | null;
+  originalTransactionId?: string | null;
+  originalLineId?: string | null;
   message?: string | null;
+}
+
+export interface SilaPosConsumptionPreviewIngredient {
+  materialId: string;
+  materialCode?: string | null;
+  materialDescription?: string | null;
+  quantity: number;
+  baseUom?: string | null;
+  unitCost?: number | null;
+  estimatedCost?: number | null;
+  costPending: boolean;
+}
+
+export interface SilaPosConsumptionPreviewLine {
+  saleTransactionId: string;
+  businessDate?: string | null;
+  transactionId: string;
+  lineId: number;
+  posCode: string;
+  quantitySold: number;
+  uom?: string | null;
+  outletCode: string;
+  outletLocationName?: string | null;
+  plantCode?: string | null;
+  storageLocationCode?: string | null;
+  salesAmount?: number | null;
+  currency?: string | null;
+  recipeCode?: string | null;
+  recipeVersion?: number | null;
+  matchStatus: string;
+  message?: string | null;
+  ingredientCount: number;
+  consumptionCost?: number | null;
+  costPending: boolean;
+  grossContribution?: number | null;
+  foodCostPercent?: number | null;
+  grossMarginPercent?: number | null;
+  ingredients: SilaPosConsumptionPreviewIngredient[];
+}
+
+export interface SilaPosConsumptionPreview {
+  batchId: string;
+  batchNumber: string;
+  lines: SilaPosConsumptionPreviewLine[];
+  totalSalesAmount: number;
+  totalConsumptionCost: number;
+}
+
+export interface SilaPosProcessRequest {
+  transactionIds?: string[];
+  /** false = deduct SILA stock but do not queue SAP (default from server config). */
+  queueErpPosting?: boolean;
 }
 
 /** Validation of an uploaded sales file; the valid lines wait in a PREVIEW batch until processed. */
@@ -242,9 +307,29 @@ export const previewPosSales = async (file: File, posSourceId?: string): Promise
   return { ...preview, rows: list(preview.rows) };
 };
 
-/** Step 2: processes the lines of a previewed batch (match, deduct stock, queue the ERP posting). */
-export const processPosBatch = async (batchId: string): Promise<SilaPosImportResult> =>
-  normalizeResult(await call(() => axiosInstance.post<SilaPosImportResult>(`${BASE}/batches/${batchId}/process`), "Could not process the sales batch."));
+/** Read-only recipe explosion and theoretical cost for selected (or all) PREVIEW lines. */
+export const previewPosConsumption = async (
+  batchId: string,
+  body: SilaPosProcessRequest = {},
+): Promise<SilaPosConsumptionPreview> => {
+  const preview = await call(
+    () => axiosInstance.post<SilaPosConsumptionPreview>(`${BASE}/batches/${batchId}/consumption-preview`, body),
+    "Could not preview consumption.",
+  );
+  return {
+    ...preview,
+    lines: list(preview.lines).map((line) => ({ ...line, ingredients: list(line.ingredients) })),
+  };
+};
+
+/** Step 2: processes selected (or all) lines of a previewed batch (match, deduct stock, optional ERP queue). */
+export const processPosBatch = async (batchId: string, body: SilaPosProcessRequest = {}): Promise<SilaPosImportResult> =>
+  normalizeResult(
+    await call(
+      () => axiosInstance.post<SilaPosImportResult>(`${BASE}/batches/${batchId}/process`, body),
+      "Could not process the sales batch.",
+    ),
+  );
 
 /** Discards a previewed batch that was not processed. */
 export const discardPosBatch = async (batchId: string): Promise<void> => {

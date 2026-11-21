@@ -64,10 +64,11 @@ namespace Buyer.API.Controllers
             [FromQuery] string? supplier,
             [FromQuery] string? materialType,
             [FromQuery] Guid? supplierId,
+            [FromQuery] Guid? outletLocationId,
             [FromQuery] int index = 0,
             [FromQuery] int limit = 20)
         {
-            _logger.LogDebug($"Searching recipe ingredients. Search: {search}, Group: {materialGroup}, Category: {category}, Supplier: {supplier}");
+            _logger.LogDebug($"Searching recipe ingredients. Search: {search}, Group: {materialGroup}, Category: {category}, Supplier: {supplier}, Outlet: {outletLocationId}");
             SilaRecipeIngredientPageDto result = await _mediator.Send(new SearchSilaRecipeIngredientsQuery
             {
                 OrganizationId = GetOrganizationId(),
@@ -77,6 +78,7 @@ namespace Buyer.API.Controllers
                 Supplier = supplier,
                 MaterialType = materialType,
                 SupplierId = supplierId,
+                OutletLocationId = outletLocationId,
                 Index = index,
                 Limit = limit
             });

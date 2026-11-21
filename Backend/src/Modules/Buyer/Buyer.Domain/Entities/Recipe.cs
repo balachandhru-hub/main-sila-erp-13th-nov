@@ -91,5 +91,36 @@ namespace Buyer.Domain.Entities
         public string? PosItem { get; set; }
 
         public DateTime? LastSaleDate { get; set; }
+
+        /// <summary>FOOD | BEVERAGE | MINIBAR | TOBACCO. Null = legacy unclassified (treated as FOOD for RECIPE/BATCH, MINIBAR for DIRECT).</summary>
+        [MaxLength(20)]
+        public string? ProductClass { get; set; }
+
+        /// <summary>
+        /// STANDARD_RECIPE | DIRECT_ITEM | BATCH_RECIPE | SUB_RECIPE | COMBO | VARIANT_RECIPE.
+        /// Null = inferred from ItemMode. Engine still uses ItemMode (DIRECT|RECIPE|BATCH).
+        /// </summary>
+        [MaxLength(30)]
+        public string? RecipeFormat { get; set; }
+
+        /// <summary>Tenant subcategory label (e.g. Cocktail, Main Course). Distinct from Category master name when needed.</summary>
+        [MaxLength(100)]
+        public string? Subcategory { get; set; }
+
+        [Precision(9, 4)]
+        public decimal? TrimLossPercent { get; set; }
+
+        [Precision(9, 4)]
+        public decimal? CookingLossPercent { get; set; }
+
+        [Precision(9, 4)]
+        public decimal? WasteFactorPercent { get; set; }
+
+        public int? PrepTimeMinutes { get; set; }
+
+        public int? CookTimeMinutes { get; set; }
+
+        /// <summary>Ordered preparation steps as JSON array of strings, or plain text for chef notes.</summary>
+        public string? PreparationSteps { get; set; }
     }
 }

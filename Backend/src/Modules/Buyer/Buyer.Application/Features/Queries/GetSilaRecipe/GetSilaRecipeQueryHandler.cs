@@ -7,6 +7,7 @@ using Buyer.Domain.Entities;
 using Buyer.Infrastructure.Contracts.IRepository;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using SharedKernel.ExceptionHandler;
 using SharedKernel.LoggerServices;
 using MaterialEntity = Buyer.Domain.Entities.ItemBuyerMaster;
@@ -22,12 +23,18 @@ namespace Buyer.Application.Features.Queries.GetSilaRecipe
         private readonly IRepositoryWrapper _repository;
         private readonly ILoggerManager _logger;
         private readonly IIdentityApiClient _identityApiClient;
+        private readonly IConfiguration _configuration;
 
-        public GetSilaRecipeQueryHandler(IRepositoryWrapper repository, ILoggerManager logger, IIdentityApiClient identityApiClient)
+        public GetSilaRecipeQueryHandler(
+            IRepositoryWrapper repository,
+            ILoggerManager logger,
+            IIdentityApiClient identityApiClient,
+            IConfiguration configuration)
         {
             _repository = repository;
             _logger = logger;
             _identityApiClient = identityApiClient;
+            _configuration = configuration;
         }
 
         public async Task<SilaRecipeDetailDto> Handle(GetSilaRecipeQuery request, CancellationToken cancellationToken)
@@ -88,6 +95,17 @@ namespace Buyer.Application.Features.Queries.GetSilaRecipe
                 x => x.OutletLocationId,
                 x => SilaRecipeRules.CostPerServing(Math.Round(ingredients.Sum(i => CostAt(i, readiness, x.OutletLocationId)), 4), servingQty));
 
+            string? basePath = _configuration[Common.BASE_FOLDER_PATH];
+            bool preferDraftPicture = showDraft || SilaRecipePictureRules.PreferDraftSlot(recipe);
+            string? picturePath = string.IsNullOrWhiteSpace(basePath)
+                ? null
+                : SilaRecipePictureRules.ResolveStudioFile(basePath, buyer.Id, recipe, preferDraftPicture);
+            string? pictureSlot = picturePath == null
+                ? null
+                : (Path.GetFileName(picturePath).StartsWith(SilaRecipePictureRules.SLOT_DRAFT, StringComparison.OrdinalIgnoreCase)
+                    ? SilaRecipePictureRules.SLOT_DRAFT
+                    : SilaRecipePictureRules.SLOT_ACTIVE);
+
             _logger.LogInfo($"Recipe fetched. RecipeId: {recipe.Id}, Version: {version}, Ingredients: {ingredients.Count}, Outlets: {prices.Count}");
             return new SilaRecipeDetailDto
             {
@@ -101,6 +119,15 @@ namespace Buyer.Application.Features.Queries.GetSilaRecipe
                 CategoryId = recipe.CategoryId,
                 CategoryName = categoryName,
                 ItemMode = recipe.ItemMode,
+                ProductClass = SilaHospitalityRules.InferProductClass(recipe),
+                RecipeFormat = SilaHospitalityRules.InferRecipeFormat(recipe),
+                Subcategory = recipe.Subcategory,
+                TrimLossPercent = recipe.TrimLossPercent,
+                CookingLossPercent = recipe.CookingLossPercent,
+                WasteFactorPercent = recipe.WasteFactorPercent,
+                PrepTimeMinutes = recipe.PrepTimeMinutes,
+                CookTimeMinutes = recipe.CookTimeMinutes,
+                PreparationSteps = recipe.PreparationSteps,
                 ServingQty = servingQty,
                 ServingUom = showDraft ? SilaRecipeRules.LatestServingUom(recipe) : recipe.ServingUom,
                 SellingUom = showDraft ? SilaRecipeRules.LatestSellingUom(recipe) : recipe.SellingUom,
@@ -137,6 +164,10 @@ namespace Buyer.Application.Features.Queries.GetSilaRecipe
                     LocationName = locations.TryGetValue(x.OutletLocationId, out InventoryLocation? name) ? name.LocationName : null,
                     MenuPrice = x.MenuPrice,
                     Currency = x.Currency,
+                    PosCode = string.IsNullOrWhiteSpace(x.PosCode)
+                        ? (showDraft ? SilaRecipeRules.LatestPosCode(recipe) : recipe.PosCode)
+                        : x.PosCode,
+                    PosItem = string.IsNullOrWhiteSpace(x.PosItem) ? recipe.PosItem : x.PosItem,
                     CostPerServing = outletCostPerServing[x.OutletLocationId],
                     CostPercent = SilaRecipeRules.CostPercent(outletCostPerServing[x.OutletLocationId], x.MenuPrice),
                     MarginAmount = SilaRecipeRules.MarginAmount(outletCostPerServing[x.OutletLocationId], x.MenuPrice),
@@ -161,7 +192,9 @@ namespace Buyer.Application.Features.Queries.GetSilaRecipe
                     ActorUserId = x.ActorUserId,
                     ActorName = users.FirstOrDefault(u => u.UserId == x.ActorUserId)?.Name,
                     DateCreated = x.DateCreated
-                }).ToList()
+                }).ToList(),
+                HasPicture = picturePath != null,
+                PictureSlot = pictureSlot
             };
         }
 

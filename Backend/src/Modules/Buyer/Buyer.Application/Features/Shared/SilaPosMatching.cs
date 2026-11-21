@@ -218,9 +218,10 @@ namespace Buyer.Application.Features.Shared
             }
 
             Recipe recipe = match.Recipe;
-            if (!string.IsNullOrWhiteSpace(uom) && !string.Equals(uom.Trim(), recipe.SellingUom.Trim(), StringComparison.OrdinalIgnoreCase))
+            if (!string.IsNullOrWhiteSpace(uom) && !SoldUomMatches(recipe, uom))
             {
-                return Problem(match, ROW_INVALID_UOM, $"Sold in {uom.Trim()} but recipe {recipe.RecipeCode} is sold in {recipe.SellingUom}. Correct the UOM.");
+                string expected = string.IsNullOrWhiteSpace(recipe.SellingUom) ? recipe.ServingUom : recipe.SellingUom;
+                return Problem(match, ROW_INVALID_UOM, $"Sold in {uom.Trim()} but recipe {recipe.RecipeCode} is sold in {expected}. Correct the UOM.");
             }
 
             if (!IsSellable(recipe))
@@ -248,6 +249,20 @@ namespace Buyer.Application.Features.Shared
                     && (Normalize(recipe.PosCode) == itemKey || Normalize(recipe.PosItem) == itemKey))
                 .OrderByDescending(recipe => recipe.ActiveVersion)
                 .FirstOrDefault();
+        }
+
+        /// <summary>POS file UOM (e.g. EA) must match the recipe selling UOM, or serving UOM when selling is blank.</summary>
+        private static bool SoldUomMatches(Recipe recipe, string uom)
+        {
+            string sold = uom.Trim();
+            if (!string.IsNullOrWhiteSpace(recipe.SellingUom)
+                && string.Equals(sold, recipe.SellingUom.Trim(), StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            return !string.IsNullOrWhiteSpace(recipe.ServingUom)
+                && string.Equals(sold, recipe.ServingUom.Trim(), StringComparison.OrdinalIgnoreCase);
         }
 
         private static SilaPosMatch Problem(SilaPosMatch match, string status, string message)

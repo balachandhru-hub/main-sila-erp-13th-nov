@@ -3,6 +3,7 @@ using Buyer.Domain.Common;
 using Buyer.Domain.Entities;
 using Buyer.Infrastructure.Contracts.IRepository;
 using MediatR;
+using Microsoft.Extensions.Configuration;
 using SharedKernel.LoggerServices;
 
 namespace Buyer.Application.Features.Commands.UpdateSilaRecipe
@@ -16,11 +17,13 @@ namespace Buyer.Application.Features.Commands.UpdateSilaRecipe
     {
         private readonly IRepositoryWrapper _repository;
         private readonly ILoggerManager _logger;
+        private readonly IConfiguration _configuration;
 
-        public UpdateSilaRecipeCommandHandler(IRepositoryWrapper repository, ILoggerManager logger)
+        public UpdateSilaRecipeCommandHandler(IRepositoryWrapper repository, ILoggerManager logger, IConfiguration configuration)
         {
             _repository = repository;
             _logger = logger;
+            _configuration = configuration;
         }
 
         public async Task<Unit> Handle(UpdateSilaRecipeCommand request, CancellationToken cancellationToken)
@@ -31,7 +34,16 @@ namespace Buyer.Application.Features.Commands.UpdateSilaRecipe
             Recipe recipe = await SilaRecipeRules.GetTrackedAsync(_repository, _logger, buyer.Id, request.RecipeId);
             InventoryLedger ledger = new InventoryLedger(_repository, buyer.Id, request.UserId);
 
-            SilaRecipeRules.StartEditing(_logger, recipe, ledger);
+            bool startedRevision = SilaRecipeRules.StartEditing(_logger, recipe, ledger);
+            if (startedRevision)
+            {
+                string? basePath = _configuration[Common.BASE_FOLDER_PATH];
+                if (!string.IsNullOrWhiteSpace(basePath))
+                {
+                    SilaRecipePictureRules.SeedDraftFromActive(basePath, buyer.Id, recipe.Id, _logger);
+                }
+            }
+
             await SilaRecipeRules.ApplyAsync(_repository, _logger, buyer.Id, request.UserId, request.RoleId, recipe, request.Request!, cancellationToken);
             ledger.AddEvent(Common.SILA_REF_RECIPE, recipe.Id, SilaRecipeRules.EVENT_UPDATED, $"Version {recipe.Version}.");
             await _repository.SaveAsync();

@@ -41,6 +41,8 @@ namespace Buyer.Application.Features.Shared
                 STEP_DONE => posting?.ErpReference == null ? "Posted to the ERP." : $"Posted to the ERP: document {posting.ErpReference}.",
                 STEP_FAILED => dto.FailureMessage,
                 STEP_SKIPPED or STEP_UNKNOWN => dto.FailureMessage,
+                "NOT_STARTED" => dto.FailureMessage ?? "ERP is not started.",
+                STEP_PENDING => dto.DeductState == STEP_DONE ? (dto.FailureMessage ?? "Queued for the ERP posting.") : "Waits for step 1.",
                 _ => dto.DeductState == STEP_DONE ? "Queued for the ERP posting." : "Waits for step 1."
             };
             dto.FailureCode = dto.DeductState == STEP_FAILED
@@ -60,9 +62,9 @@ namespace Buyer.Application.Features.Shared
                 "INVENTORY_DEDUCTED" => ("DEDUCT", STEP_DONE),
                 "DEDUCT_FAILED" => ("DEDUCT", STEP_FAILED),
                 "ERP_POSTING_QUEUED" or "ERP_POSTING_REQUEUED" => ("POST", "QUEUED"),
+                "ERP_POSTING_SKIPPED" or "ERP_SKIPPED" => ("POST", STEP_SKIPPED),
                 "ERP_POSTED" => ("POST", STEP_DONE),
                 "ERP_FAILED" => ("POST", STEP_FAILED),
-                "ERP_SKIPPED" => ("POST", STEP_SKIPPED),
                 "ERP_UNKNOWN" => ("POST", STEP_UNKNOWN),
                 "REPROCESS_REQUESTED" => ("REPROCESS", "REQUESTED"),
                 _ => (null, null)
@@ -149,12 +151,22 @@ namespace Buyer.Application.Features.Shared
                 {
                     dto.PostState = STEP_SKIPPED;
                     dto.FailureMessage = posting.ErrorMessage;
+                    dto.CanReprocess = true;
                 }
                 else if (posting?.Status == Common.SILA_POSTING_UNKNOWN)
                 {
                     // Timed out: the ERP may have posted it. The posting is reconciled under ERP postings before any retry.
                     dto.PostState = STEP_UNKNOWN;
                     dto.FailureMessage = posting.ErrorMessage ?? "The ERP did not answer in time. Reconcile the posting under ERP postings.";
+                }
+                else if (posting == null || posting.Status == Common.SILA_POSTING_PENDING)
+                {
+                    // Inventory deducted but SAP not started / still waiting in the ERP queue.
+                    dto.PostState = posting == null ? "NOT_STARTED" : STEP_PENDING;
+                    dto.FailureMessage = posting == null
+                        ? "ERP is not started. Reprocess to queue the SAP material-document posting."
+                        : "Queued for the ERP posting.";
+                    dto.CanReprocess = posting == null;
                 }
             }
 

@@ -11,6 +11,11 @@ namespace Buyer.Domain.Dtos
         public string? FamilyName { get; set; }
         public Guid? CategoryId { get; set; }
         public string ItemMode { get; set; } = string.Empty;
+        /// <summary>FOOD | BEVERAGE | MINIBAR | TOBACCO (inferred when unset on legacy rows).</summary>
+        public string ProductClass { get; set; } = string.Empty;
+        /// <summary>STANDARD_RECIPE | DIRECT_ITEM | BATCH_RECIPE | SUB_RECIPE | COMBO | VARIANT_RECIPE</summary>
+        public string RecipeFormat { get; set; } = string.Empty;
+        public string? Subcategory { get; set; }
         public decimal ServingQty { get; set; }
         public string ServingUom { get; set; } = string.Empty;
         public string SellingUom { get; set; } = string.Empty;
@@ -57,6 +62,8 @@ namespace Buyer.Domain.Dtos
         public DateTime? SubmittedOn { get; set; }
         public DateTime? ApprovedOn { get; set; }
         public DateTime DateUpdated { get; set; }
+        /// <summary>Selling/catalog picture exists under managed file storage for this recipe.</summary>
+        public bool HasPicture { get; set; }
         /// <summary>Approval list only: CREATE (never approved) or CHANGE (new version of an approved recipe).</summary>
         public string? ApprovalEvent { get; set; }
         /// <summary>Approval list only: the level waiting for a decision (1-based) and the number of levels.</summary>

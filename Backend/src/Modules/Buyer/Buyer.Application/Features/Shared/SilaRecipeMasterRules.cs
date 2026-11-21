@@ -96,7 +96,14 @@ namespace Buyer.Application.Features.Shared
             }
 
             List<RecipeCategory> categories = await repository.RecipeCategory.FindByCondition(x => x.BuyerId == buyerId).ToListAsync(cancellationToken);
-            return categories.Select(x => (new SilaRecipeMasterDto { Id = x.Id, Code = x.Code, Name = x.Name, Description = x.Description }, x.IsActive)).ToList();
+            return categories.Select(x => (new SilaRecipeMasterDto
+            {
+                Id = x.Id,
+                Code = x.Code,
+                Name = x.Name,
+                Description = x.Description,
+                ProductClass = x.ProductClass
+            }, x.IsActive)).ToList();
         }
 
         /// <summary>Active recipes per family or category id.</summary>

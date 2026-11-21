@@ -7,6 +7,8 @@ namespace Buyer.Domain.Dtos
         public string Code { get; set; } = string.Empty;
         public string Name { get; set; } = string.Empty;
         public string? Description { get; set; }
+        /// <summary>FOOD | BEVERAGE | MINIBAR | TOBACCO when this is a category master.</summary>
+        public string? ProductClass { get; set; }
         /// <summary>Active recipes that use it.</summary>
         public int RecipeCount { get; set; }
         /// <summary>ACTIVE, or INACTIVE for a deleted master (listed with status=INACTIVE or ALL).</summary>

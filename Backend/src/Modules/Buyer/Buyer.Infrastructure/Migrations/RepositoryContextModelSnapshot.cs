@@ -4731,6 +4731,21 @@ namespace Buyer.Infrastructure.Migrations
                         .HasColumnType("int")
                         .HasColumnName("recipe_version");
 
+                    b.Property<string>("TransactionType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasColumnName("transaction_type");
+
+                    b.Property<string>("OriginalTransactionId")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasColumnName("original_transaction_id");
+
+                    b.Property<int?>("OriginalLineId")
+                        .HasColumnType("int")
+                        .HasColumnName("original_line_id");
+
                     b.Property<string>("SourceTransactionId")
                         .IsRequired()
                         .HasColumnType("nvarchar(450)")
@@ -4766,6 +4781,9 @@ namespace Buyer.Infrastructure.Migrations
 
                     b.HasIndex("BuyerId", "Status")
                         .HasDatabaseName("ix_pos_sales_transaction_buyer_id_status");
+
+                    b.HasIndex("BuyerId", "OriginalTransactionId")
+                        .HasDatabaseName("ix_pos_sales_transaction_buyer_id_original_transaction_id");
 
                     b.HasIndex("BuyerId", "SourceTransactionId", "LineNumber")
                         .IsUnique()
@@ -6767,6 +6785,15 @@ namespace Buyer.Infrastructure.Migrations
                         .HasColumnType("uniqueidentifier")
                         .HasColumnName("category_id");
 
+                    b.Property<int?>("CookTimeMinutes")
+                        .HasColumnType("int")
+                        .HasColumnName("cook_time_minutes");
+
+                    b.Property<decimal?>("CookingLossPercent")
+                        .HasPrecision(9, 4)
+                        .HasColumnType("decimal(9,4)")
+                        .HasColumnName("cooking_loss_percent");
+
                     b.Property<Guid>("CreatedBy")
                         .HasColumnType("uniqueidentifier")
                         .HasColumnName("created_by");
@@ -6843,10 +6870,28 @@ namespace Buyer.Infrastructure.Migrations
                         .HasColumnType("nvarchar(max)")
                         .HasColumnName("pos_item");
 
+                    b.Property<string>("PreparationSteps")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("preparation_steps");
+
+                    b.Property<int?>("PrepTimeMinutes")
+                        .HasColumnType("int")
+                        .HasColumnName("prep_time_minutes");
+
+                    b.Property<string>("ProductClass")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasColumnName("product_class");
+
                     b.Property<string>("RecipeCode")
                         .IsRequired()
                         .HasColumnType("nvarchar(450)")
                         .HasColumnName("recipe_code");
+
+                    b.Property<string>("RecipeFormat")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)")
+                        .HasColumnName("recipe_format");
 
                     b.Property<string>("SellingUom")
                         .IsRequired()
@@ -6868,6 +6913,11 @@ namespace Buyer.Infrastructure.Migrations
                         .HasColumnType("nvarchar(max)")
                         .HasColumnName("status");
 
+                    b.Property<string>("Subcategory")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasColumnName("subcategory");
+
                     b.Property<Guid?>("SubmittedBy")
                         .HasColumnType("uniqueidentifier")
                         .HasColumnName("submitted_by");
@@ -6881,6 +6931,11 @@ namespace Buyer.Infrastructure.Migrations
                         .HasColumnType("decimal(18,4)")
                         .HasColumnName("total_cost");
 
+                    b.Property<decimal?>("TrimLossPercent")
+                        .HasPrecision(9, 4)
+                        .HasColumnType("decimal(9,4)")
+                        .HasColumnName("trim_loss_percent");
+
                     b.Property<Guid>("UpdatedBy")
                         .HasColumnType("uniqueidentifier")
                         .HasColumnName("updated_by");
@@ -6888,6 +6943,11 @@ namespace Buyer.Infrastructure.Migrations
                     b.Property<int>("Version")
                         .HasColumnType("int")
                         .HasColumnName("version");
+
+                    b.Property<decimal?>("WasteFactorPercent")
+                        .HasPrecision(9, 4)
+                        .HasColumnType("decimal(9,4)")
+                        .HasColumnName("waste_factor_percent");
 
                     b.HasKey("Id")
                         .HasName("pk_recipe");
@@ -6897,6 +6957,9 @@ namespace Buyer.Infrastructure.Migrations
 
                     b.HasIndex("BuyerId", "PosCode")
                         .HasDatabaseName("ix_recipe_buyer_id_pos_code");
+
+                    b.HasIndex("BuyerId", "ProductClass")
+                        .HasDatabaseName("IX_recipe_buyer_id_product_class");
 
                     b.HasIndex("BuyerId", "RecipeCode")
                         .IsUnique()
@@ -6945,6 +7008,11 @@ namespace Buyer.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)")
                         .HasColumnName("name");
+
+                    b.Property<string>("ProductClass")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasColumnName("product_class");
 
                     b.Property<Guid>("UpdatedBy")
                         .HasColumnType("uniqueidentifier")
