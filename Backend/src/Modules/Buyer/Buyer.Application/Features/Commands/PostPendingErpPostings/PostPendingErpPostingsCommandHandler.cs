@@ -524,7 +524,9 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
                 return await FinishAsync(posting, Common.SILA_POSTING_FAILED, null, "The buyer of this document no longer exists.", cancellationToken);
             }
 
-            bool single = posting.MovementType == SilaInventorySap.TYPE_Z01 || posting.MovementType == SilaInventorySap.TYPE_Z02;
+            bool single = posting.MovementType == SilaInventorySap.TYPE_Z01
+                || posting.MovementType == SilaInventorySap.TYPE_Z02
+                || SilaInventorySap.IsInventoryDifference(posting.MovementType);
             if (single && !string.IsNullOrWhiteSpace(posting.ErpReference))
             {
                 return await FinishAsync(posting, Common.SILA_POSTING_FAILED, null, SilaInventorySap.Failure(SilaInventorySap.ALREADY_POSTED), cancellationToken);
@@ -543,7 +545,7 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
             string[] movements = single
                 ? new[] { posting.MovementType }
                 : new[] { SilaInventorySap.TYPE_Z02, SilaInventorySap.TYPE_Z01 };
-            int directions = movements.Count(movement => transactions.Any(x => x.Direction == (movement == SilaInventorySap.TYPE_Z01 ? Common.SILA_DIRECTION_IN : Common.SILA_DIRECTION_OUT) && x.Quantity > 0));
+            int directions = movements.Count(movement => transactions.Any(x => x.Direction == SilaInventorySap.DirectionForMovement(movement) && x.Quantity > 0));
             string? reference = posting.ErpReference;
             bool sentOne = false;
             foreach (string movement in movements)
@@ -553,13 +555,23 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
                     continue;
                 }
 
-                string direction = movement == SilaInventorySap.TYPE_Z01 ? Common.SILA_DIRECTION_IN : Common.SILA_DIRECTION_OUT;
+                string direction = SilaInventorySap.DirectionForMovement(movement);
                 if (!transactions.Any(x => x.Direction == direction && x.Quantity > 0))
                 {
                     continue;
                 }
 
-                SilaInventorySap.Rule rule = movement == SilaInventorySap.TYPE_Z01 ? SilaInventorySap.PositiveAdjustment : SilaInventorySap.GoodsIssue;
+                SilaInventorySap.Rule rule = SilaInventorySap.IsInventoryDifference(movement)
+                    ? SilaInventorySap.ForInventoryDifference(direction)
+                    : (movement == SilaInventorySap.TYPE_Z01 ? SilaInventorySap.PositiveAdjustment : SilaInventorySap.GoodsIssue);
+
+                // 701/702 cannot use Material Document API (M7/096). Post via Physical Inventory Document → PostDifferences.
+                if (SilaInventorySap.IsInventoryDifference(movement))
+                {
+                    return await PostInventoryDifferenceAsync(
+                        posting, location, property, rule, buyer.OrganizationId, cancellationToken);
+                }
+
                 EffectPreparation prepared = await PrepareEffectAsync(
                     posting, new List<Guid> { posting.ReferenceId }, location, property, rule, buyer.OrganizationId, cancellationToken);
                 string? body = prepared.Body;
@@ -627,7 +639,7 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
         {
             string? body = null;
             ApiIntegrationConfiguration? api = null;
-            string direction = rule.GoodsMovementType == SilaInventorySap.TYPE_Z01 ? Common.SILA_DIRECTION_IN : Common.SILA_DIRECTION_OUT;
+            string direction = SilaInventorySap.DirectionForMovement(rule.GoodsMovementType);
             List<InventoryTransaction> transactions = await _repository.InventoryTransaction
                 .FindByCondition(x => x.BuyerId == posting.BuyerId && x.IsActive
                     && x.ReferenceType == posting.ReferenceType
@@ -679,7 +691,238 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
 
         private readonly record struct EffectPreparation(string? Error, string? Body, ApiIntegrationConfiguration? Api);
 
-        private async Task<IntegrationSendResultDto> SendAsync(Guid organizationId, Guid configurationId, InventoryErpPosting posting, string body, CancellationToken cancellationToken)
+        /// <summary>
+        /// Live stock-count 701/702: create a Physical Inventory Document with the physical qty, then PostDifferences.
+        /// Reuses FIVE S4 - Positive Stock Adjustment credentials with a path override onto API_PHYSICAL_INVENTORY_DOC_SRV.
+        /// </summary>
+        private async Task<string> PostInventoryDifferenceAsync(
+            InventoryErpPosting posting,
+            InventoryLocation? location,
+            BuyerProperty? property,
+            SilaInventorySap.Rule rule,
+            Guid organizationId,
+            CancellationToken cancellationToken)
+        {
+            if (location == null || property == null || string.IsNullOrWhiteSpace(property.PlantCode) || string.IsNullOrWhiteSpace(location.StorageLocationCode))
+            {
+                return await FinishAsync(posting, Common.SILA_POSTING_FAILED, null, SilaInventorySap.Failure(SilaInventorySap.INVENTORY_LOCATION_MAPPING_MISSING), cancellationToken);
+            }
+
+            StockAdjustmentItem? item = await _repository.StockAdjustmentItem
+                .FindByCondition(x => x.StockAdjustmentId == posting.ReferenceId && x.IsActive)
+                .OrderBy(x => x.MaterialCode)
+                .FirstOrDefaultAsync(cancellationToken);
+            if (item == null || item.BaseQuantity < 0)
+            {
+                return await FinishAsync(posting, Common.SILA_POSTING_FAILED, null, "The stock count has no physical quantity to post.", cancellationToken);
+            }
+
+            ItemBuyerMaster? material = await _repository.ItemBuyerMaster
+                .FindFirstByConditionAsync(x => x.Id == item.MaterialId && x.IsActive);
+            if (material == null || string.IsNullOrWhiteSpace(material.MaterialCode))
+            {
+                return await FinishAsync(posting, Common.SILA_POSTING_FAILED, null, SilaInventorySap.Failure(SilaInventorySap.MATERIAL_MAPPING_MISSING), cancellationToken);
+            }
+
+            string sapMaterial = SilaInventorySap.FormatSapMaterial(material.MaterialCode);
+            string sapUnit = (string.IsNullOrWhiteSpace(item.Uom) ? UomConverter.BaseUomOf(material) : item.Uom).Trim().ToUpperInvariant();
+            decimal physicalQty = item.BaseQuantity;
+
+            ApiIntegrationConfiguration? api = await SilaInventorySap.ResolveAsync(
+                _repository, organizationId, rule.ApiName, posting.CompanyCode, cancellationToken);
+            if (api == null)
+            {
+                return await FinishAsync(posting, Common.SILA_POSTING_FAILED, null, SilaInventorySap.MissingApi(rule.ApiName), cancellationToken);
+            }
+
+            DateTime businessDate = DateTime.UtcNow.Date;
+            InventoryTransaction? txn = await _repository.InventoryTransaction
+                .FindByCondition(x => x.BuyerId == posting.BuyerId && x.IsActive
+                    && x.ReferenceType == posting.ReferenceType && x.ReferenceId == posting.ReferenceId)
+                .OrderByDescending(x => x.BusinessDate)
+                .FirstOrDefaultAsync(cancellationToken);
+            if (txn != null)
+            {
+                businessDate = txn.BusinessDate.Date;
+            }
+
+            string createBody = SilaInventoryDifferenceSap.BuildCreateBody(
+                property.PlantCode!,
+                location.StorageLocationCode!,
+                sapMaterial,
+                posting.ReferenceNumber ?? "SILA STOCK COUNT",
+                businessDate);
+
+            posting.IntegrationSystem = $"{api.Name} / {SilaInventoryDifferenceSap.SERVICE}";
+            posting.MovementType = rule.GoodsMovementType;
+            posting.ErpRequestPayload = SilaErpPayload.Sanitise(createBody);
+
+            IntegrationSendResultDto created = await SendAsync(
+                organizationId, api.Id, posting, createBody, cancellationToken,
+                SilaInventoryDifferenceSap.HeaderPath());
+            posting.ErpHttpStatus = created.Answered ? created.StatusCode : null;
+            posting.ErpResponsePayload = SilaErpPayload.Sanitise(created.ResponseBody);
+            bool createOk = created.Answered && (
+                (created.StatusCode >= 200 && created.StatusCode < 300)
+                || SilaInventoryDifferenceSap.CreatedDespiteHttpError(created.ResponseBody));
+            if (!createOk || !SilaInventoryDifferenceSap.TryReadDocument(created.ResponseBody, out string fiscalYear, out string piDocument, out string piItem))
+            {
+                string error = created.Answered
+                    ? $"Physical inventory create returned HTTP {created.StatusCode}.{Snippet(created.ResponseBody)}"
+                    : created.ErrorMessage ?? "Physical inventory create could not reach the ERP.";
+                error = SilaErpPayload.Sanitise(error) ?? error;
+                // Only UNKNOWN when a PI document number appears (may already exist). Plain 5xx with no doc → FAILED/retry.
+                if (created.OutcomeUnknown && SilaInventoryDifferenceSap.CreatedDespiteHttpError(created.ResponseBody))
+                {
+                    return await FinishAsync(posting, Common.SILA_POSTING_UNKNOWN, null,
+                        $"{error} POSTING_UNKNOWN. A physical inventory document may already exist. Reconcile before retry.", cancellationToken);
+                }
+
+                posting.Attempts++;
+                string status = posting.Attempts >= MAX_ATTEMPTS ? Common.SILA_POSTING_FAILED : Common.SILA_POSTING_PENDING;
+                return await FinishAsync(posting, status, null, error, cancellationToken);
+            }
+
+            IntegrationSendResultDto? itemCreated = null;
+            string? itemBody = null;
+            bool reusedActive = SilaInventoryDifferenceSap.TryReadActiveDocument(created.ResponseBody, out _, out _, out _);
+            bool hasItemInCreate = created.ResponseBody != null
+                && created.ResponseBody.Contains("\"PhysicalInventoryDocumentItem\"", StringComparison.Ordinal);
+            // Deep-insert sometimes returns an empty item collection — add the material explicitly (skip when reusing M7/495).
+            if (!reusedActive && !hasItemInCreate)
+            {
+                itemBody = SilaInventoryDifferenceSap.BuildItemBody(fiscalYear, piDocument, sapMaterial);
+                itemCreated = await SendAsync(
+                    organizationId, api.Id, posting, itemBody, cancellationToken,
+                    SilaInventoryDifferenceSap.ItemSetPath());
+                posting.ErpHttpStatus = itemCreated.Answered ? itemCreated.StatusCode : null;
+                bool itemOk = itemCreated.Answered && itemCreated.StatusCode >= 200 && itemCreated.StatusCode < 300;
+                if (!itemOk)
+                {
+                    string error = itemCreated.Answered
+                        ? $"Physical inventory item create returned HTTP {itemCreated.StatusCode}.{Snippet(itemCreated.ResponseBody)}"
+                        : itemCreated.ErrorMessage ?? "Physical inventory item create could not reach the ERP.";
+                    error = SilaErpPayload.Sanitise(error) ?? error;
+                    posting.ErpResponsePayload = SilaErpPayload.Sanitise(
+                        $"create:{created.ResponseBody}\nitem:{itemCreated.ResponseBody}");
+                    posting.ErpRequestPayload = SilaErpPayload.Sanitise($"{createBody}\n--- Item ---\n{itemBody}");
+                    posting.Attempts++;
+                    string status = posting.Attempts >= MAX_ATTEMPTS ? Common.SILA_POSTING_FAILED : Common.SILA_POSTING_PENDING;
+                    return await FinishAsync(posting, status, piDocument, error, cancellationToken);
+                }
+
+                if (SilaInventoryDifferenceSap.TryReadDocument(itemCreated.ResponseBody, out _, out _, out string readItem)
+                    && !string.IsNullOrWhiteSpace(readItem))
+                {
+                    piItem = readItem;
+                }
+                else
+                {
+                    piItem = "1";
+                }
+            }
+
+            string countBody = SilaInventoryDifferenceSap.BuildCountPatchBody(sapMaterial, physicalQty, sapUnit, businessDate);
+            string itemPath = SilaInventoryDifferenceSap.ItemPath(fiscalYear, piDocument, piItem);
+            string? etag = itemCreated?.ETag ?? created.ETag;
+            if (string.IsNullOrWhiteSpace(etag))
+            {
+                IntegrationSendResultDto loaded = await SendAsync(
+                    organizationId, api.Id, posting, string.Empty, cancellationToken,
+                    itemPath, "GET");
+                if (loaded.Answered && loaded.StatusCode >= 200 && loaded.StatusCode < 300)
+                {
+                    etag = loaded.ETag;
+                }
+            }
+
+            Dictionary<string, string> patchHeaders = new Dictionary<string, string>
+            {
+                ["If-Match"] = string.IsNullOrWhiteSpace(etag) ? "*" : etag!
+            };
+            IntegrationSendResultDto counted = await SendAsync(
+                organizationId, api.Id, posting, countBody, cancellationToken,
+                itemPath, "PATCH", patchHeaders);
+            posting.ErpHttpStatus = counted.Answered ? counted.StatusCode : null;
+            bool countOk = counted.Answered && (
+                (counted.StatusCode >= 200 && counted.StatusCode < 300)
+                || SilaInventoryDifferenceSap.CountAlreadyEntered(counted.ResponseBody));
+            if (!countOk)
+            {
+                string error = counted.Answered
+                    ? $"Physical inventory count PATCH returned HTTP {counted.StatusCode}.{Snippet(counted.ResponseBody)}"
+                    : counted.ErrorMessage ?? "Physical inventory count could not reach the ERP.";
+                error = SilaErpPayload.Sanitise(error) ?? error;
+                posting.ErpResponsePayload = SilaErpPayload.Sanitise(
+                    $"create:{created.ResponseBody}\nitem:{itemCreated?.ResponseBody}\ncount:{counted.ResponseBody}");
+                posting.ErpRequestPayload = SilaErpPayload.Sanitise(
+                    itemBody == null
+                        ? $"{createBody}\n--- Count PATCH ---\n{countBody}"
+                        : $"{createBody}\n--- Item ---\n{itemBody}\n--- Count PATCH ---\n{countBody}");
+                posting.Attempts++;
+                string status = posting.Attempts >= MAX_ATTEMPTS ? Common.SILA_POSTING_FAILED : Common.SILA_POSTING_PENDING;
+                return await FinishAsync(posting, status, piDocument, error, cancellationToken);
+            }
+
+            // Refresh ETag after count (required If-Match for PostDifferencesOnItem).
+            string? postEtag = counted.ETag ?? etag;
+            if (string.IsNullOrWhiteSpace(postEtag) || SilaInventoryDifferenceSap.CountAlreadyEntered(counted.ResponseBody))
+            {
+                IntegrationSendResultDto refreshed = await SendAsync(
+                    organizationId, api.Id, posting, string.Empty, cancellationToken,
+                    itemPath, "GET");
+                if (refreshed.Answered && refreshed.StatusCode >= 200 && refreshed.StatusCode < 300
+                    && !string.IsNullOrWhiteSpace(refreshed.ETag))
+                {
+                    postEtag = refreshed.ETag;
+                }
+            }
+
+            string postPath = SilaInventoryDifferenceSap.PostDifferencesPath(fiscalYear, piDocument, piItem, sapMaterial, businessDate);
+            string combinedRequest = itemBody == null
+                ? $"{createBody}\n--- Count PATCH ---\n{countBody}\n--- PostDifferences ---\n{postPath}"
+                : $"{createBody}\n--- Item ---\n{itemBody}\n--- Count PATCH ---\n{countBody}\n--- PostDifferences ---\n{postPath}";
+            posting.ErpRequestPayload = SilaErpPayload.Sanitise(combinedRequest);
+
+            Dictionary<string, string> postHeaders = new Dictionary<string, string>
+            {
+                ["If-Match"] = string.IsNullOrWhiteSpace(postEtag) ? "*" : postEtag!
+            };
+
+            IntegrationSendResultDto posted = await SendAsync(
+                organizationId, api.Id, posting, string.Empty, cancellationToken, postPath, null, postHeaders);
+            posting.ErpHttpStatus = posted.Answered ? posted.StatusCode : null;
+            posting.ErpResponsePayload = SilaErpPayload.Sanitise(
+                $"create:{created.ResponseBody}\nitem:{itemCreated?.ResponseBody}\ncount:{counted.ResponseBody}\npostDifferences:{posted.ResponseBody}");
+            bool postOk = posted.Answered && posted.StatusCode >= 200 && posted.StatusCode < 300;
+            if (!postOk)
+            {
+                string error = posted.Answered
+                    ? $"Physical inventory PostDifferences returned HTTP {posted.StatusCode}.{Snippet(posted.ResponseBody)}"
+                    : posted.ErrorMessage ?? "Physical inventory PostDifferences could not reach the ERP.";
+                error = SilaErpPayload.Sanitise(error) ?? error;
+                posting.Attempts++;
+                string status = posting.Attempts >= MAX_ATTEMPTS ? Common.SILA_POSTING_FAILED : Common.SILA_POSTING_PENDING;
+                return await FinishAsync(posting, status, piDocument, error, cancellationToken);
+            }
+
+            string? materialDocument = SilaInventoryDifferenceSap.ReadMaterialDocument(posted.ResponseBody)
+                ?? SilaInventoryDifferenceSap.ReadMaterialDocument(counted.ResponseBody)
+                ?? SilaInventoryDifferenceSap.ReadMaterialDocument(itemCreated?.ResponseBody)
+                ?? $"{piDocument}/{fiscalYear}";
+            posting.ErpReference = materialDocument;
+            return await FinishAsync(posting, Common.SILA_POSTING_POSTED, materialDocument, null, cancellationToken);
+        }
+
+        private async Task<IntegrationSendResultDto> SendAsync(
+            Guid organizationId,
+            Guid configurationId,
+            InventoryErpPosting posting,
+            string body,
+            CancellationToken cancellationToken,
+            string? resourcePathOverride = null,
+            string? httpMethodOverride = null,
+            Dictionary<string, string>? extraHeaders = null)
         {
             Dictionary<string, string> headers = new Dictionary<string, string>
             {
@@ -687,6 +930,14 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
                 [Common.IDEMPOTENCY_HEADER] = posting.Id.ToString(),
                 ["X-Correlation-Id"] = posting.Id.ToString()
             };
+            if (extraHeaders != null)
+            {
+                foreach (KeyValuePair<string, string> header in extraHeaders)
+                {
+                    headers[header.Key] = header.Value;
+                }
+            }
+
             try
             {
                 return await _mediator.Send(new SendIntegrationRequestCommand
@@ -694,7 +945,10 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
                     OrganizationId = organizationId,
                     ConfigurationId = configurationId,
                     Body = body,
-                    Headers = headers
+                    Headers = headers,
+                    ResourcePathOverride = resourcePathOverride,
+                    HttpMethodOverride = httpMethodOverride,
+                    ResponseLimit = 8000
                 }, cancellationToken);
             }
             catch (BaseCustomException exception)
