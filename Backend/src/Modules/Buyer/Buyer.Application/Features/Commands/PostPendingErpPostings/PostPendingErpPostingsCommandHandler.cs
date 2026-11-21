@@ -1068,15 +1068,23 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
 
         private async Task UpdatePosSalesAsync(InventoryErpPosting posting, bool posted, CancellationToken cancellationToken)
         {
-            List<PosSalesTransaction> sales = await _repository.PosSalesTransaction
+            // FindByCondition is AsNoTracking — Update on a clone conflicts with the tracked sale from process/post.
+            List<Guid> saleIds = await _repository.PosSalesTransaction
                 .FindByCondition(x => x.BuyerId == posting.BuyerId && (x.ErpPostingId == posting.Id || x.Id == posting.ReferenceId))
+                .Select(x => x.Id)
+                .Distinct()
                 .ToListAsync(cancellationToken);
-            foreach (PosSalesTransaction sale in sales)
+            foreach (Guid saleId in saleIds)
             {
+                PosSalesTransaction sale = await _repository.PosSalesTransaction.FindFirstByConditionAsync(x => x.Id == saleId);
+                if (sale == null)
+                {
+                    continue;
+                }
+
                 sale.Status = posted ? Common.SILA_POS_POSTED : Common.SILA_POS_FAILED;
                 sale.FailedStep = posted ? null : Common.SILA_POS_STEP_POST;
                 sale.FailureMessage = posted ? null : posting.ErrorMessage;
-                _repository.PosSalesTransaction.Update(sale);
             }
 
             if (!posted)

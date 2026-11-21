@@ -137,15 +137,25 @@ namespace Buyer.Application.Features.Shared
 
         private static async Task MarkPosPostedAsync(IRepositoryWrapper repository, InventoryErpPosting posting, CancellationToken cancellationToken)
         {
-            List<PosSalesTransaction> sales = await repository.PosSalesTransaction
-                .FindByCondition(x => x.BuyerId == posting.BuyerId && x.IsActive && (x.ErpPostingId == posting.Id || x.Id == posting.ReferenceId))
+            // FindByCondition is AsNoTracking. Reloading with Update() after the sale is already tracked
+            // (process → queue → post in one scope) throws and leaves FAILED_LOCAL after SAP success.
+            List<Guid> saleIds = await repository.PosSalesTransaction
+                .FindByCondition(x => x.BuyerId == posting.BuyerId && x.IsActive
+                    && (x.ErpPostingId == posting.Id || x.Id == posting.ReferenceId))
+                .Select(x => x.Id)
+                .Distinct()
                 .ToListAsync(cancellationToken);
-            foreach (PosSalesTransaction sale in sales)
+            foreach (Guid saleId in saleIds)
             {
+                PosSalesTransaction sale = await repository.PosSalesTransaction.FindFirstByConditionAsync(x => x.Id == saleId);
+                if (sale == null)
+                {
+                    continue;
+                }
+
                 sale.Status = Common.SILA_POS_POSTED;
                 sale.FailedStep = null;
                 sale.FailureMessage = null;
-                repository.PosSalesTransaction.Update(sale);
             }
         }
 
