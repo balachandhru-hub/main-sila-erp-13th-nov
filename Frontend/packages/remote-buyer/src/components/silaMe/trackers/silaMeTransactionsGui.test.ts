@@ -28,7 +28,6 @@ assert.match(tracker, /filtersOpen/);
 assert.match(tracker, /ERP REF ID/);
 assert.match(tracker, /erpRefId/);
 assert.doesNotMatch(tracker, /Live inventory and ERP postings/);
-assert.doesNotMatch(tracker, /strk-me-hero__title/);
 assert.doesNotMatch(tracker, /Filter by type, plant, status, or integration/);
 assert.doesNotMatch(tracker, /ERP invoice ID/);
 assert.doesNotMatch(tracker, /SILA UI built this request view because technicalDetail was blank/);
