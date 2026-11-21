@@ -181,6 +181,49 @@ namespace Buyer.Application.Features.Shared
             return unit.Length == 0 ? null : unit;
         }
 
+        /// <summary>
+        /// POS FIVE_POS_UPDATE must post recipe ingredient UOM (e.g. ML), not material-base stock UOM (EA/BTL).
+        /// When the same material has both, drop the base-UOM lines.
+        /// </summary>
+        public static List<TransferLine> PreferRecipeEntryUnits(IReadOnlyList<TransferLine> lines)
+        {
+            List<TransferLine> positive = (lines ?? Array.Empty<TransferLine>()).Where(x => x.Quantity > 0).ToList();
+            if (positive.Count == 0)
+            {
+                return positive;
+            }
+
+            HashSet<Guid> withRecipeEntry = new HashSet<Guid>();
+            foreach (TransferLine line in positive)
+            {
+                if (IsRecipeEntryUnit(line))
+                {
+                    withRecipeEntry.Add(line.Material.Id);
+                }
+            }
+
+            if (withRecipeEntry.Count == 0)
+            {
+                return positive;
+            }
+
+            return positive
+                .Where(line => !withRecipeEntry.Contains(line.Material.Id) || IsRecipeEntryUnit(line))
+                .ToList();
+        }
+
+        private static bool IsRecipeEntryUnit(TransferLine line)
+        {
+            string? lineUom = EntryUnitOf(line.QuantityUom);
+            if (lineUom == null)
+            {
+                return false;
+            }
+
+            string? baseUom = EntryUnitOf(line.Material.BaseUnitOfMeasure);
+            return baseUom == null || !lineUom.Equals(baseUom, StringComparison.OrdinalIgnoreCase);
+        }
+
         public static string FormatQuantity(decimal quantity)
         {
             if (quantity <= 0)
@@ -391,13 +434,16 @@ namespace Buyer.Application.Features.Shared
                 return COST_CENTER_MISSING;
             }
 
+            // POS: never send material-base EA/BTL alongside recipe entry ML for the same material.
+            IReadOnlyList<TransferLine> effectLines = keepEntryUnit ? PreferRecipeEntryUnits(lines) : lines;
+
             string sapPlant = plant.Trim();
             string sapStorage = storageLocation.Trim();
             string? sapCostCenter = string.IsNullOrWhiteSpace(costCenter) ? null : costCenter.Trim();
             string? sapGlAccount = string.IsNullOrWhiteSpace(glAccount) ? null : glAccount.Trim();
             Dictionary<string, decimal> totals = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
             Dictionary<string, (string Material, string Unit)> keys = new Dictionary<string, (string, string)>(StringComparer.OrdinalIgnoreCase);
-            foreach (TransferLine line in lines)
+            foreach (TransferLine line in effectLines)
             {
                 if (line.Quantity <= 0)
                 {

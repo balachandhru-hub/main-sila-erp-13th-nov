@@ -423,7 +423,9 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
                 string plant = property?.PlantCode?.Trim().ToUpperInvariant() ?? string.Empty;
                 string storage = location?.StorageLocationCode?.Trim().ToUpperInvariant() ?? string.Empty;
                 string movement = SilaPosReversal.MovementForSale(row.MovementType, sale);
-                return $"{date:yyyy-MM-dd}|{plant}|{storage}|{movement}";
+                // One POS sale → one FIVE_POS_UPDATE document. Merging sibling sales mixed recipe ML
+                // entry lines with material-base EA lines and wrong POSSALES/ReferenceDocument headers.
+                return $"{date:yyyy-MM-dd}|{plant}|{storage}|{movement}|{row.ReferenceId:N}";
             }
 
             string key = KeyOf(posting);
@@ -793,16 +795,43 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
                     return new EffectPreparation(SilaInventorySap.Failure(SilaInventorySap.MATERIAL_MAPPING_MISSING), null, null);
                 }
 
-                // POS: SAP gets recipe ingredient qty/UOM (Entered*); ledger Quantity/BaseUom stays material base for ME stock.
+                // POS: SAP gets recipe ingredient qty/UOM (Entered* e.g. ML). Never send material-base EA/BTL for POS.
                 if (isPosSale
                     && transaction.EnteredQuantity > 0
                     && !string.IsNullOrWhiteSpace(transaction.EnteredUom))
                 {
                     lines.Add(new SilaInventorySap.TransferLine(material, transaction.EnteredQuantity, transaction.EnteredUom));
                 }
-                else
+                else if (!isPosSale)
                 {
                     lines.Add(new SilaInventorySap.TransferLine(material, transaction.Quantity, transaction.BaseUom));
+                }
+            }
+
+            if (isPosSale)
+            {
+                // Drop any material-base EA lines when recipe ML entry lines exist for the same material.
+                lines = SilaInventorySap.PreferRecipeEntryUnits(lines);
+                // Legacy ledger rows stored EnteredUom=EA (= base). Rebuild recipe entry units (ML) for SAP.
+                bool onlyBase = lines.Count == 0
+                    || lines.All(x =>
+                    {
+                        string? entry = SilaInventorySap.EntryUnitOf(x.QuantityUom);
+                        string? bas = SilaInventorySap.EntryUnitOf(x.Material.BaseUnitOfMeasure);
+                        return entry != null && bas != null && entry.Equals(bas, StringComparison.OrdinalIgnoreCase);
+                    });
+                if (onlyBase && posSale != null)
+                {
+                    (List<SilaInventorySap.TransferLine> exploded, string? explodeError) =
+                        await SilaPosProcessing.ExplodeTransferLinesAsync(_repository, posting.BuyerId, posSale, cancellationToken);
+                    if (exploded.Count > 0)
+                    {
+                        lines = SilaInventorySap.PreferRecipeEntryUnits(exploded);
+                    }
+                    else if (lines.Count == 0 && explodeError != null)
+                    {
+                        return new EffectPreparation(explodeError, null, null);
+                    }
                 }
             }
 

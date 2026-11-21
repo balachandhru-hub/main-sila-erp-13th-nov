@@ -160,15 +160,25 @@ namespace Buyer.Application.Features.Shared
             InventoryErpPosting? posting,
             CancellationToken cancellationToken)
         {
-            List<SilaInventorySap.TransferLine> transferLines = await LoadLedgerTransferLinesAsync(
-                repository, buyerId, sale.Id, cancellationToken);
+            List<SilaInventorySap.TransferLine> transferLines = SilaInventorySap.PreferRecipeEntryUnits(
+                await LoadLedgerTransferLinesAsync(repository, buyerId, sale.Id, cancellationToken));
 
-            if (transferLines.Count == 0)
+            bool onlyBase = transferLines.Count == 0
+                || transferLines.All(x =>
+                {
+                    string? entry = SilaInventorySap.EntryUnitOf(x.QuantityUom);
+                    string? bas = SilaInventorySap.EntryUnitOf(x.Material.BaseUnitOfMeasure);
+                    return entry != null && bas != null && entry.Equals(bas, StringComparison.OrdinalIgnoreCase);
+                });
+            if (onlyBase)
             {
                 (List<SilaInventorySap.TransferLine> exploded, string? explodeError) =
                     await SilaPosProcessing.ExplodeTransferLinesAsync(repository, buyerId, sale, cancellationToken);
                 _ = explodeError;
-                transferLines = exploded;
+                if (exploded.Count > 0)
+                {
+                    transferLines = SilaInventorySap.PreferRecipeEntryUnits(exploded);
+                }
             }
 
             if (transferLines.Count == 0)
@@ -288,17 +298,14 @@ namespace Buyer.Application.Features.Shared
                     continue;
                 }
 
+                // POS rebuild: recipe Entered* only (ML). Skip material-base Quantity/BaseUom (EA).
                 if (line.EnteredQuantity > 0 && !string.IsNullOrWhiteSpace(line.EnteredUom))
                 {
                     transferLines.Add(new SilaInventorySap.TransferLine(material, line.EnteredQuantity, line.EnteredUom));
                 }
-                else if (line.Quantity > 0)
-                {
-                    transferLines.Add(new SilaInventorySap.TransferLine(material, line.Quantity, line.BaseUom));
-                }
             }
 
-            return transferLines;
+            return SilaInventorySap.PreferRecipeEntryUnits(transferLines);
         }
 
         public static string? Store(string? body)
