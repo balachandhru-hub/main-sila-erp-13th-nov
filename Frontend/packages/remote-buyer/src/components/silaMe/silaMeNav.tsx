@@ -181,9 +181,10 @@ export const buildSilaMeNavItem = (role: SilaMeRole, access?: SilaHomeCapabiliti
               ...leaf(can.manageMasterData, "silaQuickTransferPolicy", "Quick Transfer Policy"),
               ...leaf(can.manageMasterData, "silaOcrSettings", "Invoice OCR Settings"),
               { key: "silaApprovalFlows" as const, label: "Approval flow" },
-              ...leaf(can.manageErpPosting, "silaMeTracker", "SILA ME Transactions"),
             ]
           : []),
+        // ERP posting operators must always reach the Transaction Tracker GUI (not Setup-gated).
+        ...leaf(can.manageErpPosting, "silaMeTracker", "SILA ME Transactions"),
         ...leaf(can.approvePrice, "silaPriceApprovals", "Price Approvals"),
         ...leaf(can.viewAudit, "silaAuditLog", "Audit Log"),
       ],
