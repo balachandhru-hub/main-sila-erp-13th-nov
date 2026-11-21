@@ -21,15 +21,28 @@ assert.match(live, /In Transit/);
 assert.match(live, /Pending Actions/);
 assert.match(live, /Stock Items/);
 assert.match(live, /Inventory Priorities/);
+assert.match(live, /liv-alert-icon/);
+assert.match(live, /Stock Count/);
+assert.match(live, /Scan barcode/);
+assert.match(live, /Take photo/);
+assert.match(live, /SilaLiveStockCountPanel/);
+assert.match(live, /openStockCount/);
+assert.match(live, /Search inventory/);
+// Scanned / photo material goes into the main Search inventory box — no extra scan text box.
+assert.doesNotMatch(live, /liv-scan-input/);
+assert.doesNotMatch(live, /placeholder=\{scanMode === "barcode" \? "Scan barcode…"/);
+assert.doesNotMatch(live, /liv-lenses/);
+assert.doesNotMatch(live, /Day-to-day stock availability/);
+assert.doesNotMatch(live, /Cost Control/);
 assert.match(live, /optionalCols/);
 assert.match(live, /searchLiveInventory\([\s\S]*health/);
 assert.match(live, /getInventoryHome/);
 assert.match(live, /getRecentAlerts/);
-assert.match(live, /Transfer destination/);
+assert.match(live, /Location \(transfer \/ stock count\)|Location \(stock count\)/);
 assert.doesNotMatch(live, /PageHeader/);
 assert.doesNotMatch(live, /Your Location/);
-// Transfer destination must not sit on the home list permanently.
-assert.match(live, /selectedId[\s\S]*Transfer destination|if \(selectedId\)[\s\S]*Transfer destination/);
+// Location dropdown (transfer / stock count) must not sit on the home list permanently.
+assert.match(live, /selectedId[\s\S]*Location \(transfer \/ stock count\)|if \(selectedId\)[\s\S]*Location \(transfer \/ stock count\)|if \(selectedId\)[\s\S]*Location \(stock count\)/);
 
 const css = read("SilaInventory.css");
 assert.match(css, /--liv-canvas:\s*#fafafb/i);

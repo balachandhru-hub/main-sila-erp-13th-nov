@@ -21,8 +21,9 @@ import { createQuickTransfer, createTransfer } from "../../../api/silaMe/silaMov
 import SilaSearchableSelect from "../SilaSearchableSelect";
 import type { SilaMePermissions } from "../silaMePermissions";
 import SilaLiveDecisionPanel from "./SilaLiveDecisionPanel";
+import SilaLiveStockCountPanel from "./SilaLiveStockCountPanel";
 import SilaPendingRequirementsPanel from "./SilaPendingRequirementsPanel";
-import { lensOptionsFor, resolveLiveInventoryLens, type LensProfile } from "./liveInventoryLens";
+import { resolveLiveInventoryLens } from "./liveInventoryLens";
 import { buildInventoryPriorities } from "./liveInventoryPriorities";
 import "../silaMeTheme.css";
 import "./SilaInventory.css";
@@ -105,18 +106,19 @@ const SilaLiveInventory: React.FC<SilaLiveInventoryProps> = ({
     })),
     [permissions, canTransfer, canPostGoodsIssue, canManageCount, canRequestPurchase],
   );
-  const lensChoices = useMemo(
-    () => (permissions ? lensOptionsFor(permissions) : [defaultLens]),
-    [permissions, defaultLens],
-  );
 
-  const [lens, setLens] = useState<LensProfile>(defaultLens);
   const [locations, setLocations] = useState<SilaLocation[]>([]);
   const [locationsError, setLocationsError] = useState<string | null>(null);
   const [search, setSearch] = useState(initialSearch);
   const [health, setHealth] = useState(initialHealth || defaultLens.defaultHealth || "");
   const [showFilters, setShowFilters] = useState(false);
-  const [prioritiesOpen, setPrioritiesOpen] = useState(true);
+  const [prioritiesOpen, setPrioritiesOpen] = useState(false);
+  const [stockCountOpen, setStockCountOpen] = useState(false);
+  const [stockCountTargets, setStockCountTargets] = useState<
+    { materialId?: string; materialCode: string; description?: string; onHandQty?: number | null; uom?: string | null }[]
+  >([]);
+  const [stockCountCode, setStockCountCode] = useState("");
+  const [scanMode, setScanMode] = useState<"barcode" | "photo">("barcode");
   const [locationId, setLocationId] = useState("");
   const [home, setHome] = useState<SilaInventoryHome | null>(null);
   const [alerts, setAlerts] = useState<SilaAlert[] | null>(null);
@@ -145,10 +147,10 @@ const SilaLiveInventory: React.FC<SilaLiveInventoryProps> = ({
   const [lastSynced, setLastSynced] = useState<Date | null>(null);
   const [refreshTick, setRefreshTick] = useState(0);
   const searchRef = useRef<HTMLInputElement>(null);
+  const scanPhotoRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    setLens(defaultLens);
     if (!initialHealth && defaultLens.defaultHealth) setHealth(defaultLens.defaultHealth);
   }, [defaultLens, initialHealth]);
 
@@ -341,6 +343,26 @@ const SilaLiveInventory: React.FC<SilaLiveInventoryProps> = ({
     });
   };
 
+  const openStockCount = (targets?: typeof stockCountTargets, code?: string) => {
+    if (!locationId) {
+      toastService.error("Select a location before stock count.");
+      return;
+    }
+    const selected =
+      targets ??
+      Object.values(basket).map((row) => ({
+        materialId: row.materialId,
+        materialCode: row.materialCode,
+        description: row.description,
+        onHandQty: row.onHandQty,
+        uom: row.baseUom,
+      }));
+    const fromSearch = (code ?? search).trim();
+    setStockCountTargets(selected);
+    setStockCountCode(selected.length > 0 ? "" : fromSearch);
+    setStockCountOpen(true);
+  };
+
   const createBasketIto = async () => {
     if (!canTransfer || !locationId || !itoToId) {
       toastService.error("Choose source and destination before creating an ITO.");
@@ -492,26 +514,52 @@ const SilaLiveInventory: React.FC<SilaLiveInventoryProps> = ({
               </button>
             )}
             {canManageCount && (
-              <button type="button" className="sila-btn sila-btn--secondary" onClick={() => onNavigate?.("silaStockCounts")}>
+              <button
+                type="button"
+                className="sila-btn sila-btn--secondary"
+                disabled={!transferToId && !locationId}
+                onClick={() => {
+                  const countLocationId = transferToId || locationId;
+                  if (!countLocationId) {
+                    toastService.error("Select a location in the dropdown before stock count.");
+                    return;
+                  }
+                  const atLocation = sourceRows.find((row) => row.locationId === countLocationId);
+                  openStockCount(
+                    [
+                      {
+                        materialId: detail?.materialId ?? selectedId ?? undefined,
+                        materialCode: detail?.materialCode ?? "",
+                        description: detail?.description,
+                        onHandQty: atLocation?.onHandQty ?? detail?.onHandQty,
+                        uom: detail?.baseUom,
+                      },
+                    ].filter((item) => item.materialCode),
+                  );
+                }}
+              >
                 Stock Count
               </button>
             )}
           </div>
         </header>
 
-        {canTransfer && (
+        {(canTransfer || canManageCount) && (
           <section className="liv-panel liv-panel--flush">
             <div className="liv-transfer-dest">
               <SilaSearchableSelect
-                label="Transfer destination"
-                placeholder="Select destination (transfer workflow only)"
-                value={transferToId}
+                label={canTransfer ? "Location (transfer / stock count)" : "Location (stock count)"}
+                placeholder="Select location"
+                value={transferToId || locationId}
                 clearable
                 options={stockLocations.map((location) => ({
                   value: location.id,
                   label: `${location.locationCode} · ${location.locationName}`,
                 }))}
-                onChange={setTransferToId}
+                onChange={(value) => {
+                  setTransferToId(value);
+                  if (value) setLocationId(value);
+                }}
               />
             </div>
           </section>
@@ -611,6 +659,25 @@ const SilaLiveInventory: React.FC<SilaLiveInventoryProps> = ({
             </section>
           </div>
         ) : null}
+
+        {canManageCount && (
+          <SilaLiveStockCountPanel
+            open={stockCountOpen}
+            locationId={transferToId || locationId}
+            locationLabel={
+              stockLocations.find((location) => location.id === (transferToId || locationId))
+                ? `${stockLocations.find((location) => location.id === (transferToId || locationId))!.locationCode} · ${stockLocations.find((location) => location.id === (transferToId || locationId))!.locationName}`
+                : "Selected location"
+            }
+            initialCode={stockCountCode}
+            targets={stockCountTargets}
+            onClose={() => setStockCountOpen(false)}
+            onPosted={() => {
+              setDetailKey((key) => key + 1);
+              setRefreshTick((n) => n + 1);
+            }}
+          />
+        )}
       </div>
     );
   }
@@ -683,28 +750,7 @@ const SilaLiveInventory: React.FC<SilaLiveInventoryProps> = ({
         </div>
       </header>
 
-      {lensChoices.length > 1 && (
-        <div className="liv-lenses" role="tablist" aria-label="Inventory lens">
-          {lensChoices.map((option) => (
-            <button
-              key={option.id}
-              type="button"
-              role="tab"
-              aria-selected={lens.id === option.id}
-              className={`liv-lens${lens.id === option.id ? " liv-lens--on" : ""}`}
-              onClick={() => {
-                setLens(option);
-                if (option.defaultHealth) setHealth(option.defaultHealth);
-              }}
-            >
-              {option.label}
-            </button>
-          ))}
-          <span className="liv-lens-hint">{lens.priorityHint}</span>
-        </div>
-      )}
-
-      {/* AREA B — Universal search */}
+      {/* AREA B — Universal search + scan / stock count */}
       <section className="liv-search-panel">
         <label className="liv-search-label" htmlFor="liv-search">Search inventory</label>
         <div className="liv-search-row">
@@ -716,10 +762,64 @@ const SilaLiveInventory: React.FC<SilaLiveInventoryProps> = ({
             placeholder="Material number, description, barcode…"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && search.trim()) {
+                event.preventDefault();
+                toastService.success(`Material ${search.trim()} ready for stock count`);
+              }
+            }}
           />
           <button type="button" className="sila-btn sila-btn--secondary" onClick={() => setShowFilters((v) => !v)}>
             {showFilters ? "Hide filters" : "Filters"}
           </button>
+          {canManageCount && (
+            <>
+              <div className="liv-scan-modes" role="group" aria-label="Scan method">
+                <button
+                  type="button"
+                  className={`liv-chip${scanMode === "barcode" ? " liv-chip--on" : ""}`}
+                  onClick={() => {
+                    setScanMode("barcode");
+                    searchRef.current?.focus();
+                  }}
+                >
+                  Scan barcode
+                </button>
+                <button
+                  type="button"
+                  className={`liv-chip${scanMode === "photo" ? " liv-chip--on" : ""}`}
+                  onClick={() => {
+                    setScanMode("photo");
+                    scanPhotoRef.current?.click();
+                  }}
+                >
+                  Take photo
+                </button>
+                <input
+                  ref={scanPhotoRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="liv-sc-file"
+                  onChange={(event) => {
+                    if (event.target.files?.[0]) {
+                      toastService.info("Photo captured. Enter the material number in Search inventory.");
+                      searchRef.current?.focus();
+                    }
+                    event.target.value = "";
+                  }}
+                />
+              </div>
+              <button
+                type="button"
+                className="sila-btn sila-btn--primary"
+                disabled={!locationId}
+                onClick={() => openStockCount()}
+              >
+                Stock Count
+              </button>
+            </>
+          )}
         </div>
         {showFilters && (
           <div className="liv-filters">
@@ -752,31 +852,6 @@ const SilaLiveInventory: React.FC<SilaLiveInventoryProps> = ({
           </button>
         ))}
       </div>
-
-      {/* AREA D — Priority strip */}
-      {priorities.length > 0 && (
-        <section className="liv-priority">
-          <button type="button" className="liv-priority__toggle" onClick={() => setPrioritiesOpen((v) => !v)}>
-            <span>Inventory Priorities</span>
-            <span aria-hidden>{prioritiesOpen ? "−" : "+"}</span>
-          </button>
-          {prioritiesOpen && (
-            <ul className="liv-priority__list">
-              {priorities.map((item) => (
-                <li key={item.id} className={`liv-priority__item liv-priority__item--${item.tone}`}>
-                  <div>
-                    <strong>{item.title}</strong>
-                    <p>{item.detail}</p>
-                  </div>
-                  <button type="button" className="sila-btn sila-btn--secondary sila-btn--sm" onClick={() => runPriority(item.action)}>
-                    {item.actionLabel}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      )}
 
       {/* AREA E — Clean table */}
       <section className="liv-panel" aria-live="polite">
@@ -830,6 +905,39 @@ const SilaLiveInventory: React.FC<SilaLiveInventoryProps> = ({
                 New Transfer
               </button>
             )}
+            {priorities.length > 0 && (
+              <div className="liv-priority-alert">
+                <button
+                  type="button"
+                  className={`liv-alert-icon${prioritiesOpen ? " liv-alert-icon--open" : ""}`}
+                  aria-expanded={prioritiesOpen}
+                  aria-label={`Inventory Priorities (${priorities.length})`}
+                  title="Inventory Priorities"
+                  onClick={() => setPrioritiesOpen((v) => !v)}
+                >
+                  <span aria-hidden>!</span>
+                  <em>{priorities.length}</em>
+                </button>
+                {prioritiesOpen && (
+                  <div className="liv-priority-pop" role="dialog" aria-label="Inventory Priorities">
+                    <strong>Inventory Priorities</strong>
+                    <ul className="liv-priority__list">
+                      {priorities.map((item) => (
+                        <li key={item.id} className={`liv-priority__item liv-priority__item--${item.tone}`}>
+                          <div>
+                            <strong>{item.title}</strong>
+                            <p>{item.detail}</p>
+                          </div>
+                          <button type="button" className="sila-btn sila-btn--secondary sila-btn--sm" onClick={() => runPriority(item.action)}>
+                            {item.actionLabel}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -856,7 +964,7 @@ const SilaLiveInventory: React.FC<SilaLiveInventoryProps> = ({
               <table className="sila-table liv-table">
                 <thead>
                   <tr>
-                    {canTransfer && <th scope="col">ITO</th>}
+                    {(canTransfer || canManageCount) && <th scope="col">{canTransfer ? "ITO" : "Select"}</th>}
                     <th scope="col">Material</th>
                     <th scope="col">Description</th>
                     <th scope="col" className="sinv-num">Available</th>
@@ -877,11 +985,11 @@ const SilaLiveInventory: React.FC<SilaLiveInventoryProps> = ({
                     const available = row.availableQty ?? row.onHandQty;
                     return (
                       <tr key={row.materialId} className="sinv-row-button" onClick={() => setSelectedId(row.materialId)}>
-                        {canTransfer && (
+                        {(canTransfer || canManageCount) && (
                           <td onClick={(event) => event.stopPropagation()}>
                             <input
                               type="checkbox"
-                              aria-label={`Select ${row.materialCode} for ITO`}
+                              aria-label={`Select ${row.materialCode}`}
                               checked={!!basket[row.materialId]}
                               onChange={() => toggleBasket(row)}
                             />
@@ -924,7 +1032,24 @@ const SilaLiveInventory: React.FC<SilaLiveInventoryProps> = ({
                                 )}
                                 <button type="button" role="menuitem" onClick={() => { onNavigate?.("silaTransactions"); setMenuFor(null); }}>Movement History</button>
                                 {canManageCount && (
-                                  <button type="button" role="menuitem" onClick={() => { onNavigate?.("silaStockCounts"); setMenuFor(null); }}>Stock Count</button>
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    onClick={() => {
+                                      openStockCount([
+                                        {
+                                          materialId: row.materialId,
+                                          materialCode: row.materialCode,
+                                          description: row.description,
+                                          onHandQty: row.onHandQty,
+                                          uom: row.baseUom,
+                                        },
+                                      ]);
+                                      setMenuFor(null);
+                                    }}
+                                  >
+                                    Stock Count
+                                  </button>
                                 )}
                               </div>
                             )}
@@ -956,6 +1081,22 @@ const SilaLiveInventory: React.FC<SilaLiveInventoryProps> = ({
         sourceLocationId={locationId}
         onCreated={() => setRefreshTick((n) => n + 1)}
       />
+
+      {canManageCount && (
+        <SilaLiveStockCountPanel
+          open={stockCountOpen}
+          locationId={locationId}
+          locationLabel={
+            stockLocations.find((location) => location.id === locationId)
+              ? `${stockLocations.find((location) => location.id === locationId)!.locationCode} · ${stockLocations.find((location) => location.id === locationId)!.locationName}`
+              : "Selected location"
+          }
+          initialCode={stockCountCode}
+          targets={stockCountTargets}
+          onClose={() => setStockCountOpen(false)}
+          onPosted={() => setRefreshTick((n) => n + 1)}
+        />
+      )}
     </div>
   );
 };

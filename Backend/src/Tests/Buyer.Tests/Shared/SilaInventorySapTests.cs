@@ -25,9 +25,16 @@ namespace Buyer.Tests.Shared
             Assert.Equal("301", other.GoodsMovementType);
             Assert.True(other.ReceivingPlant);
 
+            // Cross-company plant-to-plant uses 301 on Plant Transfer Stock.
+            string? cross = SilaInventorySap.DecideTransfer("1060", "FL01", "1050", "FJ01", "1060", "1050", out SilaInventorySap.Rule? crossRule);
+            Assert.Null(cross);
+            Assert.Equal("301", crossRule!.GoodsMovementType);
+            Assert.Equal(SilaInventorySap.API_PLANT_TRANSFER, crossRule.ApiName);
+
+            // Same-plant cross-company remains refused.
             Assert.Equal(
                 SilaInventorySap.CROSS_COMPANY_TRANSFER_NOT_CONFIGURED,
-                SilaInventorySap.DecideTransfer("PL-A", "FROM", "PL-B", "TO", "1000", "2000", out _));
+                SilaInventorySap.DecideTransfer("PL-A", "FROM", "PL-A", "TO", "1000", "2000", out _));
         }
 
         [Fact]

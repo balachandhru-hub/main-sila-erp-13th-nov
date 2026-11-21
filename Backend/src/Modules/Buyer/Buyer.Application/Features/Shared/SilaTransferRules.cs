@@ -73,7 +73,10 @@ namespace Buyer.Application.Features.Shared
             }
         }
 
-        /// <summary>Both locations exist, differ, belong to the same company and allow transfers.</summary>
+        /// <summary>
+        /// Both locations exist, differ, and allow transfers. Same-plant cross-company is refused;
+        /// plant-to-plant (including cross-company) is allowed for 301.
+        /// </summary>
         public static async Task<(InventoryLocation From, InventoryLocation To)> ValidateLocationsAsync(
             IRepositoryWrapper repository, ILoggerManager logger, Guid buyerId, Guid fromLocationId, Guid toLocationId)
         {
@@ -85,21 +88,20 @@ namespace Buyer.Application.Features.Shared
 
             InventoryLocation from = await SilaAccess.GetLocationAsync(repository, logger, buyerId, fromLocationId);
             InventoryLocation to = await SilaAccess.GetLocationAsync(repository, logger, buyerId, toLocationId);
-            if (from.PropertyId != to.PropertyId)
+            BuyerProperty? fromProperty = await repository.BuyerProperty.FindFirstByConditionAsync(x => x.Id == from.PropertyId);
+            BuyerProperty? toProperty = await repository.BuyerProperty.FindFirstByConditionAsync(x => x.Id == to.PropertyId);
+            string? fromCompany = string.IsNullOrWhiteSpace(fromProperty?.CompanyCode) ? null : fromProperty!.CompanyCode.Trim();
+            string? toCompany = string.IsNullOrWhiteSpace(toProperty?.CompanyCode) ? null : toProperty!.CompanyCode.Trim();
+            string? fromPlant = string.IsNullOrWhiteSpace(fromProperty?.PlantCode) ? null : fromProperty!.PlantCode.Trim();
+            string? toPlant = string.IsNullOrWhiteSpace(toProperty?.PlantCode) ? null : toProperty!.PlantCode.Trim();
+            string? decideProblem = SilaInventorySap.DecideTransfer(
+                fromPlant, from.StorageLocationCode, toPlant, to.StorageLocationCode, fromCompany, toCompany, out _);
+            if (decideProblem == SilaInventorySap.CROSS_COMPANY_TRANSFER_NOT_CONFIGURED)
             {
-                BuyerProperty? fromProperty = await repository.BuyerProperty.FindFirstByConditionAsync(x => x.Id == from.PropertyId);
-                BuyerProperty? toProperty = await repository.BuyerProperty.FindFirstByConditionAsync(x => x.Id == to.PropertyId);
-                bool sameCompany = fromProperty != null
-                    && toProperty != null
-                    && !string.IsNullOrWhiteSpace(fromProperty.CompanyCode)
-                    && string.Equals(fromProperty.CompanyCode.Trim(), toProperty.CompanyCode.Trim(), StringComparison.OrdinalIgnoreCase);
-                if (!sameCompany)
-                {
-                    logger.LogError($"Cross-company transfer. From: {from.Id} ({from.PropertyId}), To: {to.Id} ({to.PropertyId})");
-                    throw new BadRequestCustomException(
-                        SilaInventorySap.CROSS_COMPANY_TRANSFER_NOT_CONFIGURED,
-                        SilaInventorySap.Describe(SilaInventorySap.CROSS_COMPANY_TRANSFER_NOT_CONFIGURED));
-                }
+                logger.LogError($"Same-plant cross-company transfer refused. From: {from.Id} ({from.PropertyId}), To: {to.Id} ({to.PropertyId})");
+                throw new BadRequestCustomException(
+                    SilaInventorySap.CROSS_COMPANY_TRANSFER_NOT_CONFIGURED,
+                    SilaInventorySap.Describe(SilaInventorySap.CROSS_COMPANY_TRANSFER_NOT_CONFIGURED));
             }
 
             if (!from.TransferEnabled || !to.TransferEnabled)

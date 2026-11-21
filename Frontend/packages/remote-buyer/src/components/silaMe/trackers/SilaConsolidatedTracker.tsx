@@ -142,8 +142,8 @@ const resultSummary = (row: SilaTrackerRow): { label: "SUCCESS" | "FAILURE" | "�
   return { label: ok ? "SUCCESS" : "FAILURE", detail, ok };
 };
 
-const erpInvoiceId = (row: SilaTrackerRow): string =>
-  isInvoiceTxn(row.transactionType) ? (row.erpReference || "—") : "—";
+/** Any ERP success reference (material document, invoice, GRN, etc.). */
+const erpRefId = (row: SilaTrackerRow): string => row.erpReference?.trim() || "—";
 
 const badgeClass = (status?: string | null): string => {
   switch (status) {
@@ -205,6 +205,7 @@ const SilaConsolidatedTracker: React.FC<SilaConsolidatedTrackerProps> = ({ track
   const [detailError, setDetailError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<SilaTrackerRow[] | null>(null);
   const [busy, setBusy] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -348,6 +349,15 @@ const SilaConsolidatedTracker: React.FC<SilaConsolidatedTrackerProps> = ({ track
             </p>
           </div>
           <div className="strk-me-hero__actions">
+            <button
+              type="button"
+              className={`sila-btn sila-btn--secondary${filtersOpen ? " strk-filters-btn--open" : ""}`}
+              aria-expanded={filtersOpen}
+              aria-controls="strk-me-filters"
+              onClick={() => setFiltersOpen((open) => !open)}
+            >
+              Filters
+            </button>
             <button type="button" className="sila-btn sila-btn--secondary" onClick={load} disabled={loading}>
               Refresh
             </button>
@@ -375,13 +385,11 @@ const SilaConsolidatedTracker: React.FC<SilaConsolidatedTrackerProps> = ({ track
         <Kpi label="Needs attention" value={summary.needsAttention} tone={studio ? "amber" : undefined} />
       </section>
       <section className={studio ? "strk-me-panel strk-studio-panel" : "sila-card"}>
-        {studio && (
-          <div className="strk-studio-panel__head">
-            <h2 className="strk-me-panel__title">Transactions</h2>
-            <p className="strk-me-panel__hint">Filter by type, plant, status, or integration — then open a row for SAP request and response.</p>
-          </div>
-        )}
-        <div className={studio ? "srec-filters srec-filters--flush strk-studio-filters" : "srcv-filters"}>
+        {(!studio || filtersOpen) && (
+        <div
+          id={studio ? "strk-me-filters" : undefined}
+          className={studio ? "srec-filters srec-filters--flush strk-studio-filters strk-studio-filters--grid" : "srcv-filters"}
+        >
           <Field id="strk-search" label="Search" grow={studio}>
             <input id="strk-search" className="sila-input" type="search" placeholder="Invoice, reference, PO, GRN, transfer, POS" value={search} onChange={(event) => setSearch(event.target.value)} />
           </Field>
@@ -444,6 +452,7 @@ const SilaConsolidatedTracker: React.FC<SilaConsolidatedTrackerProps> = ({ track
             <input id="strk-api" className="sila-input" value={integration} onChange={(event) => { setIntegration(event.target.value); setPage(1); }} />
           </Field>
         </div>
+        )}
         {canReprocess && !studio && (
           <div className="strk-actions" style={{ padding: "0 1rem 0.75rem" }}>
             <button type="button" className="sila-btn sila-btn--primary" disabled={eligibleSelected.length === 0 || busy} onClick={() => setConfirming(eligibleSelected)}>
@@ -480,7 +489,7 @@ const SilaConsolidatedTracker: React.FC<SilaConsolidatedTrackerProps> = ({ track
                     <th scope="col">Direction</th>
                     <th scope="col">Company / plant</th>
                     <th scope="col">Reference</th>
-                    <th scope="col">ERP invoice ID</th>
+                    <th scope="col">ERP REF ID</th>
                     <th scope="col">Receive</th>
                     <th scope="col">ERP</th>
                     <th scope="col">Local</th>
@@ -517,7 +526,7 @@ const SilaConsolidatedTracker: React.FC<SilaConsolidatedTrackerProps> = ({ track
                         {row.businessReference || "—"}
                         {row.integrationName && <span className="srcv-sub">{row.integrationName}{row.movementType ? ` · ${row.movementType}` : ""}</span>}
                       </td>
-                      <td>{erpInvoiceId(row)}</td>
+                      <td>{erpRefId(row)}</td>
                       <td><span className={badgeClass(row.receiveStatus)}>{labelOf(row.receiveStatus)}</span></td>
                       <td><span className={badgeClass(row.erpStatus)}>{labelOf(row.erpStatus)}</span></td>
                       <td><span className={badgeClass(row.localStatus)}>{labelOf(row.localStatus)}</span></td>
@@ -593,7 +602,7 @@ const SilaConsolidatedTracker: React.FC<SilaConsolidatedTrackerProps> = ({ track
             <Fact label="API" value={detail.integrationName} />
             <Fact label="Status" value={labelOf(detail.overallStatus)} />
             <Fact label="ERP" value={labelOf(detail.erpStatus)} />
-            {isInvoiceTxn(detail.transactionType) ? <Fact label="ERP invoice ID" value={detail.erpReference} /> : detail.erpReference ? <Fact label="ERP reference" value={detail.erpReference} /> : null}
+            {detail.erpReference ? <Fact label="ERP REF ID" value={detail.erpReference} /> : null}
             {detail.erpHttpStatus != null ? <Fact label="HTTP status" value={String(detail.erpHttpStatus)} /> : null}
             {detail.retryCount > 0 ? <Fact label="Retries" value={String(detail.retryCount)} /> : null}
             {(detail.localReference ?? "").includes("PO ") ? <Fact label="Supplier, PO, GRN" value={detail.localReference} /> : null}

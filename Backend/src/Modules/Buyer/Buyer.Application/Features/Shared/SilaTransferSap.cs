@@ -13,16 +13,19 @@ using SharedKernel.LoggerServices;
 namespace Buyer.Application.Features.Shared
 {
         /// <summary>
-        /// Internal transfer posted through <see cref="SilaInventorySap"/>. Same plant is 311. A different plant in the
-        /// same company is 301. The user does not choose the movement. One transfer is one material document.
+        /// Internal transfer posted through <see cref="SilaInventorySap"/>. Same plant is 311
+        /// (FIVE S4 - Transfer Stock). A different plant is 301 (FIVE S4 - Plant Transfer Stock), including
+        /// cross-company. The user does not choose the movement. One transfer is one material document.
         /// </summary>
     public static class SilaTransferSap
     {
         public const string API_CONFIG_NAME = "FIVE S4 - Transfer Stock";
+        public const string API_PLANT_CONFIG_NAME = SilaInventorySap.API_PLANT_TRANSFER;
         public const string GOODS_MOVEMENT_CODE = "04";
         public const string GOODS_MOVEMENT_TYPE = "311";
         public const string REVERSAL_GOODS_MOVEMENT_CODE = "06";
         public const string REVERSAL_GOODS_MOVEMENT_TYPE = "312";
+        public const string PLANT_REVERSAL_GOODS_MOVEMENT_TYPE = "302";
 
         public const string SOURCE_SAP_LOCATION_MAPPING_MISSING = "SOURCE_SAP_LOCATION_MAPPING_MISSING";
         public const string DESTINATION_SAP_LOCATION_MAPPING_MISSING = "DESTINATION_SAP_LOCATION_MAPPING_MISSING";
@@ -43,7 +46,7 @@ namespace Buyer.Application.Features.Shared
 
         /// <summary>
         /// Null when the locations can be posted. Plant comes from the property. Storage location comes from the
-        /// inventory location. A different company code is refused.
+        /// inventory location. Plant-to-plant (301) allows different company codes; same-plant cross-company is refused.
         /// </summary>
         public static string? LocationProblem(
             string? fromPlant, string? fromStorage, string? toPlant, string? toStorage, string? fromCompany = null, string? toCompany = null)
@@ -83,7 +86,7 @@ namespace Buyer.Application.Features.Shared
                 INVALID_TRANSFER_LOCATION => "The source and destination storage locations are the same.",
                 CROSS_COMPANY_TRANSFER_NOT_CONFIGURED => SilaInventorySap.Describe(CROSS_COMPANY_TRANSFER_NOT_CONFIGURED),
                 UOM_CONVERSION_MISSING => "The material has no SAP unit of measure, or the quantity cannot be converted to it.",
-                TRANSFER_API_NOT_CONFIGURED => "FIVE S4 - Transfer Stock is not an active integration. Activate that API. No other API is used.",
+                TRANSFER_API_NOT_CONFIGURED => "FIVE S4 - Transfer Stock / Plant Transfer Stock is not an active integration. Activate the matching API.",
                 TRANSFER_ALREADY_POSTED => "This transfer already has an SAP material document.",
                 MATERIAL_NOT_VALID => "The material is not an active stock item.",
                 _ => "The transfer cannot be posted."
@@ -161,7 +164,7 @@ namespace Buyer.Application.Features.Shared
         }
 
         /// <summary>
-        /// Builds the 312 reversal body for a previously posted same-plant 311 ITO.
+        /// Builds the 312 (same-plant) or 302 (plant-to-plant) reversal body for a previously posted ITO.
         /// Quantity lines must already be validated (remaining reversible qty).
         /// </summary>
         public static string? TryPrepareReversal(
@@ -318,7 +321,8 @@ namespace Buyer.Application.Features.Shared
                 fromProperty?.CompanyCode, toProperty?.CompanyCode, out SilaInventorySap.Rule? rule);
             ApiIntegrationConfiguration? api = rule == null
                 ? null
-                : await SilaInventorySap.ResolveAsync(repository, organizationId, rule.ApiName, companyCode, cancellationToken);
+                : await SilaInventorySap.ResolveAnyAsync(
+                    repository, organizationId, SilaInventorySap.ApiNamesFor(rule), companyCode, cancellationToken);
             if (api == null || rule == null)
             {
                 string apiName = rule?.ApiName ?? API_CONFIG_NAME;
