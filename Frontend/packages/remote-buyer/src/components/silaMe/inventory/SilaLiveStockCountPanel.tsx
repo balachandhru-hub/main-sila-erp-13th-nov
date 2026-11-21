@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { toastService } from "@vosox/shared-ui";
 import {
   createLiveStockCount,
@@ -22,23 +22,24 @@ interface SilaLiveStockCountPanelProps {
   locationLabel: string;
   /** Material number copied from Search inventory when no row targets. */
   initialCode?: string;
-  /** Selected materials — counted one by one. */
+  /** Selected materials — physical counts entered together, variances posted in one go. */
   targets?: LiveStockCountTarget[];
   onClose: () => void;
   onPosted: () => void;
 }
 
-type ResolvedLine = {
+type CountLine = {
+  key: string;
   materialId: string | null;
   materialCode: string;
   materialName: string;
   uom: string;
   onHand: number;
+  physical: string;
 };
 
 /**
- * Live Inventory stock-count dialog: physical count → SAP 701/702 variance.
- * Walks a queue of materials one by one when several are selected.
+ * Live Inventory stock-count dialog: enter physical counts, post every variance (701/702) together.
  */
 const SilaLiveStockCountPanel: React.FC<SilaLiveStockCountPanelProps> = ({
   open,
@@ -49,22 +50,12 @@ const SilaLiveStockCountPanel: React.FC<SilaLiveStockCountPanelProps> = ({
   onClose,
   onPosted,
 }) => {
-  const [queue, setQueue] = useState<LiveStockCountTarget[]>([]);
-  const [index, setIndex] = useState(0);
-  const [line, setLine] = useState<ResolvedLine | null>(null);
-  const [physical, setPhysical] = useState("");
+  const [lines, setLines] = useState<CountLine[]>([]);
   const [resolving, setResolving] = useState(false);
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [postedCount, setPostedCount] = useState(0);
-  const physicalRef = useRef<HTMLInputElement>(null);
 
-  const variance = useMemo(() => {
-    if (!line || physical.trim() === "" || Number.isNaN(Number(physical))) return null;
-    return Number(physical) - line.onHand;
-  }, [line, physical]);
-
-  const resolveTarget = async (target: LiveStockCountTarget): Promise<ResolvedLine> => {
+  const resolveTarget = async (target: LiveStockCountTarget): Promise<CountLine> => {
     const term = target.materialCode.trim();
     if (!term) {
       throw new Error("Material code is required.");
@@ -99,35 +90,16 @@ const SilaLiveStockCountPanel: React.FC<SilaLiveStockCountPanelProps> = ({
       if (row?.baseUom) uom = row.baseUom;
     }
 
+    const hand = onHand ?? 0;
     return {
+      key: materialId || materialCode,
       materialId,
       materialCode,
       materialName,
       uom,
-      onHand: onHand ?? 0,
+      onHand: hand,
+      physical: String(hand),
     };
-  };
-
-  const loadIndex = async (list: LiveStockCountTarget[], at: number) => {
-    const target = list[at];
-    if (!target) {
-      setLine(null);
-      return;
-    }
-    setResolving(true);
-    setError(null);
-    setPhysical("");
-    try {
-      const resolved = await resolveTarget(target);
-      setLine(resolved);
-      setPhysical(String(resolved.onHand));
-      setTimeout(() => physicalRef.current?.focus(), 50);
-    } catch (err: unknown) {
-      setLine(null);
-      setError(err instanceof Error ? err.message : "Could not resolve the material.");
-    } finally {
-      setResolving(false);
-    }
   };
 
   useEffect(() => {
@@ -145,76 +117,115 @@ const SilaLiveStockCountPanel: React.FC<SilaLiveStockCountPanelProps> = ({
         : code
           ? [{ materialCode: code }]
           : [];
-    setQueue(list);
-    setIndex(0);
-    setPostedCount(0);
+
+    setLines([]);
     setError(null);
-    setLine(null);
-    setPhysical("");
     if (list.length === 0) {
       setError("Select materials in Material availability, or enter a material in Search inventory.");
       return;
     }
-    void loadIndex(list, 0);
+
+    let cancelled = false;
+    setResolving(true);
+    (async () => {
+      try {
+        const resolved: CountLine[] = [];
+        for (const target of list) {
+          resolved.push(await resolveTarget(target));
+        }
+        if (!cancelled) setLines(resolved);
+      } catch (err: unknown) {
+        if (!cancelled) {
+          setLines([]);
+          setError(err instanceof Error ? err.message : "Could not resolve the materials.");
+        }
+      } finally {
+        if (!cancelled) setResolving(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialCode, locationId, targets]);
 
-  const finishAll = () => {
-    if (postedCount > 0 || queue.length > 0) {
-      onPosted();
-    }
-    onClose();
-  };
+  const rows = useMemo(
+    () =>
+      lines.map((line) => {
+        const qty = line.physical.trim() === "" ? NaN : Number(line.physical);
+        const variance = Number.isNaN(qty) ? null : qty - line.onHand;
+        return { line, variance, qty };
+      }),
+    [lines],
+  );
 
-  const advanceOrClose = (nextPosted: number) => {
-    const next = index + 1;
-    if (next < queue.length) {
-      setIndex(next);
-      void loadIndex(queue, next);
-      return;
-    }
-    toastService.success(
-      nextPosted === 1 ? "Stock count posted." : `${nextPosted} stock count variances posted.`,
+  const varianceLines = rows.filter((row) => row.variance != null && row.variance !== 0);
+  const allPhysicalValid = rows.every((row) => !Number.isNaN(row.qty) && (row.qty as number) >= 0);
+
+  const setPhysical = (key: string, value: string) => {
+    setLines((current) =>
+      current.map((line) => (line.key === key ? { ...line, physical: value } : line)),
     );
-    onPosted();
-    onClose();
   };
 
-  const onPost = async () => {
-    if (!locationId || !line || physical.trim() === "") {
-      setError("Enter the physical count.");
+  const onPostAll = async () => {
+    if (!locationId) {
+      setError("Select a location before stock count.");
       return;
     }
-    const qty = Number(physical);
-    if (Number.isNaN(qty) || qty < 0) {
-      setError("Physical count must be zero or greater.");
+    if (!allPhysicalValid) {
+      setError("Enter a physical count (zero or greater) for every material.");
       return;
     }
-    if (variance === 0) {
-      // No SAP post — skip to next material in the queue.
-      toastService.info(`${line.materialCode}: no variance.`);
-      advanceOrClose(postedCount);
+    if (varianceLines.length === 0) {
+      setError("No variances to post. Change a physical count that differs from stock in hand.");
       return;
     }
+
     setPosting(true);
     setError(null);
+    const ok: string[] = [];
+    const failed: string[] = [];
     try {
-      const result = await createLiveStockCount({
-        locationId,
-        materialId: line.materialId,
-        materialCodeOrBarcode: line.materialCode,
-        physicalQty: qty,
-        uom: line.uom,
-        reason: `Live Inventory stock count at ${locationLabel}`,
-      });
-      toastService.success(
-        `${result.materialCode}: variance ${formatQty(result.varianceQty)} → SAP ${result.movementType}`,
-      );
-      const nextPosted = postedCount + 1;
-      setPostedCount(nextPosted);
-      advanceOrClose(nextPosted);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Could not post the stock count.");
+      for (const row of varianceLines) {
+        try {
+          const result = await createLiveStockCount({
+            locationId,
+            materialId: row.line.materialId,
+            materialCodeOrBarcode: row.line.materialCode,
+            physicalQty: row.qty as number,
+            uom: row.line.uom,
+            reason: `Live Inventory stock count at ${locationLabel}`,
+          });
+          ok.push(
+            `${result.materialCode}: ${formatQty(result.varianceQty)} → SAP ${result.movementType}`,
+          );
+        } catch (err: unknown) {
+          failed.push(
+            `${row.line.materialCode}: ${err instanceof Error ? err.message : "post failed"}`,
+          );
+        }
+      }
+
+      if (ok.length > 0) {
+        toastService.success(
+          ok.length === 1
+            ? ok[0]
+            : `${ok.length} variances posted.${ok.length <= 3 ? ` ${ok.join("; ")}` : ""}`,
+        );
+        onPosted();
+      }
+      if (failed.length > 0) {
+        setError(failed.join(" · "));
+        if (ok.length === 0) {
+          toastService.error("Stock count posting failed.");
+        } else {
+          toastService.error(`${failed.length} material(s) failed to post.`);
+        }
+        return;
+      }
+      onClose();
     } finally {
       setPosting(false);
     }
@@ -222,11 +233,8 @@ const SilaLiveStockCountPanel: React.FC<SilaLiveStockCountPanelProps> = ({
 
   if (!open) return null;
 
-  const progress =
-    queue.length > 1 ? `Material ${Math.min(index + 1, queue.length)} of ${queue.length}` : null;
-
   return (
-    <div className="liv-sc-backdrop" role="presentation" onClick={finishAll}>
+    <div className="liv-sc-backdrop" role="presentation" onClick={onClose}>
       <div
         className="liv-sc-dialog"
         role="dialog"
@@ -237,105 +245,89 @@ const SilaLiveStockCountPanel: React.FC<SilaLiveStockCountPanelProps> = ({
         <header className="liv-sc-head">
           <div>
             <h2 id="liv-sc-title">Stock Count</h2>
-            <p>{locationLabel}{progress ? ` · ${progress}` : ""}</p>
+            <p>
+              {locationLabel}
+              {lines.length > 1 ? ` · ${lines.length} materials` : ""}
+            </p>
           </div>
-          <button type="button" className="sila-btn sila-btn--ghost sila-btn--sm" onClick={finishAll}>
+          <button type="button" className="sila-btn sila-btn--ghost sila-btn--sm" onClick={onClose}>
             Close
           </button>
         </header>
 
-        {resolving && <p className="liv-sc-sub">Resolving material…</p>}
+        {resolving && <p className="liv-sc-sub">Resolving materials…</p>}
 
-        <div className="liv-sc-grid">
-          <div>
-            <span className="sila-label">Material</span>
-            <strong className="liv-sc-value">{line?.materialCode || "—"}</strong>
-            {line?.materialName && <p className="liv-sc-sub">{line.materialName}</p>}
+        {!resolving && lines.length > 0 && (
+          <div className="liv-sc-batch">
+            {rows.map(({ line, variance }) => (
+              <div key={line.key} className="liv-sc-grid liv-sc-batch__row">
+                <div>
+                  <span className="sila-label">Material</span>
+                  <strong className="liv-sc-value">{line.materialCode}</strong>
+                  {line.materialName && <p className="liv-sc-sub">{line.materialName}</p>}
+                </div>
+                <div>
+                  <span className="sila-label">Stock in hand</span>
+                  <strong className="liv-sc-value">{formatQty(line.onHand)}</strong>
+                  <p className="liv-sc-sub">{line.uom}</p>
+                </div>
+                <label className="sila-field">
+                  <span className="sila-label">Physical stock count</span>
+                  <input
+                    className="sila-input"
+                    type="number"
+                    min={0}
+                    step="any"
+                    value={line.physical}
+                    disabled={posting}
+                    onChange={(event) => setPhysical(line.key, event.target.value)}
+                  />
+                </label>
+                <div>
+                  <span className="sila-label">Variance</span>
+                  <strong
+                    className={`liv-sc-value${
+                      variance != null && variance < 0
+                        ? " liv-sc-value--neg"
+                        : variance != null && variance > 0
+                          ? " liv-sc-value--pos"
+                          : ""
+                    }`}
+                  >
+                    {variance == null ? "—" : formatQty(variance)}
+                  </strong>
+                  <p className="liv-sc-sub">
+                    {variance == null
+                      ? "Enter physical count"
+                      : variance > 0
+                        ? "SAP 701 (surplus)"
+                        : variance < 0
+                          ? "SAP 702 (shortage)"
+                          : "No variance"}
+                  </p>
+                </div>
+              </div>
+            ))}
           </div>
-          <div>
-            <span className="sila-label">Stock in hand</span>
-            <strong className="liv-sc-value">{line == null ? "—" : formatQty(line.onHand)}</strong>
-            <p className="liv-sc-sub">{line?.uom || ""}</p>
-          </div>
-          <label className="sila-field">
-            <span className="sila-label">Physical stock count</span>
-            <input
-              ref={physicalRef}
-              className="sila-input"
-              type="number"
-              min={0}
-              step="any"
-              value={physical}
-              disabled={!line || posting}
-              onChange={(event) => setPhysical(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  void onPost();
-                }
-              }}
-            />
-          </label>
-          <div>
-            <span className="sila-label">Variance</span>
-            <strong
-              className={`liv-sc-value${
-                variance != null && variance < 0
-                  ? " liv-sc-value--neg"
-                  : variance != null && variance > 0
-                    ? " liv-sc-value--pos"
-                    : ""
-              }`}
-            >
-              {variance == null ? "—" : formatQty(variance)}
-            </strong>
-            <p className="liv-sc-sub">
-              {variance == null
-                ? "Enter physical count"
-                : variance > 0
-                  ? "SAP 701 (surplus)"
-                  : variance < 0
-                    ? "SAP 702 (shortage)"
-                    : "No variance — skip to next"}
-            </p>
-          </div>
-        </div>
+        )}
 
         {error && <p className="liv-sc-error">{error}</p>}
 
         <footer className="liv-sc-foot">
-          <button type="button" className="sila-btn sila-btn--secondary" onClick={finishAll}>
+          <button type="button" className="sila-btn sila-btn--secondary" onClick={onClose}>
             Cancel
           </button>
-          {queue.length > 1 && index + 1 < queue.length && (
-            <button
-              type="button"
-              className="sila-btn sila-btn--secondary"
-              disabled={posting || resolving}
-              onClick={() => {
-                const next = index + 1;
-                setIndex(next);
-                void loadIndex(queue, next);
-              }}
-            >
-              Skip
-            </button>
-          )}
           <button
             type="button"
             className="sila-btn sila-btn--primary"
-            disabled={posting || resolving || !line || variance == null}
-            onClick={() => void onPost()}
+            disabled={posting || resolving || lines.length === 0 || !allPhysicalValid || varianceLines.length === 0}
+            onClick={() => void onPostAll()}
           >
             {posting
               ? "Posting…"
-              : variance === 0
-                ? queue.length > 1 && index + 1 < queue.length
-                  ? "Next material"
-                  : "Done"
-                : queue.length > 1 && index + 1 < queue.length
-                  ? "Post & next"
-                  : "Post variance"}
+              : varianceLines.length > 1
+                ? `Post ${varianceLines.length} variances`
+                : "Post variance"}
           </button>
         </footer>
       </div>
