@@ -115,14 +115,8 @@ const SilaInventoryStudio: React.FC<SilaInventoryStudioProps> = ({
 
   return (
     <div className="sila-me srec-page rstudio-page pstudio-page istudio-inv-page" data-testid="inventory-studio">
-      <header className="pstudio-hero istudio-inv-hero">
-        <div>
-          <p className="pstudio-kicker">SILA Inventory</p>
-          <h1 className="pstudio-hero__title">Inventory Studio</h1>
-          <p className="pstudio-hero__sub">
-            Stock health, transfers, counts, and alerts — in one workspace. Live Inventory and transactions stay on their own screens.
-          </p>
-        </div>
+      <header className="pstudio-hero istudio-inv-hero istudio-inv-hero--compact">
+        <h1 className="pstudio-hero__title">Inventory Studio</h1>
       </header>
 
       <nav className="pstudio-tabs" role="tablist" aria-label="Inventory Studio">
