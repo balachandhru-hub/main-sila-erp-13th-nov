@@ -153,6 +153,13 @@ export const buildSilaMeNavItem = (role: SilaMeRole, access?: SilaHomeCapabiliti
       ],
     },
     {
+      label: "Integration",
+      items: [
+        // Restored studio GUI — keep outside Setup so ERP operators always find it.
+        ...leaf(can.manageErpPosting, "silaMeTracker", "SILA ME Transactions"),
+      ],
+    },
+    {
       label: "Receiving",
       items: home.viewReceiving ? [
         { key: "silaReceivingDashboard", label: "Dashboard" },
@@ -181,7 +188,6 @@ export const buildSilaMeNavItem = (role: SilaMeRole, access?: SilaHomeCapabiliti
               ...leaf(can.manageMasterData, "silaQuickTransferPolicy", "Quick Transfer Policy"),
               ...leaf(can.manageMasterData, "silaOcrSettings", "Invoice OCR Settings"),
               { key: "silaApprovalFlows" as const, label: "Approval flow" },
-              ...leaf(can.manageErpPosting, "silaMeTracker", "SILA ME Transactions"),
             ]
           : []),
         ...leaf(can.approvePrice, "silaPriceApprovals", "Price Approvals"),
