@@ -10,23 +10,12 @@ import {
 } from "./silaHomeCapabilities";
 import SilaInventoryDashboard from "./inventory/SilaInventoryDashboard";
 import SilaLiveInventory from "./inventory/SilaLiveInventory";
-import SilaStockHealth from "./inventory/SilaStockHealth";
-import SilaRecipeAvailability from "./inventory/SilaRecipeAvailability";
-import SilaInventoryAnalytics from "./inventory/SilaInventoryAnalytics";
+import SilaInventoryStudio, { inventoryStudioTabFromNav } from "./inventory/SilaInventoryStudio";
 import SilaInventoryTransactions from "./inventory/SilaInventoryTransactions";
 import SilaLocationMaster from "./inventory/SilaLocationMaster";
 import SilaMaterialInventory from "./inventory/SilaMaterialInventory";
 import SilaPurchaseRequests from "./inventory/SilaPurchaseRequests";
-import SilaRecommendations from "./purchasing/SilaRecommendations";
 import SilaQuickTransferPolicy from "./inventory/SilaQuickTransferPolicy";
-import SilaTransfers from "./movements/SilaTransfers";
-import SilaGoodsIssue from "./movements/SilaGoodsIssue";
-import SilaStockAdjustments from "./movements/SilaStockAdjustments";
-import SilaStockCounts from "./stockCount/SilaStockCounts";
-import SilaShortageEnquiries from "./stockCount/SilaShortageEnquiries";
-import SilaAlerts from "./stockCount/SilaAlerts";
-import SilaShortageReport from "./control/SilaShortageReport";
-import SilaPhysicalInventoryRequests from "./control/SilaPhysicalInventoryRequests";
 import SilaAuditLog from "./control/SilaAuditLog";
 import SilaRecipes from "./recipes/SilaRecipes";
 import SilaRecipeApprovals from "./recipes/SilaRecipeApprovals";
@@ -75,6 +64,23 @@ const SilaMeWorkspace: React.FC<SilaMeWorkspaceProps> = ({ navKey, role, permiss
     onNavigate("silaStockCounts");
   };
 
+  const renderInventoryStudio = () => (
+    <SilaInventoryStudio
+      permissions={can}
+      showRecommendations={homeCaps.recommendation}
+      initialTab={inventoryStudioTabFromNav(navKey)}
+      initialCountId={countToOpen}
+      onOpenLive={(health) => {
+        setLiveHealth(health);
+        setLiveSearch(undefined);
+        onNavigate("silaLiveInventory");
+      }}
+      onOpenCount={openCount}
+      onOpenPhysicalInventory={() => onNavigate("silaInventoryStudio")}
+      readOnlyRecommendations={role === "admin" && previewPersona !== "self"}
+    />
+  );
+
   const renderContent = () => {
     switch (navKey) {
       case "silaDashboard": {
@@ -113,48 +119,24 @@ const SilaMeWorkspace: React.FC<SilaMeWorkspaceProps> = ({ navKey, role, permiss
             onNavigate={onNavigate}
           />
         );
-      case "silaStockHealth":
-        return (
-          <SilaStockHealth
-            onOpenLive={(health) => {
-              setLiveHealth(health);
-              setLiveSearch(undefined);
-              onNavigate("silaLiveInventory");
-            }}
-          />
-        );
-      case "silaRecipeAvailability":
-        return <SilaRecipeAvailability />;
-      case "silaInventoryAnalytics":
-        return <SilaInventoryAnalytics />;
       case "silaTransactions":
         return <SilaInventoryTransactions />;
+      case "silaInventoryStudio":
+      case "silaStockHealth":
+      case "silaRecipeAvailability":
+      case "silaInventoryAnalytics":
       case "silaTransfers":
-        return <SilaTransfers canApprove={can.approveTransfer} />;
       case "silaGoodsIssue":
-        return <SilaGoodsIssue />;
       case "silaAdjustments":
-        return <SilaStockAdjustments />;
       case "silaStockCounts":
-        return <SilaStockCounts canApprove={can.approveCount} initialCountId={countToOpen} />;
       case "silaEnquiries":
-        return <SilaShortageEnquiries canReview={can.approveCount} />;
       case "silaShortageReport":
-        return <SilaShortageReport onOpenCount={openCount} />;
       case "silaPhysicalInventory":
-        return <SilaPhysicalInventoryRequests canRequest={can.manageCount} canSchedule={can.approveCount} onOpenCount={openCount} />;
       case "silaAlerts":
-        return (
-          <SilaAlerts onCountRequested={openCount} onPhysicalInventoryRequested={() => onNavigate("silaPhysicalInventory")} />
-        );
       case "silaRecommendations":
-        return (
-          <SilaRecommendations
-            readOnly={role === "admin" && previewPersona !== "self"}
-            onOpenPurchaseRequests={() => onNavigate("silaPurchaseRequests")}
-          />
-        );
+        return renderInventoryStudio();
       case "silaPurchaseRequests":
+        // Removed from Inventory menu; keep route for legacy deep links only.
         return <SilaPurchaseRequests canAddToBucket={role === "admin" || role === "store-manager"} />;
       case "silaRecipeDashboard":
         // Legacy dashboard route — permanently folded into Recipe Studio (do not reintroduce a separate dashboard UI).

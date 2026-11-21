@@ -814,6 +814,59 @@ namespace Buyer.Application.Features.Shared
         }
 
         /// <summary>
+        /// Transfer posting resolver: name aliases first (FIVE / S4), then process-type fallback
+        /// (POST_TRANSFER_311 / POST_TRANSFER_301) so rename drift cannot block ITO posting.
+        /// </summary>
+        public static async Task<ApiIntegrationConfiguration?> ResolveForRuleAsync(
+            IRepositoryWrapper repository,
+            Guid organizationId,
+            Rule rule,
+            string? companyCode,
+            CancellationToken cancellationToken)
+        {
+            ApiIntegrationConfiguration? byName = await ResolveAnyAsync(
+                repository, organizationId, ApiNamesFor(rule), companyCode, cancellationToken);
+            if (byName != null)
+            {
+                return byName;
+            }
+
+            string? processType = ProcessTypeFor(rule);
+            if (processType == null)
+            {
+                return null;
+            }
+
+            List<ApiIntegrationConfiguration> rows = await repository.ApiIntegrationConfiguration
+                .FindByCondition(x => IntegrationLookup.BuyerIdsOf(repository, organizationId).Contains(x.BuyerId)
+                    && x.IsActive
+                    && x.Status == IntegrationConfigurationStatus.ACTIVE
+                    && x.ProcessType == processType)
+                .ToListAsync(cancellationToken);
+            return PickForCompany(rows, companyCode);
+        }
+
+        /// <summary>Integration Setup process_type for transfer rules (311/312 or 301/302).</summary>
+        public static string? ProcessTypeFor(Rule rule)
+        {
+            if (TransferApiNames.Any(x => string.Equals(x, rule.ApiName, StringComparison.OrdinalIgnoreCase))
+                || string.Equals(rule.GoodsMovementType, TYPE_311, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(rule.GoodsMovementType, TYPE_312, StringComparison.OrdinalIgnoreCase))
+            {
+                return "POST_TRANSFER_311";
+            }
+
+            if (PlantTransferApiNames.Any(x => string.Equals(x, rule.ApiName, StringComparison.OrdinalIgnoreCase))
+                || string.Equals(rule.GoodsMovementType, TYPE_301, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(rule.GoodsMovementType, TYPE_302, StringComparison.OrdinalIgnoreCase))
+            {
+                return "POST_TRANSFER_301";
+            }
+
+            return null;
+        }
+
+        /// <summary>
         /// Like <see cref="ResolveAnyAsync"/> but also returns an inactive match so the caller can report
         /// SAP_API_CONFIGURATION_INACTIVE instead of NOT_FOUND.
         /// </summary>

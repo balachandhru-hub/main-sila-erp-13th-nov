@@ -14,10 +14,12 @@ const read = (rel: string) => readFileSync(join(dir, rel), "utf8");
 const studio = read("IntegrationStudio.tsx");
 assert.match(studio, /data-testid="integration-studio"/);
 assert.match(studio, /SILA Integration Studio/);
-assert.match(studio, /istudio-hero/);
+assert.match(studio, /istudio-hero--compact/);
+assert.doesNotMatch(studio, /Configure SAP inventory movements/);
+assert.doesNotMatch(studio, /istudio-kicker/);
 assert.match(studio, /IntegrationStudioConnections/);
 assert.match(studio, /IntegrationStudioWizard/);
-assert.match(read("IntegrationStudio.css"), /\.istudio-hero/);
+assert.match(read("IntegrationStudio.css"), /\.istudio-hero--compact/);
 
 const api = readFileSync(join(dir, "../../../api/integrationsApi.ts"), "utf8");
 assert.match(api, /SAP_MOVEMENT_PROFILES/);

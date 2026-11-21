@@ -38,15 +38,50 @@
 .strk-me-hero {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  padding: 1.35rem 1.4rem;
-  border-radius: 1.15rem;
-  border: 0.0625rem solid #cfe0f5;
-  background: linear-gradient(135deg, #0f3d7a 0%, #1f5cc4 48%, #2f7de0 100%);
-  color: #fff;
-  box-shadow: 0 0.75rem 1.75rem rgba(15, 61, 122, 0.22);
+  gap: 0.75rem 1rem;
+}
+
+.strk-me-hero--compact {
+  padding: 0.15rem 0;
+}
+
+.strk-me-hero__title {
+  margin: 0;
+  color: #12355b;
+}
+
+.strk-me-hero__title--tracker {
+  font-family: "DM Sans", var(--sila-font, system-ui, sans-serif);
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.strk-me-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+.strk-excel-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.35rem;
+  min-width: 2.35rem;
+  padding: 0;
+  color: #0f6b3c;
+}
+
+.strk-excel-btn:hover:not(:disabled) {
+  color: #0a5230;
 }
 
 .strk-me-hero__eyebrow {
@@ -54,35 +89,7 @@
   font-size: 0.75rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  opacity: 0.85;
-}
-
-.strk-me-hero__title {
-  margin: 0;
-  font-size: clamp(1.6rem, 2.4vw, 2.15rem);
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  line-height: 1.15;
-}
-
-.strk-me-hero__sub {
-  margin: 0.55rem 0 0;
-  max-width: 42rem;
-  font-size: 0.95rem;
-  line-height: 1.45;
-  opacity: 0.92;
-}
-
-.strk-me-hero__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.strk-me-hero__actions .sila-btn--secondary {
-  background: rgba(255, 255, 255, 0.14);
-  border-color: rgba(255, 255, 255, 0.35);
-  color: #fff;
+  color: #5b7a99;
 }
 
 .strk-me-kpis {

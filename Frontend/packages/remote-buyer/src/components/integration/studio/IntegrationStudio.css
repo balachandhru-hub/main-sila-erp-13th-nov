@@ -30,11 +30,20 @@
   animation: istudio-fade-up 0.45s ease both;
 }
 
+.istudio-hero--compact {
+  align-items: center;
+  padding: 0.85rem 1.15rem;
+}
+
 .istudio-hero__title {
   margin: 0;
   font-size: clamp(1.5rem, 2.2vw, 2rem);
   line-height: 1.15;
   color: #12355b;
+}
+
+.istudio-hero--compact .istudio-hero__title {
+  font-size: clamp(1.15rem, 1.6vw, 1.35rem);
 }
 
 .istudio-hero__sub {
@@ -47,7 +56,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
-  align-items: flex-start;
+  align-items: center;
 }
 
 .istudio-tabs {

@@ -209,15 +209,8 @@ const IntegrationStudio: React.FC<IntegrationStudioProps> = ({
 
   return (
     <div className="sila-me srec-page rstudio-page istudio-page" data-testid="integration-studio">
-      <header className="istudio-hero">
-        <div>
-          <p className="istudio-kicker">SILA Integration Studio</p>
-          <h1 className="istudio-hero__title">Integration Studio</h1>
-          <p className="istudio-hero__sub">
-            Configure SAP inventory movements on the existing GRN integration engine — secure credentials, CSRF,
-            Material Document APIs, and Transaction Tracker — without a parallel posting stack.
-          </p>
-        </div>
+      <header className="istudio-hero istudio-hero--compact">
+        <h1 className="istudio-hero__title">SILA Integration Studio</h1>
         <div className="istudio-hero__actions">
           {!readOnly && !isWorkflow ? (
             <button type="button" className="sila-btn sila-btn--primary" onClick={() => setView({ name: "studio", tab: "wizard" })}>

@@ -13,10 +13,10 @@ const read = (rel: string) => readFileSync(join(dir, rel), "utf8");
 const nav = read("silaMeNav.tsx");
 assert.match(nav, /label: "Recipe Studio"/);
 assert.match(nav, /"POS Studio"/);
-assert.match(nav, /label: "Integration"/);
-assert.match(nav, /SILA ME Transactions/);
-assert.match(nav, /\/\/ Restored studio GUI/);
-assert.doesNotMatch(nav.slice(nav.indexOf('label: "Setup"')), /silaMeTracker/);
+assert.match(nav, /Transaction Tracker/);
+assert.match(nav, /silaMeTracker/);
+assert.doesNotMatch(nav, /label: "Integration"/);
+assert.match(nav.slice(nav.indexOf('label: "Setup"')), /silaMeTracker/);
 
 const workspace = read("SilaMeWorkspace.tsx");
 assert.match(workspace, /SilaRecipes/);
@@ -27,9 +27,12 @@ assert.match(workspace, /Inventory Command Center|SilaLiveInventory/);
 
 assert.match(read("recipes/SilaRecipes.tsx"), /SILA Recipe Studio|Recipe Studio/);
 assert.match(read("pos/SilaPosIntegration.tsx"), /SILA POS Studio|POS Studio/);
-assert.match(read("trackers/SilaConsolidatedTracker.tsx"), /strk-me-hero/);
+assert.match(read("trackers/SilaConsolidatedTracker.tsx"), /strk-me-toolbar/);
+assert.match(read("trackers/SilaConsolidatedTracker.tsx"), /strk-me-hero--compact/);
+assert.match(read("trackers/SilaConsolidatedTracker.tsx"), /TRANSACTION TRACKER/);
 assert.match(read("trackers/SilaConsolidatedTracker.tsx"), /data-testid="sila-me-transactions-studio"/);
-assert.match(read("trackers/SilaTracker.css"), /strk-me-hero/);
+assert.match(read("trackers/SilaTracker.css"), /strk-me-hero__title--tracker/);
+assert.doesNotMatch(read("trackers/SilaConsolidatedTracker.tsx"), /Live inventory and ERP postings/);
 
 // Missing these blanks the host Vite graph and /dashboard.
 assert.match(read("../../api/silaMe/readSuccessId.ts"), /readSuccessId/);

@@ -20,6 +20,8 @@ export interface AppNavItem {
   key: string;
   label: string;
   icon?: React.ReactNode;
+  /** Show the icon in the top bar without the label text (label stays as aria-label / title). */
+  iconOnly?: boolean;
   badge?: number;
   subItems?: AppNavSubEntry[];
 }
@@ -105,6 +107,12 @@ const IconMenu = () => (
 const IconChevronRight = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="m9 6 6 6-6 6" />
+  </svg>
+);
+
+const IconChevronLeft = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="m15 6-6 6 6 6" />
   </svg>
 );
 
@@ -526,6 +534,8 @@ const DrawerItem: React.FC<DrawerItemProps> = ({ item, activeNav, onSelect }) =>
  * horizontal primary navigation (dropdowns for grouped items) and the account menu.
  * Below 64rem the navigation moves into an off-canvas drawer.
  */
+const TOPNAV_SCROLL_STEP = 220;
+
 export const AppShell: React.FC<AppShellProps> = ({
   logoSrc = defaultLogo,
   logoAlt = 'SILA',
@@ -544,6 +554,9 @@ export const AppShell: React.FC<AppShellProps> = ({
 }) => {
   const hasNav = Boolean(navItems && navItems.length > 0);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+  const topnavScrollerRef = useRef<HTMLDivElement>(null);
   const drawerId = useId();
 
   const handleSelect = useCallback(
@@ -553,6 +566,25 @@ export const AppShell: React.FC<AppShellProps> = ({
     },
     [onNavClick]
   );
+
+  const updateTopnavOverflow = useCallback(() => {
+    const scroller = topnavScrollerRef.current;
+    if (!scroller) {
+      setCanScrollLeft(false);
+      setCanScrollRight(false);
+      return;
+    }
+    const maxScroll = scroller.scrollWidth - scroller.clientWidth;
+    const overflow = maxScroll > 1;
+    setCanScrollLeft(overflow && scroller.scrollLeft > 1);
+    setCanScrollRight(overflow && scroller.scrollLeft < maxScroll - 1);
+  }, []);
+
+  const scrollTopnav = useCallback((direction: -1 | 1) => {
+    const scroller = topnavScrollerRef.current;
+    if (!scroller) return;
+    scroller.scrollBy({ left: direction * TOPNAV_SCROLL_STEP, behavior: 'smooth' });
+  }, []);
 
   // Close the drawer with Escape, and whenever the viewport grows back to desktop.
   useEffect(() => {
@@ -572,9 +604,32 @@ export const AppShell: React.FC<AppShellProps> = ({
     };
   }, [drawerOpen]);
 
+  // Show left/right navigation buttons when the top bar cannot fit every menu.
+  useEffect(() => {
+    if (!hasNav) {
+      setCanScrollLeft(false);
+      setCanScrollRight(false);
+      return;
+    }
+    const scroller = topnavScrollerRef.current;
+    if (!scroller) return;
+    updateTopnavOverflow();
+    const onScroll = () => updateTopnavOverflow();
+    scroller.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', updateTopnavOverflow);
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(updateTopnavOverflow) : null;
+    observer?.observe(scroller);
+    return () => {
+      scroller.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', updateTopnavOverflow);
+      observer?.disconnect();
+    };
+  }, [hasNav, navItems, updateTopnavOverflow]);
+
   const shellClass = ['sila-root', 'sila-shell', drawerOpen && 'sila-shell--drawer-open'].filter(Boolean).join(' ');
   const displayName = userName || userFallbackName;
   const displayEmail = userEmail || userFallbackEmail;
+  const showTopnavOverflow = canScrollLeft || canScrollRight;
 
   return (
     <div className={shellClass}>
@@ -602,31 +657,56 @@ export const AppShell: React.FC<AppShellProps> = ({
         </button>
 
         {hasNav && (
-          <nav className="sila-topnav" aria-label="Primary">
-            <ul className="sila-topnav-list">
-              {navItems!.map((item) =>
-                item.subItems && item.subItems.length > 0 ? (
-                  <TopNavDropdown
-                    key={item.key}
-                    item={item as AppNavItem & { subItems: AppNavSubEntry[] }}
-                    activeNav={activeNav}
-                    onSelect={handleSelect}
-                  />
-                ) : (
-                  <li key={item.key} className="sila-topnav-entry">
-                    <button
-                      type="button"
-                      className={`sila-topnav-item${item.key === activeNav ? ' sila-topnav-item--active' : ''}`}
-                      aria-current={item.key === activeNav ? 'page' : undefined}
-                      onClick={() => handleSelect(item.key)}
-                    >
-                      <span>{item.label}</span>
-                      {item.badge ? <span className="sila-count" aria-label={`${item.badge} new`}>{item.badge}</span> : null}
-                    </button>
-                  </li>
-                )
-              )}
-            </ul>
+          <nav className={`sila-topnav${showTopnavOverflow ? ' sila-topnav--overflow' : ''}`} aria-label="Primary">
+            {canScrollLeft && (
+              <button
+                type="button"
+                className="sila-icon-btn sila-topnav-scroll sila-topnav-scroll--prev"
+                aria-label="Show previous menus"
+                onClick={() => scrollTopnav(-1)}
+              >
+                <IconChevronLeft />
+              </button>
+            )}
+            <div className="sila-topnav-scroller" ref={topnavScrollerRef}>
+              <ul className="sila-topnav-list">
+                {navItems!.map((item) =>
+                  item.subItems && item.subItems.length > 0 ? (
+                    <TopNavDropdown
+                      key={item.key}
+                      item={item as AppNavItem & { subItems: AppNavSubEntry[] }}
+                      activeNav={activeNav}
+                      onSelect={handleSelect}
+                    />
+                  ) : (
+                    <li key={item.key} className="sila-topnav-entry">
+                      <button
+                        type="button"
+                        className={`sila-topnav-item${item.iconOnly ? ' sila-topnav-item--icon' : ''}${item.key === activeNav ? ' sila-topnav-item--active' : ''}`}
+                        aria-label={item.label}
+                        title={item.label}
+                        aria-current={item.key === activeNav ? 'page' : undefined}
+                        onClick={() => handleSelect(item.key)}
+                      >
+                        {item.icon ? <span className="sila-topnav-icon" aria-hidden="true">{item.icon}</span> : null}
+                        {!item.iconOnly ? <span>{item.label}</span> : null}
+                        {item.badge ? <span className="sila-count" aria-label={`${item.badge} new`}>{item.badge}</span> : null}
+                      </button>
+                    </li>
+                  )
+                )}
+              </ul>
+            </div>
+            {canScrollRight && (
+              <button
+                type="button"
+                className="sila-icon-btn sila-topnav-scroll sila-topnav-scroll--next"
+                aria-label="Show more menus"
+                onClick={() => scrollTopnav(1)}
+              >
+                <IconChevronRight />
+              </button>
+            )}
           </nav>
         )}
 

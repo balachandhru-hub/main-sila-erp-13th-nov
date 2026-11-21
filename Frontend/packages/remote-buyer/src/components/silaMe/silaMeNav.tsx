@@ -13,6 +13,7 @@ export const SILA_ME_NAV_PATHS = {
   silaDashboard: "sila-dashboard",
   silaInventoryDashboard: "sila-inventory-dashboard",
   silaLiveInventory: "sila-live-inventory",
+  silaInventoryStudio: "sila-inventory-studio",
   silaStockHealth: "sila-stock-health",
   silaRecipeAvailability: "sila-recipe-availability",
   silaInventoryAnalytics: "sila-inventory-analytics",
@@ -106,20 +107,9 @@ export const buildSilaMeNavItem = (role: SilaMeRole, access?: SilaHomeCapabiliti
       items: home.viewInventory ? [
         { key: "silaInventoryDashboard", label: "Dashboard" },
         { key: "silaLiveInventory", label: "Live Inventory" },
-        { key: "silaStockHealth", label: "Stock Health" },
-        { key: "silaRecipeAvailability", label: "Recipe Availability" },
-        { key: "silaInventoryAnalytics", label: "Inventory Analytics" },
-        { key: "silaTransfers", label: "Internal Transfers" },
-        ...leaf(can.postGoodsIssue, "silaGoodsIssue", "Goods Issue"),
-        ...leaf(can.postAdjustment, "silaAdjustments", "Waste & Adjustments"),
-        { key: "silaStockCounts", label: "Stock Count" },
-        { key: "silaEnquiries", label: "Shortage & Enquiries" },
-        ...leaf(can.approveCount, "silaShortageReport", "Shortage Report"),
-        { key: "silaPhysicalInventory", label: "Physical Inventory" },
-        { key: "silaAlerts", label: "Alerts" },
-        ...leaf(home.recommendation, "silaRecommendations", "Recommendations"),
-        ...leaf(can.requestPurchase, "silaPurchaseRequests", "Purchase Requests"),
         { key: "silaTransactions", label: "Inventory Transactions" },
+        // Stock health, transfers, counts, alerts, etc. live inside Inventory Studio.
+        { key: "silaInventoryStudio", label: "Inventory Studio" },
       ] : [],
     },
     {
@@ -153,13 +143,6 @@ export const buildSilaMeNavItem = (role: SilaMeRole, access?: SilaHomeCapabiliti
       ],
     },
     {
-      label: "Integration",
-      items: [
-        // Restored studio GUI — SILA ME Transactions Tracker (keep outside Setup).
-        ...leaf(can.manageErpPosting, "silaMeTracker", "SILA ME Transactions"),
-      ],
-    },
-    {
       label: "Receiving",
       items: home.viewReceiving ? [
         { key: "silaReceivingDashboard", label: "Dashboard" },
@@ -190,6 +173,8 @@ export const buildSilaMeNavItem = (role: SilaMeRole, access?: SilaHomeCapabiliti
               { key: "silaApprovalFlows" as const, label: "Approval flow" },
             ]
           : []),
+        // SILA ME Transactions live under Setup as Transaction Tracker (no Integration menu).
+        ...leaf(can.manageErpPosting, "silaMeTracker", "Transaction Tracker"),
         ...leaf(can.approvePrice, "silaPriceApprovals", "Price Approvals"),
         ...leaf(can.viewAudit, "silaAuditLog", "Audit Log"),
       ],
@@ -205,17 +190,20 @@ export const buildSilaMeNavItem = (role: SilaMeRole, access?: SilaHomeCapabiliti
 };
 
 /**
- * The SILA ME site menu. SILA ME opens the add-on dashboard. Purchasing Dashboard returns to purchasing.
+ * The SILA ME site menu while the add-on is open: purchasing exit icons near the logo, then SILA ME menus.
+ * SILA ME home is labeled Dashboard (text only, no icon).
  */
 export const buildSilaMeModuleNav = (role: SilaMeRole, access?: SilaHomeCapabilities) => {
   const sections = (buildSilaMeNavItem(role, access).subItems ?? []).flatMap((entry) =>
     isSilaMeNavGroup(entry)
       ? [{ key: `sila-section-${entry.label}`, icon: <LayoutGridIcon />, label: entry.label, subItems: entry.items }]
-      : [{ key: entry.key, icon: <HomeIcon />, label: entry.label }],
+      : entry.key === "silaDashboard"
+        ? [{ key: entry.key, label: "Dashboard" }]
+        : [{ key: entry.key, icon: <HomeIcon />, label: entry.label }],
   );
   return [
-    { key: "dashboard", icon: <HomeIcon />, label: "Purchasing Home" },
-    { key: "purchasing", icon: <FileCheckIcon />, label: "Purchasing Dashboard" },
+    { key: "dashboard", icon: <HomeIcon />, label: "Purchasing Home", iconOnly: true },
+    { key: "purchasing", icon: <FileCheckIcon />, label: "Purchasing Dashboard", iconOnly: true },
     ...sections,
   ];
 };
