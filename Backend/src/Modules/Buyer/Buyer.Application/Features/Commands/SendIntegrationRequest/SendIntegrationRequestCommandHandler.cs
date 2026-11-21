@@ -58,9 +58,15 @@ namespace Buyer.Application.Features.Commands.SendIntegrationRequest
             Stopwatch watch = Stopwatch.StartNew();
             configuration.LastAttemptAt = DateTime.UtcNow;
             string? savedPath = configuration.ResourcePath;
+            string? savedMethod = configuration.HttpMethod;
             if (!string.IsNullOrWhiteSpace(request.ResourcePathOverride))
             {
                 configuration.ResourcePath = request.ResourcePathOverride.Trim();
+            }
+
+            if (!string.IsNullOrWhiteSpace(request.HttpMethodOverride))
+            {
+                configuration.HttpMethod = request.HttpMethodOverride.Trim().ToUpperInvariant();
             }
 
             try
@@ -79,6 +85,14 @@ namespace Buyer.Application.Features.Commands.SendIntegrationRequest
                 result.StatusCode = (int)response.StatusCode;
                 int responseLimit = request.ResponseLimit > 0 ? request.ResponseLimit : RESPONSE_LIMIT;
                 result.ResponseBody = body.Length > responseLimit ? body[..responseLimit] : body;
+                if (response.Headers.ETag != null)
+                {
+                    result.ETag = response.Headers.ETag.Tag;
+                }
+                else if (response.Headers.TryGetValues("ETag", out IEnumerable<string>? etags))
+                {
+                    result.ETag = etags.FirstOrDefault();
+                }
 
                 // A server error or a request timeout answer leaves it open whether the document was created.
                 result.OutcomeUnknown = (int)response.StatusCode >= 500 || (int)response.StatusCode == 408;
@@ -119,6 +133,11 @@ namespace Buyer.Application.Features.Commands.SendIntegrationRequest
                 if (!string.IsNullOrWhiteSpace(request.ResourcePathOverride))
                 {
                     configuration.ResourcePath = savedPath;
+                }
+
+                if (!string.IsNullOrWhiteSpace(request.HttpMethodOverride))
+                {
+                    configuration.HttpMethod = savedMethod;
                 }
             }
 

@@ -1,3 +1,4 @@
+using Buyer.Application.Features.Commands.CreateSilaLiveStockCount;
 using Buyer.Application.Features.Commands.CreateSilaLocation;
 using Buyer.Application.Features.Commands.DeactivateSilaLocation;
 using Buyer.Application.Features.Commands.DeleteSilaMaterialConversion;
@@ -350,6 +351,28 @@ namespace Buyer.API.Controllers
                 CurrentLocationId = currentLocationId
             });
             _logger.LogDebug($"Live inventory of a material fetched. Locations: {result.Locations.Count}");
+            return Ok(result);
+        }
+
+        /// <summary>
+        /// Live Inventory stock count: adjust book stock to physical qty and queue SAP 701 (surplus) or 702 (shortage).
+        /// </summary>
+        [HttpPost]
+        [Route("api/v1/buyer/sila/inventory/live-stock-count")]
+        [ApiAuthorization(Name = "MANAGE_SILA_STOCK_COUNT")]
+        [SwaggerOperation("CreateSilaLiveStockCount")]
+        [SwaggerResponse(200, type: typeof(SilaLiveStockCountResultDto))]
+        public async Task<IActionResult> LiveStockCount([FromBody] SilaLiveStockCountWriteDto request)
+        {
+            _logger.LogDebug($"Live stock count. LocationId: {request.LocationId}, MaterialId: {request.MaterialId}, Physical: {request.PhysicalQty}");
+            SilaLiveStockCountResultDto result = await _mediator.Send(new CreateSilaLiveStockCountCommand
+            {
+                OrganizationId = GetOrganizationId(),
+                UserId = GetUserId(),
+                RoleId = GetRoleId(),
+                Request = request
+            });
+            _logger.LogDebug($"Live stock count saved. AdjustmentId: {result.AdjustmentId}, Movement: {result.MovementType}");
             return Ok(result);
         }
 
