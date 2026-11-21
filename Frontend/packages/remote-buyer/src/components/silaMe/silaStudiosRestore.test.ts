@@ -31,4 +31,8 @@ assert.match(read("trackers/SilaConsolidatedTracker.tsx"), /strk-me-hero/);
 assert.match(read("trackers/SilaConsolidatedTracker.tsx"), /data-testid="sila-me-transactions-studio"/);
 assert.match(read("trackers/SilaTracker.css"), /strk-me-hero/);
 
+// Missing these blanks the host Vite graph and /dashboard.
+assert.match(read("../api/silaMe/readSuccessId.ts"), /readSuccessId/);
+assert.match(read("../api/silaMe/silaGoodsIssueCostCenterApi.ts"), /getGoodsIssueCostCenters/);
+
 console.log("silaStudiosRestore.test.ts: ok");
