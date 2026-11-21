@@ -113,7 +113,21 @@ namespace Buyer.Application.Features.Queries.GetSilaTransactionTracker
             detail.MovementType = posting.MovementType;
             detail.ErpPostingId = posting.Id;
             detail.TechnicalDetail = SilaErpPayload.Sanitise(posting.ErpRequestPayload);
-            detail.ErpMessage = SilaErpPayload.Sanitise(posting.ErpResponsePayload);
+            detail.ErpMessage = SilaErpPayload.Sanitise(posting.ErpResponsePayload)
+                ?? SilaErpPayload.HttpBodyFromError(posting.ErrorMessage);
+            if (string.IsNullOrWhiteSpace(detail.TechnicalDetail)
+                && posting.ReferenceType == Common.SILA_REF_POS_SALE)
+            {
+                PosSalesTransaction? sale = await _repository.PosSalesTransaction
+                    .FindFirstByConditionAsync(x => x.Id == posting.ReferenceId && x.BuyerId == buyerId);
+                if (sale != null)
+                {
+                    detail.TechnicalDetail = await SilaPosErpPayload.EnsureRequestAsync(
+                        _repository, buyerId, sale, posting, cancellationToken);
+                    detail.ErpMessage ??= SilaErpPayload.HttpBodyFromError(sale.FailureMessage ?? posting.ErrorMessage);
+                }
+            }
+
             detail.Attempts = await AttemptsAsync(buyerId, posting.ReferenceType, posting.ReferenceId, cancellationToken);
             if (SilaInvoiceTracker.IsInvoiceFamily(posting.ReferenceType))
             {
@@ -194,7 +208,8 @@ namespace Buyer.Application.Features.Queries.GetSilaTransactionTracker
             detail.Quantity = line.Quantity;
             detail.Uom = line.BaseUom;
             detail.TechnicalDetail = SilaErpPayload.Sanitise(posting?.ErpRequestPayload);
-            detail.ErpMessage = SilaErpPayload.Sanitise(posting?.ErpResponsePayload);
+            detail.ErpMessage = SilaErpPayload.Sanitise(posting?.ErpResponsePayload)
+                ?? SilaErpPayload.HttpBodyFromError(error);
             detail.Attempts = posting == null
                 ? new List<SilaTrackerAttemptDto>()
                 : await AttemptsAsync(buyerId, posting.ReferenceType, posting.ReferenceId, cancellationToken);
@@ -209,9 +224,7 @@ namespace Buyer.Application.Features.Queries.GetSilaTransactionTracker
                 return null;
             }
 
-            InventoryErpPosting? posting = sale.ErpPostingId == null
-                ? null
-                : await _repository.InventoryErpPosting.FindFirstByConditionAsync(x => x.Id == sale.ErpPostingId);
+            InventoryErpPosting? posting = await ResolvePosPostingAsync(buyerId, sale, cancellationToken);
             SilaTrackerRules.Stages? postingStages = posting == null ? null : SilaTrackerRules.OfPosting(posting.Status, posting.Attempts, posting.ErpReference);
             SilaTrackerRules.Stages stages = SilaTrackerRules.OfPos(sale.Status, sale.FailedStep, postingStages);
             SilaTrackerDetailDto detail = Base(SilaTrackerRules.SOURCE_POS, sale.Id, sale.DateCreated, sale.QuantitySold < 0 ? "POS_POSITIVE_CORRECTION" : "POS_SALE", stages);
@@ -248,10 +261,58 @@ namespace Buyer.Application.Features.Queries.GetSilaTransactionTracker
             detail.Uom = sale.Uom;
             detail.RecipeVersion = sale.RecipeVersion;
             detail.RecipeId = sale.RecipeId;
-            detail.TechnicalDetail = SilaErpPayload.Sanitise(posting?.ErpRequestPayload);
-            detail.ErpMessage = SilaErpPayload.Sanitise(posting?.ErpResponsePayload);
+            // Never leave Request blank — rebuild from ledger or return a sale diagnostic.
+            detail.TechnicalDetail = await SilaPosErpPayload.EnsureRequestAsync(_repository, buyerId, sale, posting, cancellationToken)
+                ?? SilaPosErpPayload.BuildSaleDiagnostic(sale, posting, "Request payload was not stored; showing POS sale fields for FIVE_POS_UPDATE.");
+            detail.ErpMessage = SilaErpPayload.Sanitise(posting?.ErpResponsePayload)
+                ?? SilaErpPayload.HttpBodyFromError(sale.FailureMessage ?? posting?.ErrorMessage);
             detail.Attempts = await AttemptsAsync(buyerId, Common.SILA_REF_POS_SALE, sale.Id, cancellationToken);
             return detail;
+        }
+
+        /// <summary>
+        /// Prefer the sale's ErpPostingId; if that row has no request payload, use the latest POS posting
+        /// for the sale that does (group posts may have stored the exchange on a sibling).
+        /// </summary>
+        private async Task<InventoryErpPosting?> ResolvePosPostingAsync(
+            Guid buyerId,
+            PosSalesTransaction sale,
+            CancellationToken cancellationToken)
+        {
+            InventoryErpPosting? linked = sale.ErpPostingId == null
+                ? null
+                : await _repository.InventoryErpPosting.FindFirstByConditionAsync(x => x.Id == sale.ErpPostingId.Value && x.BuyerId == buyerId);
+            if (linked != null && !string.IsNullOrWhiteSpace(linked.ErpRequestPayload))
+            {
+                return linked;
+            }
+
+            // Prefer any posting (active or not) that already has the request body.
+            InventoryErpPosting? withPayload = await _repository.InventoryErpPosting
+                .FindByCondition(x => x.BuyerId == buyerId
+                    && x.ReferenceType == Common.SILA_REF_POS_SALE
+                    && x.ReferenceId == sale.Id
+                    && x.ErpRequestPayload != null && x.ErpRequestPayload != "")
+                .OrderByDescending(x => x.DateUpdated)
+                .FirstOrDefaultAsync(cancellationToken);
+            if (withPayload != null)
+            {
+                return withPayload;
+            }
+
+            if (linked != null)
+            {
+                return linked;
+            }
+
+            // Last resort: latest posting for this sale, including inactive rows.
+            return await _repository.InventoryErpPosting
+                .FindByCondition(x => x.BuyerId == buyerId
+                    && x.ReferenceType == Common.SILA_REF_POS_SALE
+                    && x.ReferenceId == sale.Id)
+                .OrderByDescending(x => x.DateUpdated)
+                .ThenByDescending(x => x.DateCreated)
+                .FirstOrDefaultAsync(cancellationToken);
         }
 
         private async Task<SilaTrackerDetailDto?> PurchaseAsync(Guid organizationId, Guid buyerId, Guid id, CancellationToken cancellationToken)

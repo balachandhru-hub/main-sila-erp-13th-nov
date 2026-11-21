@@ -260,7 +260,11 @@ const SilaLocationForm: React.FC<SilaLocationFormProps> = ({ location, propertie
               maxLength={MAX_ACCOUNT}
               value={form.costCenter ?? ""}
               onChange={(event) => setField("costCenter", event.target.value)}
+              placeholder="e.g. 1060050124"
             />
+            <span className="sila-hint">
+              Required for POS Goods Issue (Z01). Resolved from this storage location / plant — not hardcoded.
+            </span>
           </div>
           <div className="sila-field">
             <label className="sila-label" htmlFor="sinv-form-profit">Profit center</label>

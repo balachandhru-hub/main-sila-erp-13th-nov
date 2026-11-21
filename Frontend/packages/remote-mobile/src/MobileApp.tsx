@@ -42,6 +42,10 @@ import TransferDetailScreen from './screens/inventory/TransferDetailScreen';
 import CountListScreen from './screens/count/CountListScreen';
 import RecipesScreen from './screens/recipes/RecipesScreen';
 import RecipeDetailScreen from './screens/recipes/RecipeDetailScreen';
+import RecipeStudioHomeScreen from './screens/recipes/RecipeStudioHomeScreen';
+import RecipeDraftWizardScreen from './screens/recipes/RecipeDraftWizardScreen';
+import RecipeDraftsScreen from './screens/recipes/RecipeDraftsScreen';
+import RecipeApprovalsScreen from './screens/recipes/RecipeApprovalsScreen';
 import MenuDashboardScreen from './screens/menu/MenuDashboardScreen';
 import MenuItemsScreen from './screens/menu/MenuItemsScreen';
 import MenuItemEditorScreen from './screens/menu/MenuItemEditorScreen';
@@ -142,7 +146,12 @@ const MobileSurface: React.FC<{ base: string }> = ({ base }) => {
                 <Route path="inventory/transfers" element={<TransfersScreen />} />
                 <Route path="inventory/transfers/new" element={<TransferFormScreen />} />
                 <Route path="inventory/transfers/:transferId" element={<TransferDetailScreen />} />
-                <Route path="recipes" element={<RecipesScreen />} />
+                <Route path="recipes" element={<RecipeStudioHomeScreen />} />
+                <Route path="recipes/catalog" element={<RecipesScreen />} />
+                <Route path="recipes/draft/new" element={<RecipeDraftWizardScreen />} />
+                <Route path="recipes/drafts" element={<RecipeDraftsScreen />} />
+                <Route path="recipes/approvals" element={<RecipeApprovalsScreen />} />
+                <Route path="recipes/approvals/:recipeId" element={<RecipeDetailScreen approvalMode />} />
                 <Route path="recipes/:recipeId" element={<RecipeDetailScreen />} />
                 <Route path="menu" element={<MenuDashboardScreen />} />
                 <Route path="menu/items" element={<MenuItemsScreen />} />

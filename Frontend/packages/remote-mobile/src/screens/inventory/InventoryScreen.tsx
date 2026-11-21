@@ -123,7 +123,7 @@ const InventoryScreen: React.FC = () => {
             {[
               { label: 'All transfers', to: 'inventory/transfers' },
               { label: 'Purchase requests', to: 'inventory/purchase-requests', show: can.requestPurchase },
-              { label: 'Recipes', to: 'recipes', show: can.manageRecipe || can.approveRecipe },
+              { label: 'Recipe Studio', to: 'recipes', show: can.manageRecipe || can.approveRecipe },
               { label: 'Goods issue', to: 'inventory/goods-issues', show: can.postGoodsIssue },
               { label: 'Waste & adjustments', to: 'inventory/adjustments', show: can.postAdjustment },
             ]

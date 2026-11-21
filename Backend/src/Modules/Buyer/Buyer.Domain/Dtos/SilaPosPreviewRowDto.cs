@@ -4,7 +4,9 @@ namespace Buyer.Domain.Dtos
     public class SilaPosPreviewRowDto
     {
         public int RowNumber { get; set; }
-        /// <summary>READY | INVALID | DUPLICATE | UNMAPPED_POS_CODE | INVALID_OUTLET | INVALID_UOM | RECIPE_NOT_READY</summary>
+        /// <summary>Stored POS transaction id when the row was accepted into the PREVIEW batch (for line selection).</summary>
+        public Guid? SaleTransactionId { get; set; }
+        /// <summary>READY | INVALID | DUPLICATE | UNMAPPED_POS_CODE | INVALID_OUTLET | INVALID_UOM | RECIPE_NOT_READY | RETURN_LINK_REQUIRED</summary>
         public string Status { get; set; } = string.Empty;
         public string? BusinessDate { get; set; }
         public string? TransactionId { get; set; }
@@ -17,6 +19,11 @@ namespace Buyer.Domain.Dtos
         public string? Amount { get; set; }
         public string? OutletLocationName { get; set; }
         public string? RecipeCode { get; set; }
+        public int? RecipeVersion { get; set; }
+        public string? SourceSystem { get; set; }
+        public string? TransactionType { get; set; }
+        public string? OriginalTransactionId { get; set; }
+        public string? OriginalLineId { get; set; }
         public string? Message { get; set; }
     }
 }

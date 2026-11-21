@@ -35,6 +35,21 @@ export const formatDateTime = (value: string | null | undefined): string => {
   return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString();
 };
 
+/**
+ * Material description for display. Treats blank or material-number-as-description
+ * (bad ERP map) as missing so the code is not shown twice in Code + Description columns.
+ */
+export const displayDescription = (
+  description: string | null | undefined,
+  materialCode: string | null | undefined,
+): string => {
+  const text = (description ?? "").trim();
+  const code = (materialCode ?? "").trim();
+  if (!text) return "";
+  if (code && text.toUpperCase() === code.toUpperCase()) return "";
+  return text;
+};
+
 /** "STOCK" → "Stock", "NON_STOCK" → "Non stock". */
 export const codeLabel = (code: string | null | undefined): string => {
   if (!code) return "—";

@@ -1,4 +1,5 @@
 using Buyer.Application.Features.Commands.ActivateIntegration;
+using Buyer.Application.Features.Commands.AlignIntegrationConnection;
 using Buyer.Application.Features.Commands.CreateIntegration;
 using Buyer.Application.Features.Commands.DeactivateIntegration;
 using Buyer.Application.Features.Commands.DeleteIntegration;
@@ -212,6 +213,30 @@ namespace Buyer.API.Controllers
                 ConfigurationId = configurationId
             });
             _logger.LogDebug($"Integration tested. ConfigurationId: {configurationId}, Success: {result.Success}");
+            return Ok(result);
+        }
+
+        /// <summary>
+        /// Copies base URL, auth, protected credentials and OData headers from a working connection
+        /// onto this API. Keeps the target process type, name and request body.
+        /// </summary>
+        [HttpPost]
+        [Route("api/v1/buyer/integrations/{configurationId:guid}/align-connection")]
+        [ApiAuthorization(Name = "MANAGE_INTEGRATION")]
+        [SwaggerOperation("AlignIntegrationConnection")]
+        [SwaggerResponse(200, type: typeof(IntegrationConfigurationResponseDto))]
+        public async Task<IActionResult> AlignIntegrationConnection(
+            [FromRoute] Guid configurationId,
+            [FromBody] AlignIntegrationConnectionInputDto request)
+        {
+            _logger.LogDebug($"Aligning integration connection. ConfigurationId: {configurationId}, SourceConfigurationId: {request.SourceConfigurationId}");
+            IntegrationConfigurationResponseDto result = await _mediator.Send(new AlignIntegrationConnectionCommand
+            {
+                OrganizationId = GetOrganizationId(),
+                UserId = GetUserId(),
+                ConfigurationId = configurationId,
+                SourceConfigurationId = request.SourceConfigurationId
+            });
             return Ok(result);
         }
 

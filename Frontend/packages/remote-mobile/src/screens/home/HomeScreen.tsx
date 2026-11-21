@@ -83,6 +83,7 @@ const HomeScreen: React.FC = () => {
     { label: 'Credit memos', icon: 'scan', to: 'receive/credit-memos', show: caps.viewCreditMemos },
     { label: 'Recommendations', icon: 'purchaseOrders', to: 'inventory/recommendations', show: caps.recommendation },
     { label: 'Menu Engineering', icon: 'recipes', to: 'menu', show: can.viewMenuEngineering },
+    { label: 'Recipe Studio', icon: 'recipes', to: 'recipes', show: can.manageRecipe || can.approveRecipe },
     { label: 'Live Stock', icon: 'inventory', to: 'inventory/stock', show: caps.viewInventory },
     { label: 'Raise ITO', icon: 'transfer', to: 'inventory/transfers/new', show: caps.viewInventory && can.manageTransfer },
     { label: 'Approvals', icon: 'approvals', to: 'tasks', show: caps.approveCount || caps.approveTransfer || caps.approveRecipe || caps.approvePrice || caps.approveInvoices || caps.approveCreditMemos },
