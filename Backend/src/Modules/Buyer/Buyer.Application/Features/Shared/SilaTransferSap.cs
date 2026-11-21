@@ -321,8 +321,8 @@ namespace Buyer.Application.Features.Shared
                 fromProperty?.CompanyCode, toProperty?.CompanyCode, out SilaInventorySap.Rule? rule);
             ApiIntegrationConfiguration? api = rule == null
                 ? null
-                : await SilaInventorySap.ResolveAnyAsync(
-                    repository, organizationId, SilaInventorySap.ApiNamesFor(rule), companyCode, cancellationToken);
+                : await SilaInventorySap.ResolveForRuleAsync(
+                    repository, organizationId, rule, companyCode, cancellationToken);
             if (api == null || rule == null)
             {
                 string apiName = rule?.ApiName ?? API_CONFIG_NAME;
@@ -342,24 +342,16 @@ namespace Buyer.Application.Features.Shared
         }
 
         /// <summary>
-        /// The active FIVE S4 - Transfer Stock configuration for the company code, otherwise ALL.
-        /// No other API is returned.
+        /// The active Transfer Stock configuration (FIVE / S4 name aliases, then POST_TRANSFER_311 process type).
         /// </summary>
-        public static async Task<ApiIntegrationConfiguration?> ResolveAsync(
+        public static Task<ApiIntegrationConfiguration?> ResolveAsync(
             IRepositoryWrapper repository,
             Guid organizationId,
             string? companyCode,
             CancellationToken cancellationToken)
         {
-            List<ApiIntegrationConfiguration> named = await repository.ApiIntegrationConfiguration
-                .FindByCondition(x => IntegrationLookup.BuyerIdsOf(repository, organizationId).Contains(x.BuyerId)
-                    && x.IsActive
-                    && x.Status == IntegrationConfigurationStatus.ACTIVE
-                    && x.Name == API_CONFIG_NAME)
-                .ToListAsync(cancellationToken);
-            return named.FirstOrDefault(x => companyCode != null && x.EntityCode.Equals(companyCode, StringComparison.OrdinalIgnoreCase))
-                ?? named.FirstOrDefault(x => x.EntityCode.Equals(IntegrationConstants.ENTITY_CODE_ALL, StringComparison.OrdinalIgnoreCase))
-                ?? (companyCode == null ? named.OrderBy(x => x.DateCreated).FirstOrDefault() : null);
+            return SilaInventorySap.ResolveForRuleAsync(
+                repository, organizationId, SilaInventorySap.SamePlantTransfer, companyCode, cancellationToken);
         }
 
         private static string? Text(JsonElement root, string name)
