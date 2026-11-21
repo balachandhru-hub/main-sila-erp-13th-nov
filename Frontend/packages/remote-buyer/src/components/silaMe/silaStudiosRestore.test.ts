@@ -13,10 +13,10 @@ const read = (rel: string) => readFileSync(join(dir, rel), "utf8");
 const nav = read("silaMeNav.tsx");
 assert.match(nav, /label: "Recipe Studio"/);
 assert.match(nav, /"POS Studio"/);
-assert.match(nav, /label: "Integration"/);
-assert.match(nav, /SILA ME Transactions/);
-assert.match(nav, /\/\/ Restored studio GUI/);
-assert.doesNotMatch(nav.slice(nav.indexOf('label: "Setup"')), /silaMeTracker/);
+assert.match(nav, /Transaction Tracker/);
+assert.match(nav, /silaMeTracker/);
+assert.doesNotMatch(nav, /label: "Integration"/);
+assert.match(nav.slice(nav.indexOf('label: "Setup"')), /silaMeTracker/);
 
 const workspace = read("SilaMeWorkspace.tsx");
 assert.match(workspace, /SilaRecipes/);

@@ -38,11 +38,14 @@ assert.match(css, /strk-studio-detail/);
 assert.match(css, /strk-studio-filters--grid/);
 
 assert.match(nav, /silaMeTracker/);
-assert.match(nav, /SILA ME Transactions/);
-assert.match(nav, /label: "Integration"/);
-assert.match(nav, /label: "Integration",\s*items: \[\s*\/\/ Restored studio GUI[\s\S]*silaMeTracker/);
+assert.match(nav, /Transaction Tracker/);
+assert.match(nav, /iconOnly:\s*true/);
+assert.match(nav, /Purchasing Home/);
+assert.doesNotMatch(nav, /label: "Integration"/);
+assert.doesNotMatch(nav, /Purchasing Dashboard/);
 const setupBlock = nav.slice(nav.indexOf('label: "Setup"'));
-assert.doesNotMatch(setupBlock, /silaMeTracker/);
+assert.match(setupBlock, /silaMeTracker/);
+assert.match(setupBlock, /Transaction Tracker/);
 
 assert.match(workspace, /SilaConsolidatedTracker/);
 assert.match(workspace, /silaMeTracker/);

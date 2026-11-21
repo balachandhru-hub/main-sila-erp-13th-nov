@@ -69,10 +69,23 @@
   display: flex;
   flex: 1;
   min-width: 0;
+  align-items: stretch;
+  gap: var(--sila-space-1);
+}
+
+.sila-topnav-scroller {
+  flex: 1;
+  min-width: 0;
   overflow-x: auto;
   scrollbar-width: none;
 }
-.sila-topnav::-webkit-scrollbar { display: none; }
+.sila-topnav-scroller::-webkit-scrollbar { display: none; }
+
+.sila-topnav-scroll {
+  align-self: center;
+  color: var(--sila-text-secondary);
+}
+.sila-topnav-scroll:hover { color: var(--sila-text); }
 
 .sila-topnav-list {
   display: flex;
@@ -102,6 +115,31 @@
   white-space: nowrap;
   cursor: pointer;
   transition: color var(--sila-duration-fast) var(--sila-ease);
+}
+
+.sila-topnav-item--icon {
+  justify-content: center;
+  width: 2.5rem;
+  padding: 0;
+}
+
+.sila-topnav-item--icon::after {
+  left: 0.55rem;
+  right: 0.55rem;
+}
+
+.sila-topnav-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.125rem;
+  height: 1.125rem;
+  flex-shrink: 0;
+}
+
+.sila-topnav-icon svg {
+  width: 1.125rem;
+  height: 1.125rem;
 }
 
 .sila-topnav-item::after {
