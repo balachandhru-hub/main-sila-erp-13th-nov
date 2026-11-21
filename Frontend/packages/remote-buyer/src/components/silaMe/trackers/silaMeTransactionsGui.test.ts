@@ -14,9 +14,11 @@ const nav = readFileSync(join(dir, "../silaMeNav.tsx"), "utf8");
 const workspace = readFileSync(join(dir, "../SilaMeWorkspace.tsx"), "utf8");
 
 assert.match(tracker, /strk-me-toolbar/);
+assert.match(tracker, /strk-me-hero--compact/);
 assert.match(tracker, /data-testid="sila-me-transactions-studio"/);
 assert.match(tracker, /TRANSACTION TRACKER/);
-assert.match(tracker, /strk-me-panel__title--tracker/);
+assert.match(tracker, /strk-me-hero__title--tracker/);
+assert.doesNotMatch(tracker, /strk-me-panel__title--tracker/);
 assert.match(tracker, /strk-me-kpis/);
 assert.match(tracker, /strk-me-lifecycle/);
 assert.match(tracker, /resolveRequestPayload|isCapturedSapRequest/);

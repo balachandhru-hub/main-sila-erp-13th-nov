@@ -340,30 +340,33 @@ const SilaConsolidatedTracker: React.FC<SilaConsolidatedTrackerProps> = ({ track
   return (
     <div className={studio ? "sila-me srec-page rstudio-page pstudio-page strk-me-page" : "sila-me srcv-page"}>
       {studio ? (
-        <div className="strk-me-toolbar" data-testid="sila-me-transactions-studio">
-          <button
-            type="button"
-            className={`sila-btn sila-btn--secondary${filtersOpen ? " strk-filters-btn--open" : ""}`}
-            aria-expanded={filtersOpen}
-            aria-controls="strk-me-filters"
-            onClick={() => setFiltersOpen((open) => !open)}
-          >
-            Filters
-          </button>
-          <button type="button" className="sila-btn sila-btn--secondary" onClick={load} disabled={loading}>
-            Refresh
-          </button>
-          {canReprocess && (
+        <header className="strk-me-hero strk-me-hero--compact" data-testid="sila-me-transactions-studio">
+          <h1 className="strk-me-hero__title strk-me-hero__title--tracker">TRANSACTION TRACKER</h1>
+          <div className="strk-me-toolbar">
             <button
               type="button"
-              className="sila-btn sila-btn--primary"
-              disabled={eligibleSelected.length === 0 || busy}
-              onClick={() => setConfirming(eligibleSelected)}
+              className={`sila-btn sila-btn--secondary${filtersOpen ? " strk-filters-btn--open" : ""}`}
+              aria-expanded={filtersOpen}
+              aria-controls="strk-me-filters"
+              onClick={() => setFiltersOpen((open) => !open)}
             >
-              Reprocess selected ({eligibleSelected.length})
+              Filters
             </button>
-          )}
-        </div>
+            <button type="button" className="sila-btn sila-btn--secondary" onClick={load} disabled={loading}>
+              Refresh
+            </button>
+            {canReprocess && (
+              <button
+                type="button"
+                className="sila-btn sila-btn--primary"
+                disabled={eligibleSelected.length === 0 || busy}
+                onClick={() => setConfirming(eligibleSelected)}
+              >
+                Reprocess selected ({eligibleSelected.length})
+              </button>
+            )}
+          </div>
+        </header>
       ) : (
         <PageHeader className="pud-page-header" title="Transaction Tracker" description={title} />
       )}
@@ -376,11 +379,6 @@ const SilaConsolidatedTracker: React.FC<SilaConsolidatedTrackerProps> = ({ track
         <Kpi label="Needs attention" value={summary.needsAttention} tone={studio ? "amber" : undefined} />
       </section>
       <section className={studio ? "strk-me-panel strk-studio-panel" : "sila-card"}>
-        {studio && (
-          <div className="strk-studio-panel__head">
-            <h2 className="strk-me-panel__title strk-me-panel__title--tracker">TRANSACTION TRACKER</h2>
-          </div>
-        )}
         {(!studio || filtersOpen) && (
         <div
           id={studio ? "strk-me-filters" : undefined}
