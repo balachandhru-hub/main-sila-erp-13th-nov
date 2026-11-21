@@ -1511,8 +1511,8 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
         }
 
         /// <summary>
-        /// Posts movement 312 via FIVE S4 - Transfer Stock for a queued ITO reversal. Does not re-post 311.
-        /// Local stock and ReversedQty are applied only after confirmed SAP success (queued command already reserved status).
+        /// Posts movement 312 (FIVE S4 - Transfer Stock) or 302 (FIVE S4 - Plant Transfer Stock) for a queued ITO reversal.
+        /// Does not re-post 311/301. Local stock and ReversedQty apply only after confirmed SAP success.
         /// </summary>
         private async Task<string> PostTransferReversalAsync(InventoryErpPosting posting, CancellationToken cancellationToken)
         {
@@ -1595,11 +1595,11 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
 
             posting.MovementType = rule.GoodsMovementType;
             ApiIntegrationConfiguration? api = await SilaInventorySap.ResolveAsync(_repository, buyer.OrganizationId, rule.ApiName, posting.CompanyCode, cancellationToken);
-            if (api == null || !string.Equals(api.Name, SilaTransferSap.API_CONFIG_NAME, StringComparison.Ordinal))
+            if (api == null || !string.Equals(api.Name, rule.ApiName, StringComparison.Ordinal))
             {
                 transfer.ReversalStatus = Common.SILA_ITO_REVERSAL_FAILED;
                 _repository.InternalTransferOrder.Update(transfer);
-                return await FinishAsync(posting, Common.SILA_POSTING_FAILED, null, SilaInventorySap.MissingApi(SilaTransferSap.API_CONFIG_NAME), cancellationToken);
+                return await FinishAsync(posting, Common.SILA_POSTING_FAILED, null, SilaInventorySap.MissingApi(rule.ApiName), cancellationToken);
             }
 
             IntegrationSendResultDto sent = await SendAsync(buyer.OrganizationId, api.Id, posting, body, cancellationToken);
