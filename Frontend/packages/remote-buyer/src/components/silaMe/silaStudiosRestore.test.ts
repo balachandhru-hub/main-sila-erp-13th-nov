@@ -32,7 +32,7 @@ assert.match(read("trackers/SilaConsolidatedTracker.tsx"), /data-testid="sila-me
 assert.match(read("trackers/SilaTracker.css"), /strk-me-hero/);
 
 // Missing these blanks the host Vite graph and /dashboard.
-assert.match(read("../api/silaMe/readSuccessId.ts"), /readSuccessId/);
-assert.match(read("../api/silaMe/silaGoodsIssueCostCenterApi.ts"), /getGoodsIssueCostCenters/);
+assert.match(read("../../api/silaMe/readSuccessId.ts"), /readSuccessId/);
+assert.match(read("../../api/silaMe/silaGoodsIssueCostCenterApi.ts"), /getGoodsIssueCostCenters/);
 
 console.log("silaStudiosRestore.test.ts: ok");
