@@ -43,6 +43,10 @@ namespace Buyer.Application.Features.Shared
         public const string TYPE_302 = "302";
         public const string TYPE_Z02 = "Z02";
         public const string TYPE_Z01 = "Z01";
+        /// <summary>SAP inventory difference — surplus (physical &gt; book).</summary>
+        public const string TYPE_701 = "701";
+        /// <summary>SAP inventory difference — shortage (physical &lt; book).</summary>
+        public const string TYPE_702 = "702";
 
         public const string SOURCE_SAP_LOCATION_MAPPING_MISSING = "SOURCE_SAP_LOCATION_MAPPING_MISSING";
         public const string DESTINATION_SAP_LOCATION_MAPPING_MISSING = "DESTINATION_SAP_LOCATION_MAPPING_MISSING";
@@ -78,11 +82,41 @@ namespace Buyer.Application.Features.Shared
             SilaStockCountSap.API_CONFIG_NAME, CODE_ISSUE, TYPE_Z01, false, increasesStock: true);
         /// <summary>Non-POS positive stock adjustments restore stock (IN).</summary>
         public static readonly Rule PositiveAdjustment = new Rule(API_POSITIVE_ADJUSTMENT, CODE_ISSUE, TYPE_Z01, false, increasesStock: true);
+        /// <summary>
+        /// Live Inventory stock-count surplus (701). Credentials from FIVE S4 - Positive Stock Adjustment;
+        /// posting uses API_PHYSICAL_INVENTORY_DOC_SRV (Material Document API rejects 701 with M7/096).
+        /// </summary>
+        public static readonly Rule InventoryDifferenceSurplus = new Rule(API_POSITIVE_ADJUSTMENT, CODE_ISSUE, TYPE_701, false, increasesStock: true);
+        /// <summary>
+        /// Live Inventory stock-count shortage (702). Same Physical Inventory Document path as 701.
+        /// </summary>
+        public static readonly Rule InventoryDifferenceShortage = new Rule(API_POSITIVE_ADJUSTMENT, CODE_ISSUE, TYPE_702, false, increasesStock: false);
 
         /// <summary>OUT uses GoodsIssue (Z02) for non-POS; IN uses PositiveAdjustment (Z01).</summary>
         public static Rule ForDirection(string? direction)
         {
             return direction == Common.SILA_DIRECTION_IN ? PositiveAdjustment : GoodsIssue;
+        }
+
+        /// <summary>Stock-count physical variance: positive → 701, negative → 702.</summary>
+        public static Rule ForInventoryDifference(string? direction)
+        {
+            return direction == Common.SILA_DIRECTION_IN ? InventoryDifferenceSurplus : InventoryDifferenceShortage;
+        }
+
+        public static bool IsInventoryDifference(string? movementType)
+        {
+            return movementType == TYPE_701 || movementType == TYPE_702;
+        }
+
+        public static string DirectionForMovement(string? movementType)
+        {
+            if (movementType == TYPE_Z01 || movementType == TYPE_701)
+            {
+                return Common.SILA_DIRECTION_IN;
+            }
+
+            return Common.SILA_DIRECTION_OUT;
         }
 
         /// <summary>
