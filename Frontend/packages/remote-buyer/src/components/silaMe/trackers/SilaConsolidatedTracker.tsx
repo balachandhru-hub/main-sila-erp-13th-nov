@@ -21,6 +21,60 @@ import "../pos/SilaPosStudio.css";
 import "./SilaTracker.css";
 
 const PAGE_SIZE = 25;
+const EXPORT_LIMIT = 5000;
+
+const ExcelDownloadIcon: React.FC = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" stroke="currentColor" strokeWidth="1.75" strokeLinejoin="round" />
+    <path d="M14 2v6h6" stroke="currentColor" strokeWidth="1.75" strokeLinejoin="round" />
+    <path d="M9.2 17.2 12 12l2.8 5.2M10.1 15h3.8" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+const csvEscape = (value: string): string => {
+  if (/[",\n\r]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
+  return value;
+};
+
+const trackerRowsToCsv = (rows: SilaTrackerRow[]): string => {
+  const headers = [
+    "Date / time", "Transaction ID", "Type", "Data", "Direction", "Company", "Plant", "Storage location",
+    "Reference", "ERP REF ID", "Receive", "ERP", "Local", "Overall", "Retries", "Integration", "Result",
+  ];
+  const lines = rows.map((row) => [
+    formatDateTime(row.occurredOn),
+    row.id,
+    labelOf(row.transactionType),
+    labelOf(row.dataClass),
+    labelOf(row.direction),
+    row.companyCode || "",
+    row.plant || "",
+    row.storageLocation || "",
+    row.businessReference || "",
+    row.erpReference || "",
+    labelOf(row.receiveStatus),
+    labelOf(row.erpStatus),
+    labelOf(row.localStatus),
+    labelOf(row.overallStatus),
+    String(row.retryCount ?? 0),
+    row.integrationName || "",
+    row.lastError || "",
+  ].map((cell) => csvEscape(String(cell ?? ""))).join(","));
+  return [`\uFEFF${headers.join(",")}`, ...lines].join("\r\n");
+};
+
+const downloadTrackerExcel = (rows: SilaTrackerRow[], tracker: SilaTrackerName) => {
+  const blob = new Blob([trackerRowsToCsv(rows)], { type: "application/vnd.ms-excel;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  const stamp = new Date().toISOString().slice(0, 10);
+  link.href = url;
+  link.download = `${tracker === "SILA_ME" ? "transaction-tracker" : "purchasing-transactions"}-${stamp}.xls`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+};
 
 const TYPES = [
   "POS_SALE", "POS_POSITIVE_CORRECTION", "INTERNAL_TRANSFER_311", "PLANT_TRANSFER_301",
@@ -206,6 +260,7 @@ const SilaConsolidatedTracker: React.FC<SilaConsolidatedTrackerProps> = ({ track
   const [confirming, setConfirming] = useState<SilaTrackerRow[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -333,6 +388,41 @@ const SilaConsolidatedTracker: React.FC<SilaConsolidatedTrackerProps> = ({ track
     }
   };
 
+  const exportExcel = async () => {
+    setExporting(true);
+    try {
+      const result = await getTracker(tracker, {
+        search: appliedSearch,
+        transactionType,
+        direction,
+        from,
+        to,
+        companyCode,
+        status,
+        userId: /^[0-9a-fA-F-]{36}$/.test(userId.trim()) ? userId.trim() : undefined,
+        dataClass,
+        stage,
+        plant,
+        storageLocation,
+        material,
+        integration,
+        index: 0,
+        limit: EXPORT_LIMIT,
+      });
+      const exportRows = result.rows ?? [];
+      if (exportRows.length === 0) {
+        toastService.error("No transactions match the current filters to download.");
+        return;
+      }
+      downloadTrackerExcel(exportRows, tracker);
+      toastService.success(`Downloaded ${exportRows.length} transaction${exportRows.length === 1 ? "" : "s"}.`);
+    } catch (err: unknown) {
+      toastService.error(err instanceof Error ? err.message : "Could not download the Excel file.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const fromLabel = confirming?.[0]?.reprocessFrom;
   const studio = tracker === "SILA_ME";
@@ -354,6 +444,16 @@ const SilaConsolidatedTracker: React.FC<SilaConsolidatedTrackerProps> = ({ track
             </button>
             <button type="button" className="sila-btn sila-btn--secondary" onClick={load} disabled={loading}>
               Refresh
+            </button>
+            <button
+              type="button"
+              className="sila-btn sila-btn--secondary strk-excel-btn"
+              aria-label="Download Excel"
+              title="Download Excel"
+              disabled={exporting || loading}
+              onClick={exportExcel}
+            >
+              <ExcelDownloadIcon />
             </button>
             {canReprocess && (
               <button

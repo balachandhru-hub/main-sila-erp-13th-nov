@@ -70,6 +70,20 @@
   margin-left: auto;
 }
 
+.strk-excel-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.35rem;
+  min-width: 2.35rem;
+  padding: 0;
+  color: #0f6b3c;
+}
+
+.strk-excel-btn:hover:not(:disabled) {
+  color: #0a5230;
+}
+
 .strk-me-hero__eyebrow {
   margin: 0 0 0.35rem;
   font-size: 0.75rem;
