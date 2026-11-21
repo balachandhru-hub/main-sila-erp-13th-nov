@@ -19,6 +19,13 @@ assert.match(tracker, /SILA ME Transactions/);
 assert.match(tracker, /strk-me-kpis/);
 assert.match(tracker, /strk-me-lifecycle/);
 assert.match(tracker, /resolveRequestPayload|isCapturedSapRequest/);
+assert.match(tracker, /Filters/);
+assert.match(tracker, /aria-controls="strk-me-filters"/);
+assert.match(tracker, /filtersOpen/);
+assert.match(tracker, /ERP REF ID/);
+assert.match(tracker, /erpRefId/);
+assert.doesNotMatch(tracker, /Filter by type, plant, status, or integration/);
+assert.doesNotMatch(tracker, /ERP invoice ID/);
 assert.doesNotMatch(tracker, /SILA UI built this request view because technicalDetail was blank/);
 // SILA_ME must not render the legacy PageHeader title chrome.
 assert.doesNotMatch(tracker, /studio \? \(\s*<PageHeader/);
@@ -28,6 +35,7 @@ assert.match(css, /strk-me-kpi--rose/);
 assert.match(css, /strk-studio-panel/);
 assert.match(css, /strk-studio-table/);
 assert.match(css, /strk-studio-detail/);
+assert.match(css, /strk-studio-filters--grid/);
 
 assert.match(nav, /silaMeTracker/);
 assert.match(nav, /SILA ME Transactions/);

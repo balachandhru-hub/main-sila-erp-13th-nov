@@ -1820,7 +1820,8 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
             }
 
             posting.MovementType = rule.GoodsMovementType;
-            ApiIntegrationConfiguration? api = await SilaInventorySap.ResolveAsync(_repository, buyer.OrganizationId, rule.ApiName, posting.CompanyCode, cancellationToken);
+            ApiIntegrationConfiguration? api = await SilaInventorySap.ResolveAnyAsync(
+                _repository, buyer.OrganizationId, SilaInventorySap.ApiNamesFor(rule), posting.CompanyCode, cancellationToken);
             if (api == null)
             {
                 return await FinishAsync(posting, Common.SILA_POSTING_FAILED, null, SilaInventorySap.MissingApi(rule.ApiName), cancellationToken);
@@ -1945,8 +1946,11 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
             }
 
             posting.MovementType = rule.GoodsMovementType;
-            ApiIntegrationConfiguration? api = await SilaInventorySap.ResolveAsync(_repository, buyer.OrganizationId, rule.ApiName, posting.CompanyCode, cancellationToken);
-            if (api == null || !string.Equals(api.Name, rule.ApiName, StringComparison.Ordinal))
+            IReadOnlyList<string> transferApis = SilaInventorySap.ApiNamesFor(rule);
+            ApiIntegrationConfiguration? api = await SilaInventorySap.ResolveAnyAsync(
+                _repository, buyer.OrganizationId, transferApis, posting.CompanyCode, cancellationToken);
+            if (api == null
+                || !transferApis.Any(name => string.Equals(api.Name, name, StringComparison.OrdinalIgnoreCase)))
             {
                 transfer.ReversalStatus = Common.SILA_ITO_REVERSAL_FAILED;
                 _repository.InternalTransferOrder.Update(transfer);

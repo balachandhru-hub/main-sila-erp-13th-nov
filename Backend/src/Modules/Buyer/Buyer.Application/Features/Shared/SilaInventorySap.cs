@@ -18,7 +18,11 @@ namespace Buyer.Application.Features.Shared
     public static class SilaInventorySap
     {
         public const string API_TRANSFER = "FIVE S4 - Transfer Stock";
+        /// <summary>Legacy display name still accepted when resolving Transfer Stock.</summary>
+        public const string API_TRANSFER_LEGACY = "S4 - Transfer Stock";
         public const string API_PLANT_TRANSFER = "FIVE S4 - Plant Transfer Stock";
+        /// <summary>Legacy display name still accepted when resolving Plant Transfer Stock.</summary>
+        public const string API_PLANT_TRANSFER_LEGACY = "S4 - Plant Transfer Stock";
         /// <summary>Canonical Integration Setup name for Goods Issue (POS sales consumption uses this with Z01).</summary>
         public const string API_GOODS_ISSUE = "S4 - Goods Issue";
         /// <summary>Legacy display name still accepted when resolving the same Goods Issue connector.</summary>
@@ -37,6 +41,10 @@ namespace Buyer.Application.Features.Shared
         public static readonly string[] PositiveAdjustmentApiNames = { API_POSITIVE_ADJUSTMENT, API_POSITIVE_ADJUSTMENT_LEGACY };
         /// <summary>Waste adjustment API names.</summary>
         public static readonly string[] WasteApiNames = { API_WASTE };
+        /// <summary>Same-plant transfer (311/312) names.</summary>
+        public static readonly string[] TransferApiNames = { API_TRANSFER, API_TRANSFER_LEGACY };
+        /// <summary>Plant-to-plant transfer (301/302) names.</summary>
+        public static readonly string[] PlantTransferApiNames = { API_PLANT_TRANSFER, API_PLANT_TRANSFER_LEGACY };
 
         /// <summary>All POS sales postings (consumption and RETURN/VOID) use this Integration Setup name only.</summary>
         public static readonly string[] PosUpdateApiNames = { SilaStockCountSap.API_CONFIG_NAME };
@@ -174,6 +182,16 @@ namespace Buyer.Application.Features.Shared
             if (GoodsIssueApiNames.Any(x => string.Equals(x, rule.ApiName, StringComparison.OrdinalIgnoreCase)))
             {
                 return GoodsIssueApiNames;
+            }
+
+            if (TransferApiNames.Any(x => string.Equals(x, rule.ApiName, StringComparison.OrdinalIgnoreCase)))
+            {
+                return TransferApiNames;
+            }
+
+            if (PlantTransferApiNames.Any(x => string.Equals(x, rule.ApiName, StringComparison.OrdinalIgnoreCase)))
+            {
+                return PlantTransferApiNames;
             }
 
             return new[] { rule.ApiName };

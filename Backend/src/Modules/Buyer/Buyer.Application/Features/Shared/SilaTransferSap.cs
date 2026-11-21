@@ -321,7 +321,8 @@ namespace Buyer.Application.Features.Shared
                 fromProperty?.CompanyCode, toProperty?.CompanyCode, out SilaInventorySap.Rule? rule);
             ApiIntegrationConfiguration? api = rule == null
                 ? null
-                : await SilaInventorySap.ResolveAsync(repository, organizationId, rule.ApiName, companyCode, cancellationToken);
+                : await SilaInventorySap.ResolveAnyAsync(
+                    repository, organizationId, SilaInventorySap.ApiNamesFor(rule), companyCode, cancellationToken);
             if (api == null || rule == null)
             {
                 string apiName = rule?.ApiName ?? API_CONFIG_NAME;
