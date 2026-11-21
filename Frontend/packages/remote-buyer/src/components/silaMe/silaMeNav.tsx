@@ -1,4 +1,4 @@
-import { HomeIcon, LayoutGridIcon } from "@vosox/shared-ui";
+import { FileCheckIcon, HomeIcon, LayoutGridIcon } from "@vosox/shared-ui";
 import { silaMePermissions } from "./silaMePermissions";
 import { silaHomeCapabilities, type SilaHomeCapabilities } from "./silaHomeCapabilities";
 
@@ -200,16 +200,20 @@ export const buildSilaMeNavItem = (role: SilaMeRole, access?: SilaHomeCapabiliti
 };
 
 /**
- * The SILA ME site menu while the add-on is open: Purchasing Home as an icon, then only SILA ME menus.
+ * The SILA ME site menu while the add-on is open: purchasing exit icons near the logo, then SILA ME menus.
+ * SILA ME home is labeled Dashboard (text only, no icon).
  */
 export const buildSilaMeModuleNav = (role: SilaMeRole, access?: SilaHomeCapabilities) => {
   const sections = (buildSilaMeNavItem(role, access).subItems ?? []).flatMap((entry) =>
     isSilaMeNavGroup(entry)
       ? [{ key: `sila-section-${entry.label}`, icon: <LayoutGridIcon />, label: entry.label, subItems: entry.items }]
-      : [{ key: entry.key, icon: <HomeIcon />, label: entry.label }],
+      : entry.key === "silaDashboard"
+        ? [{ key: entry.key, label: "Dashboard" }]
+        : [{ key: entry.key, icon: <HomeIcon />, label: entry.label }],
   );
   return [
     { key: "dashboard", icon: <HomeIcon />, label: "Purchasing Home", iconOnly: true },
+    { key: "purchasing", icon: <FileCheckIcon />, label: "Purchasing Dashboard", iconOnly: true },
     ...sections,
   ];
 };
