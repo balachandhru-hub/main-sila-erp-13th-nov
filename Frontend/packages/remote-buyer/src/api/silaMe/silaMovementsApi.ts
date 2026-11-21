@@ -510,3 +510,16 @@ export const createAdjustment = async (payload: SilaAdjustmentWrite): Promise<st
     throw new Error(readError(error, "Could not post the stock adjustment."));
   }
 };
+
+/** Partial/full reverse of a waste/damage adjustment (SAP Z02 on FIVE_STOCK_WASTE_UPDATE). */
+export const reverseAdjustment = async (
+  adjustmentId: string,
+  payload?: { quantity?: number; uom?: string | null; materialId?: string | null; reason?: string | null },
+): Promise<string> => {
+  try {
+    const response = await axiosInstance.post<CreatedResponse>(`${BASE}/adjustments/${adjustmentId}/reverse`, payload ?? {});
+    return response.data?.id;
+  } catch (error: unknown) {
+    throw new Error(readError(error, "Could not reverse the stock adjustment."));
+  }
+};

@@ -542,10 +542,19 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
             List<InventoryTransaction> transactions = await _repository.InventoryTransaction
                 .FindByCondition(x => x.BuyerId == posting.BuyerId && x.IsActive && x.ReferenceType == posting.ReferenceType && x.ReferenceId == posting.ReferenceId)
                 .ToListAsync(cancellationToken);
+            StockAdjustment? adjustment = posting.ReferenceType == Common.SILA_REF_ADJUSTMENT
+                ? await _repository.StockAdjustment.FindFirstByConditionAsync(x => x.Id == posting.ReferenceId && x.IsActive)
+                : null;
+            bool wastePosting = SilaInventorySap.IsWasteApi(posting.IntegrationSystem)
+                || (adjustment != null && SilaInventorySap.IsWasteAdjustmentType(adjustment.AdjustmentType));
             string[] movements = single
                 ? new[] { posting.MovementType }
                 : new[] { SilaInventorySap.TYPE_Z02, SilaInventorySap.TYPE_Z01 };
-            int directions = movements.Count(movement => transactions.Any(x => x.Direction == SilaInventorySap.DirectionForMovement(movement) && x.Quantity > 0));
+            int directions = movements.Count(movement =>
+            {
+                SilaInventorySap.Rule preview = RuleForStockEffect(movement, wastePosting, transactions);
+                return transactions.Any(x => x.Direction == SilaInventorySap.DirectionForRule(preview) && x.Quantity > 0);
+            });
             string? reference = posting.ErpReference;
             bool sentOne = false;
             foreach (string movement in movements)
@@ -555,15 +564,12 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
                     continue;
                 }
 
-                string direction = SilaInventorySap.DirectionForMovement(movement);
+                SilaInventorySap.Rule rule = RuleForStockEffect(movement, wastePosting, transactions);
+                string direction = SilaInventorySap.DirectionForRule(rule);
                 if (!transactions.Any(x => x.Direction == direction && x.Quantity > 0))
                 {
                     continue;
                 }
-
-                SilaInventorySap.Rule rule = SilaInventorySap.IsInventoryDifference(movement)
-                    ? SilaInventorySap.ForInventoryDifference(direction)
-                    : (movement == SilaInventorySap.TYPE_Z01 ? SilaInventorySap.PositiveAdjustment : SilaInventorySap.GoodsIssue);
 
                 // 701/702 cannot use Material Document API (M7/096). Post via Physical Inventory Document → PostDifferences.
                 if (SilaInventorySap.IsInventoryDifference(movement))
@@ -627,6 +633,39 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
             return await FinishAsync(posting, Common.SILA_POSTING_POSTED, reference, null, cancellationToken);
         }
 
+        /// <summary>
+        /// Picks the Material Document rule for stock-count / adjustment postings.
+        /// Waste uses FIVE_STOCK_WASTE_UPDATE (Z01 out / Z02 reverse); otherwise Z01→Positive Adjustment, Z02→Goods Issue.
+        /// </summary>
+        private static SilaInventorySap.Rule RuleForStockEffect(
+            string movement,
+            bool wastePosting,
+            List<InventoryTransaction> transactions)
+        {
+            if (SilaInventorySap.IsInventoryDifference(movement))
+            {
+                string direction = SilaInventorySap.DirectionForMovement(movement);
+                return SilaInventorySap.ForInventoryDifference(direction);
+            }
+
+            if (wastePosting)
+            {
+                // Z01 waste decreases stock; Z02 reverse increases. Prefer ledger direction when both exist.
+                bool hasOut = transactions.Any(x => x.Direction == Common.SILA_DIRECTION_OUT && x.Quantity > 0);
+                bool hasIn = transactions.Any(x => x.Direction == Common.SILA_DIRECTION_IN && x.Quantity > 0);
+                if (movement == SilaInventorySap.TYPE_Z02 || (movement == SilaInventorySap.TYPE_Z01 && hasIn && !hasOut))
+                {
+                    return SilaInventorySap.WasteReversal;
+                }
+
+                return SilaInventorySap.WasteIssue;
+            }
+
+            return movement == SilaInventorySap.TYPE_Z01
+                ? SilaInventorySap.PositiveAdjustment
+                : SilaInventorySap.GoodsIssue;
+        }
+
         /// <summary>Builds one positive-quantity material document for the rule. The error is ready to store.</summary>
         private async Task<EffectPreparation> PrepareEffectAsync(
             InventoryErpPosting posting,
@@ -639,7 +678,7 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
         {
             string? body = null;
             ApiIntegrationConfiguration? api = null;
-            string direction = SilaInventorySap.DirectionForMovement(rule.GoodsMovementType);
+            string direction = SilaInventorySap.DirectionForRule(rule);
             List<InventoryTransaction> transactions = await _repository.InventoryTransaction
                 .FindByCondition(x => x.BuyerId == posting.BuyerId && x.IsActive
                     && x.ReferenceType == posting.ReferenceType
@@ -657,6 +696,7 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
                 .FindByCondition(x => materialIds.Contains(x.Id))
                 .ToDictionaryAsync(x => x.Id, cancellationToken);
             Dictionary<Guid, List<MaterialUomConversion>> conversions = await UomConverter.GetConversionsAsync(_repository, materialIds, cancellationToken);
+            bool keepEntryUnit = SilaInventorySap.IsWasteApi(rule.ApiName);
             List<SilaInventorySap.TransferLine> lines = new List<SilaInventorySap.TransferLine>();
             foreach (InventoryTransaction transaction in transactions)
             {
@@ -665,14 +705,70 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
                     return new EffectPreparation(SilaInventorySap.Failure(SilaInventorySap.MATERIAL_MAPPING_MISSING), null, null);
                 }
 
-                lines.Add(new SilaInventorySap.TransferLine(material, transaction.Quantity, transaction.BaseUom));
+                if (keepEntryUnit
+                    && transaction.EnteredQuantity > 0
+                    && !string.IsNullOrWhiteSpace(transaction.EnteredUom))
+                {
+                    lines.Add(new SilaInventorySap.TransferLine(material, transaction.EnteredQuantity, transaction.EnteredUom));
+                }
+                else
+                {
+                    lines.Add(new SilaInventorySap.TransferLine(material, transaction.Quantity, transaction.BaseUom));
+                }
+            }
+
+            string? costCenter = null;
+            string? glAccount = location?.GlAccount;
+            if (rule.GoodsMovementType == SilaInventorySap.TYPE_Z01 || rule.GoodsMovementType == SilaInventorySap.TYPE_Z02)
+            {
+                costCenter = await SilaGoodsIssueCostCenterRules.ResolveAsync(
+                    _repository,
+                    posting.BuyerId,
+                    property?.Id,
+                    property?.PlantCode,
+                    location?.StorageLocationCode,
+                    location?.CostCenter,
+                    cancellationToken);
+                if (string.IsNullOrWhiteSpace(costCenter))
+                {
+                    return new EffectPreparation(
+                        SilaInventorySap.CostCenterMissingMessage(property?.PlantCode, location?.StorageLocationCode),
+                        null,
+                        null);
+                }
             }
 
             DateTime businessDate = transactions.Max(x => x.BusinessDate);
-            string? problem = SilaInventorySap.TryBuildEffect(businessDate, property?.PlantCode, location?.StorageLocationCode, rule, lines, conversions, out body);
+            string? headerText = string.IsNullOrWhiteSpace(posting.ReferenceNumber)
+                ? null
+                : posting.ReferenceNumber.Trim();
+            if (SilaInventorySap.IsWasteApi(rule.ApiName))
+            {
+                headerText = rule.IncreasesStock ? "WASTE REVERSAL" : "WASTAGE";
+            }
+
+            string? problem = SilaInventorySap.TryBuildEffect(
+                businessDate,
+                property?.PlantCode,
+                location?.StorageLocationCode,
+                rule,
+                lines,
+                conversions,
+                out body,
+                headerText: headerText,
+                costCenter: costCenter,
+                referenceDocument: posting.ReferenceNumber,
+                glAccount: glAccount,
+                keepEntryUnit: keepEntryUnit,
+                allowMissingConversion: keepEntryUnit);
             if (problem != null)
             {
-                return new EffectPreparation(SilaInventorySap.Failure(problem), null, null);
+                return new EffectPreparation(
+                    problem == SilaInventorySap.COST_CENTER_MISSING
+                        ? SilaInventorySap.CostCenterMissingMessage(property?.PlantCode, location?.StorageLocationCode)
+                        : SilaInventorySap.Failure(problem),
+                    null,
+                    null);
             }
 
             if (body == null)
@@ -680,7 +776,8 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
                 return new EffectPreparation("The document has no lines to post.", null, null);
             }
 
-            api = await SilaInventorySap.ResolveAsync(_repository, organizationId, rule.ApiName, posting.CompanyCode, cancellationToken);
+            api = await SilaInventorySap.ResolveAnyAsync(
+                _repository, organizationId, SilaInventorySap.ApiNamesFor(rule), posting.CompanyCode, cancellationToken);
             if (api == null)
             {
                 return new EffectPreparation(SilaInventorySap.MissingApi(rule.ApiName), null, null);

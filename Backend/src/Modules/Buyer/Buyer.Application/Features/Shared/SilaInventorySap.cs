@@ -24,9 +24,19 @@ namespace Buyer.Application.Features.Shared
         /// <summary>Legacy display name still accepted when resolving the same Goods Issue connector.</summary>
         public const string API_GOODS_ISSUE_LEGACY = "FIVE S4 - Goods Issue";
         public const string API_POSITIVE_ADJUSTMENT = "FIVE S4 - Positive Stock Adjustment";
+        /// <summary>Legacy display name still accepted when resolving Positive Stock Adjustment.</summary>
+        public const string API_POSITIVE_ADJUSTMENT_LEGACY = "S4 - Positive Stock Adjustment";
+        /// <summary>Waste / damage / breakage / spoilage / expired via Integration Setup FIVE_STOCK_WASTE_UPDATE (Z01 out, Z02 reverse).</summary>
+        public const string API_WASTE = "FIVE_STOCK_WASTE_UPDATE";
+        /// <summary>SAP goods-movement reason for wastage (required by FIVE_STOCK_WASTE_UPDATE sample).</summary>
+        public const string REASON_WASTE = "0001";
 
         /// <summary>Non-POS goods issue configurations (S4 - Goods Issue). POS sales use <see cref="PosUpdateApiNames"/>.</summary>
-        public static readonly string[] GoodsIssueApiNames = { API_GOODS_ISSUE, API_GOODS_ISSUE_LEGACY };
+        public static readonly string[] GoodsIssueApiNames = { API_GOODS_ISSUE_LEGACY, API_GOODS_ISSUE };
+        /// <summary>Positive stock adjustment names (surplus / stock-count IN).</summary>
+        public static readonly string[] PositiveAdjustmentApiNames = { API_POSITIVE_ADJUSTMENT, API_POSITIVE_ADJUSTMENT_LEGACY };
+        /// <summary>Waste adjustment API names.</summary>
+        public static readonly string[] WasteApiNames = { API_WASTE };
 
         /// <summary>All POS sales postings (consumption and RETURN/VOID) use this Integration Setup name only.</summary>
         public static readonly string[] PosUpdateApiNames = { SilaStockCountSap.API_CONFIG_NAME };
@@ -69,8 +79,8 @@ namespace Buyer.Application.Features.Shared
         public static readonly Rule PlantTransfer = new Rule(API_PLANT_TRANSFER, CODE_TRANSFER, TYPE_301, true);
         /// <summary>Explicit 302 reversal on FIVE S4 - Plant Transfer Stock (same API as 301).</summary>
         public static readonly Rule PlantTransferReversal = new Rule(API_PLANT_TRANSFER, CODE_TRANSFER_REVERSAL, TYPE_302, true);
-        /// <summary>Non-POS goods issue (stock decrease) via S4 - Goods Issue with customer Z02 where configured.</summary>
-        public static readonly Rule GoodsIssue = new Rule(API_GOODS_ISSUE, CODE_ISSUE, TYPE_Z02, false, increasesStock: false);
+        /// <summary>Non-POS goods issue (stock decrease) via FIVE S4 - Goods Issue with customer Z02 where configured.</summary>
+        public static readonly Rule GoodsIssue = new Rule(API_GOODS_ISSUE_LEGACY, CODE_ISSUE, TYPE_Z02, false, increasesStock: false);
         /// <summary>
         /// POS sales consumption via FIVE_POS_UPDATE: GoodsMovementCode 03, GoodsMovementType Z01.
         /// Stock decreases (IncreasesStock = false) even though the movement type is Z01.
@@ -83,8 +93,18 @@ namespace Buyer.Application.Features.Shared
         /// <summary>Non-POS positive stock adjustments restore stock (IN).</summary>
         public static readonly Rule PositiveAdjustment = new Rule(API_POSITIVE_ADJUSTMENT, CODE_ISSUE, TYPE_Z01, false, increasesStock: true);
         /// <summary>
+        /// Waste / damage out via FIVE_STOCK_WASTE_UPDATE (Z01). Stock decreases.
+        /// Reason code omitted: SAP M7/146 rejects GoodsMovementReasonCode 0001 for Z01 on this tenant.
+        /// </summary>
+        public static readonly Rule WasteIssue = new Rule(
+            API_WASTE, CODE_ISSUE, TYPE_Z01, false, increasesStock: false);
+        /// <summary>Partial/full reverse of waste via FIVE_STOCK_WASTE_UPDATE (Z02). Stock increases.</summary>
+        public static readonly Rule WasteReversal = new Rule(
+            API_WASTE, CODE_ISSUE, TYPE_Z02, false, increasesStock: true);
+        /// <summary>
         /// Live Inventory stock-count surplus (701). Credentials from FIVE S4 - Positive Stock Adjustment;
         /// posting uses API_PHYSICAL_INVENTORY_DOC_SRV (Material Document API rejects 701 with M7/096).
+        /// Prefer <see cref="ForDirection"/> (Z01/Z02) for Live Inventory stock count when 701/702 is unavailable.
         /// </summary>
         public static readonly Rule InventoryDifferenceSurplus = new Rule(API_POSITIVE_ADJUSTMENT, CODE_ISSUE, TYPE_701, false, increasesStock: true);
         /// <summary>
@@ -109,6 +129,24 @@ namespace Buyer.Application.Features.Shared
             return movementType == TYPE_701 || movementType == TYPE_702;
         }
 
+        public static bool IsWasteApi(string? apiName)
+        {
+            return !string.IsNullOrWhiteSpace(apiName)
+                && WasteApiNames.Any(x => string.Equals(x, apiName.Trim(), StringComparison.OrdinalIgnoreCase));
+        }
+
+        public static bool IsWasteAdjustmentType(string? adjustmentType)
+        {
+            string type = (adjustmentType ?? string.Empty).Trim().ToUpperInvariant();
+            return type is "WASTE" or "DAMAGE" or "BREAKAGE" or "SPOILAGE" or "EXPIRED";
+        }
+
+        /// <summary>Ledger direction for a posting rule (honours IncreasesStock for Z01 waste / Z02 reverse).</summary>
+        public static string DirectionForRule(Rule rule)
+        {
+            return rule.IncreasesStock ? Common.SILA_DIRECTION_IN : Common.SILA_DIRECTION_OUT;
+        }
+
         public static string DirectionForMovement(string? movementType)
         {
             if (movementType == TYPE_Z01 || movementType == TYPE_701)
@@ -117,6 +155,28 @@ namespace Buyer.Application.Features.Shared
             }
 
             return Common.SILA_DIRECTION_OUT;
+        }
+
+        /// <summary>API name aliases used when resolving the rule’s Integration Setup row.</summary>
+        public static IReadOnlyList<string> ApiNamesFor(Rule rule)
+        {
+            if (IsWasteApi(rule.ApiName))
+            {
+                return WasteApiNames;
+            }
+
+            if (string.Equals(rule.ApiName, API_POSITIVE_ADJUSTMENT, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(rule.ApiName, API_POSITIVE_ADJUSTMENT_LEGACY, StringComparison.OrdinalIgnoreCase))
+            {
+                return PositiveAdjustmentApiNames;
+            }
+
+            if (GoodsIssueApiNames.Any(x => string.Equals(x, rule.ApiName, StringComparison.OrdinalIgnoreCase)))
+            {
+                return GoodsIssueApiNames;
+            }
+
+            return new[] { rule.ApiName };
         }
 
         /// <summary>
@@ -576,6 +636,11 @@ namespace Buyer.Application.Features.Shared
                         ["QuantityInEntryUnit"] = FormatQuantity(x.Value),
                         ["EntryUnit"] = keys[x.Key].Unit
                     };
+                    if (!string.IsNullOrWhiteSpace(rule.GoodsMovementReasonCode))
+                    {
+                        item["GoodsMovementReasonCode"] = rule.GoodsMovementReasonCode.Trim();
+                    }
+
                     if (sapCostCenter != null)
                     {
                         item["CostCenter"] = sapCostCenter;
@@ -864,13 +929,15 @@ namespace Buyer.Application.Features.Shared
                 string goodsMovementCode,
                 string goodsMovementType,
                 bool receivingPlant,
-                bool increasesStock = false)
+                bool increasesStock = false,
+                string? goodsMovementReasonCode = null)
             {
                 ApiName = apiName;
                 GoodsMovementCode = goodsMovementCode;
                 GoodsMovementType = goodsMovementType;
                 ReceivingPlant = receivingPlant;
                 IncreasesStock = increasesStock;
+                GoodsMovementReasonCode = goodsMovementReasonCode;
             }
 
             public string ApiName { get; }
@@ -879,6 +946,8 @@ namespace Buyer.Application.Features.Shared
             public bool ReceivingPlant { get; }
             /// <summary>True when the movement restores/increases stock (ledger IN). False for consumption/issue (ledger OUT).</summary>
             public bool IncreasesStock { get; }
+            /// <summary>Optional SAP GoodsMovementReasonCode (e.g. 0001 for wastage).</summary>
+            public string? GoodsMovementReasonCode { get; }
         }
 
         public readonly record struct TransferLine(ItemBuyerMaster Material, decimal Quantity, string? QuantityUom);

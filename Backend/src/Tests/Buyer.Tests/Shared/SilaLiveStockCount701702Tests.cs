@@ -3,9 +3,34 @@ using Xunit;
 
 namespace Buyer.Tests.Shared
 {
-    /// <summary>Contract checks for Live Inventory stock-count variance 701/702 (no live SAP).</summary>
+    /// <summary>Contract checks for Live Inventory stock-count variance Z01/Z02 and legacy 701/702 (no live SAP).</summary>
     public class SilaLiveStockCount701702Tests
     {
+        [Fact]
+        public void LiveStockCount_Uses_Z01_Z02_Material_Documents()
+        {
+            Assert.Equal("FIVE S4 - Positive Stock Adjustment", SilaInventorySap.ForDirection("IN").ApiName);
+            Assert.Equal("Z01", SilaInventorySap.ForDirection("IN").GoodsMovementType);
+            Assert.True(SilaInventorySap.ForDirection("IN").IncreasesStock);
+
+            Assert.Equal("FIVE S4 - Goods Issue", SilaInventorySap.ForDirection("OUT").ApiName);
+            Assert.Equal("Z02", SilaInventorySap.ForDirection("OUT").GoodsMovementType);
+            Assert.False(SilaInventorySap.ForDirection("OUT").IncreasesStock);
+        }
+
+        [Fact]
+        public void Waste_Uses_FIVE_STOCK_WASTE_UPDATE_Z01_And_Z02_Reverse()
+        {
+            Assert.Equal("FIVE_STOCK_WASTE_UPDATE", SilaInventorySap.WasteIssue.ApiName);
+            Assert.Equal("Z01", SilaInventorySap.WasteIssue.GoodsMovementType);
+            Assert.False(SilaInventorySap.WasteIssue.IncreasesStock);
+            Assert.Equal(Buyer.Domain.Common.Common.SILA_DIRECTION_OUT, SilaInventorySap.DirectionForRule(SilaInventorySap.WasteIssue));
+
+            Assert.Equal("Z02", SilaInventorySap.WasteReversal.GoodsMovementType);
+            Assert.True(SilaInventorySap.WasteReversal.IncreasesStock);
+            Assert.Equal(Buyer.Domain.Common.Common.SILA_DIRECTION_IN, SilaInventorySap.DirectionForRule(SilaInventorySap.WasteReversal));
+        }
+
         [Fact]
         public void InventoryDifference_Uses_Positive_Adjustment_Api_With_701_And_702()
         {

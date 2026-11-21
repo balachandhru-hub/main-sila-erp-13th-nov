@@ -11,9 +11,8 @@ using SharedKernel.LoggerServices;
 namespace Buyer.Application.Features.Commands.CreateSilaLiveStockCount
 {
     /// <summary>
-    /// Live Inventory stock count: set book stock to physical qty, queue SAP 701 (surplus) or 702 (shortage).
-    /// Local ledger updates immediately; SAP posts via Physical Inventory Document (PostDifferences) using
-    /// FIVE S4 - Positive Stock Adjustment credentials (Material Document API rejects 701/702 with M7/096).
+    /// Live Inventory stock count: set book stock to physical qty, queue SAP Z01 (surplus) or Z02 (shortage).
+    /// Local ledger updates immediately; SAP posts via Material Document (Positive Stock Adjustment / Goods Issue).
     /// </summary>
     public class CreateSilaLiveStockCountCommandHandler : IRequestHandler<CreateSilaLiveStockCountCommand, SilaLiveStockCountResultDto>
     {
@@ -65,7 +64,8 @@ namespace Buyer.Application.Features.Commands.CreateSilaLiveStockCount
             }
 
             string direction = variance > 0 ? Common.SILA_DIRECTION_IN : Common.SILA_DIRECTION_OUT;
-            SilaInventorySap.Rule rule = SilaInventorySap.ForInventoryDifference(direction);
+            // Live Inventory stock count uses Z01/Z02 material documents (701/702 PI path is reserved for formal counts).
+            SilaInventorySap.Rule rule = SilaInventorySap.ForDirection(direction);
             string reason = string.IsNullOrWhiteSpace(request.Request.Reason)
                 ? $"Live stock count {material.MaterialCode}: physical {physicalBase:0.####} vs book {onHand:0.####}"
                 : request.Request.Reason.Trim();

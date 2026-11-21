@@ -39,7 +39,7 @@ type CountLine = {
 };
 
 /**
- * Live Inventory stock-count dialog: enter physical counts, post every variance (701/702) together.
+ * Live Inventory stock-count dialog: enter physical counts, post every variance (Z01/Z02) together.
  */
 const SilaLiveStockCountPanel: React.FC<SilaLiveStockCountPanelProps> = ({
   open,

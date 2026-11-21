@@ -569,7 +569,7 @@ export interface SilaLiveStockCountResult {
   message: string;
 }
 
-/** Live Inventory stock count → local ledger + SAP 701 (surplus) / 702 (shortage). */
+/** Live Inventory stock count → local ledger + SAP Z01 (surplus) / Z02 (shortage). */
 export const createLiveStockCount = async (request: SilaLiveStockCountWrite): Promise<SilaLiveStockCountResult> => {
   try {
     const response = await axiosInstance.post<SilaLiveStockCountResult>(`${BASE}/inventory/live-stock-count`, {

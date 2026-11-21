@@ -517,20 +517,26 @@ const SilaLiveInventory: React.FC<SilaLiveInventoryProps> = ({
               <button
                 type="button"
                 className="sila-btn sila-btn--secondary"
-                disabled={!locationId}
-                onClick={() =>
+                disabled={!transferToId && !locationId}
+                onClick={() => {
+                  const countLocationId = transferToId || locationId;
+                  if (!countLocationId) {
+                    toastService.error("Select a location in the dropdown before stock count.");
+                    return;
+                  }
+                  const atLocation = sourceRows.find((row) => row.locationId === countLocationId);
                   openStockCount(
                     [
                       {
                         materialId: detail?.materialId ?? selectedId ?? undefined,
                         materialCode: detail?.materialCode ?? "",
                         description: detail?.description,
-                        onHandQty: detail?.onHandQty,
+                        onHandQty: atLocation?.onHandQty ?? detail?.onHandQty,
                         uom: detail?.baseUom,
                       },
                     ].filter((item) => item.materialCode),
-                  )
-                }
+                  );
+                }}
               >
                 Stock Count
               </button>
@@ -538,19 +544,22 @@ const SilaLiveInventory: React.FC<SilaLiveInventoryProps> = ({
           </div>
         </header>
 
-        {canTransfer && (
+        {(canTransfer || canManageCount) && (
           <section className="liv-panel liv-panel--flush">
             <div className="liv-transfer-dest">
               <SilaSearchableSelect
-                label="Transfer destination"
-                placeholder="Select destination (transfer workflow only)"
-                value={transferToId}
+                label={canTransfer ? "Location (transfer / stock count)" : "Location (stock count)"}
+                placeholder="Select location"
+                value={transferToId || locationId}
                 clearable
                 options={stockLocations.map((location) => ({
                   value: location.id,
                   label: `${location.locationCode} · ${location.locationName}`,
                 }))}
-                onChange={setTransferToId}
+                onChange={(value) => {
+                  setTransferToId(value);
+                  if (value) setLocationId(value);
+                }}
               />
             </div>
           </section>
@@ -654,10 +663,10 @@ const SilaLiveInventory: React.FC<SilaLiveInventoryProps> = ({
         {canManageCount && (
           <SilaLiveStockCountPanel
             open={stockCountOpen}
-            locationId={locationId}
+            locationId={transferToId || locationId}
             locationLabel={
-              stockLocations.find((location) => location.id === locationId)
-                ? `${stockLocations.find((location) => location.id === locationId)!.locationCode} · ${stockLocations.find((location) => location.id === locationId)!.locationName}`
+              stockLocations.find((location) => location.id === (transferToId || locationId))
+                ? `${stockLocations.find((location) => location.id === (transferToId || locationId))!.locationCode} · ${stockLocations.find((location) => location.id === (transferToId || locationId))!.locationName}`
                 : "Selected location"
             }
             initialCode={stockCountCode}

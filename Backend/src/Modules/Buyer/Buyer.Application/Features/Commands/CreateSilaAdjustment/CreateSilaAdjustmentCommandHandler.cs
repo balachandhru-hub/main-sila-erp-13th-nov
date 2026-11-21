@@ -141,14 +141,23 @@ namespace Buyer.Application.Features.Commands.CreateSilaAdjustment
                 }, cancellationToken);
             }
 
+            bool wasteType = OutTypes.Contains(type);
             if (stockOut)
             {
-                ledger.QueueErpPosting(Common.SILA_REF_ADJUSTMENT, adjustment.Id, adjustment.AdjustmentNumber, location.Id, SilaInventorySap.TYPE_Z02);
+                // Waste/damage posts Z01 on FIVE_STOCK_WASTE_UPDATE; other OUT uses Goods Issue Z02.
+                string movement = wasteType ? SilaInventorySap.TYPE_Z01 : SilaInventorySap.TYPE_Z02;
+                InventoryErpPosting posting = ledger.QueueErpPosting(
+                    Common.SILA_REF_ADJUSTMENT, adjustment.Id, adjustment.AdjustmentNumber, location.Id, movement);
+                if (wasteType)
+                {
+                    posting.IntegrationSystem = SilaInventorySap.API_WASTE;
+                }
             }
 
             if (stockIn)
             {
-                ledger.QueueErpPosting(Common.SILA_REF_ADJUSTMENT, adjustment.Id, adjustment.AdjustmentNumber, location.Id, SilaInventorySap.TYPE_Z01);
+                ledger.QueueErpPosting(
+                    Common.SILA_REF_ADJUSTMENT, adjustment.Id, adjustment.AdjustmentNumber, location.Id, SilaInventorySap.TYPE_Z01);
             }
 
             await _repository.SaveAsync();
