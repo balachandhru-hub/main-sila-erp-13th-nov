@@ -376,6 +376,11 @@ const SilaConsolidatedTracker: React.FC<SilaConsolidatedTrackerProps> = ({ track
         <Kpi label="Needs attention" value={summary.needsAttention} tone={studio ? "amber" : undefined} />
       </section>
       <section className={studio ? "strk-me-panel strk-studio-panel" : "sila-card"}>
+        {studio && (
+          <div className="strk-studio-panel__head">
+            <h2 className="strk-me-panel__title strk-me-panel__title--tracker">TRANSACTION TRACKER</h2>
+          </div>
+        )}
         {(!studio || filtersOpen) && (
         <div
           id={studio ? "strk-me-filters" : undefined}

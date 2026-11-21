@@ -15,6 +15,8 @@ const workspace = readFileSync(join(dir, "../SilaMeWorkspace.tsx"), "utf8");
 
 assert.match(tracker, /strk-me-toolbar/);
 assert.match(tracker, /data-testid="sila-me-transactions-studio"/);
+assert.match(tracker, /TRANSACTION TRACKER/);
+assert.match(tracker, /strk-me-panel__title--tracker/);
 assert.match(tracker, /strk-me-kpis/);
 assert.match(tracker, /strk-me-lifecycle/);
 assert.match(tracker, /resolveRequestPayload|isCapturedSapRequest/);

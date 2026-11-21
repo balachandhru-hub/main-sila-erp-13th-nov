@@ -111,6 +111,16 @@
   color: #12355b;
 }
 
+.strk-me-panel__title--tracker {
+  font-family: "DM Sans", var(--sila-font, system-ui, sans-serif);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+  color: #12355b;
+  text-transform: uppercase;
+}
+
 .strk-me-panel__hint {
   margin: 0;
   color: #5b7a99;
@@ -182,9 +192,10 @@
 
 .strk-studio-panel__head {
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: 0.35rem;
-  padding: 1.15rem 1.25rem 0.35rem;
+  padding: 1rem 1.25rem 0.85rem;
+  border-bottom: 0.0625rem solid #e4eef7;
 }
 
 .strk-studio-filters {
