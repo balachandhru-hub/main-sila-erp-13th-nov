@@ -152,6 +152,11 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
                 return await PostTransferAsync(posting, cancellationToken);
             }
 
+            if (posting.ReferenceType == Common.SILA_REF_ITO_REVERSAL)
+            {
+                return await PostTransferReversalAsync(posting, cancellationToken);
+            }
+
             if (posting.ReferenceType == Common.SILA_REF_STOCK_COUNT || posting.ReferenceType == Common.SILA_REF_ADJUSTMENT)
             {
                 return await PostStockEffectAsync(posting, cancellationToken);
@@ -1479,6 +1484,12 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
             if (succeeded)
             {
                 string? reference = SilaTransferSap.ReadMaterialDocument(sent.ResponseBody) ?? ReadReference(sent.ResponseBody);
+                if (!string.IsNullOrWhiteSpace(reference))
+                {
+                    transfer.SapMaterialDocument = reference;
+                    _repository.InternalTransferOrder.Update(transfer);
+                }
+
                 return await FinishAsync(posting, Common.SILA_POSTING_POSTED, reference, null, cancellationToken);
             }
 
@@ -1497,6 +1508,203 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
             string status = posting.Attempts >= MAX_ATTEMPTS ? Common.SILA_POSTING_FAILED : Common.SILA_POSTING_PENDING;
             _logger.LogError($"Transfer SAP posting was not accepted. PostingId: {posting.Id}, Reference: {posting.ReferenceNumber}, Attempts: {posting.Attempts}, StatusCode: {sent.StatusCode}, Code: {sent.ErrorCode}");
             return await FinishAsync(posting, status, null, error, cancellationToken);
+        }
+
+        /// <summary>
+        /// Posts movement 312 via FIVE S4 - Transfer Stock for a queued ITO reversal. Does not re-post 311.
+        /// Local stock and ReversedQty are applied only after confirmed SAP success (queued command already reserved status).
+        /// </summary>
+        private async Task<string> PostTransferReversalAsync(InventoryErpPosting posting, CancellationToken cancellationToken)
+        {
+            BuyerBusinessProfile? buyer = await _repository.BuyerBusinessProfile
+                .FindByCondition(x => x.Id == posting.BuyerId)
+                .FirstOrDefaultAsync(cancellationToken);
+            if (buyer == null)
+            {
+                return await FinishAsync(posting, Common.SILA_POSTING_FAILED, null, "The buyer of this document no longer exists.", cancellationToken);
+            }
+
+            InternalTransferOrder? transfer = await _repository.InternalTransferOrder
+                .FindByCondition(x => x.Id == posting.ReferenceId && x.BuyerId == posting.BuyerId && x.IsActive)
+                .FirstOrDefaultAsync(cancellationToken);
+            if (transfer == null)
+            {
+                return await FinishAsync(posting, Common.SILA_POSTING_FAILED, null, "Transfer not found.", cancellationToken);
+            }
+
+            if (string.IsNullOrWhiteSpace(transfer.SapMaterialDocument))
+            {
+                return await FinishAsync(posting, Common.SILA_POSTING_FAILED, null, "Original SAP material document is missing for reversal.", cancellationToken);
+            }
+
+            bool unknown = await _repository.InventoryErpPosting
+                .FindByCondition(x => x.Id != posting.Id && x.BuyerId == posting.BuyerId && x.IsActive
+                    && x.ReferenceType == Common.SILA_REF_ITO_REVERSAL && x.ReferenceId == posting.ReferenceId
+                    && x.Status == Common.SILA_POSTING_UNKNOWN)
+                .AnyAsync(cancellationToken);
+            if (unknown)
+            {
+                return await FinishAsync(posting, Common.SILA_POSTING_FAILED, null,
+                    "POSTING_UNKNOWN. A reversal posting has an unknown SAP result. Reconcile it before sending again.", cancellationToken);
+            }
+
+            InventoryLocation? from = await _repository.InventoryLocation.FindFirstByConditionAsync(x => x.Id == transfer.FromLocationId);
+            InventoryLocation? to = await _repository.InventoryLocation.FindFirstByConditionAsync(x => x.Id == transfer.ToLocationId);
+            BuyerProperty? fromProperty = from == null ? null : await _repository.BuyerProperty.FindFirstByConditionAsync(x => x.Id == from.PropertyId);
+            BuyerProperty? toProperty = to == null ? null : await _repository.BuyerProperty.FindFirstByConditionAsync(x => x.Id == to.PropertyId);
+            posting.CompanyCode ??= string.IsNullOrWhiteSpace(fromProperty?.CompanyCode) ? null : fromProperty.CompanyCode.Trim();
+
+            List<InternalTransferOrderItem> items = await _repository.InternalTransferOrderItem
+                .FindByCondition(x => x.InternalTransferOrderId == transfer.Id && x.IsActive)
+                .ToListAsync(cancellationToken);
+            List<(InternalTransferOrderItem Item, decimal Quantity)> reverseLines = items
+                .Select(x =>
+                {
+                    decimal qty = x.PendingReverseQty > 0
+                        ? x.PendingReverseQty
+                        : Math.Max(0, (x.ReceivedQty > 0 ? x.ReceivedQty : x.DispatchedQty) - x.ReversedQty);
+                    return (x, qty);
+                })
+                .Where(x => x.Item2 > 0)
+                .Select(x => (x.Item1, x.Item2))
+                .ToList();
+            List<Guid> materialIds = reverseLines.Select(x => x.Item.MaterialId).Distinct().ToList();
+            Dictionary<Guid, ItemBuyerMaster> materials = materialIds.Count == 0
+                ? new Dictionary<Guid, ItemBuyerMaster>()
+                : await _repository.ItemBuyerMaster.FindByCondition(x => materialIds.Contains(x.Id)).ToDictionaryAsync(x => x.Id, cancellationToken);
+            Dictionary<Guid, List<MaterialUomConversion>> conversions = await UomConverter.GetConversionsAsync(_repository, materialIds, cancellationToken);
+
+            string? problem = SilaTransferSap.TryPrepareReversal(
+                transfer, from, to, fromProperty, toProperty, reverseLines, materials, conversions,
+                transfer.ReversedOn ?? DateTime.UtcNow, out string? body, out SilaInventorySap.Rule? rule);
+            if (problem != null)
+            {
+                ClearPendingReverse(items);
+                transfer.ReversalStatus = Common.SILA_ITO_REVERSAL_FAILED;
+                _repository.InternalTransferOrder.Update(transfer);
+                return await FinishAsync(posting, Common.SILA_POSTING_FAILED, null, SilaTransferSap.Failure(problem), cancellationToken);
+            }
+
+            if (body == null || rule == null)
+            {
+                ClearPendingReverse(items);
+                transfer.ReversalStatus = Common.SILA_ITO_REVERSAL_FAILED;
+                _repository.InternalTransferOrder.Update(transfer);
+                return await FinishAsync(posting, Common.SILA_POSTING_FAILED, null, "No reversible quantity remains.", cancellationToken);
+            }
+
+            posting.MovementType = rule.GoodsMovementType;
+            ApiIntegrationConfiguration? api = await SilaInventorySap.ResolveAsync(_repository, buyer.OrganizationId, rule.ApiName, posting.CompanyCode, cancellationToken);
+            if (api == null || !string.Equals(api.Name, SilaTransferSap.API_CONFIG_NAME, StringComparison.Ordinal))
+            {
+                transfer.ReversalStatus = Common.SILA_ITO_REVERSAL_FAILED;
+                _repository.InternalTransferOrder.Update(transfer);
+                return await FinishAsync(posting, Common.SILA_POSTING_FAILED, null, SilaInventorySap.MissingApi(SilaTransferSap.API_CONFIG_NAME), cancellationToken);
+            }
+
+            IntegrationSendResultDto sent = await SendAsync(buyer.OrganizationId, api.Id, posting, body, cancellationToken);
+            posting.IntegrationSystem = api.Name;
+            posting.ErpHttpStatus = sent.Answered ? sent.StatusCode : null;
+            posting.ErpRequestPayload = SilaErpPayload.Sanitise(body);
+            posting.ErpResponsePayload = SilaErpPayload.Sanitise(sent.ResponseBody);
+            bool succeeded = sent.Answered && sent.StatusCode >= 200 && sent.StatusCode < 300;
+            if (succeeded)
+            {
+                string? reference = SilaTransferSap.ReadMaterialDocument(sent.ResponseBody) ?? ReadReference(sent.ResponseBody);
+                InventoryLedger ledger = new InventoryLedger(_repository, buyer.Id, transfer.ReversedBy ?? Guid.Empty);
+                foreach ((InternalTransferOrderItem item, decimal quantity) in reverseLines)
+                {
+                    if (!materials.TryGetValue(item.MaterialId, out ItemBuyerMaster? material))
+                    {
+                        continue;
+                    }
+
+                    item.ReversedQty += quantity;
+                    item.PendingReverseQty = 0;
+                    _repository.InternalTransferOrderItem.Update(item);
+                    // Compensating ledger: IN at original source, OUT at original destination.
+                    await ledger.PostAsync(new InventoryMovement
+                    {
+                        LocationId = transfer.FromLocationId,
+                        Material = material,
+                        Direction = Common.SILA_DIRECTION_IN,
+                        TransactionType = Common.SILA_TXN_TRANSFER_IN,
+                        BaseQuantity = quantity,
+                        EnteredQuantity = quantity,
+                        EnteredUom = item.Uom,
+                        ReferenceType = Common.SILA_REF_ITO_REVERSAL,
+                        ReferenceId = transfer.Id,
+                        ReferenceNumber = transfer.ItoNumber,
+                        Reason = transfer.ReversalReason
+                    }, cancellationToken);
+                    await ledger.PostAsync(new InventoryMovement
+                    {
+                        LocationId = transfer.ToLocationId,
+                        Material = material,
+                        Direction = Common.SILA_DIRECTION_OUT,
+                        TransactionType = Common.SILA_TXN_TRANSFER_OUT,
+                        BaseQuantity = quantity,
+                        EnteredQuantity = quantity,
+                        EnteredUom = item.Uom,
+                        ReferenceType = Common.SILA_REF_ITO_REVERSAL,
+                        ReferenceId = transfer.Id,
+                        ReferenceNumber = transfer.ItoNumber,
+                        Reason = transfer.ReversalReason
+                    }, cancellationToken);
+                }
+
+                bool fully = items.All(x =>
+                {
+                    decimal postedQty = x.ReceivedQty > 0 ? x.ReceivedQty : x.DispatchedQty;
+                    return postedQty - x.ReversedQty <= 0.0001m;
+                });
+                transfer.ReversalStatus = fully ? Common.SILA_ITO_FULLY_REVERSED : Common.SILA_ITO_PARTIALLY_REVERSED;
+                if (fully)
+                {
+                    transfer.Status = Common.SILA_ITO_FULLY_REVERSED;
+                }
+                else
+                {
+                    transfer.Status = Common.SILA_ITO_PARTIALLY_REVERSED;
+                }
+
+                transfer.ReversedOn = DateTime.UtcNow;
+                _repository.InternalTransferOrder.Update(transfer);
+                return await FinishAsync(posting, Common.SILA_POSTING_POSTED, reference, null, cancellationToken);
+            }
+
+            string revError = sent.Answered
+                ? $"The ERP returned HTTP {sent.StatusCode}.{Snippet(sent.ResponseBody)}"
+                : sent.ErrorMessage ?? "The ERP could not be reached.";
+            revError = SilaErpPayload.Sanitise(revError) ?? revError;
+            posting.Attempts++;
+            if (sent.OutcomeUnknown)
+            {
+                transfer.ReversalStatus = Common.SILA_ITO_REVERSAL_UNKNOWN;
+                _repository.InternalTransferOrder.Update(transfer);
+                return await FinishAsync(posting, Common.SILA_POSTING_UNKNOWN, null,
+                    $"{revError} Reversal outcome unknown — reconcile before retrying.", cancellationToken);
+            }
+
+            transfer.ReversalStatus = Common.SILA_ITO_REVERSAL_FAILED;
+            _repository.InternalTransferOrder.Update(transfer);
+            string revStatus = posting.Attempts >= MAX_ATTEMPTS ? Common.SILA_POSTING_FAILED : Common.SILA_POSTING_PENDING;
+            return await FinishAsync(posting, revStatus, null, revError, cancellationToken);
+        }
+
+        
+        private void ClearPendingReverse(List<InternalTransferOrderItem> items)
+        {
+            foreach (InternalTransferOrderItem item in items)
+            {
+                if (item.PendingReverseQty == 0)
+                {
+                    continue;
+                }
+
+                item.PendingReverseQty = 0;
+                _repository.InternalTransferOrderItem.Update(item);
+            }
         }
 
         // Stock count prefers the tested UPDATE_STOCK config named FIVE_POS_UPDATE, then any UPDATE_STOCK API, then a goods movement API.

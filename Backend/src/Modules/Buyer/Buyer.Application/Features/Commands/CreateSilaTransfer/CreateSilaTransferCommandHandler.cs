@@ -44,6 +44,12 @@ namespace Buyer.Application.Features.Commands.CreateSilaTransfer
                 throw new ForBiddenCustomException("No access to these locations.", "Request transfers for a location you are assigned to.");
             }
 
+            if (request.Request.RequireSamePlant
+                || request.Request.Items.Any(x => x.WeeklyBucketItemId != null || x.WishlistItemId != null))
+            {
+                await SilaTransferDemand.EnsureSamePlant311Async(_repository, _logger, from, to);
+            }
+
             InternalTransferOrder transfer = new InternalTransferOrder
             {
                 Id = Guid.NewGuid(),
@@ -60,6 +66,8 @@ namespace Buyer.Application.Features.Commands.CreateSilaTransfer
             };
             (List<InternalTransferOrderItem> items, Dictionary<Guid, ItemBuyerMaster> _) = await SilaTransferRules.BuildItemsAsync(
                 _repository, _logger, buyer.Id, transfer.Id, request.Request.Items, cancellationToken);
+            await SilaTransferDemand.AttachDemandAndValidateAsync(
+                _repository, _logger, buyer.Id, items, request.Request.Items, cancellationToken);
 
             _repository.InternalTransferOrder.Create(transfer);
             foreach (InternalTransferOrderItem item in items)

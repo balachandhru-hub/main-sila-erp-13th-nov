@@ -18,6 +18,9 @@ export interface SilaMovementLineWrite {
   quantity: number;
   /** Empty means the base unit of the material. */
   uom: string | null;
+  weeklyBucketId?: string | null;
+  weeklyBucketItemId?: string | null;
+  wishlistItemId?: string | null;
 }
 
 export interface SilaTransferWrite {
@@ -31,6 +34,8 @@ export interface SilaTransferWrite {
   alreadyCollected?: boolean;
   /** Standard transfers: assign the line materials to the destination when it does not stock them yet. */
   addToLocation?: boolean;
+  /** When true, reject cross-plant create (311 Storage Location Transfer only). */
+  requireSamePlant?: boolean;
 }
 
 /** Approved or received quantity (base unit) of a transfer line. */
@@ -100,6 +105,10 @@ export interface SilaTransferItem {
   approvedQty: number;
   dispatchedQty: number;
   receivedQty: number;
+  reversedQty?: number;
+  remainingReversibleQty?: number;
+  weeklyBucketItemId?: string | null;
+  wishlistItemId?: string | null;
   uom: string;
   unitCost?: number | null;
   transferValue?: number | null;
@@ -142,6 +151,10 @@ export interface SilaTransferDetail {
   alreadyCollected?: boolean;
   /** Why the source disputed the handover. */
   disputeReason?: string | null;
+  sapMaterialDocument?: string | null;
+  reversalStatus?: string | null;
+  reversalReason?: string | null;
+  reversedOn?: string | null;
   items: SilaTransferItem[];
   events: SilaTransferEvent[];
   fromLocationType?: string | null;
@@ -395,6 +408,32 @@ export const disputeTransfer = async (transferId: string, reason: string): Promi
     await axiosInstance.post(`${BASE}/transfers/${transferId}/dispute`, { comment: reason });
   } catch (error: unknown) {
     throw new Error(readError(error, "Could not dispute the handover."));
+  }
+};
+
+export interface SilaTransferReverseLine {
+  itemId: string;
+  quantity: number;
+}
+
+export interface SilaTransferReverseResult {
+  transferId: string;
+  itoNumber: string;
+  reversalStatus?: string | null;
+  postingId?: string | null;
+  message: string;
+}
+
+/** Queues movement type 312 via FIVE S4 - Transfer Stock. Does not call SAP from the browser. */
+export const reverseTransfer = async (
+  transferId: string,
+  payload: { reason: string; comment?: string | null; postingDate?: string | null; items?: SilaTransferReverseLine[] },
+): Promise<SilaTransferReverseResult> => {
+  try {
+    const response = await axiosInstance.post<SilaTransferReverseResult>(`${BASE}/transfers/${transferId}/reverse`, payload);
+    return response.data;
+  } catch (error: unknown) {
+    throw new Error(readError(error, "Could not reverse the transfer."));
   }
 };
 

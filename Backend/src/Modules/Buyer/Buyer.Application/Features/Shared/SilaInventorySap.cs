@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Linq;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Buyer.Domain.Common;
@@ -18,12 +19,26 @@ namespace Buyer.Application.Features.Shared
     {
         public const string API_TRANSFER = "FIVE S4 - Transfer Stock";
         public const string API_PLANT_TRANSFER = "FIVE S4 - Plant Transfer Stock";
-        public const string API_GOODS_ISSUE = "FIVE S4 - Goods Issue";
+        /// <summary>Canonical Integration Setup name for Goods Issue (POS sales consumption uses this with Z01).</summary>
+        public const string API_GOODS_ISSUE = "S4 - Goods Issue";
+        /// <summary>Legacy display name still accepted when resolving the same Goods Issue connector.</summary>
+        public const string API_GOODS_ISSUE_LEGACY = "FIVE S4 - Goods Issue";
         public const string API_POSITIVE_ADJUSTMENT = "FIVE S4 - Positive Stock Adjustment";
 
+        /// <summary>Non-POS goods issue configurations (S4 - Goods Issue). POS sales use <see cref="PosUpdateApiNames"/>.</summary>
+        public static readonly string[] GoodsIssueApiNames = { API_GOODS_ISSUE, API_GOODS_ISSUE_LEGACY };
+
+        /// <summary>All POS sales postings (consumption and RETURN/VOID) use this Integration Setup name only.</summary>
+        public static readonly string[] PosUpdateApiNames = { SilaStockCountSap.API_CONFIG_NAME };
+
+        /// <summary>Configurable POS MaterialDocumentHeaderText prefix (SAP length limit applied later).</summary>
+        public const string POS_HEADER_PREFIX = "POSSALES";
+
         public const string CODE_TRANSFER = "04";
+        public const string CODE_TRANSFER_REVERSAL = "06";
         public const string CODE_ISSUE = "03";
         public const string TYPE_311 = "311";
+        public const string TYPE_312 = "312";
         public const string TYPE_301 = "301";
         public const string TYPE_Z02 = "Z02";
         public const string TYPE_Z01 = "Z01";
@@ -37,20 +52,39 @@ namespace Buyer.Application.Features.Shared
         public const string MATERIAL_MAPPING_MISSING = "MATERIAL_MAPPING_MISSING";
         public const string MATERIAL_NOT_VALID = "MATERIAL_NOT_VALID";
         public const string SAP_API_CONFIGURATION_NOT_FOUND = "SAP_API_CONFIGURATION_NOT_FOUND";
+        public const string SAP_API_CONFIGURATION_INACTIVE = "SAP_API_CONFIGURATION_INACTIVE";
         public const string ALREADY_POSTED = "ALREADY_POSTED";
+        public const string COST_CENTER_MISSING = "COST_CENTER_MISSING";
+        public const string MATERIAL_DOCUMENT_ENTITY = "A_MaterialDocumentHeader";
 
         public static readonly Rule SamePlantTransfer = new Rule(API_TRANSFER, CODE_TRANSFER, TYPE_311, false);
+        /// <summary>Explicit 312 reversal on FIVE S4 - Transfer Stock (same API as 311).</summary>
+        public static readonly Rule SamePlantTransferReversal = new Rule(API_TRANSFER, CODE_TRANSFER_REVERSAL, TYPE_312, false);
         public static readonly Rule PlantTransfer = new Rule(API_PLANT_TRANSFER, CODE_TRANSFER, TYPE_301, true);
-        public static readonly Rule GoodsIssue = new Rule(API_GOODS_ISSUE, CODE_ISSUE, TYPE_Z02, false);
-        public static readonly Rule PositiveAdjustment = new Rule(API_POSITIVE_ADJUSTMENT, CODE_ISSUE, TYPE_Z01, false);
+        /// <summary>Non-POS goods issue (stock decrease) via S4 - Goods Issue with customer Z02 where configured.</summary>
+        public static readonly Rule GoodsIssue = new Rule(API_GOODS_ISSUE, CODE_ISSUE, TYPE_Z02, false, increasesStock: false);
+        /// <summary>
+        /// POS sales consumption via FIVE_POS_UPDATE: GoodsMovementCode 03, GoodsMovementType Z01.
+        /// Stock decreases (IncreasesStock = false) even though the movement type is Z01.
+        /// </summary>
+        public static readonly Rule PosConsumption = new Rule(
+            SilaStockCountSap.API_CONFIG_NAME, CODE_ISSUE, TYPE_Z01, false, increasesStock: false);
+        /// <summary>POS RETURN/VOID via FIVE_POS_UPDATE restores stock (IN) with Z01.</summary>
+        public static readonly Rule PosReversal = new Rule(
+            SilaStockCountSap.API_CONFIG_NAME, CODE_ISSUE, TYPE_Z01, false, increasesStock: true);
+        /// <summary>Non-POS positive stock adjustments restore stock (IN).</summary>
+        public static readonly Rule PositiveAdjustment = new Rule(API_POSITIVE_ADJUSTMENT, CODE_ISSUE, TYPE_Z01, false, increasesStock: true);
 
-        /// <summary>OUT consumes or reduces stock (Z02). IN returns or increases stock (Z01).</summary>
+        /// <summary>OUT uses GoodsIssue (Z02) for non-POS; IN uses PositiveAdjustment (Z01).</summary>
         public static Rule ForDirection(string? direction)
         {
             return direction == Common.SILA_DIRECTION_IN ? PositiveAdjustment : GoodsIssue;
         }
 
-        /// <summary>A POS sale keeps its movement once queued. Older rows are read from the sold-quantity sign.</summary>
+        /// <summary>
+        /// POS SALE consumption is Z01 (via S4 - Goods Issue). Negative quantity / legacy rows that used Z02 keep their stored type.
+        /// Prefer the queued MovementType when already set.
+        /// </summary>
         public static string MovementForSale(string? movementType, decimal quantitySold)
         {
             if (movementType == TYPE_Z01 || movementType == TYPE_Z02)
@@ -58,7 +92,40 @@ namespace Buyer.Application.Features.Shared
                 return movementType;
             }
 
-            return quantitySold < 0 ? TYPE_Z01 : TYPE_Z02;
+            // User-confirmed: POS consumption posts as Z01 (not Z02).
+            return TYPE_Z01;
+        }
+
+        /// <summary>Build SAP ReferenceDocument e.g. POS-FL10-100046 (max 16 chars).</summary>
+        public static string BuildPosReferenceDocument(string? outletOrStorageCode, string? sourceTransactionId)
+        {
+            string outlet = string.IsNullOrWhiteSpace(outletOrStorageCode) ? "POS" : outletOrStorageCode.Trim().ToUpperInvariant();
+            string txn = string.IsNullOrWhiteSpace(sourceTransactionId) ? "REF" : sourceTransactionId.Trim();
+            string value = $"POS-{outlet}-{txn}";
+            return value.Length > 16 ? value[..16] : value;
+        }
+
+        /// <summary>Build MaterialDocumentHeaderText e.g. POSSALES2 (max 25 chars).</summary>
+        public static string BuildPosHeaderText(string? batchOrSequenceHint = null)
+        {
+            string suffix = string.IsNullOrWhiteSpace(batchOrSequenceHint)
+                ? "2"
+                : new string(batchOrSequenceHint.Trim().Where(char.IsLetterOrDigit).Take(8).ToArray());
+            if (string.IsNullOrEmpty(suffix))
+            {
+                suffix = "2";
+            }
+
+            string value = POS_HEADER_PREFIX + suffix;
+            return value.Length > 25 ? value[..25] : value;
+        }
+
+        /// <summary>User-facing Cost Center missing error for a plant / storage location pair.</summary>
+        public static string CostCenterMissingMessage(string? plant, string? storageLocation)
+        {
+            string plantText = string.IsNullOrWhiteSpace(plant) ? "(unknown)" : plant.Trim();
+            string storageText = string.IsNullOrWhiteSpace(storageLocation) ? "(unknown)" : storageLocation.Trim();
+            return $"Cost Center missing for Plant {plantText} / Storage Location {storageText}. Maintain it in Storage Location Setup.";
         }
 
         public static string MovementForDirection(string? direction)
@@ -149,8 +216,10 @@ namespace Buyer.Application.Features.Shared
                 UOM_CONVERSION_MISSING => "The material has no SAP unit of measure, or the quantity cannot be converted to it.",
                 MATERIAL_MAPPING_MISSING => "The material is not an active stock item with a material number.",
                 MATERIAL_NOT_VALID => "The material is not an active stock item.",
-                SAP_API_CONFIGURATION_NOT_FOUND => "The SAP API for this stock movement is not active. No other API is used.",
+                SAP_API_CONFIGURATION_NOT_FOUND => "The SAP Goods Issue API is not configured under Integration Setup. No other API is used.",
+                SAP_API_CONFIGURATION_INACTIVE => "The SAP Goods Issue API exists but is not ACTIVE under Integration Setup.",
                 ALREADY_POSTED => "This stock movement already has an SAP material document.",
+                COST_CENTER_MISSING => "Cost Center missing for the resolved plant / storage location. Maintain Cost Center in Storage Location Setup before posting POS consumption.",
                 _ => "The stock movement cannot be posted."
             };
         }
@@ -162,7 +231,96 @@ namespace Buyer.Application.Features.Shared
 
         public static string MissingApi(string apiName)
         {
-            return SAP_API_CONFIGURATION_NOT_FOUND + ". Activate " + apiName + ". No other API is used.";
+            return SAP_API_CONFIGURATION_NOT_FOUND + ". Activate " + apiName + " under Integration Setup. No other API is used for POS consumption.";
+        }
+
+        public static string InactiveApi(string apiName)
+        {
+            return SAP_API_CONFIGURATION_INACTIVE + ". Activate " + apiName + " under Integration Setup. POS consumption does not use another API.";
+        }
+
+        /// <summary>
+        /// Explicit movement 312 reversal for a prior same-plant 311. Stock effect: decrease original destination,
+        /// increase original source. Uses FIVE S4 - Transfer Stock only.
+        /// </summary>
+        public static string? TryBuildTransferReversal(
+            DateTime businessDate,
+            string? originalFromPlant,
+            string? originalFromStorage,
+            string? originalToPlant,
+            string? originalToStorage,
+            string? fromCompany,
+            string? toCompany,
+            string? referenceDocument,
+            IReadOnlyList<TransferLine> lines,
+            Dictionary<Guid, List<MaterialUomConversion>> conversions,
+            out string? body,
+            out Rule? rule)
+        {
+            body = null;
+            rule = null;
+            string? problem = DecideTransfer(
+                originalFromPlant, originalFromStorage, originalToPlant, originalToStorage, fromCompany, toCompany, out Rule? originalRule);
+            if (problem != null)
+            {
+                return problem;
+            }
+
+            if (originalRule == null || originalRule.GoodsMovementType != TYPE_311)
+            {
+                return INVALID_TRANSFER_LOCATION;
+            }
+
+            rule = SamePlantTransferReversal;
+            string sourcePlant = originalFromPlant!.Trim();
+            string originalSource = originalFromStorage!.Trim();
+            string originalDestination = originalToStorage!.Trim();
+            List<TransferQuantity> ready = new List<TransferQuantity>();
+            foreach (TransferLine line in lines.OrderBy(x => x.Material.MaterialCode))
+            {
+                if (line.Quantity <= 0)
+                {
+                    continue;
+                }
+
+                string? convertedProblem = ConvertLine(line.Material, line.Quantity, line.QuantityUom, conversions, out string material, out string unit, out decimal quantity);
+                if (convertedProblem != null)
+                {
+                    return convertedProblem;
+                }
+
+                ready.Add(new TransferQuantity(material, unit, quantity));
+            }
+
+            if (ready.Count == 0)
+            {
+                rule = null;
+                return null;
+            }
+
+            string postingDate = FormatDate(businessDate);
+            string headerText = string.IsNullOrWhiteSpace(referenceDocument) ? "SILA ITO REVERSAL" : ("SILA ITO REV " + referenceDocument.Trim());
+            string goodsMovementCode = rule.GoodsMovementCode;
+            string goodsMovementType = rule.GoodsMovementType;
+            body = JsonSerializer.Serialize(new
+            {
+                PostingDate = postingDate,
+                DocumentDate = postingDate,
+                GoodsMovementCode = goodsMovementCode,
+                MaterialDocumentHeaderText = headerText.Length > 25 ? headerText[..25] : headerText,
+                ReferenceDocument = string.IsNullOrWhiteSpace(referenceDocument) ? null : referenceDocument.Trim(),
+                to_MaterialDocumentItem = ready.Select(line => new
+                {
+                    Material = line.Material,
+                    Plant = sourcePlant,
+                    StorageLocation = originalDestination,
+                    GoodsMovementType = goodsMovementType,
+                    QuantityInEntryUnit = FormatQuantity(line.Quantity),
+                    EntryUnit = line.EntryUnit,
+                    IssuingOrReceivingStorageLoc = originalSource
+                }).ToList()
+            });
+            return null;
         }
 
         /// <summary>One transfer, one material document. 311 stays in the source plant. 301 names the receiving plant.</summary>
@@ -260,16 +418,26 @@ namespace Buyer.Application.Features.Shared
 
         /// <summary>
         /// Goods issue or positive adjustment. Compatible lines (same material and SAP unit) are summed.
-        /// The quantity is always positive.
+        /// The quantity is always positive. Header text and cost center are required by SAP for Z01/Z02 account assignment.
+        /// When <paramref name="keepEntryUnit"/> is true (POS recipe explosion), QuantityInEntryUnit / EntryUnit stay in the
+        /// recipe ingredient UOM (e.g. ML) instead of being forced to the material base UOM.
+        /// <paramref name="postingDate"/> defaults to <paramref name="documentDate"/>; POS sets posting to the current date.
         /// </summary>
         public static string? TryBuildEffect(
-            DateTime businessDate,
+            DateTime documentDate,
             string? plant,
             string? storageLocation,
             Rule rule,
             IReadOnlyList<TransferLine> lines,
             Dictionary<Guid, List<MaterialUomConversion>> conversions,
-            out string? body)
+            out string? body,
+            string? headerText = null,
+            string? costCenter = null,
+            string? referenceDocument = null,
+            string? glAccount = null,
+            DateTime? postingDate = null,
+            bool keepEntryUnit = false,
+            bool allowMissingConversion = false)
         {
             body = null;
             if (string.IsNullOrWhiteSpace(plant) || string.IsNullOrWhiteSpace(storageLocation))
@@ -277,8 +445,16 @@ namespace Buyer.Application.Features.Shared
                 return INVENTORY_LOCATION_MAPPING_MISSING;
             }
 
+            bool needsCostCenter = rule.GoodsMovementType == TYPE_Z01 || rule.GoodsMovementType == TYPE_Z02;
+            if (needsCostCenter && string.IsNullOrWhiteSpace(costCenter))
+            {
+                return COST_CENTER_MISSING;
+            }
+
             string sapPlant = plant.Trim();
             string sapStorage = storageLocation.Trim();
+            string? sapCostCenter = string.IsNullOrWhiteSpace(costCenter) ? null : costCenter.Trim();
+            string? sapGlAccount = string.IsNullOrWhiteSpace(glAccount) ? null : glAccount.Trim();
             Dictionary<string, decimal> totals = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
             Dictionary<string, (string Material, string Unit)> keys = new Dictionary<string, (string, string)>(StringComparer.OrdinalIgnoreCase);
             foreach (TransferLine line in lines)
@@ -288,7 +464,16 @@ namespace Buyer.Application.Features.Shared
                     continue;
                 }
 
-                string? convertedProblem = ConvertLine(line.Material, line.Quantity, line.QuantityUom, conversions, out string material, out string unit, out decimal quantity);
+                string? convertedProblem = ConvertLine(
+                    line.Material,
+                    line.Quantity,
+                    line.QuantityUom,
+                    conversions,
+                    out string material,
+                    out string unit,
+                    out decimal quantity,
+                    keepEntryUnit,
+                    allowMissingConversion);
                 if (convertedProblem != null)
                 {
                     return convertedProblem == MATERIAL_NOT_VALID ? MATERIAL_MAPPING_MISSING : convertedProblem;
@@ -304,26 +489,85 @@ namespace Buyer.Application.Features.Shared
                 return null;
             }
 
-            string postingDate = FormatDate(businessDate);
-            body = JsonSerializer.Serialize(new
+            string sapPostingDate = FormatDate(postingDate ?? documentDate);
+            string sapDocumentDate = FormatDate(documentDate);
+            string materialDocumentHeaderText = string.IsNullOrWhiteSpace(headerText)
+                ? $"SILA {rule.GoodsMovementType} {sapPostingDate[..10]}"
+                : headerText.Trim();
+            if (materialDocumentHeaderText.Length > 25)
             {
-                PostingDate = postingDate,
-                DocumentDate = postingDate,
-                GoodsMovementCode = rule.GoodsMovementCode,
-                to_MaterialDocumentItem = totals
-                    .OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase)
-                    .Select(x => new
+                materialDocumentHeaderText = materialDocumentHeaderText[..25];
+            }
+
+            List<Dictionary<string, object?>> items = totals
+                .OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase)
+                .Select(x =>
+                {
+                    Dictionary<string, object?> item = new Dictionary<string, object?>
                     {
-                        Plant = sapPlant,
-                        StorageLocation = sapStorage,
-                        Material = keys[x.Key].Material,
-                        GoodsMovementType = rule.GoodsMovementType,
-                        QuantityInEntryUnit = FormatQuantity(x.Value),
-                        EntryUnit = keys[x.Key].Unit
-                    })
-                    .ToList()
-            });
+                        ["Plant"] = sapPlant,
+                        ["StorageLocation"] = sapStorage,
+                        ["Material"] = keys[x.Key].Material,
+                        ["GoodsMovementType"] = rule.GoodsMovementType,
+                        ["QuantityInEntryUnit"] = FormatQuantity(x.Value),
+                        ["EntryUnit"] = keys[x.Key].Unit
+                    };
+                    if (sapCostCenter != null)
+                    {
+                        item["CostCenter"] = sapCostCenter;
+                    }
+
+                    if (sapGlAccount != null)
+                    {
+                        item["GLAccount"] = sapGlAccount;
+                    }
+
+                    return item;
+                })
+                .ToList();
+
+            // OData V2 deep-insert: to_MaterialDocumentItem.results[...]
+            Dictionary<string, object?> header = new Dictionary<string, object?>
+            {
+                ["PostingDate"] = sapPostingDate,
+                ["DocumentDate"] = sapDocumentDate,
+                ["GoodsMovementCode"] = rule.GoodsMovementCode,
+                ["MaterialDocumentHeaderText"] = materialDocumentHeaderText,
+                ["to_MaterialDocumentItem"] = new Dictionary<string, object?> { ["results"] = items }
+            };
+            if (!string.IsNullOrWhiteSpace(referenceDocument))
+            {
+                string reference = referenceDocument.Trim();
+                header["ReferenceDocument"] = reference.Length > 16 ? reference[..16] : reference;
+            }
+
+            body = JsonSerializer.Serialize(header);
             return null;
+        }
+
+        /// <summary>
+        /// SAP Material Document deep-insert must target A_MaterialDocumentHeader. Configurations that only store the
+        /// service root still post to the entity set.
+        /// </summary>
+        public static string? EnsureMaterialDocumentPath(string? resourcePath)
+        {
+            if (string.IsNullOrWhiteSpace(resourcePath))
+            {
+                return null;
+            }
+
+            string path = resourcePath.Trim().TrimEnd('/');
+            if (path.Contains(MATERIAL_DOCUMENT_ENTITY, StringComparison.OrdinalIgnoreCase))
+            {
+                return path;
+            }
+
+            if (path.EndsWith("API_MATERIAL_DOCUMENT_SRV", StringComparison.OrdinalIgnoreCase))
+            {
+                return path + "/" + MATERIAL_DOCUMENT_ENTITY;
+            }
+
+            return path;
         }
 
         public static string? ReadMaterialDocument(string? payload)
@@ -401,12 +645,75 @@ namespace Buyer.Application.Features.Shared
             string? companyCode,
             CancellationToken cancellationToken)
         {
-            List<ApiIntegrationConfiguration> named = await repository.ApiIntegrationConfiguration
-                .FindByCondition(x => IntegrationLookup.BuyerIdsOf(repository, organizationId).Contains(x.BuyerId)
-                    && x.IsActive
-                    && x.Status == IntegrationConfigurationStatus.ACTIVE
-                    && x.Name == apiName)
+            return await ResolveAnyAsync(repository, organizationId, new[] { apiName }, companyCode, cancellationToken);
+        }
+
+        /// <summary>
+        /// Resolves the first ACTIVE configuration whose name matches any of <paramref name="apiNames"/> (case-insensitive),
+        /// preferring the company code then ALL.
+        /// </summary>
+        public static async Task<ApiIntegrationConfiguration?> ResolveAnyAsync(
+            IRepositoryWrapper repository,
+            Guid organizationId,
+            IReadOnlyList<string> apiNames,
+            string? companyCode,
+            CancellationToken cancellationToken)
+        {
+            List<ApiIntegrationConfiguration> matches = await LoadNamedAsync(repository, organizationId, apiNames, cancellationToken);
+            List<ApiIntegrationConfiguration> active = matches
+                .Where(x => x.Status == IntegrationConfigurationStatus.ACTIVE)
+                .ToList();
+            return PickForCompany(active, companyCode);
+        }
+
+        /// <summary>
+        /// Like <see cref="ResolveAnyAsync"/> but also returns an inactive match so the caller can report
+        /// SAP_API_CONFIGURATION_INACTIVE instead of NOT_FOUND.
+        /// </summary>
+        public static async Task<(ApiIntegrationConfiguration? Active, ApiIntegrationConfiguration? Inactive)> ResolveWithInactiveAsync(
+            IRepositoryWrapper repository,
+            Guid organizationId,
+            IReadOnlyList<string> apiNames,
+            string? companyCode,
+            CancellationToken cancellationToken)
+        {
+            List<ApiIntegrationConfiguration> matches = await LoadNamedAsync(repository, organizationId, apiNames, cancellationToken);
+            ApiIntegrationConfiguration? active = PickForCompany(
+                matches.Where(x => x.Status == IntegrationConfigurationStatus.ACTIVE).ToList(),
+                companyCode);
+            if (active != null)
+            {
+                return (active, null);
+            }
+
+            ApiIntegrationConfiguration? inactive = PickForCompany(matches, companyCode)
+                ?? matches.OrderBy(x => x.DateCreated).FirstOrDefault();
+            return (null, inactive);
+        }
+
+        private static async Task<List<ApiIntegrationConfiguration>> LoadNamedAsync(
+            IRepositoryWrapper repository,
+            Guid organizationId,
+            IReadOnlyList<string> apiNames,
+            CancellationToken cancellationToken)
+        {
+            if (apiNames.Count == 0)
+            {
+                return new List<ApiIntegrationConfiguration>();
+            }
+
+            HashSet<string> wanted = apiNames
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Select(x => x.Trim())
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            List<ApiIntegrationConfiguration> rows = await repository.ApiIntegrationConfiguration
+                .FindByCondition(x => IntegrationLookup.BuyerIdsOf(repository, organizationId).Contains(x.BuyerId) && x.IsActive)
                 .ToListAsync(cancellationToken);
+            return rows.Where(x => wanted.Contains(x.Name)).ToList();
+        }
+
+        private static ApiIntegrationConfiguration? PickForCompany(List<ApiIntegrationConfiguration> named, string? companyCode)
+        {
             return named.FirstOrDefault(x => companyCode != null && x.EntityCode.Equals(companyCode, StringComparison.OrdinalIgnoreCase))
                 ?? named.FirstOrDefault(x => x.EntityCode.Equals(IntegrationConstants.ENTITY_CODE_ALL, StringComparison.OrdinalIgnoreCase))
                 ?? (companyCode == null ? named.OrderBy(x => x.DateCreated).FirstOrDefault() : null);
@@ -419,7 +726,9 @@ namespace Buyer.Application.Features.Shared
             Dictionary<Guid, List<MaterialUomConversion>> conversions,
             out string materialCode,
             out string entryUnit,
-            out decimal converted)
+            out decimal converted,
+            bool keepEntryUnit = false,
+            bool allowMissingConversion = false)
         {
             materialCode = string.Empty;
             entryUnit = string.Empty;
@@ -429,22 +738,43 @@ namespace Buyer.Application.Features.Shared
                 return MATERIAL_NOT_VALID;
             }
 
-            string? unit = EntryUnitOf(material.BaseUnitOfMeasure);
-            if (unit == null)
+            string? baseUnit = EntryUnitOf(material.BaseUnitOfMeasure);
+            if (baseUnit == null && !allowMissingConversion)
             {
                 return UOM_CONVERSION_MISSING;
             }
 
             decimal? baseQuantity = UomConverter.TryToBase(material, quantity, quantityUom, conversions);
-            if (baseQuantity == null || baseQuantity.Value <= 0)
+            if ((baseQuantity == null || baseQuantity.Value <= 0) && !(keepEntryUnit && allowMissingConversion && quantity > 0))
             {
                 return UOM_CONVERSION_MISSING;
             }
 
-            materialCode = material.MaterialCode.Trim();
-            entryUnit = unit;
-            converted = baseQuantity.Value;
+            materialCode = FormatSapMaterial(material.MaterialCode.Trim());
+            if (keepEntryUnit)
+            {
+                // POS recipe explosion: keep the recipe ingredient UOM/qty (e.g. 30 ML) for SAP.
+                string? requested = EntryUnitOf(quantityUom) ?? baseUnit ?? "EA";
+                entryUnit = requested;
+                converted = Math.Abs(quantity);
+                return null;
+            }
+
+            entryUnit = baseUnit ?? "EA";
+            converted = baseQuantity!.Value;
             return null;
+        }
+
+        /// <summary>SAP material numbers are often 18-character zero-padded numerics.</summary>
+        public static string FormatSapMaterial(string materialCode)
+        {
+            string code = materialCode.Trim();
+            if (code.Length > 0 && code.Length < 18 && code.All(char.IsDigit))
+            {
+                return code.PadLeft(18, '0');
+            }
+
+            return code;
         }
 
         private static string? Text(JsonElement root, string name)
@@ -465,18 +795,26 @@ namespace Buyer.Application.Features.Shared
 
         public sealed class Rule
         {
-            public Rule(string apiName, string goodsMovementCode, string goodsMovementType, bool receivingPlant)
+            public Rule(
+                string apiName,
+                string goodsMovementCode,
+                string goodsMovementType,
+                bool receivingPlant,
+                bool increasesStock = false)
             {
                 ApiName = apiName;
                 GoodsMovementCode = goodsMovementCode;
                 GoodsMovementType = goodsMovementType;
                 ReceivingPlant = receivingPlant;
+                IncreasesStock = increasesStock;
             }
 
             public string ApiName { get; }
             public string GoodsMovementCode { get; }
             public string GoodsMovementType { get; }
             public bool ReceivingPlant { get; }
+            /// <summary>True when the movement restores/increases stock (ledger IN). False for consumption/issue (ledger OUT).</summary>
+            public bool IncreasesStock { get; }
         }
 
         public readonly record struct TransferLine(ItemBuyerMaster Material, decimal Quantity, string? QuantityUom);

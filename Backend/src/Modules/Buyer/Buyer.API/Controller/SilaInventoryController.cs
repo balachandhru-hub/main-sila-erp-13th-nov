@@ -16,6 +16,7 @@ using Buyer.Application.Features.Queries.GetSilaLocationMaterials;
 using Buyer.Application.Features.Queries.GetSilaLocations;
 using Buyer.Application.Features.Queries.GetSilaLocationUsers;
 using Buyer.Application.Features.Queries.GetSilaMaterials;
+using Buyer.Application.Features.Queries.GetSilaPendingOutletRequirements;
 using Buyer.Domain.Dtos;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
@@ -400,6 +401,37 @@ namespace Buyer.API.Controllers
                 LocationId = locationId
             });
             _logger.LogDebug($"Inventory home fetched. LocationId: {result.LocationId}");
+            return Ok(result);
+        }
+
+        /// <summary>Pending Weekly Bucket / Wishlist outlet requirements for demand-based ITO from Live Inventory.</summary>
+        [HttpGet]
+        [Route("api/v1/buyer/sila/inventory/pending-requirements")]
+        [ApiAuthorization(Name = "VIEW_SILA_INVENTORY")]
+        [SwaggerOperation("GetSilaPendingOutletRequirements")]
+        [SwaggerResponse(200, type: typeof(SilaPendingOutletRequirementsDto))]
+        public async Task<IActionResult> PendingRequirements(
+            [FromQuery] Guid? destinationOutletId,
+            [FromQuery] Guid? weeklyBucketId,
+            [FromQuery] Guid? wishlistId,
+            [FromQuery] Guid? materialId,
+            [FromQuery] Guid? sourceLocationId,
+            [FromQuery] bool countOnly = false)
+        {
+            _logger.LogDebug("Fetching pending outlet requirements for ITO.");
+            SilaPendingOutletRequirementsDto result = await _mediator.Send(new GetSilaPendingOutletRequirementsQuery
+            {
+                OrganizationId = GetOrganizationId(),
+                UserId = GetUserId(),
+                RoleId = GetRoleId(),
+                DestinationOutletId = destinationOutletId,
+                WeeklyBucketId = weeklyBucketId,
+                WishlistId = wishlistId,
+                MaterialId = materialId,
+                SourceLocationId = sourceLocationId?.ToString(),
+                CountOnly = countOnly
+            });
+            _logger.LogDebug($"Pending outlet requirements fetched. Count: {result.Count}");
             return Ok(result);
         }
 

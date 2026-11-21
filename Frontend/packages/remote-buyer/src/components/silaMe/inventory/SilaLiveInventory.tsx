@@ -6,6 +6,7 @@ import {
   getInventoryHome,
   getLiveInventoryDetail,
   getMyLocations,
+  getPendingOutletRequirements,
   getRecentAlerts,
   searchLiveInventory,
   silaLabel,
@@ -20,6 +21,7 @@ import { createQuickTransfer, createTransfer } from "../../../api/silaMe/silaMov
 import SilaSearchableSelect from "../SilaSearchableSelect";
 import type { SilaMePermissions } from "../silaMePermissions";
 import SilaLiveDecisionPanel from "./SilaLiveDecisionPanel";
+import SilaPendingRequirementsPanel from "./SilaPendingRequirementsPanel";
 import { lensOptionsFor, resolveLiveInventoryLens, type LensProfile } from "./liveInventoryLens";
 import { buildInventoryPriorities } from "./liveInventoryPriorities";
 import "../silaMeTheme.css";
@@ -135,6 +137,11 @@ const SilaLiveInventory: React.FC<SilaLiveInventoryProps> = ({
   const [optionalCols, setOptionalCols] = useState<Set<OptionalColumn>>(new Set());
   const [showColumns, setShowColumns] = useState(false);
   const [showMore, setShowMore] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [showPending, setShowPending] = useState(false);
+  const [basket, setBasket] = useState<Record<string, SilaLiveInventoryRow>>({});
+  const [itoToId, setItoToId] = useState("");
+  const [creatingBasket, setCreatingBasket] = useState(false);
   const [lastSynced, setLastSynced] = useState<Date | null>(null);
   const [refreshTick, setRefreshTick] = useState(0);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -161,6 +168,20 @@ const SilaLiveInventory: React.FC<SilaLiveInventoryProps> = ({
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    getPendingOutletRequirements({ sourceLocationId: locationId || undefined, countOnly: true })
+      .then((data) => {
+        if (active) setPendingCount(data.count);
+      })
+      .catch(() => {
+        if (active) setPendingCount(0);
+      });
+    return () => {
+      active = false;
+    };
+  }, [locationId, refreshTick]);
 
   useEffect(() => {
     if (!locationId) {
@@ -308,6 +329,55 @@ const SilaLiveInventory: React.FC<SilaLiveInventoryProps> = ({
     }
     if (action === "RECIPE") {
       onNavigate?.("silaRecipeAvailability");
+    }
+  };
+
+  const toggleBasket = (row: SilaLiveInventoryRow) => {
+    setBasket((current) => {
+      const next = { ...current };
+      if (next[row.materialId]) delete next[row.materialId];
+      else next[row.materialId] = row;
+      return next;
+    });
+  };
+
+  const createBasketIto = async () => {
+    if (!canTransfer || !locationId || !itoToId) {
+      toastService.error("Choose source and destination before creating an ITO.");
+      return;
+    }
+    const items = Object.values(basket)
+      .filter((row) => (row.availableQty ?? row.onHandQty ?? 0) > 0)
+      .map((row) => {
+        const available = row.availableQty ?? row.onHandQty ?? 0;
+        return {
+          materialId: row.materialId,
+          quantity: Math.max(0.001, available),
+          uom: row.baseUom ?? null,
+        };
+      });
+    if (items.length === 0) {
+      toastService.error("Select materials with transferable stock.");
+      return;
+    }
+    setCreatingBasket(true);
+    try {
+      await createTransfer({
+        fromLocationId: locationId,
+        toLocationId: itoToId,
+        reason: "Material-based ITO from Live Inventory",
+        requiredBy: null,
+        requireSamePlant: true,
+        addToLocation: true,
+        items,
+      });
+      toastService.success(`ITO created for ${items.length} material(s).`);
+      setBasket({});
+      setRefreshTick((n) => n + 1);
+    } catch (err: unknown) {
+      toastService.error(err instanceof Error ? err.message : "Could not create the ITO.");
+    } finally {
+      setCreatingBasket(false);
     }
   };
 
@@ -581,6 +651,15 @@ const SilaLiveInventory: React.FC<SilaLiveInventoryProps> = ({
               onChange={setLocationId}
             />
           </div>
+          <button
+            type="button"
+            className="liv-chip"
+            data-testid="pending-requirements-indicator"
+            onClick={() => setShowPending(true)}
+            title="Pending Weekly Bucket / Wishlist requirements"
+          >
+            Pending Requirements: {pendingCount}
+          </button>
           <button type="button" className="sila-btn sila-btn--secondary" onClick={() => { setRefreshTick((n) => n + 1); searchRef.current?.focus(); }}>
             Refresh
           </button>
@@ -722,6 +801,30 @@ const SilaLiveInventory: React.FC<SilaLiveInventoryProps> = ({
                 </div>
               )}
             </div>
+            {canTransfer && Object.keys(basket).length > 0 && (
+              <>
+                <SilaSearchableSelect
+                  label="ITO destination"
+                  placeholder="Destination"
+                  value={itoToId}
+                  options={stockLocations
+                    .filter((location) => location.id !== locationId)
+                    .map((location) => ({
+                      value: location.id,
+                      label: `${location.locationCode} · ${location.locationName}`,
+                    }))}
+                  onChange={setItoToId}
+                />
+                <button
+                  type="button"
+                  className="sila-btn sila-btn--primary sila-btn--sm"
+                  disabled={creatingBasket || !itoToId}
+                  onClick={createBasketIto}
+                >
+                  {creatingBasket ? "Creating…" : `Create ITO (${Object.keys(basket).length})`}
+                </button>
+              </>
+            )}
             {canTransfer && (
               <button type="button" className="sila-btn sila-btn--primary sila-btn--sm" onClick={() => onNavigate?.("silaTransfers")}>
                 New Transfer
@@ -753,6 +856,7 @@ const SilaLiveInventory: React.FC<SilaLiveInventoryProps> = ({
               <table className="sila-table liv-table">
                 <thead>
                   <tr>
+                    {canTransfer && <th scope="col">ITO</th>}
                     <th scope="col">Material</th>
                     <th scope="col">Description</th>
                     <th scope="col" className="sinv-num">Available</th>
@@ -773,6 +877,16 @@ const SilaLiveInventory: React.FC<SilaLiveInventoryProps> = ({
                     const available = row.availableQty ?? row.onHandQty;
                     return (
                       <tr key={row.materialId} className="sinv-row-button" onClick={() => setSelectedId(row.materialId)}>
+                        {canTransfer && (
+                          <td onClick={(event) => event.stopPropagation()}>
+                            <input
+                              type="checkbox"
+                              aria-label={`Select ${row.materialCode} for ITO`}
+                              checked={!!basket[row.materialId]}
+                              onChange={() => toggleBasket(row)}
+                            />
+                          </td>
+                        )}
                         <td><span className="sila-cell-strong">{row.materialCode}</span></td>
                         <td>{materialLabel(row.materialCode, row.description)}</td>
                         <td className="sinv-num">{formatQty(available)}</td>
@@ -833,6 +947,15 @@ const SilaLiveInventory: React.FC<SilaLiveInventoryProps> = ({
           </>
         )}
       </section>
+
+      <SilaPendingRequirementsPanel
+        open={showPending}
+        onClose={() => setShowPending(false)}
+        canTransfer={canTransfer}
+        locations={locations}
+        sourceLocationId={locationId}
+        onCreated={() => setRefreshTick((n) => n + 1)}
+      />
     </div>
   );
 };

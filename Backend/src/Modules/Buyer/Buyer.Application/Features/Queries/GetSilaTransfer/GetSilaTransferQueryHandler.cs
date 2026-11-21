@@ -90,6 +90,10 @@ namespace Buyer.Application.Features.Queries.GetSilaTransfer
                 ReceivedOn = transfer.ReceivedOn,
                 AlreadyCollected = transfer.AlreadyCollected,
                 DisputeReason = transfer.DisputeReason,
+                SapMaterialDocument = transfer.SapMaterialDocument,
+                ReversalStatus = transfer.ReversalStatus,
+                ReversalReason = transfer.ReversalReason,
+                ReversedOn = transfer.ReversedOn,
                 Items = items.Select(x => new SilaTransferItemDto
                 {
                     Id = x.Id,
@@ -100,6 +104,10 @@ namespace Buyer.Application.Features.Queries.GetSilaTransfer
                     ApprovedQty = x.ApprovedQty,
                     DispatchedQty = x.DispatchedQty,
                     ReceivedQty = x.ReceivedQty,
+                    ReversedQty = x.ReversedQty,
+                    RemainingReversibleQty = Math.Max(0, (x.ReceivedQty > 0 ? x.ReceivedQty : x.DispatchedQty) - x.ReversedQty - x.PendingReverseQty),
+                    WeeklyBucketItemId = x.WeeklyBucketItemId,
+                    WishlistItemId = x.WishlistItemId,
                     Uom = x.Uom,
                     UnitCost = book.UnitCost(transfer.FromLocationId, x.MaterialId),
                     TransferValue = book.UnitCost(transfer.FromLocationId, x.MaterialId) is decimal cost
