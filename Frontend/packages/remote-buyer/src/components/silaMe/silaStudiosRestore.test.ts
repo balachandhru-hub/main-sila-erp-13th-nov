@@ -27,9 +27,10 @@ assert.match(workspace, /Inventory Command Center|SilaLiveInventory/);
 
 assert.match(read("recipes/SilaRecipes.tsx"), /SILA Recipe Studio|Recipe Studio/);
 assert.match(read("pos/SilaPosIntegration.tsx"), /SILA POS Studio|POS Studio/);
-assert.match(read("trackers/SilaConsolidatedTracker.tsx"), /strk-me-hero/);
+assert.match(read("trackers/SilaConsolidatedTracker.tsx"), /strk-me-toolbar/);
 assert.match(read("trackers/SilaConsolidatedTracker.tsx"), /data-testid="sila-me-transactions-studio"/);
-assert.match(read("trackers/SilaTracker.css"), /strk-me-hero/);
+assert.match(read("trackers/SilaTracker.css"), /strk-me-toolbar/);
+assert.doesNotMatch(read("trackers/SilaConsolidatedTracker.tsx"), /Live inventory and ERP postings/);
 
 // Missing these blanks the host Vite graph and /dashboard.
 assert.match(read("../../api/silaMe/readSuccessId.ts"), /readSuccessId/);

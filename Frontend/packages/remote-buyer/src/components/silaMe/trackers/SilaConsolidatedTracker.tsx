@@ -340,39 +340,30 @@ const SilaConsolidatedTracker: React.FC<SilaConsolidatedTrackerProps> = ({ track
   return (
     <div className={studio ? "sila-me srec-page rstudio-page pstudio-page strk-me-page" : "sila-me srcv-page"}>
       {studio ? (
-        <header className="strk-me-hero" data-testid="sila-me-transactions-studio">
-          <div className="strk-me-hero__copy">
-            <p className="strk-me-hero__eyebrow">Integration · Transaction Tracker</p>
-            <h1 className="strk-me-hero__title">SILA ME Transactions</h1>
-            <p className="strk-me-hero__sub">
-              Live inventory and ERP postings — receive, SAP call, and local finalization with request/response payloads in one place.
-            </p>
-          </div>
-          <div className="strk-me-hero__actions">
+        <div className="strk-me-toolbar" data-testid="sila-me-transactions-studio">
+          <button
+            type="button"
+            className={`sila-btn sila-btn--secondary${filtersOpen ? " strk-filters-btn--open" : ""}`}
+            aria-expanded={filtersOpen}
+            aria-controls="strk-me-filters"
+            onClick={() => setFiltersOpen((open) => !open)}
+          >
+            Filters
+          </button>
+          <button type="button" className="sila-btn sila-btn--secondary" onClick={load} disabled={loading}>
+            Refresh
+          </button>
+          {canReprocess && (
             <button
               type="button"
-              className={`sila-btn sila-btn--secondary${filtersOpen ? " strk-filters-btn--open" : ""}`}
-              aria-expanded={filtersOpen}
-              aria-controls="strk-me-filters"
-              onClick={() => setFiltersOpen((open) => !open)}
+              className="sila-btn sila-btn--primary"
+              disabled={eligibleSelected.length === 0 || busy}
+              onClick={() => setConfirming(eligibleSelected)}
             >
-              Filters
+              Reprocess selected ({eligibleSelected.length})
             </button>
-            <button type="button" className="sila-btn sila-btn--secondary" onClick={load} disabled={loading}>
-              Refresh
-            </button>
-            {canReprocess && (
-              <button
-                type="button"
-                className="sila-btn sila-btn--primary"
-                disabled={eligibleSelected.length === 0 || busy}
-                onClick={() => setConfirming(eligibleSelected)}
-              >
-                Reprocess selected ({eligibleSelected.length})
-              </button>
-            )}
-          </div>
-        </header>
+          )}
+        </div>
       ) : (
         <PageHeader className="pud-page-header" title="Transaction Tracker" description={title} />
       )}

@@ -13,9 +13,8 @@ const css = readFileSync(join(dir, "SilaTracker.css"), "utf8");
 const nav = readFileSync(join(dir, "../silaMeNav.tsx"), "utf8");
 const workspace = readFileSync(join(dir, "../SilaMeWorkspace.tsx"), "utf8");
 
-assert.match(tracker, /strk-me-hero/);
+assert.match(tracker, /strk-me-toolbar/);
 assert.match(tracker, /data-testid="sila-me-transactions-studio"/);
-assert.match(tracker, /SILA ME Transactions/);
 assert.match(tracker, /strk-me-kpis/);
 assert.match(tracker, /strk-me-lifecycle/);
 assert.match(tracker, /resolveRequestPayload|isCapturedSapRequest/);
@@ -24,13 +23,15 @@ assert.match(tracker, /aria-controls="strk-me-filters"/);
 assert.match(tracker, /filtersOpen/);
 assert.match(tracker, /ERP REF ID/);
 assert.match(tracker, /erpRefId/);
+assert.doesNotMatch(tracker, /Live inventory and ERP postings/);
+assert.doesNotMatch(tracker, /strk-me-hero__title/);
 assert.doesNotMatch(tracker, /Filter by type, plant, status, or integration/);
 assert.doesNotMatch(tracker, /ERP invoice ID/);
 assert.doesNotMatch(tracker, /SILA UI built this request view because technicalDetail was blank/);
 // SILA_ME must not render the legacy PageHeader title chrome.
 assert.doesNotMatch(tracker, /studio \? \(\s*<PageHeader/);
 
-assert.match(css, /strk-me-hero/);
+assert.match(css, /strk-me-toolbar/);
 assert.match(css, /strk-me-kpi--rose/);
 assert.match(css, /strk-studio-panel/);
 assert.match(css, /strk-studio-table/);
