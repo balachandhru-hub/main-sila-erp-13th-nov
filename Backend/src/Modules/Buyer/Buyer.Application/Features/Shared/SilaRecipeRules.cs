@@ -23,6 +23,7 @@ namespace Buyer.Application.Features.Shared
         public const string EVENT_APPROVED = "APPROVED";
         public const string EVENT_REJECTED = "REJECTED";
         public const string EVENT_DEACTIVATED = "DEACTIVATED";
+        public const string EVENT_DRAFT_DELETED = "DRAFT_DELETED";
 
         public const string VERSION_ACTIVE = "ACTIVE";
         public const string VERSION_SUPERSEDED = "SUPERSEDED";
@@ -115,7 +116,6 @@ namespace Buyer.Application.Features.Shared
 
             string? posCode = string.IsNullOrWhiteSpace(request.PosCode) ? null : request.PosCode.Trim();
             await EnsurePosCodeFreeAsync(repository, logger, buyerId, recipe.Id, posCode, cancellationToken);
-            await ApplyFamilyAndCategoryAsync(repository, logger, buyerId, recipe, request, cancellationToken);
 
             // Materials with their conversions, and the sub-recipes of a batch with their active cost per serving.
             List<Guid> materialIds = lines.Where(x => x.MaterialId != null).Select(x => x.MaterialId!.Value).ToList();
@@ -131,6 +131,8 @@ namespace Buyer.Application.Features.Shared
             recipe.Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim();
             recipe.PosItem = string.IsNullOrWhiteSpace(request.PosItem) ? null : request.PosItem.Trim();
             recipe.ItemMode = mode;
+            SilaHospitalityRules.ApplyHospitalityFields(logger, recipe, request);
+            await ApplyFamilyAndCategoryAsync(repository, logger, buyerId, recipe, request, cancellationToken);
             WriteHeader(
                 recipe,
                 request.Name.Trim(),
@@ -200,6 +202,15 @@ namespace Buyer.Application.Features.Shared
 
             foreach (SilaRecipeOutletPriceWriteDto price in prices)
             {
+                string? outletPosCode = string.IsNullOrWhiteSpace(price.PosCode) ? posCode : price.PosCode.Trim();
+                string? outletPosItem = string.IsNullOrWhiteSpace(price.PosItem)
+                    ? recipe.PosItem
+                    : price.PosItem.Trim();
+                if (string.IsNullOrWhiteSpace(outletPosItem))
+                {
+                    outletPosItem = outletPosCode;
+                }
+
                 repository.RecipeOutletPrice.Create(new RecipeOutletPrice
                 {
                     Id = Guid.NewGuid(),
@@ -208,6 +219,8 @@ namespace Buyer.Application.Features.Shared
                     OutletLocationId = outlets[price.OutletLocationId].Id,
                     MenuPrice = price.MenuPrice,
                     Currency = string.IsNullOrWhiteSpace(price.Currency) ? recipe.Currency : price.Currency.Trim().ToUpperInvariant(),
+                    PosCode = outletPosCode,
+                    PosItem = outletPosItem,
                     IsActive = true
                 });
             }

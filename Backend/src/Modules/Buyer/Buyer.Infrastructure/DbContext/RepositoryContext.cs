@@ -116,6 +116,7 @@ namespace Buyer.Infrastructure.DbContext
         public DbSet<Invoice> Invoice { get; set; }
         public DbSet<RecipeFamily> RecipeFamily { get; set; }
         public DbSet<RecipeCategory> RecipeCategory { get; set; }
+        public DbSet<GoodsIssueCostCenter> GoodsIssueCostCenter { get; set; }
         public DbSet<SilaApprovalStep> SilaApprovalStep { get; set; }
         public DbSet<PosSource> PosSource { get; set; }
         public DbSet<PosOutletMapping> PosOutletMapping { get; set; }
@@ -305,6 +306,8 @@ namespace Buyer.Infrastructure.DbContext
             _ = modelBuilder.Entity<RecipeFamily>().HasIndex(a => new { a.BuyerId, a.Code }).IsUnique();
             _ = modelBuilder.Entity<RecipeCategory>().HasIndex(a => a.IsActive);
             _ = modelBuilder.Entity<RecipeCategory>().HasIndex(a => new { a.BuyerId, a.Code }).IsUnique();
+            _ = modelBuilder.Entity<GoodsIssueCostCenter>().HasIndex(a => a.IsActive);
+            _ = modelBuilder.Entity<GoodsIssueCostCenter>().HasIndex(a => new { a.BuyerId, a.PropertyId, a.Scope, a.StorageLocationCode }).IsUnique();
             _ = modelBuilder.Entity<SilaApprovalStep>().HasIndex(a => a.IsActive);
             _ = modelBuilder.Entity<SilaApprovalStep>().HasIndex(a => new { a.ReferenceType, a.ReferenceId, a.Version });
             _ = modelBuilder.Entity<SilaApprovalStep>().HasIndex(a => new { a.UserId, a.Status });
@@ -363,6 +366,7 @@ namespace Buyer.Infrastructure.DbContext
             _ = modelBuilder.Entity<PosSalesTransaction>().HasIndex(a => new { a.BuyerId, a.BusinessDate });
             _ = modelBuilder.Entity<PosSalesTransaction>().HasIndex(a => a.BatchId);
             _ = modelBuilder.Entity<PosSalesTransaction>().HasIndex(a => a.ErpPostingId);
+            _ = modelBuilder.Entity<PosSalesTransaction>().HasIndex(a => new { a.BuyerId, a.OriginalTransactionId });
             _ = modelBuilder.Entity<SilaApprovalStep>().HasIndex(a => new { a.BuyerId, a.ReferenceType, a.Status });
             _ = modelBuilder.Entity<Invoice>().HasIndex(a => new { a.BuyerId, a.Status });
             _ = modelBuilder.Entity<Invoice>().HasIndex(a => new { a.BuyerId, a.ContentHash });

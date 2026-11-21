@@ -16,6 +16,7 @@ namespace Buyer.Infrastructure.Repository
         private readonly string _dbConnectionString;
         private IRecipeFamilyRepository? _recipeFamily;
         private IRecipeCategoryRepository? _recipeCategory;
+        private IGoodsIssueCostCenterRepository? _goodsIssueCostCenter;
         private ISilaApprovalStepRepository? _silaApprovalStep;
         private IPosSourceRepository? _posSource;
         private IPosOutletMappingRepository? _posOutletMapping;
@@ -1226,6 +1227,15 @@ namespace Buyer.Infrastructure.Repository
             {
                 _recipeCategory ??= new RecipeCategoryRepository(_context);
                 return _recipeCategory;
+            }
+        }
+
+        public IGoodsIssueCostCenterRepository GoodsIssueCostCenter
+        {
+            get
+            {
+                _goodsIssueCostCenter ??= new GoodsIssueCostCenterRepository(_context);
+                return _goodsIssueCostCenter;
             }
         }
 

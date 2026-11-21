@@ -8,6 +8,8 @@ namespace Buyer.Domain.Dtos
         /// <summary>True when the document may exist although no clear answer came back.</summary>
         public bool OutcomeUnknown { get; set; }
         public int StatusCode { get; set; }
+        /// <summary>Exact body that was handed to the HTTP client (for the transaction tracker).</summary>
+        public string? RequestBody { get; set; }
         public string? ResponseBody { get; set; }
 
         /// <summary>

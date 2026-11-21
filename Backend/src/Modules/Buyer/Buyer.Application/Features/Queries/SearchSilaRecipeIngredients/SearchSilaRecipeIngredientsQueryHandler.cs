@@ -134,22 +134,50 @@ namespace Buyer.Application.Features.Queries.SearchSilaRecipeIngredients
                 .GroupBy(x => x.MaterialCode!, StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(x => x.Key, x => x.Select(y => y.SupplierName!).OrderBy(y => y).ToList(), StringComparer.OrdinalIgnoreCase);
 
-            List<SilaRecipeIngredientOptionDto> items = materials.Select(x => new SilaRecipeIngredientOptionDto
+            InventoryLocation? stockLocation = null;
+            Dictionary<Guid, InventoryBalance> balances = new Dictionary<Guid, InventoryBalance>();
+            if (request.OutletLocationId != null)
             {
-                Id = x.Id,
-                MaterialCode = x.MaterialCode,
-                Description = x.Description,
-                MaterialGroup = x.MaterialGroup,
-                Category = x.ProductType,
-                BaseUom = UomConverter.BaseUomOf(x),
-                UnitCost = x.UnitCost,
-                Currency = x.Currency,
-                OutletPrices = outletPrices.TryGetValue(x.Id, out List<SilaMaterialOutletPriceDto>? own) ? own : new List<SilaMaterialOutletPriceDto>(),
-                PriceStatus = SilaRecipeReadiness.PriceStatus(x, pending.Contains(x.Id)),
-                Conversions = (conversions.TryGetValue(x.Id, out List<MaterialUomConversion>? list) ? list : new List<MaterialUomConversion>())
-                    .Select(c => new SilaUomConversionDto { Id = c.Id, FromUom = c.FromUom, ToUom = c.ToUom, Factor = c.Factor })
-                    .ToList(),
-                Suppliers = suppliers.TryGetValue(x.MaterialCode, out List<string>? names) ? names : new List<string>()
+                stockLocation = await _repository.InventoryLocation
+                    .FindByCondition(x => x.Id == request.OutletLocationId && x.BuyerId == buyer.Id && x.IsActive)
+                    .FirstOrDefaultAsync(cancellationToken);
+                if (stockLocation != null && ids.Count > 0)
+                {
+                    balances = await _repository.InventoryBalance
+                        .FindByCondition(x => x.BuyerId == buyer.Id && x.LocationId == stockLocation.Id && ids.Contains(x.MaterialId) && x.IsActive)
+                        .ToDictionaryAsync(x => x.MaterialId, cancellationToken);
+                }
+            }
+
+            List<SilaRecipeIngredientOptionDto> items = materials.Select(x =>
+            {
+                InventoryBalance? balance = balances.GetValueOrDefault(x.Id);
+                return new SilaRecipeIngredientOptionDto
+                {
+                    Id = x.Id,
+                    MaterialCode = x.MaterialCode,
+                    Description = x.Description,
+                    MaterialGroup = x.MaterialGroup,
+                    Category = x.ProductType,
+                    BaseUom = UomConverter.BaseUomOf(x),
+                    UnitCost = x.UnitCost,
+                    Currency = x.Currency,
+                    OutletPrices = outletPrices.TryGetValue(x.Id, out List<SilaMaterialOutletPriceDto>? own) ? own : new List<SilaMaterialOutletPriceDto>(),
+                    PriceStatus = SilaRecipeReadiness.PriceStatus(x, pending.Contains(x.Id)),
+                    Conversions = (conversions.TryGetValue(x.Id, out List<MaterialUomConversion>? list) ? list : new List<MaterialUomConversion>())
+                        .Select(c => new SilaUomConversionDto { Id = c.Id, FromUom = c.FromUom, ToUom = c.ToUom, Factor = c.Factor })
+                        .ToList(),
+                    Suppliers = suppliers.TryGetValue(x.MaterialCode, out List<string>? names) ? names : new List<string>(),
+                    StockOnHand = request.OutletLocationId == null ? null : balance?.OnHandQty ?? 0m,
+                    StockInTransit = request.OutletLocationId == null ? null : balance?.InTransitQty ?? 0m,
+                    StockAvailable = request.OutletLocationId == null ? null : balance?.OnHandQty ?? 0m,
+                    StockFreshness = request.OutletLocationId == null
+                        ? "NOT_DETERMINED"
+                        : balance?.LastMovementOn == null
+                            ? "UNKNOWN"
+                            : (DateTime.UtcNow - balance.LastMovementOn.Value).TotalHours <= 24 ? "FRESH" : "STALE",
+                    StockLocationName = stockLocation?.LocationName
+                };
             }).ToList();
 
             _logger.LogInfo($"Recipe ingredients found. Count: {items.Count}, Total: {total}");

@@ -90,37 +90,39 @@ export const materialFromOption = (option: SilaIngredientOption): IngredientMate
   currency: option.currency,
   priceStatus: option.priceStatus,
   outletPrices: option.outletPrices ?? [],
-  conversions: option.conversions,
+  conversions: option.conversions ?? [],
 });
 
-/** The editor lines of a saved version; sub-recipes must still be active (else they are dropped). */
+/** The editor lines of a saved version; sub-recipes must still be active (else they are dropped). Ordered by Sequence. */
 export const linesFrom = (recipe: SilaRecipeDetail | null | undefined, activeRecipes: SilaRecipeListItem[]): IngredientLine[] =>
-  (recipe?.ingredients ?? []).flatMap((ingredient): IngredientLine[] => {
-    if (ingredient.materialId) {
-      return [{
-        key: nextKey(),
-        material: {
-          id: ingredient.materialId,
-          materialCode: ingredient.itemCode,
-          description: ingredient.itemName,
-          baseUom: ingredient.baseUom,
-          unitCost: ingredient.currentUnitCost,
-          currency: ingredient.currency,
-          priceStatus: ingredient.priceStatus ?? "MISSING",
-          proposedUnitPrice: ingredient.proposedUnitPrice,
-          outletPrices: ingredient.outletPrices ?? [],
-          conversions: ingredient.conversions,
-        },
-        quantity: String(ingredient.quantity),
-        uom: ingredient.uom,
-        ingredientCode: ingredient.ingredientCode,
-      }];
-    }
-    const sub = activeRecipes.find((x) => x.id.toLowerCase() === ingredient.subRecipeId?.toLowerCase());
-    return sub
-      ? [{ key: nextKey(), subRecipe: sub, quantity: String(ingredient.quantity), uom: sub.servingUom, ingredientCode: ingredient.ingredientCode }]
-      : [];
-  });
+  [...(recipe?.ingredients ?? [])]
+    .sort((a, b) => a.sequence - b.sequence)
+    .flatMap((ingredient): IngredientLine[] => {
+      if (ingredient.materialId) {
+        return [{
+          key: nextKey(),
+          material: {
+            id: ingredient.materialId,
+            materialCode: ingredient.itemCode,
+            description: ingredient.itemName,
+            baseUom: ingredient.baseUom,
+            unitCost: ingredient.currentUnitCost,
+            currency: ingredient.currency,
+            priceStatus: ingredient.priceStatus ?? "MISSING",
+            proposedUnitPrice: ingredient.proposedUnitPrice,
+            outletPrices: ingredient.outletPrices ?? [],
+            conversions: ingredient.conversions,
+          },
+          quantity: String(ingredient.quantity),
+          uom: ingredient.uom,
+          ingredientCode: ingredient.ingredientCode,
+        }];
+      }
+      const sub = activeRecipes.find((x) => x.id.toLowerCase() === ingredient.subRecipeId?.toLowerCase());
+      return sub
+        ? [{ key: nextKey(), subRecipe: sub, quantity: String(ingredient.quantity), uom: sub.servingUom, ingredientCode: ingredient.ingredientCode }]
+        : [];
+    });
 
 /** The unit cost (per base unit) of a material at an outlet: its outlet price, else the default price; null when neither is set. */
 export const unitCostAt = (material: IngredientMaterial, outletId: string): { unitCost: number; currency: string | null } | null => {

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { PageHeader } from "@vosox/shared-ui";
 import type { SilaRecipeMasterKind } from "../../../api/silaMe/silaRecipeToolsApi";
+import SilaGoodsIssueCostCenters from "./SilaGoodsIssueCostCenters";
 import SilaRecipeMasterTab from "./SilaRecipeMasterTab";
 import "../silaMeTheme.css";
 import "./SilaRecipes.css";
@@ -10,14 +11,17 @@ interface SilaRecipeMasterDataProps {
   canManage: boolean;
 }
 
-const TABS: { key: SilaRecipeMasterKind; label: string }[] = [
+type MasterTab = SilaRecipeMasterKind | "goodsIssueCostCenters";
+
+const TABS: { key: MasterTab; label: string }[] = [
   { key: "families", label: "Families" },
   { key: "categories", label: "Categories" },
+  { key: "goodsIssueCostCenters", label: "Goods Issue Cost Centers" },
 ];
 
-/** Recipe master data: recipe families and categories, each with Excel template, export and import. */
+/** Recipe master / setup: families, categories, and Goods Issue cost center mappings. */
 const SilaRecipeMasterData: React.FC<SilaRecipeMasterDataProps> = ({ canManage }) => {
-  const [tab, setTab] = useState<SilaRecipeMasterKind>("families");
+  const [tab, setTab] = useState<MasterTab>("families");
 
   return (
     <div className="sila-me srec-page">
@@ -40,7 +44,11 @@ const SilaRecipeMasterData: React.FC<SilaRecipeMasterDataProps> = ({ canManage }
           ))}
         </div>
         <div role="tabpanel" id={`srec-panel-${tab}`} aria-labelledby={`srec-tab-${tab}`}>
-          <SilaRecipeMasterTab key={tab} kind={tab} canManage={canManage} />
+          {tab === "goodsIssueCostCenters" ? (
+            <SilaGoodsIssueCostCenters canManage={canManage} />
+          ) : (
+            <SilaRecipeMasterTab key={tab} kind={tab} canManage={canManage} />
+          )}
         </div>
       </section>
     </div>

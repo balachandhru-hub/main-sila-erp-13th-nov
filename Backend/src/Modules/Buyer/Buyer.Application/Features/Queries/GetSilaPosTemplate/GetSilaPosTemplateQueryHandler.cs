@@ -28,11 +28,7 @@ namespace Buyer.Application.Features.Queries.GetSilaPosTemplate
             SilaPosFileDto file;
             if (kind == KIND_SALES)
             {
-                file = SilaPosFiles.BuildTemplate(
-                    "pos-sales-template.xlsx",
-                    "SalesData",
-                    new[] { "BusinessDate", "TransactionId", "LineId", "PosCode", "Qty", "UOM", "OutletCode", "Currency", "Amount" },
-                    new List<string[]> { new[] { DateTime.UtcNow.ToString("yyyy-MM-dd"), "100045", "1", "COF-LATTE", "2", "EA", "LOBBY", "AED", "36.00" } });
+                file = SilaPosFiles.BuildSalesTemplate();
             }
             else if (kind == KIND_OUTLETS)
             {

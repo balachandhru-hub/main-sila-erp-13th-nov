@@ -13,6 +13,21 @@ namespace Buyer.Tests.Shared
             Assert.Equal(0.25m, SilaPosProcessing.SaleFactor(4, 1m));
         }
 
+        [Fact]
+        public void ScaleIngredient_KeepsRecipeUomForPosEaExplosion()
+        {
+            // Template: 2 EA of PosCode → recipe 1 EA = 30 ML of 100000 and 60 ML of 100001.
+            decimal factor = SilaPosProcessing.SaleFactor(1, 2m);
+            (decimal enteredA, string uomA, decimal baseA) = SilaPosProcessing.ScaleIngredient(30m, "ML", 0.03m, factor);
+            (decimal enteredB, string uomB, decimal baseB) = SilaPosProcessing.ScaleIngredient(60m, "ml", 0.06m, factor);
+            Assert.Equal(60m, enteredA);
+            Assert.Equal("ML", uomA);
+            Assert.Equal(0.06m, baseA);
+            Assert.Equal(120m, enteredB);
+            Assert.Equal("ML", uomB);
+            Assert.Equal(0.12m, baseB);
+        }
+
         [Theory]
         [InlineData(true, "STOCK", true)]
         [InlineData(true, "SERVICE", false)]

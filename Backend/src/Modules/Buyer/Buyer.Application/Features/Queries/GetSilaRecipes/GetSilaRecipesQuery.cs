@@ -10,6 +10,8 @@ namespace Buyer.Application.Features.Queries.GetSilaRecipes
         public Guid RoleId { get; set; }
         public string? Status { get; set; }
         public string? ItemMode { get; set; }
+        /// <summary>FOOD | BEVERAGE | MINIBAR | TOBACCO</summary>
+        public string? ProductClass { get; set; }
         /// <summary>Recipe code, name or POS code.</summary>
         public string? Search { get; set; }
         public Guid? FamilyId { get; set; }

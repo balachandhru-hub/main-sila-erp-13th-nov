@@ -85,7 +85,11 @@ namespace Buyer.Application.Features.Commands.UploadSilaPosSales
                     Uom = SilaPosFiles.Cell(cells, columns, "UOM"),
                     OutletCode = SilaPosFiles.Cell(cells, columns, "OUTLETCODE", "OUTLETID"),
                     Currency = SilaPosFiles.Cell(cells, columns, "CURRENCY"),
-                    Amount = SilaPosFiles.Cell(cells, columns, "AMOUNT")
+                    Amount = SilaPosFiles.Cell(cells, columns, "AMOUNT"),
+                    SourceSystem = SilaPosFiles.Cell(cells, columns, "SOURCESYSTEM"),
+                    TransactionType = SilaPosFiles.Cell(cells, columns, "TRANSACTIONTYPE"),
+                    OriginalTransactionId = SilaPosFiles.Cell(cells, columns, "ORIGINALTRANSACTIONID"),
+                    OriginalLineId = SilaPosFiles.Cell(cells, columns, "ORIGINALLINEID")
                 });
             }
 
@@ -140,11 +144,13 @@ namespace Buyer.Application.Features.Commands.UploadSilaPosSales
                 }
                 else if (receipt.ByRow.TryGetValue(raw.RowNumber, out PosSalesTransaction? line))
                 {
+                    preview.SaleTransactionId = line.Id;
                     SilaPosMatch match = matching.Match(source?.Id, line.OutletCode, line.PosCode, line.Uom);
                     preview.Status = match.Status;
                     preview.Message = match.Message;
                     preview.OutletLocationName = match.Outlet?.LocationName;
                     preview.RecipeCode = match.Recipe?.RecipeCode;
+                    preview.RecipeVersion = match.Recipe?.ActiveVersion;
                     Count(result, match.Status);
                 }
 
@@ -187,7 +193,11 @@ namespace Buyer.Application.Features.Commands.UploadSilaPosSales
                 Uom = raw.Uom,
                 OutletCode = raw.OutletCode,
                 Currency = raw.Currency,
-                Amount = raw.Amount
+                Amount = raw.Amount,
+                SourceSystem = raw.SourceSystem,
+                TransactionType = string.IsNullOrWhiteSpace(raw.TransactionType) ? "SALE" : raw.TransactionType.Trim().ToUpperInvariant(),
+                OriginalTransactionId = raw.OriginalTransactionId,
+                OriginalLineId = raw.OriginalLineId
             };
         }
     }

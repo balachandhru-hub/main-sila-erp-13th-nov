@@ -5,6 +5,7 @@ using Buyer.Domain.Entities;
 using Buyer.Infrastructure.Contracts.IRepository;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using SharedKernel.ExceptionHandler;
 using SharedKernel.LoggerServices;
 
@@ -17,11 +18,13 @@ namespace Buyer.Application.Features.Queries.GetSilaRecipes
 
         private readonly IRepositoryWrapper _repository;
         private readonly ILoggerManager _logger;
+        private readonly IConfiguration _configuration;
 
-        public GetSilaRecipesQueryHandler(IRepositoryWrapper repository, ILoggerManager logger)
+        public GetSilaRecipesQueryHandler(IRepositoryWrapper repository, ILoggerManager logger, IConfiguration configuration)
         {
             _repository = repository;
             _logger = logger;
+            _configuration = configuration;
         }
 
         public async Task<SilaRecipePageDto> Handle(GetSilaRecipesQuery request, CancellationToken cancellationToken)
@@ -55,6 +58,26 @@ namespace Buyer.Application.Features.Queries.GetSilaRecipes
                 query = query.Where(x => x.ItemMode == mode);
             }
 
+            if (!string.IsNullOrWhiteSpace(request.ProductClass))
+            {
+                string productClass = SilaHospitalityRules.NormalizeProductClass(_logger, request.ProductClass)!;
+                // Legacy rows without ProductClass: DIRECT → MINIBAR, else FOOD
+                if (productClass == Common.SILA_PRODUCT_MINIBAR)
+                {
+                    query = query.Where(x => x.ProductClass == productClass
+                        || (x.ProductClass == null && x.ItemMode == Common.SILA_RECIPE_DIRECT));
+                }
+                else if (productClass == Common.SILA_PRODUCT_FOOD)
+                {
+                    query = query.Where(x => x.ProductClass == productClass
+                        || (x.ProductClass == null && x.ItemMode != Common.SILA_RECIPE_DIRECT));
+                }
+                else
+                {
+                    query = query.Where(x => x.ProductClass == productClass);
+                }
+            }
+
             if (request.FamilyId != null)
             {
                 query = query.Where(x => x.FamilyId == request.FamilyId);
@@ -84,6 +107,14 @@ namespace Buyer.Application.Features.Queries.GetSilaRecipes
                 .Take(request.Limit)
                 .ToListAsync(cancellationToken);
             List<SilaRecipeListItemDto> items = await SilaRecipeRules.ToListItemsAsync(_repository, buyer.Id, recipes, cancellationToken);
+            string? basePath = _configuration[Common.BASE_FOLDER_PATH];
+            if (!string.IsNullOrWhiteSpace(basePath))
+            {
+                foreach (SilaRecipeListItemDto item in items)
+                {
+                    item.HasPicture = SilaRecipePictureRules.ResolveCatalogFile(basePath, buyer.Id, recipes.First(x => x.Id == item.Id)) != null;
+                }
+            }
 
             _logger.LogInfo($"Recipes fetched. Count: {items.Count}, Total: {total}");
             return new SilaRecipePageDto { Items = items, Total = total, Index = request.Index, Limit = request.Limit };
