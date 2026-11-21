@@ -66,11 +66,12 @@ assert.match(integration, /queueErpPosting:\s*true/);
 assert.match(integration, /Validate & update locally/);
 assert.match(integration, /Call SAP API/);
 assert.match(integration, /Transaction Tracker/);
-assert.match(integration, /FIVE_POS_UPDATE · Z01 \/ 03/);
+assert.match(integration, /FIVE_POS_UPDATE · Z01\/Z02 \/ 03/);
 
 const sap = readBackend("Buyer.Application/Features/Shared/SilaInventorySap.cs");
 assert.match(sap, /PosConsumption = new Rule\(\s*\n?\s*SilaStockCountSap\.API_CONFIG_NAME/);
 assert.match(sap, /TYPE_Z01/);
+assert.match(sap, /PosReversal = new Rule\(\s*\n?\s*SilaStockCountSap\.API_CONFIG_NAME[\s\S]*?TYPE_Z02/);
 assert.doesNotMatch(sap, /PosConsumption = new Rule\([^)]*TYPE_Z02/);
 
 const stockCount = readBackend("Buyer.Application/Features/Shared/SilaStockCountSap.cs");

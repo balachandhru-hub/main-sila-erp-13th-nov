@@ -60,14 +60,14 @@ namespace Buyer.Application.Features.Shared
         /// <summary>Non-POS goods issue (stock decrease) via S4 - Goods Issue with customer Z02 where configured.</summary>
         public static readonly Rule GoodsIssue = new Rule(API_GOODS_ISSUE, CODE_ISSUE, TYPE_Z02, false, increasesStock: false);
         /// <summary>
-        /// POS sales consumption via FIVE_POS_UPDATE: GoodsMovementCode 03, GoodsMovementType Z01.
-        /// Stock decreases (IncreasesStock = false) even though the movement type is Z01.
+        /// POS SALE consumption via FIVE_POS_UPDATE: GoodsMovementCode 03, GoodsMovementType Z01.
+        /// Stock decreases (IncreasesStock = false).
         /// </summary>
         public static readonly Rule PosConsumption = new Rule(
             SilaStockCountSap.API_CONFIG_NAME, CODE_ISSUE, TYPE_Z01, false, increasesStock: false);
-        /// <summary>POS RETURN/VOID via FIVE_POS_UPDATE restores stock (IN) with Z01.</summary>
+        /// <summary>POS RETURN/VOID via FIVE_POS_UPDATE restores stock (IN) with Z02. May share a payload with Z01 SALE lines.</summary>
         public static readonly Rule PosReversal = new Rule(
-            SilaStockCountSap.API_CONFIG_NAME, CODE_ISSUE, TYPE_Z01, false, increasesStock: true);
+            SilaStockCountSap.API_CONFIG_NAME, CODE_ISSUE, TYPE_Z02, false, increasesStock: true);
         /// <summary>Non-POS positive stock adjustments restore stock (IN).</summary>
         public static readonly Rule PositiveAdjustment = new Rule(API_POSITIVE_ADJUSTMENT, CODE_ISSUE, TYPE_Z01, false, increasesStock: true);
 
@@ -77,15 +77,11 @@ namespace Buyer.Application.Features.Shared
             return direction == Common.SILA_DIRECTION_IN ? PositiveAdjustment : GoodsIssue;
         }
 
-        /// <summary>
-        /// POS SALE consumption always queues/posts as Z01 via FIVE_POS_UPDATE.
-        /// Legacy Z02 values on POS rows are corrected to Z01 — Z02 is reserved for non-POS goods issue.
-        /// </summary>
+        /// <summary>POS SALE → Z01; negative qty treated as return → Z02.</summary>
         public static string MovementForSale(string? movementType, decimal quantitySold)
         {
             _ = movementType;
-            _ = quantitySold;
-            return TYPE_Z01;
+            return quantitySold < 0 ? TYPE_Z02 : TYPE_Z01;
         }
 
         /// <summary>Build SAP ReferenceDocument e.g. POS-FL10-100046 (max 16 chars).</summary>
@@ -423,13 +419,19 @@ namespace Buyer.Application.Features.Shared
             bool allowMissingConversion = false)
         {
             body = null;
-            if (string.IsNullOrWhiteSpace(plant) || string.IsNullOrWhiteSpace(storageLocation))
+            // POS batch lines carry their own plant/storage/CC/movement (Z01+Z02 in one payload).
+            bool lineScoped = lines.Any(x =>
+                !string.IsNullOrWhiteSpace(x.Plant)
+                || !string.IsNullOrWhiteSpace(x.StorageLocation)
+                || !string.IsNullOrWhiteSpace(x.GoodsMovementType));
+            if (!lineScoped && (string.IsNullOrWhiteSpace(plant) || string.IsNullOrWhiteSpace(storageLocation)))
             {
                 return INVENTORY_LOCATION_MAPPING_MISSING;
             }
 
-            bool needsCostCenter = rule.GoodsMovementType == TYPE_Z01 || rule.GoodsMovementType == TYPE_Z02;
-            if (needsCostCenter && string.IsNullOrWhiteSpace(costCenter))
+            bool needsCostCenter = rule.GoodsMovementType == TYPE_Z01 || rule.GoodsMovementType == TYPE_Z02
+                || lineScoped;
+            if (needsCostCenter && string.IsNullOrWhiteSpace(costCenter) && !lineScoped && !allowMissingConversion)
             {
                 return COST_CENTER_MISSING;
             }
@@ -437,17 +439,39 @@ namespace Buyer.Application.Features.Shared
             // POS: never send material-base EA/BTL alongside recipe entry ML for the same material.
             IReadOnlyList<TransferLine> effectLines = keepEntryUnit ? PreferRecipeEntryUnits(lines) : lines;
 
-            string sapPlant = plant.Trim();
-            string sapStorage = storageLocation.Trim();
+            string sapPlant = string.IsNullOrWhiteSpace(plant) ? "UNMAPPED" : plant.Trim();
+            string sapStorage = string.IsNullOrWhiteSpace(storageLocation) ? "UNMAPPED" : storageLocation.Trim();
+
             string? sapCostCenter = string.IsNullOrWhiteSpace(costCenter) ? null : costCenter.Trim();
             string? sapGlAccount = string.IsNullOrWhiteSpace(glAccount) ? null : glAccount.Trim();
             Dictionary<string, decimal> totals = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
-            Dictionary<string, (string Material, string Unit)> keys = new Dictionary<string, (string, string)>(StringComparer.OrdinalIgnoreCase);
+            Dictionary<string, (string Material, string Unit, string Plant, string Storage, string Movement, string? CostCenter)> keys =
+                new Dictionary<string, (string, string, string, string, string, string?)>(StringComparer.OrdinalIgnoreCase);
             foreach (TransferLine line in effectLines)
             {
                 if (line.Quantity <= 0)
                 {
                     continue;
+                }
+
+                string linePlant = string.IsNullOrWhiteSpace(line.Plant) ? sapPlant : line.Plant.Trim();
+                string lineStorage = string.IsNullOrWhiteSpace(line.StorageLocation) ? sapStorage : line.StorageLocation.Trim();
+                string lineMovement = string.IsNullOrWhiteSpace(line.GoodsMovementType)
+                    ? rule.GoodsMovementType
+                    : line.GoodsMovementType.Trim().ToUpperInvariant();
+                string? lineCostCenter = string.IsNullOrWhiteSpace(line.CostCenter) ? sapCostCenter : line.CostCenter.Trim();
+                if (string.IsNullOrWhiteSpace(linePlant) || string.IsNullOrWhiteSpace(lineStorage)
+                    || linePlant == "UNMAPPED" || lineStorage == "UNMAPPED")
+                {
+                    if (!allowMissingConversion)
+                    {
+                        return INVENTORY_LOCATION_MAPPING_MISSING;
+                    }
+                }
+
+                if (needsCostCenter && string.IsNullOrWhiteSpace(lineCostCenter) && !allowMissingConversion)
+                {
+                    return COST_CENTER_MISSING;
                 }
 
                 string? convertedProblem = ConvertLine(
@@ -465,9 +489,9 @@ namespace Buyer.Application.Features.Shared
                     return convertedProblem == MATERIAL_NOT_VALID ? MATERIAL_MAPPING_MISSING : convertedProblem;
                 }
 
-                string key = material + "|" + unit;
+                string key = $"{linePlant}|{lineStorage}|{material}|{unit}|{lineMovement}|{lineCostCenter ?? ""}";
                 totals[key] = totals.GetValueOrDefault(key) + quantity;
-                keys[key] = (material, unit);
+                keys[key] = (material, unit, linePlant, lineStorage, lineMovement, lineCostCenter);
             }
 
             if (totals.Count == 0)
@@ -489,18 +513,19 @@ namespace Buyer.Application.Features.Shared
                 .OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase)
                 .Select(x =>
                 {
+                    (string Material, string Unit, string Plant, string Storage, string Movement, string? CostCenter) meta = keys[x.Key];
                     Dictionary<string, object?> item = new Dictionary<string, object?>
                     {
-                        ["Plant"] = sapPlant,
-                        ["StorageLocation"] = sapStorage,
-                        ["Material"] = keys[x.Key].Material,
-                        ["GoodsMovementType"] = rule.GoodsMovementType,
+                        ["Plant"] = meta.Plant,
+                        ["StorageLocation"] = meta.Storage,
+                        ["Material"] = meta.Material,
+                        ["GoodsMovementType"] = meta.Movement,
                         ["QuantityInEntryUnit"] = FormatQuantity(x.Value),
-                        ["EntryUnit"] = keys[x.Key].Unit
+                        ["EntryUnit"] = meta.Unit
                     };
-                    if (sapCostCenter != null)
+                    if (meta.CostCenter != null)
                     {
-                        item["CostCenter"] = sapCostCenter;
+                        item["CostCenter"] = meta.CostCenter;
                     }
 
                     if (sapGlAccount != null)
@@ -803,7 +828,18 @@ namespace Buyer.Application.Features.Shared
             public bool IncreasesStock { get; }
         }
 
-        public readonly record struct TransferLine(ItemBuyerMaster Material, decimal Quantity, string? QuantityUom);
+        /// <param name="Plant">Optional POS per-line plant (batch payloads may span outlets).</param>
+        /// <param name="StorageLocation">Optional POS per-line storage location.</param>
+        /// <param name="CostCenter">Optional POS per-line cost center.</param>
+        /// <param name="GoodsMovementType">Optional POS per-line Z01 (SALE) or Z02 (RETURN); mixed in one payload.</param>
+        public readonly record struct TransferLine(
+            ItemBuyerMaster Material,
+            decimal Quantity,
+            string? QuantityUom,
+            string? Plant = null,
+            string? StorageLocation = null,
+            string? CostCenter = null,
+            string? GoodsMovementType = null);
 
         private readonly record struct TransferQuantity(string Material, string EntryUnit, decimal Quantity);
     }

@@ -83,14 +83,19 @@ namespace Buyer.Tests.Shared
         }
 
         [Fact]
-        public void PosMovement_AlwaysZ01_NeverPreservesLegacyZ02()
+        public void PosMovement_SaleZ01_ReturnZ02_UsesFivePosUpdateOnly()
         {
             Assert.Equal(SilaInventorySap.TYPE_Z01, SilaInventorySap.MovementForSale(SilaInventorySap.TYPE_Z02, 2m));
             Assert.Equal(SilaInventorySap.TYPE_Z01, SilaInventorySap.MovementForSale(null, 2m));
+            Assert.Equal(SilaInventorySap.TYPE_Z02, SilaInventorySap.MovementForSale(null, -1m));
             Assert.Equal(SilaInventorySap.TYPE_Z01, SilaPosReversal.MovementForSale(SilaInventorySap.TYPE_Z02, null));
+            Assert.Equal(
+                SilaInventorySap.TYPE_Z02,
+                SilaPosReversal.MovementForSale(null, new PosSalesTransaction { TransactionType = "RETURN", QuantitySold = 1m }));
             Assert.Equal(SilaStockCountSap.API_CONFIG_NAME, SilaInventorySap.PosConsumption.ApiName);
             Assert.Equal("FIVE_POS_UPDATE", SilaInventorySap.PosConsumption.ApiName);
             Assert.Equal(SilaInventorySap.TYPE_Z01, SilaInventorySap.PosConsumption.GoodsMovementType);
+            Assert.Equal(SilaInventorySap.TYPE_Z02, SilaInventorySap.PosReversal.GoodsMovementType);
             Assert.Equal(SilaInventorySap.CODE_ISSUE, SilaInventorySap.PosConsumption.GoodsMovementCode);
             Assert.Single(SilaInventorySap.PosUpdateApiNames);
             Assert.Equal("FIVE_POS_UPDATE", SilaInventorySap.PosUpdateApiNames[0]);

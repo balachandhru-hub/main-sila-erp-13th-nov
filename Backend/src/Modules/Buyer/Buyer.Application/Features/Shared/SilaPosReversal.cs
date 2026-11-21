@@ -4,7 +4,8 @@ using Buyer.Domain.Entities;
 namespace Buyer.Application.Features.Shared
 {
     /// <summary>
-    /// Controlled POS RETURN/VOID handling. Stock is restored with Z01 (positive adjustment).
+    /// Controlled POS RETURN/VOID handling. SALE posts Z01; RETURN/VOID post Z02.
+    /// Both movement types may appear in the same FIVE_POS_UPDATE material document.
     /// Cancellation of the original material document is not used for POS reversal.
     /// </summary>
     public static class SilaPosReversal
@@ -26,7 +27,7 @@ namespace Buyer.Application.Features.Shared
         }
 
         /// <summary>
-        /// Absolute sold quantity used for recipe explosion. RETURN/VOID always restore stock (IN / Z01)
+        /// Absolute sold quantity used for recipe explosion. RETURN/VOID always restore stock (IN / Z02)
         /// even when the file quantity is positive.
         /// </summary>
         public static decimal ExplosionQuantity(PosSalesTransaction transaction)
@@ -42,14 +43,14 @@ namespace Buyer.Application.Features.Shared
         }
 
         /// <summary>
-        /// POS SALE consumption and RETURN/VOID both use movement type Z01 via FIVE_POS_UPDATE.
-        /// Legacy Z02 on POS rows is corrected to Z01.
+        /// SALE → Z01 (consume). RETURN/VOID → Z02 (restore). Same FIVE_POS_UPDATE payload may mix both.
         /// </summary>
         public static string MovementForSale(string? movementType, PosSalesTransaction? sale)
         {
             _ = movementType;
-            _ = sale;
-            return SilaInventorySap.TYPE_Z01;
+            return sale != null && IsReversal(sale.TransactionType)
+                ? SilaInventorySap.TYPE_Z02
+                : SilaInventorySap.TYPE_Z01;
         }
 
         /// <summary>

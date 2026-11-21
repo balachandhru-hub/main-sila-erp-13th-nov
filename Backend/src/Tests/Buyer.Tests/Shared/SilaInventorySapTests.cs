@@ -181,6 +181,42 @@ namespace Buyer.Tests.Shared
         }
 
         [Fact]
+        public void TryBuildEffect_MixesSaleZ01AndReturnZ02InOnePayload()
+        {
+            ItemBuyerMaster vodka = Stock("1000000", "EA");
+            List<SilaInventorySap.TransferLine> lines = new List<SilaInventorySap.TransferLine>
+            {
+                new SilaInventorySap.TransferLine(vodka, 120m, "ML", Plant: "1060", StorageLocation: "FL10", CostCenter: "1060050124", GoodsMovementType: "Z01"),
+                new SilaInventorySap.TransferLine(vodka, 60m, "ML", Plant: "1060", StorageLocation: "FL10", CostCenter: "1060050124", GoodsMovementType: "Z02"),
+            };
+
+            string? problem = SilaInventorySap.TryBuildEffect(
+                new DateTime(2026, 11, 21),
+                "1060",
+                "FL10",
+                SilaInventorySap.PosConsumption,
+                lines,
+                new Dictionary<Guid, List<MaterialUomConversion>>(),
+                out string? body,
+                headerText: SilaInventorySap.BuildPosHeaderText("PSMIX"),
+                costCenter: "1060050124",
+                keepEntryUnit: true,
+                allowMissingConversion: true);
+
+            Assert.Null(problem);
+            using JsonDocument json = JsonDocument.Parse(body!);
+            Assert.Equal("03", json.RootElement.GetProperty("GoodsMovementCode").GetString());
+            JsonElement items = json.RootElement.GetProperty("to_MaterialDocumentItem").GetProperty("results");
+            Assert.Equal(2, items.GetArrayLength());
+            HashSet<string> movements = items.EnumerateArray()
+                .Select(x => x.GetProperty("GoodsMovementType").GetString()!)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            Assert.Contains("Z01", movements);
+            Assert.Contains("Z02", movements);
+            Assert.All(items.EnumerateArray(), x => Assert.Equal("ML", x.GetProperty("EntryUnit").GetString()));
+        }
+
+        [Fact]
         public void PosConsumption_KeepsRecipeEntryUomInsteadOfMaterialBase()
         {
             // Material base is BTL; recipe ingredient is 30 ML. SAP must receive 60 ML for 2 EA, not 0.08 BTL.
@@ -218,9 +254,9 @@ namespace Buyer.Tests.Shared
         [Fact]
         public void Effect_RoutesAPositiveCorrectionToZ01AndRefusesAMissingUnit()
         {
-            // POS consumption (and returns) queue as Z01; API selection uses transaction type + IncreasesStock.
+            // Positive qty → Z01 SALE; negative qty → Z02 RETURN (same FIVE_POS_UPDATE payload may mix both).
             Assert.Equal("Z01", SilaInventorySap.MovementForSale(null, 10m));
-            Assert.Equal("Z01", SilaInventorySap.MovementForSale(null, -2m));
+            Assert.Equal("Z02", SilaInventorySap.MovementForSale(null, -2m));
             Assert.Equal(SilaInventorySap.API_POSITIVE_ADJUSTMENT, SilaInventorySap.ForDirection(Common.SILA_DIRECTION_IN).ApiName);
             Assert.Equal(SilaInventorySap.API_GOODS_ISSUE, SilaInventorySap.ForDirection(Common.SILA_DIRECTION_OUT).ApiName);
             Assert.Equal(SilaInventorySap.TYPE_Z01, SilaInventorySap.PosConsumption.GoodsMovementType);

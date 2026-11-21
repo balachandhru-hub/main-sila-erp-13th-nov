@@ -139,17 +139,21 @@ namespace Buyer.Application.Features.Commands.ProcessSilaPosBatch
 
         private async Task PostQueuedSapAsync(Guid buyerId, List<PosSalesTransaction> lines, CancellationToken cancellationToken)
         {
-            foreach (Guid postingId in lines.Where(x => x.ErpPostingId != null).Select(x => x.ErpPostingId!.Value).Distinct())
+            // One FIVE_POS_UPDATE call per file/API batch — PostConsumptionGroupAsync posts all sibling sales together.
+            Guid? leaderPostingId = lines.Where(x => x.ErpPostingId != null).Select(x => x.ErpPostingId!.Value).FirstOrDefault();
+            if (leaderPostingId == null || leaderPostingId == Guid.Empty)
             {
-                try
-                {
-                    await _mediator.Send(new PostPendingErpPostingsCommand { BuyerId = buyerId, PostingId = postingId }, cancellationToken);
-                }
-                catch (Exception exception) when (exception is not OperationCanceledException)
-                {
-                    _logger.LogError(
-                        $"Immediate POS ERP post failed after inventory deduction. BuyerId: {buyerId}, PostingId: {postingId}, Error: {SilaLogText.FromException(exception)}");
-                }
+                return;
+            }
+
+            try
+            {
+                await _mediator.Send(new PostPendingErpPostingsCommand { BuyerId = buyerId, PostingId = leaderPostingId }, cancellationToken);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                _logger.LogError(
+                    $"Immediate POS ERP post failed after inventory deduction. BuyerId: {buyerId}, PostingId: {leaderPostingId}, Error: {SilaLogText.FromException(exception)}");
             }
         }
 

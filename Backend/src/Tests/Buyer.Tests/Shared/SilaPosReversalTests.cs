@@ -7,7 +7,7 @@ namespace Buyer.Tests.Shared
     public class SilaPosReversalTests
     {
         [Fact]
-        public void MovementForSale_UsesZ01ForReturnOrVoidEvenWhenQuantityIsPositive()
+        public void MovementForSale_UsesZ01ForSaleAndZ02ForReturnOrVoid()
         {
             PosSalesTransaction sale = new PosSalesTransaction { TransactionType = "SALE", QuantitySold = 10m };
             PosSalesTransaction returned = new PosSalesTransaction
@@ -17,9 +17,9 @@ namespace Buyer.Tests.Shared
                 OriginalTransactionId = "100045"
             };
 
-            // Tenant profile: POS SALE consumption and RETURN both use Z01; API path differs by transaction type.
+            // SALE posts Z01; RETURN/VOID post Z02 — both may share one FIVE_POS_UPDATE payload.
             Assert.Equal(SilaInventorySap.TYPE_Z01, SilaPosReversal.MovementForSale(null, sale));
-            Assert.Equal(SilaInventorySap.TYPE_Z01, SilaPosReversal.MovementForSale(null, returned));
+            Assert.Equal(SilaInventorySap.TYPE_Z02, SilaPosReversal.MovementForSale(null, returned));
             Assert.False(SilaPosReversal.IsReversal(sale.TransactionType));
             Assert.True(SilaPosReversal.IsReversal(returned.TransactionType));
             Assert.Equal(Common.SILA_DIRECTION_IN, SilaPosReversal.LedgerDirection(returned));
