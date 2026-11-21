@@ -153,6 +153,13 @@ export const buildSilaMeNavItem = (role: SilaMeRole, access?: SilaHomeCapabiliti
       ],
     },
     {
+      label: "Integration",
+      items: [
+        // Restored studio GUI — keep outside Setup so ERP operators always find it.
+        ...leaf(can.manageErpPosting, "silaMeTracker", "SILA ME Transactions"),
+      ],
+    },
+    {
       label: "Receiving",
       items: home.viewReceiving ? [
         { key: "silaReceivingDashboard", label: "Dashboard" },
@@ -183,8 +190,6 @@ export const buildSilaMeNavItem = (role: SilaMeRole, access?: SilaHomeCapabiliti
               { key: "silaApprovalFlows" as const, label: "Approval flow" },
             ]
           : []),
-        // ERP posting operators must always reach the Transaction Tracker GUI (not Setup-gated).
-        ...leaf(can.manageErpPosting, "silaMeTracker", "SILA ME Transactions"),
         ...leaf(can.approvePrice, "silaPriceApprovals", "Price Approvals"),
         ...leaf(can.viewAudit, "silaAuditLog", "Audit Log"),
       ],

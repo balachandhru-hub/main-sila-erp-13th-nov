@@ -337,17 +337,17 @@ const SilaConsolidatedTracker: React.FC<SilaConsolidatedTrackerProps> = ({ track
   const studio = tracker === "SILA_ME";
 
   return (
-    <div className={studio ? "sila-me srec-page rstudio-page pstudio-page" : "sila-me srcv-page"}>
+    <div className={studio ? "sila-me srec-page rstudio-page pstudio-page strk-me-page" : "sila-me srcv-page"}>
       {studio ? (
-        <header className="pstudio-hero">
-          <div>
-            <p className="pstudio-kicker">Transaction Tracker</p>
-            <h1 className="pstudio-hero__title">{title}</h1>
-            <p className="pstudio-hero__sub">
+        <header className="strk-me-hero" data-testid="sila-me-transactions-studio">
+          <div className="strk-me-hero__copy">
+            <p className="strk-me-hero__eyebrow">Integration · Transaction Tracker</p>
+            <h1 className="strk-me-hero__title">SILA ME Transactions</h1>
+            <p className="strk-me-hero__sub">
               Live inventory and ERP postings — receive, SAP call, and local finalization with request/response payloads in one place.
             </p>
           </div>
-          <div className="pstudio-hero__actions">
+          <div className="strk-me-hero__actions">
             <button type="button" className="sila-btn sila-btn--secondary" onClick={load} disabled={loading}>
               Refresh
             </button>
@@ -366,7 +366,7 @@ const SilaConsolidatedTracker: React.FC<SilaConsolidatedTrackerProps> = ({ track
       ) : (
         <PageHeader className="pud-page-header" title="Transaction Tracker" description={title} />
       )}
-      <section className={studio ? "pstudio-kpis" : "strk-kpis"} aria-label="Tracker summary">
+      <section className={studio ? "strk-me-kpis" : "strk-kpis"} aria-label="Tracker summary">
         <Kpi label="Total" value={summary.total} tone={studio ? "sky" : undefined} />
         <Kpi label="Processing" value={summary.processing} tone={studio ? "blue" : undefined} />
         <Kpi label="Successful" value={summary.successful} tone={studio ? "mint" : undefined} />
@@ -374,11 +374,11 @@ const SilaConsolidatedTracker: React.FC<SilaConsolidatedTrackerProps> = ({ track
         <Kpi label="Reprocessing" value={summary.reprocessing} tone={studio ? "lavender" : undefined} />
         <Kpi label="Needs attention" value={summary.needsAttention} tone={studio ? "amber" : undefined} />
       </section>
-      <section className={studio ? "pstudio-panel strk-studio-panel" : "sila-card"}>
+      <section className={studio ? "strk-me-panel strk-studio-panel" : "sila-card"}>
         {studio && (
           <div className="strk-studio-panel__head">
-            <h2 className="pstudio-panel__title">Transactions</h2>
-            <p className="pstudio-panel__hint">Filter by type, plant, status, or integration — then open a row for SAP request and response.</p>
+            <h2 className="strk-me-panel__title">Transactions</h2>
+            <p className="strk-me-panel__hint">Filter by type, plant, status, or integration — then open a row for SAP request and response.</p>
           </div>
         )}
         <div className={studio ? "srec-filters srec-filters--flush strk-studio-filters" : "srcv-filters"}>
@@ -453,7 +453,7 @@ const SilaConsolidatedTracker: React.FC<SilaConsolidatedTrackerProps> = ({ track
           </div>
         )}
         {canReprocess && studio && selected.length > 0 && (
-          <p className="pstudio-panel__hint strk-studio-hint">
+          <p className="strk-me-panel__hint strk-studio-hint">
             {eligibleSelected.length} eligible · {selected.length - eligibleSelected.length} selected row{selected.length - eligibleSelected.length === 1 ? "" : "s"} cannot be retried (including unknown ERP results).
           </p>
         )}
@@ -463,7 +463,7 @@ const SilaConsolidatedTracker: React.FC<SilaConsolidatedTrackerProps> = ({ track
           <EmptyState variant="error" title="Couldn't load transactions" description={error} action={<button type="button" className="sila-btn sila-btn--secondary" onClick={load}>Try again</button>} />
         ) : rows.length === 0 ? (
           studio ? (
-            <div className="pstudio-empty">No transactions match these filters. Try widening the date range or clearing status.</div>
+            <div className="strk-me-empty">No transactions match these filters. Try widening the date range or clearing status.</div>
           ) : (
             <EmptyState title="No transactions match" description="Adjust the filters. The default view is the last 30 days." />
           )
@@ -552,13 +552,13 @@ const SilaConsolidatedTracker: React.FC<SilaConsolidatedTrackerProps> = ({ track
         )}
       </section>
       {detail && (
-        <section className={studio ? "pstudio-panel pstudio-panel--lavender strk-detail strk-studio-detail" : "sila-card strk-detail"}>
+        <section className={studio ? "strk-me-panel strk-me-panel--detail strk-detail strk-studio-detail" : "sila-card strk-detail"}>
           <div className="strk-actions">
             <button type="button" className="sila-btn sila-btn--secondary" onClick={() => { setDetail(null); setFlow(null); }}>Back to list</button>
             {studio ? (
               <div className="strk-studio-detail__title">
-                <p className="pstudio-kicker">Transaction detail</p>
-                <h2 className="pstudio-panel__title">{labelOf(detail.transactionType)}</h2>
+                <p className="strk-me-hero__eyebrow">Transaction detail</p>
+                <h2 className="strk-me-panel__title">{labelOf(detail.transactionType)}</h2>
               </div>
             ) : (
               <h2 className="sila-section-title">{labelOf(detail.transactionType)}</h2>
@@ -570,14 +570,14 @@ const SilaConsolidatedTracker: React.FC<SilaConsolidatedTrackerProps> = ({ track
             )}
           </div>
           {studio && (
-            <div className="pstudio-lifecycle" aria-label="Lifecycle">
-              <span className="pstudio-lifecycle__node" data-state={lifecycleState(detail.receiveStatus)}>Receive · {labelOf(detail.receiveStatus)}</span>
-              <span className="pstudio-lifecycle__sep" aria-hidden>→</span>
-              <span className="pstudio-lifecycle__node" data-state={lifecycleState(detail.erpStatus)}>ERP · {labelOf(detail.erpStatus)}</span>
-              <span className="pstudio-lifecycle__sep" aria-hidden>→</span>
-              <span className="pstudio-lifecycle__node" data-state={lifecycleState(detail.localStatus)}>Local · {labelOf(detail.localStatus)}</span>
-              <span className="pstudio-lifecycle__sep" aria-hidden>→</span>
-              <span className="pstudio-lifecycle__node" data-state={lifecycleState(detail.overallStatus)}>Overall · {labelOf(detail.overallStatus)}</span>
+            <div className="strk-me-lifecycle" aria-label="Lifecycle">
+              <span className="strk-me-lifecycle__node" data-state={lifecycleState(detail.receiveStatus)}>Receive · {labelOf(detail.receiveStatus)}</span>
+              <span className="strk-me-lifecycle__sep" aria-hidden>→</span>
+              <span className="strk-me-lifecycle__node" data-state={lifecycleState(detail.erpStatus)}>ERP · {labelOf(detail.erpStatus)}</span>
+              <span className="strk-me-lifecycle__sep" aria-hidden>→</span>
+              <span className="strk-me-lifecycle__node" data-state={lifecycleState(detail.localStatus)}>Local · {labelOf(detail.localStatus)}</span>
+              <span className="strk-me-lifecycle__sep" aria-hidden>→</span>
+              <span className="strk-me-lifecycle__node" data-state={lifecycleState(detail.overallStatus)}>Overall · {labelOf(detail.overallStatus)}</span>
             </div>
           )}
           {detailError && <p className="srcv-error">{detailError}</p>}
@@ -701,7 +701,7 @@ const ResultCell: React.FC<{ row: SilaTrackerRow }> = ({ row }) => {
 type KpiTone = "sky" | "mint" | "lavender" | "amber" | "blue" | "rose";
 
 const Kpi: React.FC<{ label: string; value: number; tone?: KpiTone }> = ({ label, value, tone }) => (
-  <div className={tone ? `pstudio-kpi pstudio-kpi--${tone}` : "strk-kpi"}>
+  <div className={tone ? `strk-me-kpi strk-me-kpi--${tone}` : "strk-kpi"}>
     <span>{label}</span>
     <strong>{value}</strong>
   </div>
