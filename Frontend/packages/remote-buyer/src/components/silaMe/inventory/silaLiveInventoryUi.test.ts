@@ -28,6 +28,12 @@ assert.match(live, /Take photo/);
 assert.match(live, /SilaLiveStockCountPanel/);
 assert.match(live, /openStockCount/);
 assert.match(live, /Search inventory/);
+assert.match(live, /New Transfer/);
+assert.match(live, /createBasketIto/);
+assert.match(live, /focusTransitPanel|panelFocus === "transit"/);
+assert.match(live, /focusPendingPanel|liv-pending-panel/);
+// New Transfer creates ITO for destination — must not jump to Transfer Center from that button.
+assert.doesNotMatch(live, /New Transfer[\s\S]{0,220}onNavigate\?\.\("silaTransfers"\)/);
 // Scanned / photo material goes into the main Search inventory box — no extra scan text box.
 assert.doesNotMatch(live, /liv-scan-input/);
 assert.doesNotMatch(live, /placeholder=\{scanMode === "barcode" \? "Scan barcode…"/);

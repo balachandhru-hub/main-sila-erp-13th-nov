@@ -144,6 +144,8 @@ const SilaLiveInventory: React.FC<SilaLiveInventoryProps> = ({
   const [basket, setBasket] = useState<Record<string, SilaLiveInventoryRow>>({});
   const [itoToId, setItoToId] = useState("");
   const [creatingBasket, setCreatingBasket] = useState(false);
+  /** KPI focus on this screen: transit / pending stay here (no route change). */
+  const [panelFocus, setPanelFocus] = useState<"" | "transit" | "pending">("");
   const [lastSynced, setLastSynced] = useState<Date | null>(null);
   const [refreshTick, setRefreshTick] = useState(0);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -311,18 +313,37 @@ const SilaLiveInventory: React.FC<SilaLiveInventoryProps> = ({
     });
   };
 
+  const focusTransitPanel = () => {
+    setHealth("");
+    setPanelFocus("transit");
+    setSelectedId(null);
+    setPrioritiesOpen(false);
+    setOptionalCols((current) => {
+      const next = new Set(current);
+      next.add("inTransit");
+      return next;
+    });
+  };
+
+  const focusPendingPanel = () => {
+    setPanelFocus("pending");
+    setSelectedId(null);
+    setPrioritiesOpen(false);
+  };
+
   const runPriority = (action: string) => {
     if (action === "LOW") {
       setHealth("LOW");
+      setPanelFocus("");
       setSelectedId(null);
       return;
     }
     if (action === "TRANSIT" || action === "TRANSFERS") {
-      onNavigate?.("silaTransfers");
+      focusTransitPanel();
       return;
     }
     if (action === "PENDING" || action === "ALERTS") {
-      onNavigate?.("silaAlerts");
+      focusPendingPanel();
       return;
     }
     if (action === "COUNTS") {
@@ -456,13 +477,18 @@ const SilaLiveInventory: React.FC<SilaLiveInventoryProps> = ({
   const materialLabel = (code: string, description?: string | null) =>
     description && description !== code ? description : description || "—";
 
+  const displayRows = useMemo(
+    () => (panelFocus === "transit" ? rows.filter((row) => (row.inTransitQty ?? 0) > 0) : rows),
+    [rows, panelFocus],
+  );
+
   const kpis = [
     {
       key: "items",
       label: "Stock Items",
       value: home?.stockItems ?? "—",
       tone: "liv-kpi--sky",
-      onClick: () => { setHealth(""); setSelectedId(null); },
+      onClick: () => { setHealth(""); setPanelFocus(""); setSelectedId(null); },
     },
     {
       key: "low",
@@ -476,14 +502,14 @@ const SilaLiveInventory: React.FC<SilaLiveInventoryProps> = ({
       label: "In Transit",
       value: home?.inTransitToReceive ?? "—",
       tone: "liv-kpi--teal",
-      onClick: () => runPriority("TRANSIT"),
+      onClick: () => focusTransitPanel(),
     },
     {
       key: "pending",
       label: "Pending Actions",
       value: home?.pendingActions ?? "—",
       tone: "liv-kpi--rose",
-      onClick: () => runPriority("PENDING"),
+      onClick: () => focusPendingPanel(),
     },
   ];
 
@@ -853,12 +879,60 @@ const SilaLiveInventory: React.FC<SilaLiveInventoryProps> = ({
         ))}
       </div>
 
+      {panelFocus === "pending" && (
+        <section className="liv-panel" data-testid="liv-pending-panel">
+          <div className="liv-panel__head liv-panel__head--row">
+            <div>
+              <h2>Pending Actions</h2>
+              <p>Approvals, alerts, and open work for this location — shown here without leaving Live Inventory.</p>
+            </div>
+            <button type="button" className="sila-btn sila-btn--ghost sila-btn--sm" onClick={() => setPanelFocus("")}>
+              Clear
+            </button>
+          </div>
+          {priorities.length === 0 && (alerts?.length ?? 0) === 0 ? (
+            <EmptyState title="No pending actions" description="Nothing needs attention for this location right now." />
+          ) : (
+            <ul className="liv-priority__list" style={{ margin: "0 1rem 1rem" }}>
+              {priorities.map((item) => (
+                <li key={item.id} className={`liv-priority__item liv-priority__item--${item.tone}`}>
+                  <div>
+                    <strong>{item.title}</strong>
+                    <p>{item.detail}</p>
+                  </div>
+                  <button type="button" className="sila-btn sila-btn--secondary sila-btn--sm" onClick={() => runPriority(item.action)}>
+                    {item.actionLabel}
+                  </button>
+                </li>
+              ))}
+              {(alerts ?? []).slice(0, 5).map((alert) => (
+                <li key={alert.id} className="liv-priority__item liv-priority__item--warning">
+                  <div>
+                    <strong>{alert.title || alert.alertType}</strong>
+                    <p>{alert.message || alert.recommendedAction || "Open the material for next steps."}</p>
+                  </div>
+                  {alert.materialId ? (
+                    <button type="button" className="sila-btn sila-btn--secondary sila-btn--sm" onClick={() => setSelectedId(alert.materialId!)}>
+                      View material
+                    </button>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+
       {/* AREA E — Clean table */}
       <section className="liv-panel" aria-live="polite">
         <div className="liv-panel__head liv-panel__head--row">
           <div>
-            <h2>Material availability</h2>
-            <p>Default columns stay compact. Open a row for transfers, history, and linked workflows.</p>
+            <h2>{panelFocus === "transit" ? "In transit materials" : "Material availability"}</h2>
+            <p>
+              {panelFocus === "transit"
+                ? "Materials with stock on the way to this location. Clear the In Transit panel to see all stock again."
+                : "Default columns stay compact. Open a row for transfers, history, and linked workflows."}
+            </p>
           </div>
           <div className="sinv-inline">
             <div className="sinv-columns">
@@ -901,8 +975,14 @@ const SilaLiveInventory: React.FC<SilaLiveInventoryProps> = ({
               </>
             )}
             {canTransfer && (
-              <button type="button" className="sila-btn sila-btn--primary sila-btn--sm" onClick={() => onNavigate?.("silaTransfers")}>
-                New Transfer
+              <button
+                type="button"
+                className="sila-btn sila-btn--primary sila-btn--sm"
+                disabled={creatingBasket}
+                onClick={createBasketIto}
+                title="Create transfer request for the selected destination outlet"
+              >
+                {creatingBasket ? "Creating…" : "New Transfer"}
               </button>
             )}
             {priorities.length > 0 && (
@@ -956,8 +1036,12 @@ const SilaLiveInventory: React.FC<SilaLiveInventoryProps> = ({
           </div>
         ) : error ? (
           <EmptyState variant="error" title="Couldn't load stock" description={error} />
-        ) : rows.length === 0 ? (
-          <EmptyState title="No materials found" description="Try another search or clear filters." />
+        ) : displayRows.length === 0 ? (
+          <EmptyState
+            title={panelFocus === "transit" ? "No in-transit stock" : "No materials found"}
+            description={panelFocus === "transit" ? "Nothing is currently in transit for this view." : "Try another search or clear filters."}
+            action={panelFocus === "transit" ? <button type="button" className="sila-btn sila-btn--secondary" onClick={() => setPanelFocus("")}>Show all stock</button> : undefined}
+          />
         ) : (
           <>
             <div className="sila-table-wrap liv-table-wrap">
@@ -980,7 +1064,7 @@ const SilaLiveInventory: React.FC<SilaLiveInventoryProps> = ({
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((row) => {
+                  {displayRows.map((row) => {
                     const status = statusOf(row);
                     const available = row.availableQty ?? row.onHandQty;
                     return (
