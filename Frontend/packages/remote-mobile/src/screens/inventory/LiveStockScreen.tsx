@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   formatQty,
   searchLiveInventory,
   SILA_LIVE_PAGE_SIZE,
+  silaLabel,
   type SilaLiveInventoryRow,
 } from '../../../../remote-buyer/src/api/silaMe/silaInventoryApi';
 import ScreenHeader from '../../components/ScreenHeader';
@@ -13,11 +15,22 @@ import { errorText } from '../../useLoad';
 
 const MIN_SEARCH = 2;
 
-/** Own location's stock by default. A material search lists that material at every location the user can open. */
+const STATUS_CLASS: Record<string, string> = {
+  NEGATIVE: 'sm-badge sm-badge--error',
+  OUT: 'sm-badge sm-badge--error',
+  LOW: 'sm-badge sm-badge--warning',
+  HEALTHY: 'sm-badge sm-badge--success',
+  EXCESS: 'sm-badge sm-badge--neutral',
+  IN_STOCK: 'sm-badge sm-badge--success',
+};
+
+/** Own location stock by default. Material search lists stock across permitted locations. */
 const LiveStockScreen: React.FC = () => {
   const go = useGo();
+  const [params] = useSearchParams();
   const { location } = useMyLocation();
-  const [search, setSearch] = useState<string>('');
+  const [search, setSearch] = useState<string>(params.get('q') ?? '');
+  const [health, setHealth] = useState<string>(params.get('health') ?? '');
   const [rows, setRows] = useState<SilaLiveInventoryRow[]>([]);
   const [hasMore, setHasMore] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
@@ -26,6 +39,13 @@ const LiveStockScreen: React.FC = () => {
   const text = search.trim();
   const searching = text.length >= MIN_SEARCH;
   const locationId = searching ? null : location?.id ?? null;
+
+  useEffect(() => {
+    const q = params.get('q');
+    const h = params.get('health');
+    if (q != null) setSearch(q);
+    if (h != null) setHealth(h);
+  }, [params]);
 
   useEffect(() => {
     if (!searching && !locationId) {
@@ -38,7 +58,7 @@ const LiveStockScreen: React.FC = () => {
     const timer = window.setTimeout(() => {
       setLoading(true);
       setError(null);
-      searchLiveInventory(searching ? text : '', locationId, 0)
+      searchLiveInventory(searching ? text : '', locationId, 0, locationId ? health || null : null)
         .then((found) => {
           if (!active) return;
           setRows(found);
@@ -55,12 +75,12 @@ const LiveStockScreen: React.FC = () => {
       active = false;
       window.clearTimeout(timer);
     };
-  }, [text, searching, locationId, attempt]);
+  }, [text, searching, locationId, health, attempt]);
 
   const loadMore = async () => {
     setLoading(true);
     try {
-      const found = await searchLiveInventory(searching ? text : '', locationId, rows.length);
+      const found = await searchLiveInventory(searching ? text : '', locationId, rows.length, locationId ? health || null : null);
       setRows((current) => [...current, ...found]);
       setHasMore(found.length === SILA_LIVE_PAGE_SIZE);
     } catch (caught: unknown) {
@@ -72,7 +92,7 @@ const LiveStockScreen: React.FC = () => {
 
   return (
     <>
-      <ScreenHeader title="Live Inventory" eyebrow="Inventory" back />
+      <ScreenHeader title="Find Stock" eyebrow="Live Inventory" back />
       <div className="sm-screen">
         <input
           className="sm-input"
@@ -81,34 +101,44 @@ const LiveStockScreen: React.FC = () => {
           placeholder="Search or scan material ID, name, barcode…"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
+          style={{ minHeight: '2.75rem' }}
         />
-        {location && !searching && (
-          <p className="sm-muted">Stock at {location.locationName} ({location.locationCode}). Search a material to see it at other locations.</p>
+        {health && (
+          <button type="button" className="sm-badge sm-badge--warning" onClick={() => setHealth('')}>
+            Filter: {silaLabel(health)} ×
+          </button>
         )}
-        {searching && <p className="sm-muted">“{text}” at every location you can open. Open a material to raise an ITO.</p>}
-        {!location && !searching && <p className="sm-muted">Choose your location on Home, or search a material.</p>}
+        {location && !searching && (
+          <p className="sm-muted">Stock at {location.locationName}. Search a material for cross-location availability.</p>
+        )}
         {error && <ErrorNotice message={error} onRetry={() => setAttempt((value) => value + 1)} />}
         {!loading && !error && (searching || location) && rows.length === 0 && (
           <Empty text="No materials" description={searching ? `No matches for “${text}”.` : 'Nothing is in stock at this location.'} />
         )}
         <ul className="sm-list">
-          {rows.map((row) => (
-            <li key={row.materialId}>
-              <button type="button" className="sm-list-btn" onClick={() => go(`inventory/stock/${row.materialId}`)}>
-                <strong>{row.materialCode}</strong>
-                <span>{row.description}</span>
-                <span className="sm-row">
-                  <span>
-                    On hand <strong>{formatQty(row.onHandQty)}</strong> {row.baseUom}
+          {rows.map((row) => {
+            const status = row.stockStatus || (row.onHandQty <= 0 ? 'OUT' : 'IN_STOCK');
+            const available = row.availableQty ?? row.onHandQty;
+            return (
+              <li key={row.materialId}>
+                <button type="button" className="sm-list-btn sm-card" onClick={() => go(`inventory/stock/${row.materialId}`)}>
+                  <span className="sm-row">
+                    <strong>{row.materialCode}</strong>
+                    <span className={STATUS_CLASS[status] || 'sm-badge sm-badge--neutral'}>{silaLabel(status)}</span>
                   </span>
-                  <span className="sm-meta">
-                    {row.locationCount} location{row.locationCount === 1 ? '' : 's'}
+                  <span>{row.description && row.description !== row.materialCode ? row.description : row.description || '—'}</span>
+                  <span className="sm-row">
+                    <span>
+                      Available <strong>{formatQty(available)}</strong> {row.baseUom}
+                    </span>
+                    <span className="sm-meta">
+                      {searching ? `${row.locationCount} location${row.locationCount === 1 ? '' : 's'}` : 'Tap for details'}
+                    </span>
                   </span>
-                </span>
-                {row.inTransitQty > 0 && <span className="sm-meta">In transit {formatQty(row.inTransitQty)}</span>}
-              </button>
-            </li>
-          ))}
+                </button>
+              </li>
+            );
+          })}
         </ul>
         {loading && <Loading text={searching ? 'Searching…' : 'Loading stock…'} />}
         {hasMore && !loading && (

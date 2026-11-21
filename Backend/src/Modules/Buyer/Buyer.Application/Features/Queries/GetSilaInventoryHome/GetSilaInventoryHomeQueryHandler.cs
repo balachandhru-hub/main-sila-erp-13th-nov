@@ -84,25 +84,34 @@ namespace Buyer.Application.Features.Queries.GetSilaInventoryHome
                 return quantity <= threshold;
             });
 
-            string? propertyName = await _repository.BuyerProperty
+            BuyerProperty? property = await _repository.BuyerProperty
                 .FindByCondition(x => x.Id == location.PropertyId)
-                .Select(x => x.PropertyName)
                 .FirstOrDefaultAsync(cancellationToken);
+            int stockItems = await _repository.InventoryBalance
+                .FindByCondition(x => x.LocationId == id && x.IsActive && (x.OnHandQty != 0 || x.InTransitQty != 0))
+                .Select(x => x.MaterialId)
+                .Distinct()
+                .CountAsync(cancellationToken);
+            int pendingActions = pendingApprovals + openCounts + openEnquiries + openAlerts;
 
-            _logger.LogInfo($"Inventory home fetched. LocationId: {id}, Approvals: {pendingApprovals}, InTransit: {inTransit}, LowStock: {lowStock}");
+            _logger.LogInfo($"Inventory home fetched. LocationId: {id}, Approvals: {pendingApprovals}, InTransit: {inTransit}, LowStock: {lowStock}, StockItems: {stockItems}");
             return new SilaInventoryHomeDto
             {
                 LocationId = id,
                 LocationCode = location.LocationCode,
                 LocationName = location.LocationName,
                 LocationType = location.LocationType,
-                PropertyName = propertyName,
+                PropertyName = property?.PropertyName,
+                PlantCode = string.IsNullOrWhiteSpace(property?.PlantCode) ? null : property!.PlantCode.Trim(),
+                StorageLocationCode = string.IsNullOrWhiteSpace(location.StorageLocationCode) ? null : location.StorageLocationCode.Trim(),
                 PendingTransferApprovals = pendingApprovals,
                 InTransitToReceive = inTransit,
                 OpenStockCounts = openCounts,
                 OpenEnquiries = openEnquiries,
                 OpenAlerts = openAlerts,
-                LowStockItems = lowStock
+                LowStockItems = lowStock,
+                StockItems = stockItems,
+                PendingActions = pendingActions
             };
         }
     }

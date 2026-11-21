@@ -308,9 +308,13 @@ namespace Buyer.API.Controllers
         [SwaggerOperation("GetSilaLiveInventory")]
         [SwaggerResponse(200, type: typeof(List<SilaLiveInventoryRowDto>))]
         public async Task<IActionResult> LiveInventory(
-            [FromQuery] string? search, [FromQuery] Guid? locationId, [FromQuery] int index = 0, [FromQuery] int limit = 20)
+            [FromQuery] string? search,
+            [FromQuery] Guid? locationId,
+            [FromQuery] string? health = null,
+            [FromQuery] int index = 0,
+            [FromQuery] int limit = 20)
         {
-            _logger.LogDebug($"Searching live inventory. Search: {search}, LocationId: {locationId}, Index: {index}");
+            _logger.LogDebug($"Searching live inventory. Search: {search}, LocationId: {locationId}, Health: {health}, Index: {index}");
             List<SilaLiveInventoryRowDto> result = await _mediator.Send(new GetSilaLiveInventoryQuery
             {
                 OrganizationId = GetOrganizationId(),
@@ -318,6 +322,7 @@ namespace Buyer.API.Controllers
                 RoleId = GetRoleId(),
                 Search = search,
                 LocationId = locationId,
+                Health = health,
                 Index = index,
                 Limit = limit
             });
