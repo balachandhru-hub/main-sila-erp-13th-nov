@@ -252,7 +252,7 @@ namespace Buyer.Application.Features.Shared
 
                 if (queueErpPosting)
                 {
-                    // Recipe explosion ledger lines. POS consumption posts as Z01 via S4 - Goods Issue (user-confirmed).
+                    // Recipe explosion ledger lines. POS consumption posts as Z01 via FIVE_POS_UPDATE only.
                     InventoryErpPosting posting = ledger.QueueErpPosting(
                         Common.SILA_REF_POS_SALE,
                         transaction.Id,
@@ -570,6 +570,78 @@ namespace Buyer.Application.Features.Shared
                 .Sum(x => Math.Abs(x.QuantitySold));
 
             return SilaPosReversal.ValidateAgainstOriginal(transaction, original, alreadyReversed);
+        }
+
+        /// <summary>
+        /// Explodes a POS sale into SAP transfer lines (recipe ingredient qty/UOM). Used to rebuild the FIVE_POS_UPDATE
+        /// request when ledger lines or the HTTP capture are missing.
+        /// </summary>
+        public static async Task<(List<SilaInventorySap.TransferLine> Lines, string? Error)> ExplodeTransferLinesAsync(
+            IRepositoryWrapper repository,
+            Guid buyerId,
+            PosSalesTransaction sale,
+            CancellationToken cancellationToken)
+        {
+            List<SilaInventorySap.TransferLine> empty = new List<SilaInventorySap.TransferLine>();
+            Guid? recipeId = sale.RecipeId;
+            Guid? posSourceId = null;
+            if (sale.BatchId != null)
+            {
+                PosSalesBatch? batch = await repository.PosSalesBatch
+                    .FindFirstByConditionAsync(x => x.Id == sale.BatchId.Value && x.BuyerId == buyerId);
+                posSourceId = batch?.PosSourceId;
+            }
+
+            SilaPosMatching context = await SilaPosMatching.LoadAsync(
+                repository,
+                buyerId,
+                posSourceId == null ? new List<Guid>() : new List<Guid> { posSourceId.Value },
+                cancellationToken);
+
+            if (recipeId == null)
+            {
+                SilaPosMatch match = context.Match(posSourceId, sale.OutletCode, sale.PosCode, sale.Uom);
+                if (match.Recipe == null)
+                {
+                    return (empty, match.Message ?? "The sale is not matched to an approved recipe.");
+                }
+
+                recipeId = match.Recipe.Id;
+            }
+
+            Dictionary<string, ExplosionLine> quantities = new Dictionary<string, ExplosionLine>(StringComparer.OrdinalIgnoreCase);
+            string? problem = Expand(context, recipeId.Value, SilaPosReversal.ExplosionQuantity(sale), quantities, 0);
+            if (problem != null)
+            {
+                return (empty, problem);
+            }
+
+            List<SilaInventorySap.TransferLine> lines = new List<SilaInventorySap.TransferLine>();
+            foreach (ExplosionLine entry in quantities.Values.Where(x => x.EnteredQuantity > 0 || x.BaseQuantity > 0))
+            {
+                if (!context.Materials.TryGetValue(entry.MaterialId, out ItemBuyerMaster? material) || !material.IsActive)
+                {
+                    continue;
+                }
+
+                if (!SilaMaterialRules.HoldsStock(material))
+                {
+                    continue;
+                }
+
+                if (entry.EnteredQuantity > 0 && !string.IsNullOrWhiteSpace(entry.EnteredUom))
+                {
+                    lines.Add(new SilaInventorySap.TransferLine(material, entry.EnteredQuantity, entry.EnteredUom));
+                }
+                else if (entry.BaseQuantity > 0)
+                {
+                    lines.Add(new SilaInventorySap.TransferLine(material, entry.BaseQuantity, material.BaseUnitOfMeasure ?? "EA"));
+                }
+            }
+
+            return lines.Count == 0
+                ? (empty, "NO_CONSUMPTION_LINES")
+                : (lines, null);
         }
 
         /// <summary>

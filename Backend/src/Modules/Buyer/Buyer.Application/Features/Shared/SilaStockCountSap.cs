@@ -18,7 +18,7 @@ namespace Buyer.Application.Features.Shared
             return movementType == Common.SILA_MOVEMENT_STOCK_COUNT;
         }
 
-        /// <summary>Stock count and POS consumption both post through UPDATE_STOCK (sale Z02, return Z01).</summary>
+        /// <summary>Stock count and POS consumption both post through FIVE_POS_UPDATE (POS consumption is Z01).</summary>
         public static bool UsesUpdateStock(string? movementType)
         {
             return IsStockCount(movementType) || movementType == Common.SILA_MOVEMENT_CONSUMPTION;

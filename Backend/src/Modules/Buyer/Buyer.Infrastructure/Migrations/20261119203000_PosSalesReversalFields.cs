@@ -13,58 +13,66 @@ namespace Buyer.Infrastructure.Migrations
     {
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<string>(
-                name: "transaction_type",
-                schema: "buyersystem",
-                table: "pos_sales_transaction",
-                type: "nvarchar(20)",
-                maxLength: 20,
-                nullable: false,
-                defaultValue: "SALE");
+            // Idempotent: columns may already exist from earlier manual/hotfix applies.
+            migrationBuilder.Sql("""
+IF COL_LENGTH('buyersystem.pos_sales_transaction', 'transaction_type') IS NULL
+BEGIN
+    ALTER TABLE [buyersystem].[pos_sales_transaction]
+    ADD [transaction_type] nvarchar(20) NOT NULL CONSTRAINT DF_pos_sales_transaction_transaction_type DEFAULT N'SALE';
+END
 
-            migrationBuilder.AddColumn<string>(
-                name: "original_transaction_id",
-                schema: "buyersystem",
-                table: "pos_sales_transaction",
-                type: "nvarchar(100)",
-                maxLength: 100,
-                nullable: true);
+IF COL_LENGTH('buyersystem.pos_sales_transaction', 'original_transaction_id') IS NULL
+BEGIN
+    ALTER TABLE [buyersystem].[pos_sales_transaction]
+    ADD [original_transaction_id] nvarchar(100) NULL;
+END
 
-            migrationBuilder.AddColumn<int>(
-                name: "original_line_id",
-                schema: "buyersystem",
-                table: "pos_sales_transaction",
-                type: "int",
-                nullable: true);
+IF COL_LENGTH('buyersystem.pos_sales_transaction', 'original_line_id') IS NULL
+BEGIN
+    ALTER TABLE [buyersystem].[pos_sales_transaction]
+    ADD [original_line_id] int NULL;
+END
 
-            migrationBuilder.CreateIndex(
-                name: "IX_pos_sales_transaction_buyer_id_original_transaction_id",
-                schema: "buyersystem",
-                table: "pos_sales_transaction",
-                columns: new[] { "buyer_id", "original_transaction_id" });
+IF NOT EXISTS (
+    SELECT 1 FROM sys.indexes
+    WHERE name = N'IX_pos_sales_transaction_buyer_id_original_transaction_id'
+      AND object_id = OBJECT_ID(N'buyersystem.pos_sales_transaction'))
+BEGIN
+    CREATE INDEX [IX_pos_sales_transaction_buyer_id_original_transaction_id]
+    ON [buyersystem].[pos_sales_transaction] ([buyer_id], [original_transaction_id]);
+END
+""");
         }
 
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropIndex(
-                name: "IX_pos_sales_transaction_buyer_id_original_transaction_id",
-                schema: "buyersystem",
-                table: "pos_sales_transaction");
+            migrationBuilder.Sql("""
+IF EXISTS (
+    SELECT 1 FROM sys.indexes
+    WHERE name = N'IX_pos_sales_transaction_buyer_id_original_transaction_id'
+      AND object_id = OBJECT_ID(N'buyersystem.pos_sales_transaction'))
+    DROP INDEX [IX_pos_sales_transaction_buyer_id_original_transaction_id]
+    ON [buyersystem].[pos_sales_transaction];
 
-            migrationBuilder.DropColumn(
-                name: "original_line_id",
-                schema: "buyersystem",
-                table: "pos_sales_transaction");
+IF COL_LENGTH('buyersystem.pos_sales_transaction', 'original_line_id') IS NOT NULL
+    ALTER TABLE [buyersystem].[pos_sales_transaction] DROP COLUMN [original_line_id];
 
-            migrationBuilder.DropColumn(
-                name: "original_transaction_id",
-                schema: "buyersystem",
-                table: "pos_sales_transaction");
+IF COL_LENGTH('buyersystem.pos_sales_transaction', 'original_transaction_id') IS NOT NULL
+    ALTER TABLE [buyersystem].[pos_sales_transaction] DROP COLUMN [original_transaction_id];
 
-            migrationBuilder.DropColumn(
-                name: "transaction_type",
-                schema: "buyersystem",
-                table: "pos_sales_transaction");
+IF COL_LENGTH('buyersystem.pos_sales_transaction', 'transaction_type') IS NOT NULL
+BEGIN
+    DECLARE @df sysname;
+    SELECT @df = dc.name
+    FROM sys.default_constraints dc
+    INNER JOIN sys.columns c ON c.default_object_id = dc.object_id
+    WHERE dc.parent_object_id = OBJECT_ID(N'buyersystem.pos_sales_transaction')
+      AND c.name = N'transaction_type';
+    IF @df IS NOT NULL
+        EXEC(N'ALTER TABLE [buyersystem].[pos_sales_transaction] DROP CONSTRAINT [' + @df + N']');
+    ALTER TABLE [buyersystem].[pos_sales_transaction] DROP COLUMN [transaction_type];
+END
+""");
         }
     }
 }

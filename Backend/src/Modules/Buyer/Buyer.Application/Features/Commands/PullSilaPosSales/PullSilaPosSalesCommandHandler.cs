@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Buyer.Application.Features.Commands.PostPendingErpPostings;
 using Buyer.Application.Features.Commands.ProcessSilaPosBatch;
 using Buyer.Application.Features.Queries.ResolveIntegration;
 using Buyer.Application.Features.Shared;
@@ -127,6 +128,33 @@ namespace Buyer.Application.Features.Commands.PullSilaPosSales
                 _repository, _logger, buyer.Id, request.UserId, receipt.Transactions, queueErp, cancellationToken);
             result.Processed = receipt.Transactions.Count - result.Failed;
             await _repository.SaveAsync();
+
+            // Same as file upload: one FIVE_POS_UPDATE payload for the whole API pull batch (SALE Z01 + RETURN Z02).
+            if (queueErp)
+            {
+                Guid? leaderPostingId = receipt.Transactions
+                    .Where(x => x.ErpPostingId != null)
+                    .Select(x => x.ErpPostingId!.Value)
+                    .FirstOrDefault();
+                if (leaderPostingId != null && leaderPostingId != Guid.Empty)
+                {
+                    try
+                    {
+                        await _mediator.Send(
+                            new PostPendingErpPostingsCommand
+                            {
+                                BuyerId = buyer.Id,
+                                PostingId = leaderPostingId
+                            },
+                            cancellationToken);
+                    }
+                    catch (Exception exception) when (exception is not OperationCanceledException)
+                    {
+                        _logger.LogError(
+                            $"Immediate POS ERP post failed after API pull. BuyerId: {buyer.Id}, PostingId: {leaderPostingId}, Error: {SilaLogText.FromException(exception)}");
+                    }
+                }
+            }
 
             _logger.LogInfo(
                 $"POS sales pulled. BatchNumber: {result.BatchNumber}, Records: {result.Rows}, Accepted: {result.Accepted}, Duplicates: {result.Duplicates}, Invalid: {result.Invalid}, Failed: {result.Failed}");

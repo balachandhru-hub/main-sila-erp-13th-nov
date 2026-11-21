@@ -132,15 +132,23 @@ namespace Buyer.Application.Features.Commands.ReconcileSilaErpPosting
 
         private async Task MarkPosSalesPostedAsync(InventoryErpPosting posting, CancellationToken cancellationToken)
         {
-            List<PosSalesTransaction> sales = await _repository.PosSalesTransaction
+            // FindByCondition is AsNoTracking — Update on a clone conflicts when the sale is already tracked.
+            List<Guid> saleIds = await _repository.PosSalesTransaction
                 .FindByCondition(x => x.BuyerId == posting.BuyerId && (x.ErpPostingId == posting.Id || x.Id == posting.ReferenceId))
+                .Select(x => x.Id)
+                .Distinct()
                 .ToListAsync(cancellationToken);
-            foreach (PosSalesTransaction sale in sales)
+            foreach (Guid saleId in saleIds)
             {
+                PosSalesTransaction sale = await _repository.PosSalesTransaction.FindFirstByConditionAsync(x => x.Id == saleId);
+                if (sale == null)
+                {
+                    continue;
+                }
+
                 sale.Status = Common.SILA_POS_POSTED;
                 sale.FailedStep = null;
                 sale.FailureMessage = null;
-                _repository.PosSalesTransaction.Update(sale);
             }
         }
     }
