@@ -62,15 +62,20 @@ assert.match(read("SilaInventoryAnalytics.tsx"), /Inventory Analytics/);
 assert.match(read("SilaInventoryAnalytics.tsx"), /getInventoryDashboard/);
 
 const nav = readFileSync(join(dir, "../silaMeNav.tsx"), "utf8");
-assert.match(nav, /silaStockHealth/);
-assert.match(nav, /silaRecipeAvailability/);
-assert.match(nav, /silaInventoryAnalytics/);
+assert.match(nav, /silaInventoryStudio/);
+assert.match(nav, /Inventory Studio/);
+assert.match(nav, /Inventory Transactions/);
+assert.doesNotMatch(nav.slice(nav.indexOf('label: "Inventory"'), nav.indexOf('label: "Menu Engineering"')), /Purchase Requests/);
+assert.doesNotMatch(nav.slice(nav.indexOf('label: "Inventory"'), nav.indexOf('label: "Menu Engineering"')), /silaStockHealth/);
 const workspace = readFileSync(join(dir, "../SilaMeWorkspace.tsx"), "utf8");
-assert.match(workspace, /SilaStockHealth/);
-assert.match(workspace, /SilaRecipeAvailability/);
-assert.match(workspace, /SilaInventoryAnalytics/);
+assert.match(workspace, /SilaInventoryStudio/);
+assert.match(workspace, /inventoryStudioTabFromNav/);
 assert.match(workspace, /permissions=\{can\}/);
 assert.match(workspace, /canPostGoodsIssue/);
+assert.match(read("SilaInventoryStudio.tsx"), /data-testid="inventory-studio"/);
+assert.match(read("SilaInventoryStudio.tsx"), /Stock Health/);
+assert.match(read("SilaInventoryStudio.tsx"), /Internal Transfers/);
+assert.match(read("SilaInventoryStudio.css"), /istudio-inv-page/);
 
 const chef = resolveLiveInventoryLens(silaMePermissions("outlet-manager"));
 assert.ok(chef.id === "chef" || chef.id === "store" || chef.id === "fnb" || chef.id === "ops");
