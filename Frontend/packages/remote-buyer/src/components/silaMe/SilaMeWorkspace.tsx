@@ -10,6 +10,9 @@ import {
 } from "./silaHomeCapabilities";
 import SilaInventoryDashboard from "./inventory/SilaInventoryDashboard";
 import SilaLiveInventory from "./inventory/SilaLiveInventory";
+import SilaStockHealth from "./inventory/SilaStockHealth";
+import SilaRecipeAvailability from "./inventory/SilaRecipeAvailability";
+import SilaInventoryAnalytics from "./inventory/SilaInventoryAnalytics";
 import SilaInventoryTransactions from "./inventory/SilaInventoryTransactions";
 import SilaLocationMaster from "./inventory/SilaLocationMaster";
 import SilaMaterialInventory from "./inventory/SilaMaterialInventory";
@@ -68,6 +71,7 @@ const SilaMeWorkspace: React.FC<SilaMeWorkspaceProps> = ({ navKey, role, permiss
   const [recipeToOpen, setRecipeToOpen] = useState<string | null>(null);
   const [newRecipe, setNewRecipe] = useState(false);
   const [liveSearch, setLiveSearch] = useState<string | undefined>(undefined);
+  const [liveHealth, setLiveHealth] = useState<string | undefined>(undefined);
 
   const openCount = (stockCountId: string) => {
     setCountToOpen(stockCountId);
@@ -100,7 +104,30 @@ const SilaMeWorkspace: React.FC<SilaMeWorkspaceProps> = ({ navKey, role, permiss
           />
         );
       case "silaLiveInventory":
-        return <SilaLiveInventory canTransfer={can.manageTransfer} canRequestPurchase={can.requestPurchase} initialSearch={liveSearch} />;
+        return (
+          <SilaLiveInventory
+            canTransfer={can.manageTransfer}
+            canRequestPurchase={can.requestPurchase}
+            canManageCount={can.manageCount}
+            initialSearch={liveSearch}
+            initialHealth={liveHealth}
+            onNavigate={onNavigate}
+          />
+        );
+      case "silaStockHealth":
+        return (
+          <SilaStockHealth
+            onOpenLive={(health) => {
+              setLiveHealth(health);
+              setLiveSearch(undefined);
+              onNavigate("silaLiveInventory");
+            }}
+          />
+        );
+      case "silaRecipeAvailability":
+        return <SilaRecipeAvailability />;
+      case "silaInventoryAnalytics":
+        return <SilaInventoryAnalytics />;
       case "silaTransactions":
         return <SilaInventoryTransactions />;
       case "silaTransfers":

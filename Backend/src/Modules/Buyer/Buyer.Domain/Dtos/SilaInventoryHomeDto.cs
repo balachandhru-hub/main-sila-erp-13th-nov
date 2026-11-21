@@ -18,5 +18,13 @@ namespace Buyer.Domain.Dtos
         public int OpenAlerts { get; set; }
         /// <summary>Stocking rows whose on hand is at or under the minimum stock or reorder point.</summary>
         public int LowStockItems { get; set; }
+        /// <summary>Distinct materials with an active balance at the location.</summary>
+        public int StockItems { get; set; }
+        /// <summary>Pending transfer approvals + open counts + open enquiries + open alerts.</summary>
+        public int PendingActions { get; set; }
+        /// <summary>Plant code of the property, when mapped.</summary>
+        public string? PlantCode { get; set; }
+        /// <summary>SAP storage location code of the location, when mapped.</summary>
+        public string? StorageLocationCode { get; set; }
     }
 }

@@ -182,6 +182,14 @@ export interface SilaLiveInventoryRow {
   onHandQty: number;
   inTransitQty: number;
   locationCount: number;
+  /** Single-location search: reserved on open outbound ITOs. */
+  reservedQty?: number;
+  /** On hand minus reserved (single-location) or on hand (cross-location). */
+  availableQty?: number;
+  /** NEGATIVE | OUT | LOW | HEALTHY | EXCESS | IN_STOCK */
+  stockStatus?: string | null;
+  reorderPoint?: number | null;
+  lastMovementOn?: string | null;
 }
 
 export interface SilaLiveInventoryLocation {
@@ -300,12 +308,16 @@ export interface SilaInventoryHome {
   locationName?: string | null;
   locationType?: string | null;
   propertyName?: string | null;
+  plantCode?: string | null;
+  storageLocationCode?: string | null;
   pendingTransferApprovals: number;
   inTransitToReceive: number;
   openStockCounts: number;
   openEnquiries: number;
   openAlerts: number;
   lowStockItems: number;
+  stockItems?: number;
+  pendingActions?: number;
 }
 
 /** The ledger's transaction types, for filters. */
@@ -510,10 +522,17 @@ export const searchLiveInventory = async (
   search: string,
   locationId: string | null,
   index = 0,
+  health?: string | null,
 ): Promise<SilaLiveInventoryRow[]> => {
   try {
     const response = await axiosInstance.get<SilaLiveInventoryRow[]>(`${BASE}/inventory/live`, {
-      params: { search: search.trim() || undefined, locationId: locationId || undefined, index, limit: SILA_LIVE_PAGE_SIZE },
+      params: {
+        search: search.trim() || undefined,
+        locationId: locationId || undefined,
+        health: health || undefined,
+        index,
+        limit: SILA_LIVE_PAGE_SIZE,
+      },
     });
     return list(response.data);
   } catch (error: unknown) {
