@@ -36,7 +36,8 @@ import AdminQsAns from "../../../remote-buyer/src/components/Qsans";
 // import QuotationSummaryTable from "../../../remote-buyer/src/components/QuotationSummaryTable";
 import QuotationComparisonCard from "./QuotationComparisonCard";
 import ItemMasterCatalog from "../../../remote-buyer/src/components/ItemMasterCatalog";
-import IntegrationHub from "../../../remote-buyer/src/components/integration/IntegrationHub";
+// API Config / Workflow use Integration Studio — do not swap back to IntegrationHub unless explicitly requested.
+import IntegrationStudio from "../../../remote-buyer/src/components/integration/studio/IntegrationStudio";
 import RecentPurchaseOrderList from "../../../remote-buyer/src/components/dashboard/RecentPurchaseOrderList";
 import Models from "../../../remote-buyer/src/components/Models";
 import WishlistSection from "../../../remote-buyer/src/components/wishlist/WishlistSection";
@@ -854,13 +855,19 @@ const BuyerAdminDash: React.FC = () => {
                 }}
               />
             ) : activeNav === "workflowConfiguration" ? (
-              <IntegrationHub variant="workflow" />
+              <IntegrationStudio
+                variant="workflow"
+                onOpenTracker={() => handleNavClick("silaMeTracker")}
+              />
             ) : activeNav === "cart" ? (
               <CartSection onOpenWeeklyBucket={() => handleNavClick("weeklyBucket")} onBrowseCatalog={() => handleNavClick("product")} />
             ) : activeNav === "outlets" ? (
               <OutletManagement buyerId={buyerId || ""} />
             ) : activeNav === "apiConfiguration" ? (
-              <IntegrationHub variant="integration" />
+              <IntegrationStudio
+                variant="integration"
+                onOpenTracker={() => handleNavClick("silaMeTracker")}
+              />
             ) : activeNav === "wishlist" ? (
               <WishlistSection onOpenCart={() => handleNavClick("cart")} />
             ) : activeNav === "weeklyBucket" ? (
