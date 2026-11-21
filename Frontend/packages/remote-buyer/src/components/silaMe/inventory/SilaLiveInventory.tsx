@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { EmptyState, Loader, PageHeader, toastService } from "@vosox/shared-ui";
+import { EmptyState, Loader, toastService } from "@vosox/shared-ui";
 import {
   SILA_LIVE_PAGE_SIZE,
   formatQty,
   getInventoryHome,
   getLiveInventoryDetail,
   getMyLocations,
+  getRecentAlerts,
   searchLiveInventory,
   silaLabel,
   type SilaInventoryHome,
@@ -14,9 +15,13 @@ import {
   type SilaLiveInventoryRow,
   type SilaLocation,
 } from "../../../api/silaMe/silaInventoryApi";
+import type { SilaAlert } from "../../../api/silaMe/silaStockCountApi";
 import { createQuickTransfer, createTransfer } from "../../../api/silaMe/silaMovementsApi";
 import SilaSearchableSelect from "../SilaSearchableSelect";
+import type { SilaMePermissions } from "../silaMePermissions";
 import SilaLiveDecisionPanel from "./SilaLiveDecisionPanel";
+import { lensOptionsFor, resolveLiveInventoryLens, type LensProfile } from "./liveInventoryLens";
+import { buildInventoryPriorities } from "./liveInventoryPriorities";
 import "../silaMeTheme.css";
 import "./SilaInventory.css";
 
@@ -33,12 +38,6 @@ const homeLocation = (locations: SilaLocation[]): SilaLocation | undefined => {
   return byCode(stocked, "STORE") ?? byCode(stocked, "OUTLET") ?? pool[0];
 };
 
-const destinationLocation = (locations: SilaLocation[]): SilaLocation | undefined => {
-  const assigned = locations.filter((location) => location.assigned);
-  const pool = assigned.length > 0 ? assigned : locations;
-  return byCode(pool, "OUTLET") ?? homeLocation(locations);
-};
-
 const STATUS_TEXT: Record<string, string> = {
   NEGATIVE: "Negative",
   OUT: "Out of stock",
@@ -49,12 +48,12 @@ const STATUS_TEXT: Record<string, string> = {
 };
 
 const STATUS_BADGE: Record<string, string> = {
-  NEGATIVE: "sila-badge--danger",
-  OUT: "sila-badge--danger",
-  LOW: "sila-badge--warning",
-  HEALTHY: "sila-badge--success",
-  EXCESS: "sila-badge--info",
-  IN_STOCK: "sila-badge--success",
+  NEGATIVE: "liv-badge liv-badge--critical",
+  OUT: "liv-badge liv-badge--critical",
+  LOW: "liv-badge liv-badge--warn",
+  HEALTHY: "liv-badge liv-badge--ok",
+  EXCESS: "liv-badge liv-badge--info",
+  IN_STOCK: "liv-badge liv-badge--ok",
 };
 
 type OptionalColumn = "onHand" | "reserved" | "inTransit" | "reorder" | "lastMovement";
@@ -71,29 +70,54 @@ interface SilaLiveInventoryProps {
   canTransfer?: boolean;
   canRequestPurchase?: boolean;
   canManageCount?: boolean;
+  canPostGoodsIssue?: boolean;
+  permissions?: SilaMePermissions;
   initialSearch?: string;
   initialHealth?: string;
   onNavigate?: (key: string) => void;
 }
 
 /**
- * Premium Live Inventory home: compact location context, actionable KPIs, searchable stock table,
- * and dedicated material detail / transfer actions — reusing existing live + transfer APIs.
+ * Daylight Alabaster Live Inventory command center.
+ * Reuses existing live inventory, transfer, and alert APIs — no duplicate ledger.
  */
 const SilaLiveInventory: React.FC<SilaLiveInventoryProps> = ({
   canTransfer = true,
   canRequestPurchase = false,
   canManageCount = false,
+  canPostGoodsIssue = false,
+  permissions,
   initialSearch = "",
   initialHealth = "",
   onNavigate,
 }) => {
+  const defaultLens = useMemo(
+    () => (permissions ? resolveLiveInventoryLens(permissions) : resolveLiveInventoryLens({
+      manageLocation: false, manageMasterData: false, manageTransfer: canTransfer, approveTransfer: false,
+      postGoodsIssue: canPostGoodsIssue, postAdjustment: false, manageCount: canManageCount, initiateCount: false,
+      approveCount: false, requestPurchase: canRequestPurchase, manageRecipe: false, approveRecipe: false,
+      approvePrice: false, managePos: false, viewReceiving: false, viewInventory: true, postGrn: false,
+      manageErpPosting: false, viewAudit: false, viewInvoice: false, processInvoice: false, approveInvoice: false,
+      viewCreditMemo: false, processCreditMemo: false, approveCreditMemo: false,
+      viewMenuEngineering: false, manageMenuEngineering: false,
+    })),
+    [permissions, canTransfer, canPostGoodsIssue, canManageCount, canRequestPurchase],
+  );
+  const lensChoices = useMemo(
+    () => (permissions ? lensOptionsFor(permissions) : [defaultLens]),
+    [permissions, defaultLens],
+  );
+
+  const [lens, setLens] = useState<LensProfile>(defaultLens);
   const [locations, setLocations] = useState<SilaLocation[]>([]);
   const [locationsError, setLocationsError] = useState<string | null>(null);
   const [search, setSearch] = useState(initialSearch);
-  const [health, setHealth] = useState(initialHealth);
+  const [health, setHealth] = useState(initialHealth || defaultLens.defaultHealth || "");
+  const [showFilters, setShowFilters] = useState(false);
+  const [prioritiesOpen, setPrioritiesOpen] = useState(true);
   const [locationId, setLocationId] = useState("");
   const [home, setHome] = useState<SilaInventoryHome | null>(null);
+  const [alerts, setAlerts] = useState<SilaAlert[] | null>(null);
   const [rows, setRows] = useState<SilaLiveInventoryRow[]>([]);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -110,8 +134,16 @@ const SilaLiveInventory: React.FC<SilaLiveInventoryProps> = ({
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [optionalCols, setOptionalCols] = useState<Set<OptionalColumn>>(new Set());
   const [showColumns, setShowColumns] = useState(false);
+  const [showMore, setShowMore] = useState(false);
+  const [lastSynced, setLastSynced] = useState<Date | null>(null);
+  const [refreshTick, setRefreshTick] = useState(0);
   const searchRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    setLens(defaultLens);
+    if (!initialHealth && defaultLens.defaultHealth) setHealth(defaultLens.defaultHealth);
+  }, [defaultLens, initialHealth]);
 
   useEffect(() => {
     let active = true;
@@ -120,9 +152,7 @@ const SilaLiveInventory: React.FC<SilaLiveInventoryProps> = ({
         if (!active) return;
         setLocations(data);
         const homeLoc = homeLocation(data);
-        const destination = destinationLocation(data);
         if (homeLoc) setLocationId(homeLoc.id);
-        if (destination) setTransferToId(destination.id);
       })
       .catch((err: unknown) => {
         if (active) setLocationsError(err instanceof Error ? err.message : "Could not load your locations.");
@@ -145,10 +175,17 @@ const SilaLiveInventory: React.FC<SilaLiveInventoryProps> = ({
       .catch(() => {
         if (active) setHome(null);
       });
+    getRecentAlerts(5)
+      .then((data) => {
+        if (active) setAlerts(data);
+      })
+      .catch(() => {
+        if (active) setAlerts(null);
+      });
     return () => {
       active = false;
     };
-  }, [locationId]);
+  }, [locationId, refreshTick]);
 
   const materialTerm = search.trim();
   const canSearch = Boolean(locationId) || materialTerm.length >= 2;
@@ -172,6 +209,7 @@ const SilaLiveInventory: React.FC<SilaLiveInventoryProps> = ({
         if (!active || controller.signal.aborted) return;
         setRows(data);
         setHasMore(data.length === SILA_LIVE_PAGE_SIZE);
+        setLastSynced(new Date());
       } catch (err: unknown) {
         if (active && !controller.signal.aborted) {
           setError(err instanceof Error ? err.message : "Could not search the inventory.");
@@ -185,7 +223,7 @@ const SilaLiveInventory: React.FC<SilaLiveInventoryProps> = ({
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [search, locationId, health, canSearch]);
+  }, [search, locationId, health, canSearch, refreshTick]);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -217,6 +255,15 @@ const SilaLiveInventory: React.FC<SilaLiveInventoryProps> = ({
     [locations],
   );
   const currentLocation = locations.find((location) => location.id === locationId);
+  const priorities = useMemo(() => buildInventoryPriorities(home, alerts), [home, alerts]);
+
+  const freshness = (() => {
+    if (!lastSynced) return "Waiting for data";
+    const seconds = Math.max(0, Math.round((Date.now() - lastSynced.getTime()) / 1000));
+    if (seconds < 15) return "Live";
+    if (seconds < 120) return `Updated ${seconds}s ago`;
+    return "Refresh recommended";
+  })();
 
   const loadMore = async () => {
     setLoadingMore(true);
@@ -224,6 +271,7 @@ const SilaLiveInventory: React.FC<SilaLiveInventoryProps> = ({
       const data = await searchLiveInventory(search, locationId || null, rows.length, health || null);
       setRows((current) => [...current, ...data]);
       setHasMore(data.length === SILA_LIVE_PAGE_SIZE);
+      setLastSynced(new Date());
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Could not search the inventory.");
     } finally {
@@ -240,28 +288,34 @@ const SilaLiveInventory: React.FC<SilaLiveInventoryProps> = ({
     });
   };
 
-  const applyKpi = (filter: string) => {
-    if (filter === "LOW") {
+  const runPriority = (action: string) => {
+    if (action === "LOW") {
       setHealth("LOW");
       setSelectedId(null);
       return;
     }
-    if (filter === "TRANSIT") {
+    if (action === "TRANSIT" || action === "TRANSFERS") {
       onNavigate?.("silaTransfers");
       return;
     }
-    if (filter === "PENDING") {
+    if (action === "PENDING" || action === "ALERTS") {
       onNavigate?.("silaAlerts");
       return;
     }
-    setHealth("");
+    if (action === "COUNTS") {
+      onNavigate?.("silaStockCounts");
+      return;
+    }
+    if (action === "RECIPE") {
+      onNavigate?.("silaRecipeAvailability");
+    }
   };
 
   const sendTransfer = async (row: SilaLiveInventoryLocation, quick: boolean) => {
     if (!canTransfer || !detail) return;
     const destination = locations.find((location) => location.id === transferToId);
     if (!destination) {
-      toastService.error("Choose the destination in Transfer before sending stock.");
+      toastService.error("Choose the destination before sending stock.");
       return;
     }
     if (row.locationId === destination.id) return;
@@ -303,60 +357,86 @@ const SilaLiveInventory: React.FC<SilaLiveInventoryProps> = ({
     const code = row.stockStatus || (row.onHandQty <= 0 ? "OUT" : "IN_STOCK");
     return {
       label: STATUS_TEXT[code] ?? silaLabel(code),
-      badge: STATUS_BADGE[code] ?? "sila-badge--info",
+      badge: STATUS_BADGE[code] ?? "liv-badge liv-badge--info",
     };
   };
+
+  const materialLabel = (code: string, description?: string | null) =>
+    description && description !== code ? description : description || "—";
 
   const kpis = [
     {
       key: "items",
       label: "Stock Items",
       value: home?.stockItems ?? "—",
-      tone: "sinv-kpi--blue",
-      onClick: () => applyKpi(""),
+      tone: "liv-kpi--sky",
+      onClick: () => { setHealth(""); setSelectedId(null); },
     },
     {
       key: "low",
-      label: "Low Stock",
+      label: "Critical / Low Stock",
       value: home?.lowStockItems ?? "—",
-      tone: "sinv-kpi--amber",
-      onClick: () => applyKpi("LOW"),
+      tone: "liv-kpi--amber",
+      onClick: () => runPriority("LOW"),
     },
     {
       key: "transit",
       label: "In Transit",
       value: home?.inTransitToReceive ?? "—",
-      tone: "sinv-kpi--lavender",
-      onClick: () => applyKpi("TRANSIT"),
+      tone: "liv-kpi--teal",
+      onClick: () => runPriority("TRANSIT"),
     },
     {
       key: "pending",
       label: "Pending Actions",
       value: home?.pendingActions ?? "—",
-      tone: "sinv-kpi--mint",
-      onClick: () => applyKpi("PENDING"),
+      tone: "liv-kpi--rose",
+      onClick: () => runPriority("PENDING"),
     },
   ];
 
   if (selectedId) {
     return (
-      <div className="sila-me sinv-page">
-        <PageHeader
-          className="pud-page-header"
-          title="Material Details"
-          description={detail ? `${detail.materialCode} · ${detail.description}` : "Loading material stock…"}
-        />
-        <div className="sinv-detail-bar">
-          <button type="button" className="sila-btn sila-btn--ghost" onClick={() => { setSelectedId(null); setDetail(null); setMenuFor(null); }}>
-            ← Back to Live Inventory
-          </button>
-          {canTransfer && (
-            <div className="sinv-detail-dest">
+      <div className="sila-me liv-page">
+        <header className="liv-command">
+          <div className="liv-command__copy">
+            <p className="liv-eyebrow">Material Inventory</p>
+            <h1 className="liv-title">{detail?.materialCode ?? "Material"}</h1>
+            <p className="liv-sub">{detail ? materialLabel(detail.materialCode, detail.description) : "Loading…"}</p>
+          </div>
+          <div className="liv-command__actions">
+            <button type="button" className="sila-btn sila-btn--secondary" onClick={() => { setSelectedId(null); setDetail(null); setMenuFor(null); }}>
+              ← Live Inventory
+            </button>
+            <button type="button" className="sila-btn sila-btn--secondary" onClick={() => onNavigate?.("silaTransactions")}>
+              Movement History
+            </button>
+            {canTransfer && (
+              <button type="button" className="sila-btn sila-btn--secondary" onClick={() => onNavigate?.("silaTransfers")}>
+                Transfer Center
+              </button>
+            )}
+            {canPostGoodsIssue && (
+              <button type="button" className="sila-btn sila-btn--secondary" onClick={() => onNavigate?.("silaGoodsIssue")}>
+                Goods Issue
+              </button>
+            )}
+            {canManageCount && (
+              <button type="button" className="sila-btn sila-btn--secondary" onClick={() => onNavigate?.("silaStockCounts")}>
+                Stock Count
+              </button>
+            )}
+          </div>
+        </header>
+
+        {canTransfer && (
+          <section className="liv-panel liv-panel--flush">
+            <div className="liv-transfer-dest">
               <SilaSearchableSelect
                 label="Transfer destination"
-                placeholder="Select destination"
+                placeholder="Select destination (transfer workflow only)"
                 value={transferToId}
-                clearable={false}
+                clearable
                 options={stockLocations.map((location) => ({
                   value: location.id,
                   label: `${location.locationCode} · ${location.locationName}`,
@@ -364,23 +444,28 @@ const SilaLiveInventory: React.FC<SilaLiveInventoryProps> = ({
                 onChange={setTransferToId}
               />
             </div>
-          )}
-          <button type="button" className="sila-btn sila-btn--secondary sila-btn--sm" onClick={() => onNavigate?.("silaTransactions")}>
-            Movement History
-          </button>
-          {canTransfer && (
-            <button type="button" className="sila-btn sila-btn--secondary sila-btn--sm" onClick={() => onNavigate?.("silaTransfers")}>
-              Transfer Center
-            </button>
-          )}
-        </div>
+          </section>
+        )}
+
         {detailLoading && !detail ? (
           <Loader size={28} message="Loading material…" />
         ) : detailError ? (
           <EmptyState variant="error" title="Couldn't load material" description={detailError} />
         ) : detail ? (
-          <div className="sinv-detail-grid">
-            <section className="sila-card">
+          <div className="liv-detail-grid">
+            <section className="liv-panel">
+              <div className="liv-panel__head">
+                <h2>Overview</h2>
+                <p>Available = on hand minus valid reservations. Incoming is not counted until receipt.</p>
+              </div>
+              <dl className="liv-facts">
+                <div><dt>Material</dt><dd>{detail.materialCode}</dd></div>
+                <div><dt>Description</dt><dd>{materialLabel(detail.materialCode, detail.description)}</dd></div>
+                <div><dt>Base UOM</dt><dd>{detail.baseUom}</dd></div>
+                <div><dt>On hand</dt><dd className="liv-num">{formatQty(detail.onHandQty)}</dd></div>
+                <div><dt>Available</dt><dd className="liv-num">{formatQty(detail.localAvailable ?? detail.onHandQty)}</dd></div>
+                <div><dt>In transit</dt><dd className="liv-num">{formatQty(detail.inTransitQty)}</dd></div>
+              </dl>
               <SilaLiveDecisionPanel
                 detail={detail}
                 locations={stockLocations}
@@ -392,15 +477,16 @@ const SilaLiveInventory: React.FC<SilaLiveInventoryProps> = ({
                 onChanged={() => setDetailKey((key) => key + 1)}
               />
             </section>
-            <section className="sila-card">
-              <div className="sila-card-header">
-                <h2 className="sila-card-title">Stock by location</h2>
+            <section className="liv-panel">
+              <div className="liv-panel__head">
+                <h2>Stock by location</h2>
+                <p>Authorized properties, plants, storage locations, and outlets.</p>
               </div>
               {sourceRows.length === 0 ? (
                 <EmptyState title="No stock rows" description="This material has no balances in your locations." />
               ) : (
-                <div className="sila-table-wrap">
-                  <table className="sila-table">
+                <div className="sila-table-wrap liv-table-wrap">
+                  <table className="sila-table liv-table">
                     <thead>
                       <tr>
                         <th scope="col">Location</th>
@@ -427,7 +513,7 @@ const SilaLiveInventory: React.FC<SilaLiveInventoryProps> = ({
                             <td className="sinv-num">{formatQty(row.availableQty ?? row.onHandQty)}</td>
                             <td className="sinv-num">{row.transferableQty ? formatQty(row.transferableQty) : "—"}</td>
                             <td>
-                              <span className={`sila-badge ${STATUS_BADGE[code] ?? "sila-badge--info"}`}>
+                              <span className={STATUS_BADGE[code] ?? "liv-badge liv-badge--info"}>
                                 {STATUS_TEXT[code] ?? silaLabel(code)}
                               </span>
                             </td>
@@ -435,20 +521,10 @@ const SilaLiveInventory: React.FC<SilaLiveInventoryProps> = ({
                               <td>
                                 {canPick && (
                                   <span className="sinv-inline">
-                                    <button
-                                      type="button"
-                                      className="sila-btn sila-btn--primary sila-btn--sm"
-                                      disabled={pickingId !== null}
-                                      onClick={() => sendTransfer(row, true)}
-                                    >
+                                    <button type="button" className="sila-btn sila-btn--primary sila-btn--sm" disabled={pickingId !== null} onClick={() => sendTransfer(row, true)}>
                                       {pickingId === `${row.locationId}:quick` ? "…" : "Quick ITO"}
                                     </button>
-                                    <button
-                                      type="button"
-                                      className="sila-btn sila-btn--secondary sila-btn--sm"
-                                      disabled={pickingId !== null}
-                                      onClick={() => sendTransfer(row, false)}
-                                    >
+                                    <button type="button" className="sila-btn sila-btn--secondary sila-btn--sm" disabled={pickingId !== null} onClick={() => sendTransfer(row, false)}>
                                       {pickingId === `${row.locationId}:ito` ? "…" : "ITO"}
                                     </button>
                                   </span>
@@ -470,75 +546,166 @@ const SilaLiveInventory: React.FC<SilaLiveInventoryProps> = ({
   }
 
   return (
-    <div className="sila-me sinv-page">
-      <PageHeader className="pud-page-header" title="Live Inventory" description="Operational stock at your location. Open a material for transfers, history, and recommendations." />
-
-      <section className="sila-card sinv-live-header">
-        <div className="sinv-live-context">
-          <div>
-            <span className="sila-label">Property / outlet</span>
-            <strong className="sinv-live-title">
-              {currentLocation
-                ? `${currentLocation.locationCode} · ${currentLocation.locationName}`
-                : locationsError ?? "Select a location"}
-            </strong>
-            <span className="sinv-sub">
-              {[home?.propertyName || currentLocation?.propertyName, home?.plantCode || currentLocation?.plantCode, home?.storageLocationCode || currentLocation?.storageLocationCode]
-                .filter(Boolean)
-                .join(" · ") || "Plant and storage from Location Setup"}
-            </span>
-          </div>
-          <div className="sinv-live-header-actions">
+    <div className="sila-me liv-page">
+      {/* AREA A — Compact command bar */}
+      <header className="liv-command">
+        <div className="liv-command__copy">
+          <p className="liv-eyebrow">Live Inventory</p>
+          <h1 className="liv-title">Inventory Command Center</h1>
+          <p className="liv-sub">
+            {currentLocation
+              ? [
+                  home?.propertyName || currentLocation.propertyName,
+                  `${currentLocation.locationCode} — ${currentLocation.locationName}`,
+                  home?.plantCode || currentLocation.plantCode
+                    ? `Plant ${home?.plantCode || currentLocation.plantCode}`
+                    : null,
+                  home?.storageLocationCode || currentLocation.storageLocationCode,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")
+              : locationsError ?? "Select a property / outlet"}
+          </p>
+        </div>
+        <div className="liv-command__actions">
+          <div className="liv-location-select">
             <SilaSearchableSelect
               label="Location"
-              placeholder="Select location"
+              placeholder="Store / outlet"
               value={locationId}
               clearable
               options={stockLocations.map((location) => ({
                 value: location.id,
                 label: `${location.locationCode} · ${location.locationName}`,
               }))}
-              onChange={(value) => setLocationId(value)}
+              onChange={setLocationId}
             />
-            <button type="button" className="sila-btn sila-btn--secondary sila-btn--sm" onClick={() => onNavigate?.("silaStockHealth")}>
-              Stock Health
-            </button>
-            <button type="button" className="sila-btn sila-btn--secondary sila-btn--sm" onClick={() => onNavigate?.("silaTransfers")}>
-              Transfer Center
-            </button>
           </div>
+          <button type="button" className="sila-btn sila-btn--secondary" onClick={() => { setRefreshTick((n) => n + 1); searchRef.current?.focus(); }}>
+            Refresh
+          </button>
+          <div className="liv-more">
+            <button type="button" className="sila-btn sila-btn--secondary" onClick={() => setShowMore((v) => !v)}>
+              More
+            </button>
+            {showMore && (
+              <div className="liv-more-menu" role="menu">
+                <button type="button" role="menuitem" onClick={() => { onNavigate?.("silaStockHealth"); setShowMore(false); }}>Stock Health</button>
+                <button type="button" role="menuitem" onClick={() => { onNavigate?.("silaTransfers"); setShowMore(false); }}>Transfer Center</button>
+                <button type="button" role="menuitem" onClick={() => { onNavigate?.("silaRecipeAvailability"); setShowMore(false); }}>Recipe Availability</button>
+                <button type="button" role="menuitem" onClick={() => { onNavigate?.("silaInventoryAnalytics"); setShowMore(false); }}>Analytics</button>
+                <button type="button" role="menuitem" onClick={() => { onNavigate?.("silaTransactions"); setShowMore(false); }}>Movement History</button>
+              </div>
+            )}
+          </div>
+          <span className={`liv-fresh${freshness.startsWith("Refresh") ? " liv-fresh--stale" : ""}`} title="Based on last successful inventory query">
+            {freshness}
+          </span>
         </div>
-        <div className="sinv-live-search-row">
-          <label className="sila-label" htmlFor="sinv-live-search">Search</label>
+      </header>
+
+      {lensChoices.length > 1 && (
+        <div className="liv-lenses" role="tablist" aria-label="Inventory lens">
+          {lensChoices.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              role="tab"
+              aria-selected={lens.id === option.id}
+              className={`liv-lens${lens.id === option.id ? " liv-lens--on" : ""}`}
+              onClick={() => {
+                setLens(option);
+                if (option.defaultHealth) setHealth(option.defaultHealth);
+              }}
+            >
+              {option.label}
+            </button>
+          ))}
+          <span className="liv-lens-hint">{lens.priorityHint}</span>
+        </div>
+      )}
+
+      {/* AREA B — Universal search */}
+      <section className="liv-search-panel">
+        <label className="liv-search-label" htmlFor="liv-search">Search inventory</label>
+        <div className="liv-search-row">
           <input
             ref={searchRef}
-            id="sinv-live-search"
-            className="sila-input sinv-live-search"
+            id="liv-search"
+            className="liv-search-input"
             type="search"
             placeholder="Material number, description, barcode…"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />
-          {health && (
-            <button type="button" className="sila-badge sila-badge--warning sinv-filter-chip" onClick={() => setHealth("")}>
-              Filter: {STATUS_TEXT[health] ?? health} ×
-            </button>
-          )}
+          <button type="button" className="sila-btn sila-btn--secondary" onClick={() => setShowFilters((v) => !v)}>
+            {showFilters ? "Hide filters" : "Filters"}
+          </button>
         </div>
+        {showFilters && (
+          <div className="liv-filters">
+            <label className="sila-field">
+              <span className="sila-label">Stock status</span>
+              <select className="sila-select" value={health} onChange={(event) => setHealth(event.target.value)}>
+                <option value="">All</option>
+                <option value="LOW">Low / critical</option>
+                <option value="OUT">Out of stock</option>
+                <option value="NEGATIVE">Negative</option>
+                <option value="EXCESS">Excess</option>
+                <option value="HEALTHY">Healthy</option>
+              </select>
+            </label>
+            {health && (
+              <button type="button" className="liv-chip" onClick={() => setHealth("")}>
+                Clear status ×
+              </button>
+            )}
+          </div>
+        )}
       </section>
 
-      <div className="sinv-kpi-row">
+      {/* AREA C — Four KPIs */}
+      <div className="liv-kpi-row">
         {kpis.map((kpi) => (
-          <button key={kpi.key} type="button" className={`sinv-kpi ${kpi.tone}`} onClick={kpi.onClick}>
+          <button key={kpi.key} type="button" className={`liv-kpi ${kpi.tone}`} onClick={kpi.onClick}>
             <span>{kpi.label}</span>
             <strong>{kpi.value}</strong>
           </button>
         ))}
       </div>
 
-      <section className="sila-card" aria-live="polite">
-        <div className="sila-card-header">
-          <h2 className="sila-card-title">Materials</h2>
+      {/* AREA D — Priority strip */}
+      {priorities.length > 0 && (
+        <section className="liv-priority">
+          <button type="button" className="liv-priority__toggle" onClick={() => setPrioritiesOpen((v) => !v)}>
+            <span>Inventory Priorities</span>
+            <span aria-hidden>{prioritiesOpen ? "−" : "+"}</span>
+          </button>
+          {prioritiesOpen && (
+            <ul className="liv-priority__list">
+              {priorities.map((item) => (
+                <li key={item.id} className={`liv-priority__item liv-priority__item--${item.tone}`}>
+                  <div>
+                    <strong>{item.title}</strong>
+                    <p>{item.detail}</p>
+                  </div>
+                  <button type="button" className="sila-btn sila-btn--secondary sila-btn--sm" onClick={() => runPriority(item.action)}>
+                    {item.actionLabel}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+
+      {/* AREA E — Clean table */}
+      <section className="liv-panel" aria-live="polite">
+        <div className="liv-panel__head liv-panel__head--row">
+          <div>
+            <h2>Material availability</h2>
+            <p>Default columns stay compact. Open a row for transfers, history, and linked workflows.</p>
+          </div>
           <div className="sinv-inline">
             <div className="sinv-columns">
               <button type="button" className="sila-btn sila-btn--ghost sila-btn--sm" onClick={() => setShowColumns((v) => !v)}>
@@ -579,18 +746,18 @@ const SilaLiveInventory: React.FC<SilaLiveInventoryProps> = ({
         ) : error ? (
           <EmptyState variant="error" title="Couldn't load stock" description={error} />
         ) : rows.length === 0 ? (
-          <EmptyState title="No materials found" description="Try another search or clear the health filter." />
+          <EmptyState title="No materials found" description="Try another search or clear filters." />
         ) : (
           <>
-            <div className="sila-table-wrap">
-              <table className="sila-table">
+            <div className="sila-table-wrap liv-table-wrap">
+              <table className="sila-table liv-table">
                 <thead>
                   <tr>
                     <th scope="col">Material</th>
                     <th scope="col">Description</th>
                     <th scope="col" className="sinv-num">Available</th>
                     <th scope="col">UOM</th>
-                    <th scope="col">Stock Status</th>
+                    <th scope="col">Status</th>
                     {optionalCols.has("onHand") && <th scope="col" className="sinv-num">On Hand</th>}
                     {optionalCols.has("reserved") && <th scope="col" className="sinv-num">Reserved</th>}
                     {optionalCols.has("inTransit") && <th scope="col" className="sinv-num">In Transit</th>}
@@ -607,10 +774,10 @@ const SilaLiveInventory: React.FC<SilaLiveInventoryProps> = ({
                     return (
                       <tr key={row.materialId} className="sinv-row-button" onClick={() => setSelectedId(row.materialId)}>
                         <td><span className="sila-cell-strong">{row.materialCode}</span></td>
-                        <td>{row.description && row.description !== row.materialCode ? row.description : row.description || "—"}</td>
+                        <td>{materialLabel(row.materialCode, row.description)}</td>
                         <td className="sinv-num">{formatQty(available)}</td>
                         <td>{row.baseUom}</td>
-                        <td><span className={`sila-badge ${status.badge}`}>{status.label}</span></td>
+                        <td><span className={status.badge}>{status.label}</span></td>
                         {optionalCols.has("onHand") && <td className="sinv-num">{formatQty(row.onHandQty)}</td>}
                         {optionalCols.has("reserved") && <td className="sinv-num">{formatQty(row.reservedQty ?? 0)}</td>}
                         {optionalCols.has("inTransit") && <td className="sinv-num">{formatQty(row.inTransitQty)}</td>}
@@ -638,6 +805,9 @@ const SilaLiveInventory: React.FC<SilaLiveInventoryProps> = ({
                                 {canRequestPurchase && (
                                   <button type="button" role="menuitem" onClick={() => { setSelectedId(row.materialId); setMenuFor(null); }}>Request Stock</button>
                                 )}
+                                {canPostGoodsIssue && (
+                                  <button type="button" role="menuitem" onClick={() => { onNavigate?.("silaGoodsIssue"); setMenuFor(null); }}>Goods Issue</button>
+                                )}
                                 <button type="button" role="menuitem" onClick={() => { onNavigate?.("silaTransactions"); setMenuFor(null); }}>Movement History</button>
                                 {canManageCount && (
                                   <button type="button" role="menuitem" onClick={() => { onNavigate?.("silaStockCounts"); setMenuFor(null); }}>Stock Count</button>
@@ -654,7 +824,7 @@ const SilaLiveInventory: React.FC<SilaLiveInventoryProps> = ({
             </div>
             {hasMore && (
               <div className="sinv-pager">
-                <span>{rows.length} materials</span>
+                <span className="liv-num">{rows.length} materials</span>
                 <button type="button" className="sila-btn sila-btn--secondary sila-btn--sm" disabled={loadingMore} onClick={loadMore}>
                   {loadingMore ? "Loading…" : "Load more"}
                 </button>

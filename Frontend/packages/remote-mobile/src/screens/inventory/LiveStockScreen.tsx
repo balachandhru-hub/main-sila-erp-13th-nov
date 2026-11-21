@@ -12,6 +12,7 @@ import { Empty, ErrorNotice, Loading } from '../../components/StateViews';
 import { useMyLocation } from '../../location';
 import { useGo } from '../../navigation';
 import { errorText } from '../../useLoad';
+import './liveInventoryMobile.css';
 
 const MIN_SEARCH = 2;
 
@@ -24,7 +25,7 @@ const STATUS_CLASS: Record<string, string> = {
   IN_STOCK: 'sm-badge sm-badge--success',
 };
 
-/** Own location stock by default. Material search lists stock across permitted locations. */
+/** Card-based material availability — own location by default; search is cross-location. */
 const LiveStockScreen: React.FC = () => {
   const go = useGo();
   const [params] = useSearchParams();
@@ -90,19 +91,23 @@ const LiveStockScreen: React.FC = () => {
     }
   };
 
+  const descriptionOf = (row: SilaLiveInventoryRow) =>
+    row.description && row.description !== row.materialCode ? row.description : row.description || '—';
+
   return (
     <>
-      <ScreenHeader title="Find Stock" eyebrow="Live Inventory" back />
-      <div className="sm-screen">
-        <input
-          className="sm-input"
-          type="search"
-          aria-label="Search material"
-          placeholder="Search or scan material ID, name, barcode…"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          style={{ minHeight: '2.75rem' }}
-        />
+      <ScreenHeader title="Find Stock" eyebrow="Live Inventory" back backTo="inventory" />
+      <div className="sm-screen liv-m">
+        <div className="liv-m-search">
+          <input
+            className="sm-input liv-m-search__input"
+            type="search"
+            aria-label="Search material"
+            placeholder="Search or scan material ID, name, barcode…"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+        </div>
         {health && (
           <button type="button" className="sm-badge sm-badge--warning" onClick={() => setHealth('')}>
             Filter: {silaLabel(health)} ×
@@ -115,21 +120,21 @@ const LiveStockScreen: React.FC = () => {
         {!loading && !error && (searching || location) && rows.length === 0 && (
           <Empty text="No materials" description={searching ? `No matches for “${text}”.` : 'Nothing is in stock at this location.'} />
         )}
-        <ul className="sm-list">
+        <ul className="sm-list" style={{ gap: '0.55rem' }}>
           {rows.map((row) => {
             const status = row.stockStatus || (row.onHandQty <= 0 ? 'OUT' : 'IN_STOCK');
             const available = row.availableQty ?? row.onHandQty;
             return (
               <li key={row.materialId}>
-                <button type="button" className="sm-list-btn sm-card" onClick={() => go(`inventory/stock/${row.materialId}`)}>
+                <button type="button" className="liv-m-card" onClick={() => go(`inventory/stock/${row.materialId}`)}>
                   <span className="sm-row">
-                    <strong>{row.materialCode}</strong>
+                    <strong>{descriptionOf(row)}</strong>
                     <span className={STATUS_CLASS[status] || 'sm-badge sm-badge--neutral'}>{silaLabel(status)}</span>
                   </span>
-                  <span>{row.description && row.description !== row.materialCode ? row.description : row.description || '—'}</span>
+                  <span className="sm-meta">{row.materialCode}</span>
                   <span className="sm-row">
-                    <span>
-                      Available <strong>{formatQty(available)}</strong> {row.baseUom}
+                    <span className="liv-m-card__qty">
+                      {formatQty(available)} {row.baseUom}
                     </span>
                     <span className="sm-meta">
                       {searching ? `${row.locationCount} location${row.locationCount === 1 ? '' : 's'}` : 'Tap for details'}

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Buyer.Application.Features.Commands.ProcessSilaPosBatch;
 using Buyer.Application.Features.Queries.ResolveIntegration;
 using Buyer.Application.Features.Shared;
 using Buyer.Domain.Common;
@@ -7,6 +8,7 @@ using Buyer.Domain.Entities;
 using Buyer.Infrastructure.Contracts.IRepository;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using SharedKernel.ExceptionHandler;
 using SharedKernel.Integration.Entities;
 using SharedKernel.Integration.Enums;
@@ -26,17 +28,20 @@ namespace Buyer.Application.Features.Commands.PullSilaPosSales
         private readonly IMediator _mediator;
         private readonly IIntegrationHttpExecutor _executor;
         private readonly ILoggerManager _logger;
+        private readonly IConfiguration _configuration;
 
         public PullSilaPosSalesCommandHandler(
             IRepositoryWrapper repository,
             IMediator mediator,
             IIntegrationHttpExecutor executor,
-            ILoggerManager logger)
+            ILoggerManager logger,
+            IConfiguration configuration)
         {
             _repository = repository;
             _mediator = mediator;
             _executor = executor;
             _logger = logger;
+            _configuration = configuration;
         }
 
         public Task<SilaPosImportResultDto> Handle(PullSilaPosSalesCommand request, CancellationToken cancellationToken)
@@ -117,7 +122,9 @@ namespace Buyer.Application.Features.Commands.PullSilaPosSales
             result.BatchNumber = receipt.Batch.BatchNumber;
             result.Accepted = receipt.Transactions.Count;
             result.Duplicates = receipt.DuplicateRows.Count;
-            result.Failed = await SilaPosProcessing.ProcessAsync(_repository, _logger, buyer.Id, request.UserId, receipt.Transactions, cancellationToken);
+            bool queueErp = _configuration.GetValue(ProcessSilaPosBatch.ProcessSilaPosBatchCommandHandler.CONFIG_QUEUE_ERP, true);
+            result.Failed = await SilaPosProcessing.ProcessAsync(
+                _repository, _logger, buyer.Id, request.UserId, receipt.Transactions, queueErp, cancellationToken);
             result.Processed = receipt.Transactions.Count - result.Failed;
             await _repository.SaveAsync();
 

@@ -14,6 +14,7 @@ const LABELS: Record<string, string> = {
   PENDING: "Pending",
   SKIPPED: "Skipped",
   UNKNOWN: "Unknown",
+  NOT_STARTED: "ERP not started",
   PREVIEW: "Awaiting processing",
   PROCESSED: "Processed",
   READY: "Ready",
@@ -28,6 +29,7 @@ const LABELS: Record<string, string> = {
   DEDUCT_FAILED: "Inventory deduction failed",
   ERP_POSTING_QUEUED: "Queued for SAP posting",
   ERP_POSTING_REQUEUED: "SAP posting queued again",
+  ERP_POSTING_SKIPPED: "SAP posting not started",
   REPROCESS_REQUESTED: "Reprocess requested",
   ERP_POSTED: "Posted to SAP",
   ERP_FAILED: "SAP posting failed",
@@ -86,6 +88,7 @@ export const stepBadgeClass = (state?: string | null): string => {
       return "sila-badge sila-badge--danger sila-badge--sm";
     case "PENDING":
     case "UNKNOWN":
+    case "NOT_STARTED":
       return "sila-badge sila-badge--warning sila-badge--sm";
     default:
       return "sila-badge sila-badge--info sila-badge--sm";

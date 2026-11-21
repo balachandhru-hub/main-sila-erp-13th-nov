@@ -28,7 +28,6 @@ import SilaAlerts from "./stockCount/SilaAlerts";
 import SilaShortageReport from "./control/SilaShortageReport";
 import SilaPhysicalInventoryRequests from "./control/SilaPhysicalInventoryRequests";
 import SilaAuditLog from "./control/SilaAuditLog";
-import SilaRecipeDashboard from "./recipes/SilaRecipeDashboard";
 import SilaRecipes from "./recipes/SilaRecipes";
 import SilaRecipeApprovals from "./recipes/SilaRecipeApprovals";
 import SilaRecipeMasterData from "./recipes/SilaRecipeMasterData";
@@ -68,8 +67,6 @@ const SilaMeWorkspace: React.FC<SilaMeWorkspaceProps> = ({ navKey, role, permiss
   const [previewPersona, setPreviewPersona] = useState<SilaHomePersona>("self");
   // Screens that open a specific record in another screen pass it through here.
   const [countToOpen, setCountToOpen] = useState<string | null>(null);
-  const [recipeToOpen, setRecipeToOpen] = useState<string | null>(null);
-  const [newRecipe, setNewRecipe] = useState(false);
   const [liveSearch, setLiveSearch] = useState<string | undefined>(undefined);
   const [liveHealth, setLiveHealth] = useState<string | undefined>(undefined);
 
@@ -109,6 +106,8 @@ const SilaMeWorkspace: React.FC<SilaMeWorkspaceProps> = ({ navKey, role, permiss
             canTransfer={can.manageTransfer}
             canRequestPurchase={can.requestPurchase}
             canManageCount={can.manageCount}
+            canPostGoodsIssue={can.postGoodsIssue}
+            permissions={can}
             initialSearch={liveSearch}
             initialHealth={liveHealth}
             onNavigate={onNavigate}
@@ -158,19 +157,11 @@ const SilaMeWorkspace: React.FC<SilaMeWorkspaceProps> = ({ navKey, role, permiss
       case "silaPurchaseRequests":
         return <SilaPurchaseRequests canAddToBucket={role === "admin" || role === "store-manager"} />;
       case "silaRecipeDashboard":
+        // Legacy dashboard route — permanently folded into Recipe Studio (do not reintroduce a separate dashboard UI).
         return (
-          <SilaRecipeDashboard
-            onOpenRecipes={() => onNavigate("silaRecipes")}
-            onOpenRecipe={(recipeId) => {
-              setRecipeToOpen(recipeId);
-              onNavigate("silaRecipes");
-            }}
-            onOpenApprovals={can.approveRecipe ? () => onNavigate("silaRecipeApprovals") : undefined}
-            onOpenPosTransactions={can.managePos ? () => onNavigate("silaTracker") : undefined}
-            onNewRecipe={can.manageRecipe ? () => {
-              setNewRecipe(true);
-              onNavigate("silaRecipes");
-            } : undefined}
+          <SilaRecipes
+            canManage={can.manageRecipe}
+            canRequestPrice={can.manageMasterData}
           />
         );
       case "silaRecipes":
@@ -178,8 +169,6 @@ const SilaMeWorkspace: React.FC<SilaMeWorkspaceProps> = ({ navKey, role, permiss
           <SilaRecipes
             canManage={can.manageRecipe}
             canRequestPrice={can.manageMasterData}
-            openRecipeId={recipeToOpen}
-            startNew={newRecipe}
           />
         );
       case "silaRecipeApprovals":

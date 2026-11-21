@@ -1,6 +1,7 @@
 import React from "react";
 import type { SilaRecipeDetail } from "../../../api/silaMe/silaRecipeApi";
 import { conversionSummary, costPerServing, formatCost, formatPercent, formatQty, priceStatusBadgeClass, priceStatusLabel } from "./recipeFormat";
+import { resolveRecipePos } from "./recipeStudioEditAccess";
 
 interface SilaRecipeCostingProps {
   recipe: SilaRecipeDetail;
@@ -9,6 +10,7 @@ interface SilaRecipeCostingProps {
 /** Saved ingredients with their costs, and the menu price, cost per serving, cost % and margin per outlet. */
 const SilaRecipeCosting: React.FC<SilaRecipeCostingProps> = ({ recipe }) => {
   const perServing = recipe.costPerServing ?? costPerServing(recipe.totalCost, recipe.servingQty);
+  const defaultPos = resolveRecipePos(recipe);
   return (
   <>
     <section className="sila-card">
@@ -80,7 +82,7 @@ const SilaRecipeCosting: React.FC<SilaRecipeCostingProps> = ({ recipe }) => {
       </div>
     </section>
 
-    <section className="sila-card">
+    <section className="sila-card" data-testid="recipe-outlet-pos">
       <div className="sila-card-header">
         <h2 className="sila-card-title">Menu price per outlet</h2>
       </div>
@@ -95,6 +97,8 @@ const SilaRecipeCosting: React.FC<SilaRecipeCostingProps> = ({ recipe }) => {
             <thead>
               <tr>
                 <th scope="col">Outlet</th>
+                <th scope="col">POS code</th>
+                <th scope="col">POS item</th>
                 <th scope="col" className="srec-num">Menu price</th>
                 <th scope="col" className="srec-num">Cost / serving</th>
                 <th scope="col" className="srec-num">Cost %</th>
@@ -103,12 +107,17 @@ const SilaRecipeCosting: React.FC<SilaRecipeCostingProps> = ({ recipe }) => {
               </tr>
             </thead>
             <tbody>
-              {recipe.outletPrices.map((price) => (
+              {recipe.outletPrices.map((price) => {
+                const rowPosCode = (price.posCode || "").trim() || defaultPos.posCode || "—";
+                const rowPosItem = (price.posItem || "").trim() || defaultPos.posItem || rowPosCode;
+                return (
                 <tr key={price.id}>
                   <td>
                     <span className="sila-cell-strong">{price.locationName || "—"}</span>
                     <span className="srec-sub">{price.locationCode}</span>
                   </td>
+                  <td data-testid="recipe-outlet-pos-code">{rowPosCode}</td>
+                  <td data-testid="recipe-outlet-pos-item">{rowPosItem}</td>
                   <td className="srec-num">{formatCost(price.menuPrice, price.currency)}</td>
                   {!recipe.readiness.costComplete || price.costPercent == null ? (
                     <td colSpan={4} className="srec-num"><span className="sila-me-flag">Incomplete</span></td>
@@ -125,7 +134,8 @@ const SilaRecipeCosting: React.FC<SilaRecipeCostingProps> = ({ recipe }) => {
                     </>
                   )}
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

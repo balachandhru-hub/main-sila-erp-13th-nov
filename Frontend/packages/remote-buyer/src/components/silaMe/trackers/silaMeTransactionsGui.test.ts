@@ -1,0 +1,43 @@
+/**
+ * SILA ME Transactions GUI restore guards (no Vite/axios runtime).
+ * Run: npx --yes tsx src/components/silaMe/trackers/silaMeTransactionsGui.test.ts
+ */
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const dir = dirname(fileURLToPath(import.meta.url));
+const tracker = readFileSync(join(dir, "SilaConsolidatedTracker.tsx"), "utf8");
+const css = readFileSync(join(dir, "SilaTracker.css"), "utf8");
+const nav = readFileSync(join(dir, "../silaMeNav.tsx"), "utf8");
+const workspace = readFileSync(join(dir, "../SilaMeWorkspace.tsx"), "utf8");
+
+assert.match(tracker, /strk-me-hero/);
+assert.match(tracker, /data-testid="sila-me-transactions-studio"/);
+assert.match(tracker, /SILA ME Transactions/);
+assert.match(tracker, /strk-me-kpis/);
+assert.match(tracker, /strk-me-lifecycle/);
+assert.match(tracker, /resolveRequestPayload|isCapturedSapRequest/);
+assert.doesNotMatch(tracker, /SILA UI built this request view because technicalDetail was blank/);
+// SILA_ME must not render the legacy PageHeader title chrome.
+assert.doesNotMatch(tracker, /studio \? \(\s*<PageHeader/);
+
+assert.match(css, /strk-me-hero/);
+assert.match(css, /strk-me-kpi--rose/);
+assert.match(css, /strk-studio-panel/);
+assert.match(css, /strk-studio-table/);
+assert.match(css, /strk-studio-detail/);
+
+assert.match(nav, /silaMeTracker/);
+assert.match(nav, /SILA ME Transactions/);
+assert.match(nav, /label: "Integration"/);
+assert.match(nav, /label: "Integration",\s*items: \[\s*\/\/ Restored studio GUI[\s\S]*silaMeTracker/);
+const setupBlock = nav.slice(nav.indexOf('label: "Setup"'));
+assert.doesNotMatch(setupBlock, /silaMeTracker/);
+
+assert.match(workspace, /SilaConsolidatedTracker/);
+assert.match(workspace, /silaMeTracker/);
+assert.match(workspace, /tracker="SILA_ME"/);
+
+console.log("silaMeTransactionsGui.test.ts: ok");

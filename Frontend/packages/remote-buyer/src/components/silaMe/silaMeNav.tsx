@@ -144,11 +144,19 @@ export const buildSilaMeNavItem = (role: SilaMeRole, access?: SilaHomeCapabiliti
     {
       label: "Recipe Management",
       items: [
-        { key: "silaRecipeDashboard", label: "Dashboard" },
-        { key: "silaRecipes", label: "Recipes" },
+        // Recipe Studio owns catalog + former dashboard KPIs. Do not remove this entry
+        // or reintroduce a separate Recipe Dashboard nav item.
+        { key: "silaRecipes", label: "Recipe Studio" },
         ...leaf(can.approveRecipe, "silaRecipeApprovals", "Recipe Approvals"),
         { key: "silaSubstitutions", label: "Ingredient Substitutions" },
-        ...leaf(can.managePos, "silaPos", "POS Integration"),
+        ...leaf(can.managePos, "silaPos", "POS Studio"),
+      ],
+    },
+    {
+      label: "Integration",
+      items: [
+        // Restored studio GUI — SILA ME Transactions Tracker (keep outside Setup).
+        ...leaf(can.manageErpPosting, "silaMeTracker", "SILA ME Transactions"),
       ],
     },
     {
@@ -180,7 +188,6 @@ export const buildSilaMeNavItem = (role: SilaMeRole, access?: SilaHomeCapabiliti
               ...leaf(can.manageMasterData, "silaQuickTransferPolicy", "Quick Transfer Policy"),
               ...leaf(can.manageMasterData, "silaOcrSettings", "Invoice OCR Settings"),
               { key: "silaApprovalFlows" as const, label: "Approval flow" },
-              ...leaf(can.manageErpPosting, "silaMeTracker", "SILA ME Transactions"),
             ]
           : []),
         ...leaf(can.approvePrice, "silaPriceApprovals", "Price Approvals"),

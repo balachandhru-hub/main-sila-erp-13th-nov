@@ -106,6 +106,7 @@ namespace Buyer.Infrastructure.Contracts.IRepository
         IInvoiceRepository Invoice { get; }
         IRecipeFamilyRepository RecipeFamily { get; }
         IRecipeCategoryRepository RecipeCategory { get; }
+        IGoodsIssueCostCenterRepository GoodsIssueCostCenter { get; }
         ISilaApprovalStepRepository SilaApprovalStep { get; }
         IPosSourceRepository PosSource { get; }
         IPosOutletMappingRepository PosOutletMapping { get; }

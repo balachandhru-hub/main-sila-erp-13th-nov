@@ -57,7 +57,7 @@ const SilaPosBatchDetail: React.FC<SilaPosBatchDetailProps> = ({ batchId, canMan
   const handleProcess = async () => {
     setBusy("process");
     try {
-      const result = await processPosBatch(batchId);
+      const result = await processPosBatch(batchId, { queueErpPosting: true });
       toastService.success(`Batch ${result.batchNumber}: ${result.processed} processed, ${result.failed} failed.`);
       await load();
     } catch (err: unknown) {
