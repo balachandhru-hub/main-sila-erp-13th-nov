@@ -1,0 +1,160 @@
+/* Mobile Live Inventory — Alabaster touch hub */
+
+.liv-m {
+  --liv-primary: #0284c7;
+  --liv-secondary: #0f766e;
+  --liv-premium: #b45309;
+  --liv-border: #e5e7eb;
+}
+
+.liv-m-outlet {
+  padding: 0.9rem 1rem;
+  border-radius: 0.9rem;
+  border: 0.0625rem solid var(--liv-border);
+  background: #fff;
+  margin-bottom: 0.75rem;
+}
+
+.liv-m-kicker {
+  margin: 0 0 0.2rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--liv-primary);
+}
+
+.liv-m-outlet__name {
+  display: block;
+  font-size: 1.1rem;
+  color: #0f172a;
+}
+
+.liv-m-search {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.85rem;
+}
+
+.liv-m-search__input {
+  flex: 1 1 auto;
+  min-height: 2.85rem;
+}
+
+.liv-m-search__btn {
+  min-height: 2.85rem;
+  min-width: 4.5rem;
+}
+
+.liv-m-alerts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 0.85rem;
+}
+
+.liv-m-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  align-items: flex-start;
+  text-align: left;
+  border: 0.0625rem solid var(--liv-border);
+  border-radius: 0.85rem;
+  padding: 0.75rem;
+  background: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+
+.liv-m-stat strong {
+  font-size: 1.25rem;
+  font-variant-numeric: tabular-nums;
+  color: #0f172a;
+}
+
+.liv-m-stat span {
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.liv-m-stat--warn {
+  border-color: #fed7aa;
+  background: #fff7ed;
+}
+
+.liv-m-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.liv-m-section-head h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.liv-m-quick__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.liv-m-action {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  align-items: flex-start;
+  text-align: left;
+  min-height: 4.25rem;
+  padding: 0.85rem;
+  border: 0.0625rem solid var(--liv-border);
+  border-radius: 0.9rem;
+  background: #fff;
+  font: inherit;
+  cursor: pointer;
+  box-shadow: 0 0.0625rem 0.25rem rgba(15, 23, 42, 0.04);
+}
+
+.liv-m-action strong {
+  color: #0f172a;
+}
+
+.liv-m-action span {
+  font-size: 0.78rem;
+  color: #64748b;
+}
+
+.liv-m--floor .liv-m-action {
+  min-height: 5rem;
+  padding: 1rem;
+}
+
+.liv-m--floor .liv-m-search__input,
+.liv-m--floor .liv-m-search__btn {
+  min-height: 3.25rem;
+  font-size: 1.05rem;
+}
+
+.liv-m-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  width: 100%;
+  text-align: left;
+  border: 0.0625rem solid var(--liv-border);
+  border-radius: 0.9rem;
+  padding: 0.9rem;
+  background: #fff;
+  box-shadow: 0 0.0625rem 0.3rem rgba(15, 23, 42, 0.05);
+  font: inherit;
+  cursor: pointer;
+}
+
+.liv-m-card__qty {
+  font-variant-numeric: tabular-nums;
+  font-size: 1.05rem;
+  color: #0f172a;
+}
