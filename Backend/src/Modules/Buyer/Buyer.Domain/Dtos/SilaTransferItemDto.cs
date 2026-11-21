@@ -11,6 +11,10 @@ namespace Buyer.Domain.Dtos
         public decimal ApprovedQty { get; set; }
         public decimal DispatchedQty { get; set; }
         public decimal ReceivedQty { get; set; }
+        public decimal ReversedQty { get; set; }
+        public decimal RemainingReversibleQty { get; set; }
+        public Guid? WeeklyBucketItemId { get; set; }
+        public Guid? WishlistItemId { get; set; }
         public string Uom { get; set; } = string.Empty;
 
         /// <summary>Per base unit: the source balance cost, else the material cost.</summary>

@@ -24,6 +24,11 @@ namespace Buyer.Domain.Dtos
         /// <summary>Why the source disputed an already-collected transfer.</summary>
         public string? DisputeReason { get; set; }
 
+        public string? SapMaterialDocument { get; set; }
+        public string? ReversalStatus { get; set; }
+        public string? ReversalReason { get; set; }
+        public DateTime? ReversedOn { get; set; }
+
         public string? FromLocationType { get; set; }
         public string? ToLocationType { get; set; }
 
@@ -37,7 +42,7 @@ namespace Buyer.Domain.Dtos
         public List<SilaTransferItemDto> Items { get; set; } = new();
         public List<SilaTransferEventDto> Events { get; set; } = new();
 
-        /// <summary>What the signed-in user may do now: APPROVE, REJECT, DISPATCH, RECEIVE, CANCEL, CONFIRM_HANDOVER, DISPUTE.</summary>
+        /// <summary>What the signed-in user may do now: APPROVE, REJECT, DISPATCH, RECEIVE, CANCEL, CONFIRM_HANDOVER, DISPUTE, REVERSE.</summary>
         public List<string> AllowedActions { get; set; } = new();
     }
 }

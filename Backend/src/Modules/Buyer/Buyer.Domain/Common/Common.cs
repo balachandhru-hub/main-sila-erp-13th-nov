@@ -191,6 +191,19 @@ namespace Buyer.Domain.Common
                 public const string SILA_ITO_DISCREPANCY = "DISCREPANCY";
                 public const string SILA_ITO_REJECTED = "REJECTED";
                 public const string SILA_ITO_CANCELLED = "CANCELLED";
+                public const string SILA_ITO_PARTIALLY_REVERSED = "PARTIALLY_REVERSED";
+                public const string SILA_ITO_FULLY_REVERSED = "FULLY_REVERSED";
+                public const string SILA_ITO_REVERSAL_PENDING = "REVERSAL_PENDING";
+                public const string SILA_ITO_REVERSAL_FAILED = "REVERSAL_FAILED";
+                public const string SILA_ITO_REVERSAL_UNKNOWN = "REVERSAL_UNKNOWN";
+                public const string SILA_REF_ITO_REVERSAL = "ITO_REV";
+                public const string SILA_PRODUCT_FOOD = "FOOD";
+                public const string SILA_PRODUCT_BEVERAGE = "BEVERAGE";
+                public const string SILA_PRODUCT_MINIBAR = "MINIBAR";
+                public const string SILA_PRODUCT_TOBACCO = "TOBACCO";
+
+                public const string SILA_REQ_SOURCE_WEEKLY_BUCKET = "WEEKLY_BUCKET";
+                public const string SILA_REQ_SOURCE_WISHLIST = "WISHLIST";
                 public const string SILA_COUNT_IN_PROGRESS = "IN_PROGRESS";
                 public const string SILA_COUNT_SUBMITTED = "SUBMITTED";
                 public const string SILA_COUNT_ENQUIRY_PENDING = "ENQUIRY_PENDING";

@@ -7,6 +7,7 @@ using Buyer.Application.Features.Commands.DispatchSilaTransfer;
 using Buyer.Application.Features.Commands.DisputeSilaTransfer;
 using Buyer.Application.Features.Commands.ReceiveSilaTransfer;
 using Buyer.Application.Features.Commands.RejectSilaTransfer;
+using Buyer.Application.Features.Commands.ReverseSilaTransfer;
 using Buyer.Application.Features.Queries.GetSilaTransfer;
 using Buyer.Application.Features.Queries.GetSilaTransfers;
 using Buyer.Domain.Dtos;
@@ -267,6 +268,27 @@ namespace Buyer.API.Controllers
             });
             _logger.LogDebug($"Transfer handover disputed. TransferId: {transferId}");
             return Ok(Success(transferId, "Handover disputed."));
+        }
+
+        /// <summary>Queues movement type 312 via FIVE S4 - Transfer Stock for a successfully posted 311 ITO.</summary>
+        [HttpPost]
+        [Route("api/v1/buyer/sila/transfers/{transferId}/reverse")]
+        [ApiAuthorization(Name = "MANAGE_SILA_TRANSFER")]
+        [SwaggerOperation("ReverseSilaTransfer")]
+        [SwaggerResponse(200, type: typeof(SilaTransferReverseResultDto))]
+        public async Task<IActionResult> Reverse([FromRoute] Guid transferId, [FromBody] SilaTransferReverseDto request)
+        {
+            _logger.LogDebug($"Reversing transfer. TransferId: {transferId}");
+            SilaTransferReverseResultDto result = await _mediator.Send(new ReverseSilaTransferCommand
+            {
+                OrganizationId = GetOrganizationId(),
+                UserId = GetUserId(),
+                RoleId = GetRoleId(),
+                TransferId = transferId,
+                Request = request ?? new SilaTransferReverseDto()
+            });
+            _logger.LogDebug($"Transfer reversal queued. TransferId: {transferId}, PostingId: {result.PostingId}");
+            return Ok(result);
         }
 
         private static SuccessResponseDto Success(Guid id, string description)

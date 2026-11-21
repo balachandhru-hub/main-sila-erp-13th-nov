@@ -21,6 +21,8 @@ namespace Buyer.Application.Features.Shared
         public const string API_CONFIG_NAME = "FIVE S4 - Transfer Stock";
         public const string GOODS_MOVEMENT_CODE = "04";
         public const string GOODS_MOVEMENT_TYPE = "311";
+        public const string REVERSAL_GOODS_MOVEMENT_CODE = "06";
+        public const string REVERSAL_GOODS_MOVEMENT_TYPE = "312";
 
         public const string SOURCE_SAP_LOCATION_MAPPING_MISSING = "SOURCE_SAP_LOCATION_MAPPING_MISSING";
         public const string DESTINATION_SAP_LOCATION_MAPPING_MISSING = "DESTINATION_SAP_LOCATION_MAPPING_MISSING";
@@ -152,6 +154,57 @@ namespace Buyer.Application.Features.Shared
                 fromProperty?.CompanyCode,
                 toProperty?.CompanyCode,
                 lines,
+                conversions,
+                out body,
+                out rule);
+            return problem == SilaInventorySap.MATERIAL_NOT_VALID ? MATERIAL_NOT_VALID : problem;
+        }
+
+        /// <summary>
+        /// Builds the 312 reversal body for a previously posted same-plant 311 ITO.
+        /// Quantity lines must already be validated (remaining reversible qty).
+        /// </summary>
+        public static string? TryPrepareReversal(
+            InternalTransferOrder transfer,
+            InventoryLocation? from,
+            InventoryLocation? to,
+            BuyerProperty? fromProperty,
+            BuyerProperty? toProperty,
+            IReadOnlyList<(InternalTransferOrderItem Item, decimal Quantity)> lines,
+            IReadOnlyDictionary<Guid, ItemBuyerMaster> materials,
+            Dictionary<Guid, List<MaterialUomConversion>> conversions,
+            DateTime postingDate,
+            out string? body,
+            out SilaInventorySap.Rule? rule)
+        {
+            List<SilaInventorySap.TransferLine> transferLines = new List<SilaInventorySap.TransferLine>();
+            foreach ((InternalTransferOrderItem item, decimal quantity) in lines)
+            {
+                if (quantity <= 0)
+                {
+                    continue;
+                }
+
+                if (!materials.TryGetValue(item.MaterialId, out ItemBuyerMaster? material))
+                {
+                    body = null;
+                    rule = null;
+                    return MATERIAL_NOT_VALID;
+                }
+
+                transferLines.Add(new SilaInventorySap.TransferLine(material, quantity, item.Uom));
+            }
+
+            string? problem = SilaInventorySap.TryBuildTransferReversal(
+                postingDate,
+                fromProperty?.PlantCode,
+                from?.StorageLocationCode,
+                toProperty?.PlantCode,
+                to?.StorageLocationCode,
+                fromProperty?.CompanyCode,
+                toProperty?.CompanyCode,
+                transfer.ItoNumber,
+                transferLines,
                 conversions,
                 out body,
                 out rule);

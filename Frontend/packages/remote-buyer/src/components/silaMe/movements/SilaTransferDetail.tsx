@@ -10,6 +10,7 @@ import {
   getTransfer,
   receiveTransfer,
   rejectTransfer,
+  reverseTransfer,
   type SilaTransferDetail as TransferDetail,
   type SilaTransferItem,
 } from "../../../api/silaMe/silaMovementsApi";
@@ -26,7 +27,7 @@ interface SilaTransferDetailProps {
   onChanged: () => void;
 }
 
-type ActionMode = "APPROVE" | "REJECT" | "DISPATCH" | "RECEIVE" | "CANCEL" | "CONFIRM_HANDOVER" | "DISPUTE";
+type ActionMode = "APPROVE" | "REJECT" | "DISPATCH" | "RECEIVE" | "CANCEL" | "CONFIRM_HANDOVER" | "DISPUTE" | "REVERSE";
 
 const ACTION_TEXT: Record<ActionMode, { button: string; confirm: string; done: string }> = {
   APPROVE: { button: "Approve", confirm: "Confirm approval", done: "Transfer approved." },
@@ -36,6 +37,7 @@ const ACTION_TEXT: Record<ActionMode, { button: string; confirm: string; done: s
   CANCEL: { button: "Cancel transfer", confirm: "Confirm cancellation", done: "Transfer cancelled." },
   CONFIRM_HANDOVER: { button: "Confirm handover", confirm: "Confirm handover", done: "Handover confirmed." },
   DISPUTE: { button: "Dispute", confirm: "Confirm dispute", done: "Handover disputed." },
+  REVERSE: { button: "Reverse Transfer", confirm: "Confirm reversal (312)", done: "Transfer reversal queued." },
 };
 
 /** Statuses in which the received quantities are final. */
@@ -49,13 +51,16 @@ const STAGE_DATES: { key: "approvedOn" | "dispatchedOn" | "receivedOn"; label: s
 ];
 
 /** Actions shown as destructive (red) buttons. */
-const DANGER_ACTIONS: ActionMode[] = ["REJECT", "CANCEL", "DISPUTE"];
+const DANGER_ACTIONS: ActionMode[] = ["REJECT", "CANCEL", "DISPUTE", "REVERSE"];
 
 const APPROVER_ACTIONS: ActionMode[] = ["APPROVE", "REJECT", "DISPATCH", "CONFIRM_HANDOVER", "DISPUTE"];
 
 /** The editable quantity of a line starts at the quantity of the previous step. */
-const startQuantity = (mode: ActionMode, item: SilaTransferItem): string =>
-  String(mode === "APPROVE" ? item.requestedQty : item.dispatchedQty);
+const startQuantity = (mode: ActionMode, item: SilaTransferItem): string => {
+  if (mode === "APPROVE") return String(item.requestedQty);
+  if (mode === "REVERSE") return String(item.remainingReversibleQty ?? Math.max(0, (item.receivedQty || item.dispatchedQty) - (item.reversedQty ?? 0)));
+  return String(item.dispatchedQty);
+};
 
 /** One transfer: all lines, the timeline and the actions the signed-in user may take. */
 const SilaTransferDetail: React.FC<SilaTransferDetailProps> = ({ transferId, canApprove, onClose, onChanged }) => {
@@ -101,19 +106,27 @@ const SilaTransferDetail: React.FC<SilaTransferDetailProps> = ({ transferId, can
     setQuantities(start);
   };
 
-  const editsQuantity = mode === "APPROVE" || mode === "RECEIVE";
+  const editsQuantity = mode === "APPROVE" || mode === "RECEIVE" || mode === "REVERSE";
 
   // The first problem with the entered quantities, or null.
   const quantityError = (): string | null => {
     if (!transfer || !editsQuantity) return null;
     for (const item of transfer.items) {
       const value = Number(quantities[item.id]);
-      const limit = mode === "APPROVE" ? item.requestedQty : item.dispatchedQty;
+      const limit =
+        mode === "APPROVE"
+          ? item.requestedQty
+          : mode === "REVERSE"
+            ? item.remainingReversibleQty ?? Math.max(0, (item.receivedQty || item.dispatchedQty) - (item.reversedQty ?? 0))
+            : item.dispatchedQty;
       if (quantities[item.id] === "" || Number.isNaN(value) || value < 0) return `Enter zero or more for ${item.materialCode}.`;
       if (value > limit) return `${item.materialCode}: at most ${formatQty(limit)} ${item.uom}.`;
     }
     if (mode === "APPROVE" && transfer.items.every((item) => Number(quantities[item.id]) === 0)) {
       return "Approve at least one line, or reject the transfer.";
+    }
+    if (mode === "REVERSE" && transfer.items.every((item) => Number(quantities[item.id]) === 0)) {
+      return "Enter a reversal quantity on at least one line.";
     }
     return null;
   };
@@ -133,6 +146,10 @@ const SilaTransferDetail: React.FC<SilaTransferDetailProps> = ({ transferId, can
       setActionError("Enter why the handover is disputed.");
       return;
     }
+    if (mode === "REVERSE" && !comment.trim()) {
+      setActionError("Reversal reason is required.");
+      return;
+    }
     setActionError(null);
     setSaving(true);
     const note = comment.trim() || null;
@@ -145,6 +162,12 @@ const SilaTransferDetail: React.FC<SilaTransferDetailProps> = ({ transferId, can
       if (mode === "CANCEL") await cancelTransfer(transfer.id, note);
       if (mode === "CONFIRM_HANDOVER") await confirmTransferHandover(transfer.id, note);
       if (mode === "DISPUTE") await disputeTransfer(transfer.id, comment.trim());
+      if (mode === "REVERSE") {
+        await reverseTransfer(transfer.id, {
+          reason: comment.trim(),
+          items: lines.filter((line) => line.quantity > 0),
+        });
+      }
       toastService.success(ACTION_TEXT[mode].done);
       setMode(null);
       onChanged();
@@ -213,6 +236,18 @@ const SilaTransferDetail: React.FC<SilaTransferDetailProps> = ({ transferId, can
                 <dt className="sila-meta-label">Relationship</dt>
                 <dd className="sila-meta-value">{relationshipLabel(transfer.transferRelationship)}</dd>
               </div>
+              {transfer.sapMaterialDocument && (
+                <div className="sila-meta-item">
+                  <dt className="sila-meta-label">SAP Material Document</dt>
+                  <dd className="sila-meta-value">{transfer.sapMaterialDocument}</dd>
+                </div>
+              )}
+              {transfer.reversalStatus && (
+                <div className="sila-meta-item">
+                  <dt className="sila-meta-label">Reversal Status</dt>
+                  <dd className="sila-meta-value">{movementLabel(transfer.reversalStatus)}</dd>
+                </div>
+              )}
               <div className="sila-meta-item">
                 <dt className="sila-meta-label">Total value</dt>
                 <dd className="sila-meta-value">{formatValue(transfer.totalValue, transfer.currency)}</dd>

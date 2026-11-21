@@ -517,6 +517,66 @@ export const deleteMaterialConversion = async (materialId: string, conversionId:
   }
 };
 
+export interface SilaPendingOutletRequirement {
+  requirementId: string;
+  requirementSource: string;
+  sourceReference?: string | null;
+  weeklyBucketId?: string | null;
+  weeklyBucketItemId?: string | null;
+  wishlistId?: string | null;
+  wishlistItemId?: string | null;
+  requestedDate?: string | null;
+  destinationOutletId?: string | null;
+  destinationOutletName?: string | null;
+  destinationLocationId?: string | null;
+  destinationLocationCode?: string | null;
+  materialId: string;
+  materialCode: string;
+  materialDescription: string;
+  requestedQuantity: number;
+  fulfilledQuantity: number;
+  outstandingQuantity: number;
+  allocatedToActiveItos: number;
+  availableForNewIto: number;
+  uom: string;
+  availableSourceStock: number;
+  requirementStatus: string;
+}
+
+export interface SilaPendingOutletRequirements {
+  count: number;
+  items: SilaPendingOutletRequirement[];
+}
+
+/** Compact pending Weekly Bucket / Wishlist requirements for demand-based ITO. */
+export const getPendingOutletRequirements = async (filters: {
+  destinationOutletId?: string;
+  weeklyBucketId?: string;
+  wishlistId?: string;
+  materialId?: string;
+  sourceLocationId?: string;
+  countOnly?: boolean;
+} = {}): Promise<SilaPendingOutletRequirements> => {
+  try {
+    const response = await axiosInstance.get<SilaPendingOutletRequirements>(`${BASE}/inventory/pending-requirements`, {
+      params: {
+        destinationOutletId: filters.destinationOutletId || undefined,
+        weeklyBucketId: filters.weeklyBucketId || undefined,
+        wishlistId: filters.wishlistId || undefined,
+        materialId: filters.materialId || undefined,
+        sourceLocationId: filters.sourceLocationId || undefined,
+        countOnly: filters.countOnly || undefined,
+      },
+    });
+    return {
+      count: response.data?.count ?? 0,
+      items: list(response.data?.items),
+    };
+  } catch (error: unknown) {
+    throw new Error(readError(error, "Could not load pending outlet requirements."));
+  }
+};
+
 /** Needs a search of two characters or more, or a location. `index` is the row offset. */
 export const searchLiveInventory = async (
   search: string,

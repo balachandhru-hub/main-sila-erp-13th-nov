@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { getInventoryHome } from '../../../../remote-buyer/src/api/silaMe/silaInventoryApi';
+import { getInventoryHome, getPendingOutletRequirements } from '../../../../remote-buyer/src/api/silaMe/silaInventoryApi';
 import ScreenHeader from '../../components/ScreenHeader';
 import { Empty, ErrorNotice, OfflineBanner } from '../../components/StateViews';
 import { useAccess } from '../../access';
@@ -36,6 +36,10 @@ const InventoryScreen: React.FC = () => {
   const [query, setQuery] = useState('');
   const [floorMode, setFloorMode] = useState(false);
   const home = useLoad(() => getInventoryHome(location?.id), location ? `inv-home-${location.id}` : null);
+  const pending = useLoad(
+    () => getPendingOutletRequirements({ sourceLocationId: location?.id, countOnly: true }),
+    location ? `inv-pending-${location.id}` : null,
+  );
   const value = (count: number | undefined): string => (home.loading ? '…' : count === undefined ? '—' : String(count));
 
   const openSearch = () => {
@@ -64,6 +68,16 @@ const InventoryScreen: React.FC = () => {
             !loading && <Empty text="No operational location assigned." />
           )}
           {home.error && <ErrorNotice message={home.error} onRetry={home.reload} />}
+          {can.manageTransfer && (
+            <button
+              type="button"
+              className="sm-btn sm-btn--secondary"
+              style={{ marginTop: 8 }}
+              onClick={() => go('inventory/transfers/new')}
+            >
+              Pending Requirements: {pending.loading ? '…' : pending.value?.count ?? 0}
+            </button>
+          )}
         </section>
 
         <section className="liv-m-search" aria-label="Search material">
