@@ -213,8 +213,12 @@ namespace SharedKernel.Integration.Services
             HttpClient client,
             CancellationToken cancellationToken)
         {
+            // Entity-key URLs (A_...(Key='x')) and function imports reject $top — fetch CSRF from the service document.
+            bool entityOrAction = IsODataAction(configuration.ResourcePath)
+                || url.Contains('(', StringComparison.Ordinal)
+                || (configuration.ResourcePath?.Contains('(', StringComparison.Ordinal) ?? false);
             string fetchUrl = IsODataProtocol(configuration.Protocol)
-                ? (IsODataAction(configuration.ResourcePath)
+                ? (entityOrAction
                     ? ServiceDocumentUrl(configuration)
                     : url + (url.Contains('?') ? "&" : "?") + "$top=0")
                 : url;

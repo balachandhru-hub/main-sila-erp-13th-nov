@@ -12,7 +12,8 @@ using SharedKernel.LoggerServices;
 namespace Buyer.Application.Features.Commands.ReverseSilaTransfer
 {
     /// <summary>
-    /// Queues an explicit SAP 312 reversal for a successfully posted same-plant 311 ITO via FIVE S4 - Transfer Stock.
+    /// Queues an explicit SAP reversal for a successfully posted ITO:
+    /// 311 → 312 via FIVE S4 - Transfer Stock, or 301 → 302 via FIVE S4 - Plant Transfer Stock.
     /// Local stock moves only after confirmed SAP success in PostPendingErpPostings.
     /// </summary>
     public class ReverseSilaTransferCommandHandler : IRequestHandler<ReverseSilaTransferCommand, SilaTransferReverseResultDto>
@@ -35,7 +36,7 @@ namespace Buyer.Application.Features.Commands.ReverseSilaTransfer
         {
             if (string.IsNullOrWhiteSpace(request.Request.Reason))
             {
-                throw new BadRequestCustomException("Reversal reason is required.", "Enter a reversal reason before posting movement type 312.");
+                throw new BadRequestCustomException("Reversal reason is required.", "Enter a reversal reason before posting movement type 312 or 302.");
             }
 
             BuyerBusinessProfile buyer = await SilaAccess.GetBuyerAsync(_repository, _logger, request.OrganizationId);
@@ -50,26 +51,26 @@ namespace Buyer.Application.Features.Commands.ReverseSilaTransfer
             {
                 throw new BadRequestCustomException(
                     "Transfer is not posted.",
-                    "Unposted ITOs must be cancelled. Movement type 312 applies only to successful 311 postings.");
+                    "Unposted ITOs must be cancelled. Reversal applies only to successful 311 or 301 postings.");
             }
 
             if (string.IsNullOrWhiteSpace(transfer.SapMaterialDocument))
             {
-                InventoryErpPosting? posted = await _repository.InventoryErpPosting
+                InventoryErpPosting? originalPosted = await _repository.InventoryErpPosting
                     .FindByCondition(x => x.BuyerId == buyer.Id && x.IsActive
                         && x.ReferenceType == Common.SILA_REF_ITO && x.ReferenceId == transfer.Id
                         && x.Status == Common.SILA_POSTING_POSTED
-                        && x.MovementType == SilaInventorySap.TYPE_311)
+                        && (x.MovementType == SilaInventorySap.TYPE_311 || x.MovementType == SilaInventorySap.TYPE_301))
                     .OrderByDescending(x => x.PostedOn)
                     .FirstOrDefaultAsync(cancellationToken);
-                if (posted == null || string.IsNullOrWhiteSpace(posted.ErpReference))
+                if (originalPosted == null || string.IsNullOrWhiteSpace(originalPosted.ErpReference))
                 {
                     throw new BadRequestCustomException(
                         "Original SAP material document missing.",
-                        "A confirmed 311 material document is required before movement type 312.");
+                        "A confirmed 311 or 301 material document is required before reversal.");
                 }
 
-                transfer.SapMaterialDocument = posted.ErpReference;
+                transfer.SapMaterialDocument = originalPosted.ErpReference;
             }
 
             if (transfer.ReversalStatus == Common.SILA_ITO_REVERSAL_PENDING
@@ -146,13 +147,14 @@ namespace Buyer.Application.Features.Commands.ReverseSilaTransfer
             }
 
             string? companyCode = string.IsNullOrWhiteSpace(fromProperty?.CompanyCode) ? null : fromProperty.CompanyCode.Trim();
+            string apiName = rule.ApiName;
             ApiIntegrationConfiguration? api = await SilaInventorySap.ResolveAsync(
-                _repository, request.OrganizationId, SilaTransferSap.API_CONFIG_NAME, companyCode, cancellationToken);
-            if (api == null || !string.Equals(api.Name, SilaTransferSap.API_CONFIG_NAME, StringComparison.Ordinal))
+                _repository, request.OrganizationId, apiName, companyCode, cancellationToken);
+            if (api == null || !string.Equals(api.Name, apiName, StringComparison.Ordinal))
             {
                 throw new BadRequestCustomException(
                     SilaInventorySap.SAP_API_CONFIGURATION_NOT_FOUND,
-                    SilaInventorySap.MissingApi(SilaTransferSap.API_CONFIG_NAME));
+                    SilaInventorySap.MissingApi(apiName));
             }
 
             foreach ((InternalTransferOrderItem item, decimal quantity) in lines)
@@ -167,7 +169,7 @@ namespace Buyer.Application.Features.Commands.ReverseSilaTransfer
                 transfer.Id,
                 transfer.ItoNumber + "-R",
                 transfer.ToLocationId,
-                SilaInventorySap.TYPE_312);
+                rule.GoodsMovementType);
             posting.CompanyCode = companyCode;
             posting.IntegrationSystem = api.Name;
             posting.ErpRequestPayload = SilaErpPayload.Sanitise(body);
@@ -178,17 +180,17 @@ namespace Buyer.Application.Features.Commands.ReverseSilaTransfer
             transfer.ReversedBy = request.UserId;
             transfer.ReversedOn = postingDate;
             _repository.InternalTransferOrder.Update(transfer);
-            ledger.AddEvent(Common.SILA_REF_ITO, transfer.Id, "REVERSAL_REQUESTED", transfer.ReversalReason);
+            ledger.AddEvent(Common.SILA_REF_ITO, transfer.Id, "REVERSAL_REQUESTED", $"{rule.GoodsMovementType}: {transfer.ReversalReason}");
             await _repository.SaveAsync();
 
-            _logger.LogInfo($"ITO reversal queued. TransferId: {transfer.Id}, PostingId: {posting.Id}, Lines: {lines.Count}");
+            _logger.LogInfo($"ITO reversal queued. TransferId: {transfer.Id}, PostingId: {posting.Id}, Movement: {rule.GoodsMovementType}, Lines: {lines.Count}");
             return new SilaTransferReverseResultDto
             {
                 TransferId = transfer.Id,
                 ItoNumber = transfer.ItoNumber,
                 ReversalStatus = transfer.ReversalStatus,
                 PostingId = posting.Id,
-                Message = "Reversal queued for FIVE S4 - Transfer Stock (movement type 312). SAP is not called until the ERP posting worker runs."
+                Message = $"Reversal queued for {api.Name} (movement type {rule.GoodsMovementType}). SAP is not called until the ERP posting worker runs."
             };
         }
     }

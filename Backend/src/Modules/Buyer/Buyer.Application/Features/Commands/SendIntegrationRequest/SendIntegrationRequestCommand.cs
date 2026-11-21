@@ -22,5 +22,10 @@ namespace Buyer.Application.Features.Commands.SendIntegrationRequest
         /// Optional path for this call only (e.g. API_MATERIAL_DOCUMENT_SRV/Cancel). Does not change the saved configuration.
         /// </summary>
         public string? ResourcePathOverride { get; set; }
+
+        /// <summary>
+        /// Optional HTTP method for this call only (e.g. PATCH for physical-inventory count entry). Does not change the saved configuration.
+        /// </summary>
+        public string? HttpMethodOverride { get; set; }
     }
 }

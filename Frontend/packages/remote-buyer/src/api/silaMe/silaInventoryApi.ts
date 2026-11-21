@@ -548,6 +548,44 @@ export interface SilaPendingOutletRequirements {
   items: SilaPendingOutletRequirement[];
 }
 
+export interface SilaLiveStockCountWrite {
+  locationId: string;
+  materialId?: string | null;
+  materialCodeOrBarcode?: string | null;
+  physicalQty: number;
+  uom?: string | null;
+  reason?: string | null;
+}
+
+export interface SilaLiveStockCountResult {
+  adjustmentId: string;
+  adjustmentNumber: string;
+  postingId?: string | null;
+  materialCode: string;
+  onHandQty: number;
+  physicalQty: number;
+  varianceQty: number;
+  movementType: string;
+  message: string;
+}
+
+/** Live Inventory stock count → local ledger + SAP 701 (surplus) / 702 (shortage). */
+export const createLiveStockCount = async (request: SilaLiveStockCountWrite): Promise<SilaLiveStockCountResult> => {
+  try {
+    const response = await axiosInstance.post<SilaLiveStockCountResult>(`${BASE}/inventory/live-stock-count`, {
+      locationId: request.locationId,
+      materialId: request.materialId || undefined,
+      materialCodeOrBarcode: request.materialCodeOrBarcode?.trim() || undefined,
+      physicalQty: request.physicalQty,
+      uom: request.uom || undefined,
+      reason: request.reason || undefined,
+    });
+    return response.data;
+  } catch (error: unknown) {
+    throw new Error(readError(error, "Could not post the stock count."));
+  }
+};
+
 /** Compact pending Weekly Bucket / Wishlist requirements for demand-based ITO. */
 export const getPendingOutletRequirements = async (filters: {
   destinationOutletId?: string;

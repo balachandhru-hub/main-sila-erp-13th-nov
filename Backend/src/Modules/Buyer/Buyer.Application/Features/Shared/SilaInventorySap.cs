@@ -40,8 +40,13 @@ namespace Buyer.Application.Features.Shared
         public const string TYPE_311 = "311";
         public const string TYPE_312 = "312";
         public const string TYPE_301 = "301";
+        public const string TYPE_302 = "302";
         public const string TYPE_Z02 = "Z02";
         public const string TYPE_Z01 = "Z01";
+        /// <summary>SAP inventory difference — surplus (physical &gt; book).</summary>
+        public const string TYPE_701 = "701";
+        /// <summary>SAP inventory difference — shortage (physical &lt; book).</summary>
+        public const string TYPE_702 = "702";
 
         public const string SOURCE_SAP_LOCATION_MAPPING_MISSING = "SOURCE_SAP_LOCATION_MAPPING_MISSING";
         public const string DESTINATION_SAP_LOCATION_MAPPING_MISSING = "DESTINATION_SAP_LOCATION_MAPPING_MISSING";
@@ -60,7 +65,10 @@ namespace Buyer.Application.Features.Shared
         public static readonly Rule SamePlantTransfer = new Rule(API_TRANSFER, CODE_TRANSFER, TYPE_311, false);
         /// <summary>Explicit 312 reversal on FIVE S4 - Transfer Stock (same API as 311).</summary>
         public static readonly Rule SamePlantTransferReversal = new Rule(API_TRANSFER, CODE_TRANSFER_REVERSAL, TYPE_312, false);
+        /// <summary>Plant-to-plant (incl. cross-company) via FIVE S4 - Plant Transfer Stock.</summary>
         public static readonly Rule PlantTransfer = new Rule(API_PLANT_TRANSFER, CODE_TRANSFER, TYPE_301, true);
+        /// <summary>Explicit 302 reversal on FIVE S4 - Plant Transfer Stock (same API as 301).</summary>
+        public static readonly Rule PlantTransferReversal = new Rule(API_PLANT_TRANSFER, CODE_TRANSFER_REVERSAL, TYPE_302, true);
         /// <summary>Non-POS goods issue (stock decrease) via S4 - Goods Issue with customer Z02 where configured.</summary>
         public static readonly Rule GoodsIssue = new Rule(API_GOODS_ISSUE, CODE_ISSUE, TYPE_Z02, false, increasesStock: false);
         /// <summary>
@@ -74,11 +82,41 @@ namespace Buyer.Application.Features.Shared
             SilaStockCountSap.API_CONFIG_NAME, CODE_ISSUE, TYPE_Z01, false, increasesStock: true);
         /// <summary>Non-POS positive stock adjustments restore stock (IN).</summary>
         public static readonly Rule PositiveAdjustment = new Rule(API_POSITIVE_ADJUSTMENT, CODE_ISSUE, TYPE_Z01, false, increasesStock: true);
+        /// <summary>
+        /// Live Inventory stock-count surplus (701). Credentials from FIVE S4 - Positive Stock Adjustment;
+        /// posting uses API_PHYSICAL_INVENTORY_DOC_SRV (Material Document API rejects 701 with M7/096).
+        /// </summary>
+        public static readonly Rule InventoryDifferenceSurplus = new Rule(API_POSITIVE_ADJUSTMENT, CODE_ISSUE, TYPE_701, false, increasesStock: true);
+        /// <summary>
+        /// Live Inventory stock-count shortage (702). Same Physical Inventory Document path as 701.
+        /// </summary>
+        public static readonly Rule InventoryDifferenceShortage = new Rule(API_POSITIVE_ADJUSTMENT, CODE_ISSUE, TYPE_702, false, increasesStock: false);
 
         /// <summary>OUT uses GoodsIssue (Z02) for non-POS; IN uses PositiveAdjustment (Z01).</summary>
         public static Rule ForDirection(string? direction)
         {
             return direction == Common.SILA_DIRECTION_IN ? PositiveAdjustment : GoodsIssue;
+        }
+
+        /// <summary>Stock-count physical variance: positive → 701, negative → 702.</summary>
+        public static Rule ForInventoryDifference(string? direction)
+        {
+            return direction == Common.SILA_DIRECTION_IN ? InventoryDifferenceSurplus : InventoryDifferenceShortage;
+        }
+
+        public static bool IsInventoryDifference(string? movementType)
+        {
+            return movementType == TYPE_701 || movementType == TYPE_702;
+        }
+
+        public static string DirectionForMovement(string? movementType)
+        {
+            if (movementType == TYPE_Z01 || movementType == TYPE_701)
+            {
+                return Common.SILA_DIRECTION_IN;
+            }
+
+            return Common.SILA_DIRECTION_OUT;
         }
 
         /// <summary>
@@ -134,8 +172,9 @@ namespace Buyer.Application.Features.Shared
         }
 
         /// <summary>
-        /// Null when the locations can be posted. Same plant and a different storage location is 311.
-        /// A different plant in the same company is 301. A different company stops.
+        /// Null when the locations can be posted. Same plant and a different storage location is 311
+        /// (FIVE S4 - Transfer Stock). A different plant is 301 (FIVE S4 - Plant Transfer Stock), including
+        /// cross-company plant-to-plant. Same-plant cross-company is refused.
         /// </summary>
         public static string? DecideTransfer(
             string? fromPlant,
@@ -157,21 +196,16 @@ namespace Buyer.Application.Features.Shared
                 return DESTINATION_SAP_LOCATION_MAPPING_MISSING;
             }
 
+            if (!Same(fromPlant, toPlant))
+            {
+                rule = PlantTransfer;
+                return null;
+            }
+
             bool companiesKnown = !string.IsNullOrWhiteSpace(fromCompany) && !string.IsNullOrWhiteSpace(toCompany);
             if (companiesKnown && !Same(fromCompany!, toCompany!))
             {
                 return CROSS_COMPANY_TRANSFER_NOT_CONFIGURED;
-            }
-
-            if (!Same(fromPlant, toPlant))
-            {
-                if (!companiesKnown)
-                {
-                    return CROSS_COMPANY_TRANSFER_NOT_CONFIGURED;
-                }
-
-                rule = PlantTransfer;
-                return null;
             }
 
             if (Same(fromStorage, toStorage))
@@ -212,7 +246,7 @@ namespace Buyer.Application.Features.Shared
                 DESTINATION_SAP_LOCATION_MAPPING_MISSING => "The destination location has no SAP plant or storage location.",
                 INVENTORY_LOCATION_MAPPING_MISSING => "The inventory location has no SAP plant or storage location.",
                 INVALID_TRANSFER_LOCATION => "The source and destination storage locations are the same.",
-                CROSS_COMPANY_TRANSFER_NOT_CONFIGURED => "The source and destination company codes differ, so this transfer is not posted.",
+                CROSS_COMPANY_TRANSFER_NOT_CONFIGURED => "Same-plant transfers across different company codes are not posted. Use plant-to-plant (301) when plants differ.",
                 UOM_CONVERSION_MISSING => "The material has no SAP unit of measure, or the quantity cannot be converted to it.",
                 MATERIAL_MAPPING_MISSING => "The material is not an active stock item with a material number.",
                 MATERIAL_NOT_VALID => "The material is not an active stock item.",
@@ -240,8 +274,8 @@ namespace Buyer.Application.Features.Shared
         }
 
         /// <summary>
-        /// Explicit movement 312 reversal for a prior same-plant 311. Stock effect: decrease original destination,
-        /// increase original source. Uses FIVE S4 - Transfer Stock only.
+        /// Explicit reversal for a prior transfer: 311 → 312 (FIVE S4 - Transfer Stock) or 301 → 302
+        /// (FIVE S4 - Plant Transfer Stock). Stock effect: decrease original destination, increase original source.
         /// </summary>
         public static string? TryBuildTransferReversal(
             DateTime businessDate,
@@ -266,13 +300,16 @@ namespace Buyer.Application.Features.Shared
                 return problem;
             }
 
-            if (originalRule == null || originalRule.GoodsMovementType != TYPE_311)
+            if (originalRule == null
+                || (originalRule.GoodsMovementType != TYPE_311 && originalRule.GoodsMovementType != TYPE_301))
             {
                 return INVALID_TRANSFER_LOCATION;
             }
 
-            rule = SamePlantTransferReversal;
+            bool plantTransfer = originalRule.GoodsMovementType == TYPE_301;
+            rule = plantTransfer ? PlantTransferReversal : SamePlantTransferReversal;
             string sourcePlant = originalFromPlant!.Trim();
+            string destinationPlant = originalToPlant!.Trim();
             string originalSource = originalFromStorage!.Trim();
             string originalDestination = originalToStorage!.Trim();
             List<TransferQuantity> ready = new List<TransferQuantity>();
@@ -302,24 +339,51 @@ namespace Buyer.Application.Features.Shared
             string headerText = string.IsNullOrWhiteSpace(referenceDocument) ? "SILA ITO REVERSAL" : ("SILA ITO REV " + referenceDocument.Trim());
             string goodsMovementCode = rule.GoodsMovementCode;
             string goodsMovementType = rule.GoodsMovementType;
-            body = JsonSerializer.Serialize(new
+            if (plantTransfer)
             {
-                PostingDate = postingDate,
-                DocumentDate = postingDate,
-                GoodsMovementCode = goodsMovementCode,
-                MaterialDocumentHeaderText = headerText.Length > 25 ? headerText[..25] : headerText,
-                ReferenceDocument = string.IsNullOrWhiteSpace(referenceDocument) ? null : referenceDocument.Trim(),
-                to_MaterialDocumentItem = ready.Select(line => new
+                // 302: stock leaves original destination plant and returns to original source plant.
+                body = JsonSerializer.Serialize(new
                 {
-                    Material = line.Material,
-                    Plant = sourcePlant,
-                    StorageLocation = originalDestination,
-                    GoodsMovementType = goodsMovementType,
-                    QuantityInEntryUnit = FormatQuantity(line.Quantity),
-                    EntryUnit = line.EntryUnit,
-                    IssuingOrReceivingStorageLoc = originalSource
-                }).ToList()
-            });
+                    PostingDate = postingDate,
+                    DocumentDate = postingDate,
+                    GoodsMovementCode = goodsMovementCode,
+                    MaterialDocumentHeaderText = headerText.Length > 25 ? headerText[..25] : headerText,
+                    ReferenceDocument = string.IsNullOrWhiteSpace(referenceDocument) ? null : referenceDocument.Trim(),
+                    to_MaterialDocumentItem = ready.Select(line => new
+                    {
+                        Material = line.Material,
+                        Plant = destinationPlant,
+                        StorageLocation = originalDestination,
+                        GoodsMovementType = goodsMovementType,
+                        QuantityInEntryUnit = FormatQuantity(line.Quantity),
+                        EntryUnit = line.EntryUnit,
+                        IssuingOrReceivingPlant = sourcePlant,
+                        IssuingOrReceivingStorageLoc = originalSource
+                    }).ToList()
+                });
+            }
+            else
+            {
+                body = JsonSerializer.Serialize(new
+                {
+                    PostingDate = postingDate,
+                    DocumentDate = postingDate,
+                    GoodsMovementCode = goodsMovementCode,
+                    MaterialDocumentHeaderText = headerText.Length > 25 ? headerText[..25] : headerText,
+                    ReferenceDocument = string.IsNullOrWhiteSpace(referenceDocument) ? null : referenceDocument.Trim(),
+                    to_MaterialDocumentItem = ready.Select(line => new
+                    {
+                        Material = line.Material,
+                        Plant = sourcePlant,
+                        StorageLocation = originalDestination,
+                        GoodsMovementType = goodsMovementType,
+                        QuantityInEntryUnit = FormatQuantity(line.Quantity),
+                        EntryUnit = line.EntryUnit,
+                        IssuingOrReceivingStorageLoc = originalSource
+                    }).ToList()
+                });
+            }
+
             return null;
         }
 
