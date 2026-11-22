@@ -159,7 +159,8 @@ namespace Buyer.Application.Features.Shared
                 lines,
                 conversions,
                 out body,
-                out rule);
+                out rule,
+                transfer.ItoNumber);
             return problem == SilaInventorySap.MATERIAL_NOT_VALID ? MATERIAL_NOT_VALID : problem;
         }
 
