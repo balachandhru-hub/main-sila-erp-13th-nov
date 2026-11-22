@@ -87,8 +87,8 @@ namespace Buyer.Application.Features.Shared
         public static readonly Rule PlantTransfer = new Rule(API_PLANT_TRANSFER, CODE_TRANSFER, TYPE_301, true);
         /// <summary>Explicit 302 reversal on FIVE S4 - Plant Transfer Stock (same API as 301).</summary>
         public static readonly Rule PlantTransferReversal = new Rule(API_PLANT_TRANSFER, CODE_TRANSFER_REVERSAL, TYPE_302, true);
-        /// <summary>Non-POS goods issue (stock decrease) via FIVE S4 - Goods Issue with customer Z02 where configured.</summary>
-        public static readonly Rule GoodsIssue = new Rule(API_GOODS_ISSUE_LEGACY, CODE_ISSUE, TYPE_Z02, false, increasesStock: false);
+        /// <summary>Non-POS goods issue (stock decrease) via S4 - Goods Issue (Z02). Resolves FIVE / S4 name aliases.</summary>
+        public static readonly Rule GoodsIssue = new Rule(API_GOODS_ISSUE, CODE_ISSUE, TYPE_Z02, false, increasesStock: false);
         /// <summary>
         /// POS sales consumption via FIVE_POS_UPDATE: GoodsMovementCode 03, GoodsMovementType Z01.
         /// Stock decreases (IncreasesStock = false) even though the movement type is Z01.
@@ -846,7 +846,10 @@ namespace Buyer.Application.Features.Shared
             return PickForCompany(rows, companyCode);
         }
 
-        /// <summary>Integration Setup process_type for transfer rules (311/312 or 301/302).</summary>
+        /// <summary>
+        /// Integration Setup process_type fallbacks when the display name drifted
+        /// (311/312, 301/302, goods issue, positive adjustment).
+        /// </summary>
         public static string? ProcessTypeFor(Rule rule)
         {
             if (TransferApiNames.Any(x => string.Equals(x, rule.ApiName, StringComparison.OrdinalIgnoreCase))
@@ -863,7 +866,32 @@ namespace Buyer.Application.Features.Shared
                 return "POST_TRANSFER_301";
             }
 
+            if (IsWasteApi(rule.ApiName))
+            {
+                return "POST_WASTE_ADJUSTMENT";
+            }
+
+            // Name-based only for Z01/Z02 — do not key off movement type (waste also uses Z01/Z02).
+            if (GoodsIssueApiNames.Any(x => string.Equals(x, rule.ApiName, StringComparison.OrdinalIgnoreCase)))
+            {
+                return "POST_STOCK_ISSUE";
+            }
+
+            if (PositiveAdjustmentApiNames.Any(x => string.Equals(x, rule.ApiName, StringComparison.OrdinalIgnoreCase))
+                || IsInventoryDifference(rule.GoodsMovementType))
+            {
+                return "POST_POSITIVE_ADJ";
+            }
+
             return null;
+        }
+
+        /// <summary>User-facing missing-API text that names the Integration Setup row to activate.</summary>
+        public static string MissingApiForRule(Rule rule)
+        {
+            string names = string.Join(" / ", ApiNamesFor(rule));
+            return SAP_API_CONFIGURATION_NOT_FOUND + ". Activate " + names
+                + " under Integration Setup (process " + (ProcessTypeFor(rule) ?? "n/a") + ").";
         }
 
         /// <summary>
