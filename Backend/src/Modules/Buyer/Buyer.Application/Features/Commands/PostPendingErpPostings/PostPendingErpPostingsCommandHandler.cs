@@ -627,6 +627,42 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
 
             if (!sentOne && string.IsNullOrWhiteSpace(reference))
             {
+                // Safety net: Z01 waste was sometimes resolved as Positive Adjustment (IN) when waste flags drifted,
+                // leaving no OUT lines. Retry once with an explicit waste/out rule when the ledger has OUT qty.
+                if (wastePosting
+                    && posting.MovementType == SilaInventorySap.TYPE_Z01
+                    && transactions.Any(x => x.Direction == Common.SILA_DIRECTION_OUT && x.Quantity > 0))
+                {
+                    EffectPreparation retry = await PrepareEffectAsync(
+                        posting, new List<Guid> { posting.ReferenceId }, location, property,
+                        SilaInventorySap.WasteIssue, buyer.OrganizationId, cancellationToken);
+                    if (retry.Error == null && retry.Body != null && retry.Api != null)
+                    {
+                        IntegrationSendResultDto sent = await SendAsync(buyer.OrganizationId, retry.Api.Id, posting, retry.Body, cancellationToken);
+                        posting.IntegrationSystem = retry.Api.Name;
+                        posting.ErpHttpStatus = sent.Answered ? sent.StatusCode : null;
+                        posting.ErpRequestPayload = SilaErpPayload.Sanitise(retry.Body);
+                        posting.ErpResponsePayload = SilaErpPayload.Sanitise(sent.ResponseBody);
+                        bool ok = sent.Answered && sent.StatusCode >= 200 && sent.StatusCode < 300;
+                        if (ok)
+                        {
+                            string? document = SilaInventorySap.ReadMaterialDocument(sent.ResponseBody) ?? ReadReference(sent.ResponseBody);
+                            return await FinishAsync(posting, Common.SILA_POSTING_POSTED, document, null, cancellationToken);
+                        }
+
+                        string error = sent.Answered
+                            ? $"The ERP returned HTTP {sent.StatusCode}.{Snippet(sent.ResponseBody)}"
+                            : sent.ErrorMessage ?? "The ERP could not be reached.";
+                        posting.Attempts++;
+                        return await FinishAsync(
+                            posting,
+                            posting.Attempts >= MAX_ATTEMPTS ? Common.SILA_POSTING_FAILED : Common.SILA_POSTING_PENDING,
+                            null,
+                            SilaErpPayload.Sanitise(error) ?? error,
+                            cancellationToken);
+                    }
+                }
+
                 return await FinishAsync(posting, Common.SILA_POSTING_FAILED, null, "The document has no lines to post.", cancellationToken);
             }
 
@@ -658,6 +694,14 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
                     return SilaInventorySap.WasteReversal;
                 }
 
+                return SilaInventorySap.WasteIssue;
+            }
+
+            // OUT-only Z01 with no IN lines is waste-shaped (never a positive adjustment).
+            if (movement == SilaInventorySap.TYPE_Z01
+                && transactions.Any(x => x.Direction == Common.SILA_DIRECTION_OUT && x.Quantity > 0)
+                && !transactions.Any(x => x.Direction == Common.SILA_DIRECTION_IN && x.Quantity > 0))
+            {
                 return SilaInventorySap.WasteIssue;
             }
 
@@ -776,11 +820,11 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
                 return new EffectPreparation("The document has no lines to post.", null, null);
             }
 
-            api = await SilaInventorySap.ResolveAnyAsync(
-                _repository, organizationId, SilaInventorySap.ApiNamesFor(rule), posting.CompanyCode, cancellationToken);
+            api = await SilaInventorySap.ResolveForRuleAsync(
+                _repository, organizationId, rule, posting.CompanyCode, cancellationToken);
             if (api == null)
             {
-                return new EffectPreparation(SilaInventorySap.MissingApi(rule.ApiName), null, null);
+                return new EffectPreparation(SilaInventorySap.MissingApiForRule(rule), null, null);
             }
 
             return new EffectPreparation(null, body, api);

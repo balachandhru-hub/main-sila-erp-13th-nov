@@ -21,6 +21,7 @@ import {
 import SilaRecipeCatalogGrid from "./SilaRecipeCatalogGrid";
 import SilaRecipeDetailView from "./SilaRecipeDetailView";
 import SilaRecipeExcelPanel from "./SilaRecipeExcelPanel";
+import SilaRecipeLegacyUpload from "./SilaRecipeLegacyUpload";
 import SilaRecipeTable from "./SilaRecipeTable";
 import SilaRecipeWorkspaceShell from "./SilaRecipeWorkspaceShell";
 import { RECIPE_STATUSES, formatCost, recipeLabel } from "./recipeFormat";
@@ -30,6 +31,7 @@ import {
   silaRecipeCatalogPath,
   silaRecipeDetailPath,
   silaRecipeEditPath,
+  silaRecipeLegacyUploadPath,
   silaRecipeNewPath,
 } from "./silaRecipeRoutes";
 import { loadStudioViewMode, resolveStudioKind, saveStudioViewMode, StudioCover, type StudioViewMode } from "./recipeStudioVisuals";
@@ -39,6 +41,8 @@ import "./SilaRecipeStudio.css";
 
 interface SilaRecipesProps {
   canManage: boolean;
+  /** Approvers can decide legacy migration batches and publish. */
+  canApprove?: boolean;
   /** Reserved for later rebuild steps (Material price requests). Unused in Step 1 shell. */
   canRequestPrice?: boolean;
 }
@@ -49,7 +53,11 @@ const PAGE_SIZE = 48;
  * Recipe Studio — catalog/detail + New/Edit workspace shell (Steps 1–6).
  * Canonical URLs under /sila-recipes; SilaRecipeEditor is not mounted.
  */
-const SilaRecipes: React.FC<SilaRecipesProps> = ({ canManage, canRequestPrice: _canRequestPrice = false }) => {
+const SilaRecipes: React.FC<SilaRecipesProps> = ({
+  canManage,
+  canApprove = false,
+  canRequestPrice: _canRequestPrice = false,
+}) => {
   const { pathname, key: locationKey } = useLocation();
   const navigate = useNavigate();
   const route = useMemo(() => parseSilaRecipePath(pathname), [pathname]);
@@ -70,6 +78,8 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({ canManage, canRequestPrice: _
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<StudioViewMode>(() => loadStudioViewMode());
+  /** Categories / subcategories chip rows stay hidden until Filters is pressed. */
+  const [showCategoryFilters, setShowCategoryFilters] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<SilaRecipeListItem | null>(null);
   const [deleting, setDeleting] = useState(false);
   /** Remount New shell when New is clicked again while already on /sila-recipes/new. */
@@ -175,6 +185,18 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({ canManage, canRequestPrice: _
     }
   };
 
+  // --- Legacy Recipe Upload (isolated migration workspace) ---
+  if (route.kind === "legacy-upload") {
+    return (
+      <SilaRecipeLegacyUpload
+        canManage={canManage}
+        canApprove={canApprove}
+        onBack={goCatalog}
+        onOpenRecipe={(recipeId) => navigate(silaRecipeDetailPath(recipeId))}
+      />
+    );
+  }
+
   // --- New Recipe: Recipe Studio workspace (SilaRecipeEditor not mounted) ---
   if (route.kind === "new") {
     if (!canManage) {
@@ -262,6 +284,14 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({ canManage, canRequestPrice: _
           />
           <button
             type="button"
+            className="sila-btn sila-btn--secondary"
+            onClick={() => navigate(silaRecipeLegacyUploadPath())}
+            data-testid="recipe-legacy-upload-entry"
+          >
+            Legacy Recipe Upload
+          </button>
+          <button
+            type="button"
             className="sila-btn sila-btn--primary"
             onClick={goNew}
             disabled={!canManage}
@@ -303,54 +333,6 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({ canManage, canRequestPrice: _
         </div>
       </div>
 
-      <nav className="rstudio-cats" aria-label="Hospitality product classes" data-testid="recipe-product-class-tabs">
-        <button
-          type="button"
-          className={`rstudio-chip${!productClass ? " is-active" : ""}`}
-          onClick={() => { setProductClass(""); setCategoryId(""); setPage(1); }}
-        >
-          <StudioCover kind="other" compact title="All" />
-          All
-        </button>
-        {PRODUCT_CLASSES.map((cls) => (
-          <button
-            key={cls.id}
-            type="button"
-            className={`rstudio-chip${productClass === cls.id ? " is-active" : ""}`}
-            onClick={() => { setProductClass(cls.id); setCategoryId(""); setPage(1); }}
-          >
-            <StudioCover kind={resolveStudioKind(cls.label, cls.id)} compact title={cls.label} />
-            {cls.label}
-          </button>
-        ))}
-      </nav>
-
-      <nav className="rstudio-cats rstudio-cats--sub" aria-label="Recipe subcategories">
-        <button
-          type="button"
-          className={`rstudio-chip${!categoryId ? " is-active" : ""}`}
-          onClick={() => { setCategoryId(""); setPage(1); }}
-        >
-          All subcategories
-        </button>
-        {categories
-          .filter((category) => !productClass || !category.productClass || category.productClass === productClass)
-          .map((category) => {
-            const kind = resolveStudioKind(category.name, category.code);
-            return (
-              <button
-                key={category.id}
-                type="button"
-                className={`rstudio-chip${categoryId === category.id ? " is-active" : ""}`}
-                onClick={() => { setCategoryId(category.id); setPage(1); }}
-              >
-                <StudioCover kind={kind} compact title={category.name} />
-                {category.name}
-              </button>
-            );
-          })}
-      </nav>
-
       <section className="rstudio-toolbar sila-card">
         <div className="srec-filters srec-filters--flush">
           <div className="sila-field srec-grow">
@@ -391,12 +373,74 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({ canManage, canRequestPrice: _
               <option value="BATCH">Batch</option>
             </select>
           </div>
+          <button
+            type="button"
+            className="sila-btn sila-btn--secondary"
+            data-testid="recipe-category-filters-toggle"
+            aria-expanded={showCategoryFilters}
+            aria-controls="recipe-category-filters"
+            onClick={() => setShowCategoryFilters((open) => !open)}
+          >
+            {showCategoryFilters ? "Hide filters" : "Filters"}
+          </button>
           <div className="rstudio-view-toggle" role="group" aria-label="Catalog view">
             <button type="button" className={`sila-btn sila-btn--sm ${viewMode === "grid" ? "sila-btn--primary" : "sila-btn--secondary"}`} onClick={() => setMode("grid")}>Grid</button>
             <button type="button" className={`sila-btn sila-btn--sm ${viewMode === "list" ? "sila-btn--primary" : "sila-btn--secondary"}`} onClick={() => setMode("list")}>List</button>
           </div>
         </div>
       </section>
+
+      {showCategoryFilters && (
+        <div id="recipe-category-filters" data-testid="recipe-category-filters">
+          <nav className="rstudio-cats" aria-label="Hospitality product classes" data-testid="recipe-product-class-tabs">
+            <button
+              type="button"
+              className={`rstudio-chip${!productClass ? " is-active" : ""}`}
+              onClick={() => { setProductClass(""); setCategoryId(""); setPage(1); }}
+            >
+              <StudioCover kind="other" compact title="All" />
+              All
+            </button>
+            {PRODUCT_CLASSES.map((cls) => (
+              <button
+                key={cls.id}
+                type="button"
+                className={`rstudio-chip${productClass === cls.id ? " is-active" : ""}`}
+                onClick={() => { setProductClass(cls.id); setCategoryId(""); setPage(1); }}
+              >
+                <StudioCover kind={resolveStudioKind(cls.label, cls.id)} compact title={cls.label} />
+                {cls.label}
+              </button>
+            ))}
+          </nav>
+
+          <nav className="rstudio-cats rstudio-cats--sub" aria-label="Recipe subcategories">
+            <button
+              type="button"
+              className={`rstudio-chip${!categoryId ? " is-active" : ""}`}
+              onClick={() => { setCategoryId(""); setPage(1); }}
+            >
+              All subcategories
+            </button>
+            {categories
+              .filter((category) => !productClass || !category.productClass || category.productClass === productClass)
+              .map((category) => {
+                const kind = resolveStudioKind(category.name, category.code);
+                return (
+                  <button
+                    key={category.id}
+                    type="button"
+                    className={`rstudio-chip${categoryId === category.id ? " is-active" : ""}`}
+                    onClick={() => { setCategoryId(category.id); setPage(1); }}
+                  >
+                    <StudioCover kind={kind} compact title={category.name} />
+                    {category.name}
+                  </button>
+                );
+              })}
+          </nav>
+        </div>
+      )}
 
       {loading ? (
         <Loader size={24} message="Loading Recipe Studio..." />

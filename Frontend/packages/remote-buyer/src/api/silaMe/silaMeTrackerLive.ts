@@ -278,8 +278,25 @@ export const composeLiveSilaMeTracker = async (query: SilaTrackerQuery): Promise
     };
   };
 
+  // One tracker row per ITO / stock-count / adjustment document (not per ledger line). Prefer OUT.
+  const seenDocs = new Set<string>();
+  const collapsedLedger = [...ledger].sort((a, b) => {
+    const score = (line: typeof a) =>
+      (line.direction === "OUT" || line.transactionType === "TRANSFER_OUT" ? 2 : 0)
+      + (line.transactionType === "TRANSFER_OUT" ? 1 : 0);
+    return score(b) - score(a);
+  }).filter((line) => {
+    if (line.referenceType !== "ITO" && line.referenceType !== "STOCK_COUNT" && line.referenceType !== "ADJUSTMENT") {
+      return true;
+    }
+    const key = `${line.referenceType}|${line.referenceId}`;
+    if (seenDocs.has(key)) return false;
+    seenDocs.add(key);
+    return true;
+  });
+
   const rows: SilaTrackerRow[] = [];
-  for (const line of ledger) {
+  for (const line of collapsedLedger) {
     const posting = postingByReference.get(referenceKey(line.referenceType, line.referenceId));
     const place = placeOf(locations, properties, line.locationId);
     let movement = posting?.movementType ?? "";

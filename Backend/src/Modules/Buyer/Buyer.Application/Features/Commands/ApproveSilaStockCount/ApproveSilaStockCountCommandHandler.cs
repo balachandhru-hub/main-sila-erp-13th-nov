@@ -84,22 +84,10 @@ namespace Buyer.Application.Features.Commands.ApproveSilaStockCount
                 .ToDictionaryAsync(x => x.Id, cancellationToken);
 
             InventoryLedger ledger = new InventoryLedger(_repository, buyer.Id, request.UserId);
-            int adjustmentCount = 0;
-            foreach (StockCountItem item in variances)
+            int lineCount = 0;
+            if (variances.Count > 0)
             {
-                if (!materials.TryGetValue(item.MaterialId, out ItemBuyerMaster? material))
-                {
-                    _logger.LogError($"Material of the count line not found. MaterialId: {item.MaterialId}, StockCountId: {count.Id}");
-                    throw new NotFoundCustomException("Material not found.", $"Material {item.MaterialCode} no longer exists in the Item Master.");
-                }
-
-                decimal variance = item.VarianceQty ?? 0;
-                decimal physical = item.CountedQty ?? (item.SystemQty + variance);
-                string direction = variance > 0 ? Common.SILA_DIRECTION_IN : Common.SILA_DIRECTION_OUT;
-                SilaInventorySap.Rule rule = SilaInventorySap.ForInventoryDifference(direction);
-                string reason = $"Stock count {count.CountNumber}: {item.MaterialCode} physical {physical:0.####} variance {variance:0.####}";
-
-                // Same posting path as Live Inventory createLiveStockCount: StockAdjustment + SAP 701/702.
+                // One local adjustment document + one ERP posting for the whole count (not per line).
                 string adjustmentNumber = await DocumentNumber.NextAsync(
                     _repository, buyer.Id, DocumentNumber.ADJUSTMENT, 6, cancellationToken);
                 StockAdjustment adjustment = new StockAdjustment
@@ -109,60 +97,106 @@ namespace Buyer.Application.Features.Commands.ApproveSilaStockCount
                     AdjustmentNumber = adjustmentNumber,
                     LocationId = count.LocationId,
                     AdjustmentType = Common.SILA_TXN_STOCK_COUNT_ADJUSTMENT,
-                    Reason = reason,
+                    Reason = $"Stock count {count.CountNumber}: {variances.Count} variance line(s)",
                     PostedBy = request.UserId,
                     IsActive = true
                 };
                 _repository.StockAdjustment.Create(adjustment);
-                _repository.StockAdjustmentItem.Create(new StockAdjustmentItem
-                {
-                    Id = Guid.NewGuid(),
-                    StockAdjustmentId = adjustment.Id,
-                    MaterialId = material.Id,
-                    MaterialCode = material.MaterialCode ?? item.MaterialCode ?? string.Empty,
-                    MaterialName = material.Description ?? material.MaterialCode ?? string.Empty,
-                    Quantity = physical,
-                    Uom = string.IsNullOrWhiteSpace(item.BaseUom) ? UomConverter.BaseUomOf(material) : item.BaseUom,
-                    BaseQuantity = physical,
-                    IsActive = true
-                });
 
-                await ledger.PostAsync(new InventoryMovement
+                bool hasIn = false;
+                bool hasOut = false;
+                foreach (StockCountItem item in variances)
                 {
-                    LocationId = count.LocationId,
-                    Material = material,
-                    Direction = direction,
-                    TransactionType = Common.SILA_TXN_STOCK_COUNT_ADJUSTMENT,
-                    BaseQuantity = Math.Abs(variance),
-                    EnteredQuantity = Math.Abs(variance),
-                    EnteredUom = item.BaseUom,
-                    UnitCost = item.UnitCost,
-                    ReferenceType = Common.SILA_REF_ADJUSTMENT,
-                    ReferenceId = adjustment.Id,
-                    ReferenceNumber = adjustment.AdjustmentNumber,
-                    Reason = reason,
-                    BusinessDate = count.BusinessDate
-                }, cancellationToken);
+                    if (!materials.TryGetValue(item.MaterialId, out ItemBuyerMaster? material))
+                    {
+                        _logger.LogError($"Material of the count line not found. MaterialId: {item.MaterialId}, StockCountId: {count.Id}");
+                        throw new NotFoundCustomException("Material not found.", $"Material {item.MaterialCode} no longer exists in the Item Master.");
+                    }
+
+                    decimal variance = item.VarianceQty ?? 0;
+                    decimal physical = item.CountedQty ?? (item.SystemQty + variance);
+                    string direction = variance > 0 ? Common.SILA_DIRECTION_IN : Common.SILA_DIRECTION_OUT;
+                    hasIn |= direction == Common.SILA_DIRECTION_IN;
+                    hasOut |= direction == Common.SILA_DIRECTION_OUT;
+                    string reason = $"Stock count {count.CountNumber}: {item.MaterialCode} physical {physical:0.####} variance {variance:0.####}";
+
+                    _repository.StockAdjustmentItem.Create(new StockAdjustmentItem
+                    {
+                        Id = Guid.NewGuid(),
+                        StockAdjustmentId = adjustment.Id,
+                        MaterialId = material.Id,
+                        MaterialCode = material.MaterialCode ?? item.MaterialCode ?? string.Empty,
+                        MaterialName = material.Description ?? material.MaterialCode ?? string.Empty,
+                        Quantity = physical,
+                        Uom = string.IsNullOrWhiteSpace(item.BaseUom) ? UomConverter.BaseUomOf(material) : item.BaseUom,
+                        BaseQuantity = physical,
+                        IsActive = true
+                    });
+
+                    // Ledger references the STOCK COUNT so one ERP posting covers every variance line together.
+                    await ledger.PostAsync(new InventoryMovement
+                    {
+                        LocationId = count.LocationId,
+                        Material = material,
+                        Direction = direction,
+                        TransactionType = Common.SILA_TXN_STOCK_COUNT_ADJUSTMENT,
+                        BaseQuantity = Math.Abs(variance),
+                        EnteredQuantity = Math.Abs(variance),
+                        EnteredUom = item.BaseUom,
+                        UnitCost = item.UnitCost,
+                        ReferenceType = Common.SILA_REF_STOCK_COUNT,
+                        ReferenceId = count.Id,
+                        ReferenceNumber = count.CountNumber,
+                        Reason = reason,
+                        BusinessDate = count.BusinessDate
+                    }, cancellationToken);
+                    lineCount++;
+                }
+
+                // Z01/Z02 Material Document (Goods Issue / Positive Adjustment). Mixed directions use STOCK_COUNT
+                // so PostStockEffect posts both movements against the same posting record.
+                string movement;
+                string apiName;
+                if (hasIn && hasOut)
+                {
+                    movement = Common.SILA_MOVEMENT_STOCK_COUNT;
+                    apiName = $"{SilaInventorySap.API_GOODS_ISSUE}+{SilaInventorySap.API_POSITIVE_ADJUSTMENT}";
+                }
+                else if (hasIn)
+                {
+                    SilaInventorySap.Rule rule = SilaInventorySap.PositiveAdjustment;
+                    movement = rule.GoodsMovementType;
+                    apiName = rule.ApiName;
+                }
+                else
+                {
+                    SilaInventorySap.Rule rule = SilaInventorySap.GoodsIssue;
+                    movement = rule.GoodsMovementType;
+                    apiName = rule.ApiName;
+                }
 
                 InventoryErpPosting posting = ledger.QueueErpPosting(
-                    Common.SILA_REF_ADJUSTMENT,
-                    adjustment.Id,
-                    adjustment.AdjustmentNumber,
+                    Common.SILA_REF_STOCK_COUNT,
+                    count.Id,
+                    count.CountNumber,
                     count.LocationId,
-                    rule.GoodsMovementType);
-                posting.IntegrationSystem = rule.ApiName;
-                ledger.AddEvent(Common.SILA_REF_ADJUSTMENT, adjustment.Id, "STOCK_COUNT", $"{rule.GoodsMovementType}: {variance:0.####}");
-                adjustmentCount++;
+                    movement);
+                posting.IntegrationSystem = apiName;
+                ledger.AddEvent(
+                    Common.SILA_REF_STOCK_COUNT,
+                    count.Id,
+                    "STOCK_COUNT_ERP",
+                    $"{movement}: lines={lineCount} adj={adjustment.AdjustmentNumber}");
             }
 
             count.Status = Common.SILA_COUNT_POSTED;
             count.ApprovedBy = request.UserId;
             count.ApprovedOn = DateTime.UtcNow;
-            ledger.AddEvent(Common.SILA_REF_STOCK_COUNT, count.Id, SilaStockCountRules.EVENT_APPROVED, $"Adjustments={adjustmentCount}");
+            ledger.AddEvent(Common.SILA_REF_STOCK_COUNT, count.Id, SilaStockCountRules.EVENT_APPROVED, $"Lines={lineCount}");
             await SilaPhysicalInventoryRules.CloseForCountAsync(_repository, ledger, count, Common.SILA_PI_COMPLETED, cancellationToken);
             await _repository.SaveAsync();
 
-            _logger.LogInfo($"Stock count approved and posted. StockCountId: {count.Id}, Adjustments: {adjustmentCount}");
+            _logger.LogInfo($"Stock count approved and posted together. StockCountId: {count.Id}, Lines: {lineCount}");
             return Unit.Value;
         }
     }

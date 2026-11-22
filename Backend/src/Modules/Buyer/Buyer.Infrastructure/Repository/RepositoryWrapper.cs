@@ -71,6 +71,10 @@ namespace Buyer.Infrastructure.Repository
         private IMenuPosMappingRepository? _menuPosMapping;
         private IPmsDemandSnapshotRepository? _pmsDemandSnapshot;
         private IMenuEngineeringSettingsRepository? _menuEngineeringSettings;
+        private IRecipeLegacyBatchRepository? _recipeLegacyBatch;
+        private IRecipeLegacyRecipeRepository? _recipeLegacyRecipe;
+        private IRecipeLegacyMaterialMapRepository? _recipeLegacyMaterialMap;
+        private IRecipeLegacyImageRepository? _recipeLegacyImage;
         private IBuyerBusinessProfileRepository _buyerBusinessProfileRepository;
         private IBuyerCategoryRepository _buyerCategoryRepository;
         private IAssetRepository _assetRepository;
@@ -1434,6 +1438,42 @@ namespace Buyer.Infrastructure.Repository
             {
                 _menuEngineeringSettings ??= new MenuEngineeringSettingsRepository(_context);
                 return _menuEngineeringSettings;
+            }
+        }
+
+        public IRecipeLegacyBatchRepository RecipeLegacyBatch
+        {
+            get
+            {
+                _recipeLegacyBatch ??= new RecipeLegacyBatchRepository(_context);
+                return _recipeLegacyBatch;
+            }
+        }
+
+        public IRecipeLegacyRecipeRepository RecipeLegacyRecipe
+        {
+            get
+            {
+                _recipeLegacyRecipe ??= new RecipeLegacyRecipeRepository(_context);
+                return _recipeLegacyRecipe;
+            }
+        }
+
+        public IRecipeLegacyMaterialMapRepository RecipeLegacyMaterialMap
+        {
+            get
+            {
+                _recipeLegacyMaterialMap ??= new RecipeLegacyMaterialMapRepository(_context);
+                return _recipeLegacyMaterialMap;
+            }
+        }
+
+        public IRecipeLegacyImageRepository RecipeLegacyImage
+        {
+            get
+            {
+                _recipeLegacyImage ??= new RecipeLegacyImageRepository(_context);
+                return _recipeLegacyImage;
             }
         }
 

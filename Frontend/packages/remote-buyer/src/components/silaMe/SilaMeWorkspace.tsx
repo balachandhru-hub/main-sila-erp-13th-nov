@@ -143,6 +143,7 @@ const SilaMeWorkspace: React.FC<SilaMeWorkspaceProps> = ({ navKey, role, permiss
         return (
           <SilaRecipes
             canManage={can.manageRecipe}
+            canApprove={can.approveRecipe}
             canRequestPrice={can.manageMasterData}
           />
         );
@@ -150,6 +151,7 @@ const SilaMeWorkspace: React.FC<SilaMeWorkspaceProps> = ({ navKey, role, permiss
         return (
           <SilaRecipes
             canManage={can.manageRecipe}
+            canApprove={can.approveRecipe}
             canRequestPrice={can.manageMasterData}
           />
         );
