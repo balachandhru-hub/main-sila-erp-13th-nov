@@ -48,7 +48,7 @@ namespace Buyer.Tests.Shared
             Assert.Equal(SilaInventorySap.API_PLANT_TRANSFER, rule.ApiName);
             using JsonDocument json = JsonDocument.Parse(body!);
             Assert.Equal("04", json.RootElement.GetProperty("GoodsMovementCode").GetString());
-            JsonElement item = json.RootElement.GetProperty("to_MaterialDocumentItem")[0];
+            JsonElement item = json.RootElement.GetProperty("to_MaterialDocumentItem").GetProperty("results")[0];
             Assert.Equal("301", item.GetProperty("GoodsMovementType").GetString());
             Assert.Equal("1060", item.GetProperty("Plant").GetString());
             Assert.Equal("FL01", item.GetProperty("StorageLocation").GetString());
@@ -81,7 +81,7 @@ namespace Buyer.Tests.Shared
             Assert.Equal(SilaInventorySap.API_PLANT_TRANSFER, rule.ApiName);
             using JsonDocument json = JsonDocument.Parse(body!);
             Assert.Equal("06", json.RootElement.GetProperty("GoodsMovementCode").GetString());
-            JsonElement item = json.RootElement.GetProperty("to_MaterialDocumentItem")[0];
+            JsonElement item = json.RootElement.GetProperty("to_MaterialDocumentItem").GetProperty("results")[0];
             Assert.Equal("302", item.GetProperty("GoodsMovementType").GetString());
             Assert.Equal("1050", item.GetProperty("Plant").GetString());
             Assert.Equal("FJ01", item.GetProperty("StorageLocation").GetString());

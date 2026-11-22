@@ -60,7 +60,7 @@ namespace Buyer.Tests.Shared
 
             using JsonDocument json = JsonDocument.Parse(body!);
             Assert.Equal("06", json.RootElement.GetProperty("GoodsMovementCode").GetString());
-            JsonElement item = json.RootElement.GetProperty("to_MaterialDocumentItem")[0];
+            JsonElement item = json.RootElement.GetProperty("to_MaterialDocumentItem").GetProperty("results")[0];
             Assert.Equal("312", item.GetProperty("GoodsMovementType").GetString());
             Assert.Equal("FL10", item.GetProperty("StorageLocation").GetString());
             Assert.Equal("CS01", item.GetProperty("IssuingOrReceivingStorageLoc").GetString());
