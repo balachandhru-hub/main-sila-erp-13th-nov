@@ -55,6 +55,11 @@ namespace Buyer.Application.Features.Shared
 
         public static string NameOf(Dictionary<Guid, string> names, Guid userId)
         {
+            if (userId == Guid.Empty)
+            {
+                return "System";
+            }
+
             return names.TryGetValue(userId, out string? name) ? name : userId.ToString();
         }
     }

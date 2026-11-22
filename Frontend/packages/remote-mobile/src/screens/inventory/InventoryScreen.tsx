@@ -17,6 +17,7 @@ interface QuickAction {
 }
 
 const QUICK: QuickAction[] = [
+  { label: 'Scan material', detail: 'Barcode / photo → action', to: 'inventory/scan' },
   { label: 'Stock Count', detail: 'Scan, photo, or search', to: 'inventory/counts', visible: (can) => can.manageCount || can.approveCount || can.initiateCount },
   { label: 'Quick Transfer', detail: 'Scan · check stock · move', to: 'inventory/transfers/new?mode=quick', visible: (can) => can.manageTransfer },
   { label: 'ITO', detail: 'Open transfer orders', to: 'inventory/transfers', visible: (can) => can.manageTransfer || can.approveTransfer },
@@ -187,7 +188,7 @@ const InventoryScreen: React.FC = () => {
               { label: 'Pending ITO & transfers', to: 'inventory/transfers' },
               { label: 'Stock count history', to: 'inventory/counts', show: can.manageCount || can.approveCount || can.initiateCount },
               { label: 'Stock health', to: 'inventory/stock?health=LOW' },
-              { label: 'Transaction history', to: 'tasks/alerts' },
+              { label: 'Transaction history', to: 'inventory/transactions' },
               { label: 'Recommendations', to: 'inventory/recommendations', show: can.requestPurchase },
             ]
               .filter((entry) => entry.show !== false)

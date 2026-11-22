@@ -282,6 +282,10 @@ export interface SilaAdjustmentItem {
 
 export interface SilaAdjustmentDetail extends Omit<SilaAdjustmentListItem, "lineCount"> {
   items: SilaAdjustmentItem[];
+  events?: SilaTransferEvent[];
+  erpStatus?: string | null;
+  erpReference?: string | null;
+  erpPostingId?: string | null;
 }
 
 interface CreatedResponse {
@@ -496,7 +500,11 @@ export const getAdjustments = async (filter: { locationId?: string; type?: strin
 export const getAdjustment = async (adjustmentId: string): Promise<SilaAdjustmentDetail> => {
   try {
     const response = await axiosInstance.get<SilaAdjustmentDetail>(`${BASE}/adjustments/${adjustmentId}`);
-    return { ...response.data, items: list(response.data?.items) };
+    return {
+      ...response.data,
+      items: list(response.data?.items),
+      events: list(response.data?.events),
+    };
   } catch (error: unknown) {
     throw new Error(readError(error, "Could not load the stock adjustment."));
   }

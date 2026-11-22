@@ -417,53 +417,64 @@ namespace Buyer.Application.Features.Shared
 
             string postingDate = FormatDate(businessDate);
             string headerText = string.IsNullOrWhiteSpace(referenceDocument) ? "SILA ITO REVERSAL" : ("SILA ITO REV " + referenceDocument.Trim());
+            if (headerText.Length > 25)
+            {
+                headerText = headerText[..25];
+            }
+
+            string? reference = string.IsNullOrWhiteSpace(referenceDocument) ? null : referenceDocument.Trim();
+            if (reference != null && reference.Length > 16)
+            {
+                reference = reference[..16];
+            }
+
             string goodsMovementCode = rule.GoodsMovementCode;
             string goodsMovementType = rule.GoodsMovementType;
+            // OData V2 deep-insert: to_MaterialDocumentItem.results[...] (matches Integration Setup sample).
+            List<Dictionary<string, object?>> items;
             if (plantTransfer)
             {
                 // 302: stock leaves original destination plant and returns to original source plant.
-                body = JsonSerializer.Serialize(new
+                items = ready.Select(line => new Dictionary<string, object?>
                 {
-                    PostingDate = postingDate,
-                    DocumentDate = postingDate,
-                    GoodsMovementCode = goodsMovementCode,
-                    MaterialDocumentHeaderText = headerText.Length > 25 ? headerText[..25] : headerText,
-                    ReferenceDocument = string.IsNullOrWhiteSpace(referenceDocument) ? null : referenceDocument.Trim(),
-                    to_MaterialDocumentItem = ready.Select(line => new
-                    {
-                        Material = line.Material,
-                        Plant = destinationPlant,
-                        StorageLocation = originalDestination,
-                        GoodsMovementType = goodsMovementType,
-                        QuantityInEntryUnit = FormatQuantity(line.Quantity),
-                        EntryUnit = line.EntryUnit,
-                        IssuingOrReceivingPlant = sourcePlant,
-                        IssuingOrReceivingStorageLoc = originalSource
-                    }).ToList()
-                });
+                    ["Material"] = line.Material,
+                    ["Plant"] = destinationPlant,
+                    ["StorageLocation"] = originalDestination,
+                    ["GoodsMovementType"] = goodsMovementType,
+                    ["QuantityInEntryUnit"] = FormatQuantity(line.Quantity),
+                    ["EntryUnit"] = line.EntryUnit,
+                    ["IssuingOrReceivingPlant"] = sourcePlant,
+                    ["IssuingOrReceivingStorageLoc"] = originalSource
+                }).ToList();
             }
             else
             {
-                body = JsonSerializer.Serialize(new
+                items = ready.Select(line => new Dictionary<string, object?>
                 {
-                    PostingDate = postingDate,
-                    DocumentDate = postingDate,
-                    GoodsMovementCode = goodsMovementCode,
-                    MaterialDocumentHeaderText = headerText.Length > 25 ? headerText[..25] : headerText,
-                    ReferenceDocument = string.IsNullOrWhiteSpace(referenceDocument) ? null : referenceDocument.Trim(),
-                    to_MaterialDocumentItem = ready.Select(line => new
-                    {
-                        Material = line.Material,
-                        Plant = sourcePlant,
-                        StorageLocation = originalDestination,
-                        GoodsMovementType = goodsMovementType,
-                        QuantityInEntryUnit = FormatQuantity(line.Quantity),
-                        EntryUnit = line.EntryUnit,
-                        IssuingOrReceivingStorageLoc = originalSource
-                    }).ToList()
-                });
+                    ["Material"] = line.Material,
+                    ["Plant"] = sourcePlant,
+                    ["StorageLocation"] = originalDestination,
+                    ["GoodsMovementType"] = goodsMovementType,
+                    ["QuantityInEntryUnit"] = FormatQuantity(line.Quantity),
+                    ["EntryUnit"] = line.EntryUnit,
+                    ["IssuingOrReceivingStorageLoc"] = originalSource
+                }).ToList();
             }
 
+            Dictionary<string, object?> header = new Dictionary<string, object?>
+            {
+                ["PostingDate"] = postingDate,
+                ["DocumentDate"] = postingDate,
+                ["GoodsMovementCode"] = goodsMovementCode,
+                ["MaterialDocumentHeaderText"] = headerText,
+                ["to_MaterialDocumentItem"] = new Dictionary<string, object?> { ["results"] = items }
+            };
+            if (reference != null)
+            {
+                header["ReferenceDocument"] = reference;
+            }
+
+            body = JsonSerializer.Serialize(header);
             return null;
         }
 
@@ -479,7 +490,8 @@ namespace Buyer.Application.Features.Shared
             IReadOnlyList<TransferLine> lines,
             Dictionary<Guid, List<MaterialUomConversion>> conversions,
             out string? body,
-            out Rule? rule)
+            out Rule? rule,
+            string? referenceDocument = null)
         {
             body = null;
             string? problem = DecideTransfer(fromPlant, fromStorage, toPlant, toStorage, fromCompany, toCompany, out rule);
@@ -517,46 +529,64 @@ namespace Buyer.Application.Features.Shared
 
             string postingDate = FormatDate(businessDate);
             Rule decided = rule;
+            string headerText = string.IsNullOrWhiteSpace(referenceDocument)
+                ? "SILA Storage Location Transfer"
+                : referenceDocument.Trim();
+            if (headerText.Length > 25)
+            {
+                headerText = headerText[..25];
+            }
+
+            string? reference = string.IsNullOrWhiteSpace(referenceDocument) ? null : referenceDocument.Trim();
+            if (reference != null && reference.Length > 16)
+            {
+                reference = reference[..16];
+            }
+
+            // OData V2 deep-insert: to_MaterialDocumentItem.results[...] (matches Integration Setup sample).
+            List<Dictionary<string, object?>> items;
             if (decided.ReceivingPlant)
             {
-                body = JsonSerializer.Serialize(new
+                items = ready.Select(line => new Dictionary<string, object?>
                 {
-                    PostingDate = postingDate,
-                    DocumentDate = postingDate,
-                    GoodsMovementCode = decided.GoodsMovementCode,
-                    to_MaterialDocumentItem = ready.Select(line => new
-                    {
-                        Material = line.Material,
-                        Plant = sourcePlant,
-                        StorageLocation = sourceStorage,
-                        GoodsMovementType = decided.GoodsMovementType,
-                        QuantityInEntryUnit = FormatQuantity(line.Quantity),
-                        EntryUnit = line.EntryUnit,
-                        IssuingOrReceivingPlant = destinationPlant,
-                        IssuingOrReceivingStorageLoc = destinationStorage
-                    }).ToList()
-                });
+                    ["Material"] = line.Material,
+                    ["Plant"] = sourcePlant,
+                    ["StorageLocation"] = sourceStorage,
+                    ["GoodsMovementType"] = decided.GoodsMovementType,
+                    ["QuantityInEntryUnit"] = FormatQuantity(line.Quantity),
+                    ["EntryUnit"] = line.EntryUnit,
+                    ["IssuingOrReceivingPlant"] = destinationPlant,
+                    ["IssuingOrReceivingStorageLoc"] = destinationStorage
+                }).ToList();
             }
             else
             {
-                body = JsonSerializer.Serialize(new
+                items = ready.Select(line => new Dictionary<string, object?>
                 {
-                    PostingDate = postingDate,
-                    DocumentDate = postingDate,
-                    GoodsMovementCode = decided.GoodsMovementCode,
-                    to_MaterialDocumentItem = ready.Select(line => new
-                    {
-                        Material = line.Material,
-                        Plant = sourcePlant,
-                        StorageLocation = sourceStorage,
-                        GoodsMovementType = decided.GoodsMovementType,
-                        QuantityInEntryUnit = FormatQuantity(line.Quantity),
-                        EntryUnit = line.EntryUnit,
-                        IssuingOrReceivingStorageLoc = destinationStorage
-                    }).ToList()
-                });
+                    ["Material"] = line.Material,
+                    ["Plant"] = sourcePlant,
+                    ["StorageLocation"] = sourceStorage,
+                    ["GoodsMovementType"] = decided.GoodsMovementType,
+                    ["QuantityInEntryUnit"] = FormatQuantity(line.Quantity),
+                    ["EntryUnit"] = line.EntryUnit,
+                    ["IssuingOrReceivingStorageLoc"] = destinationStorage
+                }).ToList();
             }
 
+            Dictionary<string, object?> header = new Dictionary<string, object?>
+            {
+                ["PostingDate"] = postingDate,
+                ["DocumentDate"] = postingDate,
+                ["GoodsMovementCode"] = decided.GoodsMovementCode,
+                ["MaterialDocumentHeaderText"] = headerText,
+                ["to_MaterialDocumentItem"] = new Dictionary<string, object?> { ["results"] = items }
+            };
+            if (reference != null)
+            {
+                header["ReferenceDocument"] = reference;
+            }
+
+            body = JsonSerializer.Serialize(header);
             return null;
         }
 

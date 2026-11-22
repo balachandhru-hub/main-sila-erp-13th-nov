@@ -94,6 +94,7 @@ namespace Buyer.Application.Features.Commands.CreateSilaAdjustment
             _repository.StockAdjustment.Create(adjustment);
 
             InventoryLedger ledger = new InventoryLedger(_repository, buyer.Id, request.UserId);
+            ledger.AddEvent(Common.SILA_REF_ADJUSTMENT, adjustment.Id, "CREATED", reason);
             bool stockOut = false;
             bool stockIn = false;
             foreach (SilaAdjustmentLineWriteDto line in lines)
