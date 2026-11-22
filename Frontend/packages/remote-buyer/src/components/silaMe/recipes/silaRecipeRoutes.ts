@@ -6,6 +6,7 @@
  * Contract:
  * - /sila-recipes
  * - /sila-recipes/new
+ * - /sila-recipes/legacy-upload
  * - /sila-recipes/:recipeId
  * - /sila-recipes/:recipeId/edit
  */
@@ -15,6 +16,7 @@ export const SILA_RECIPES_BASE = "/sila-recipes";
 export type SilaRecipeRoute =
   | { kind: "list" }
   | { kind: "new" }
+  | { kind: "legacy-upload" }
   | { kind: "detail"; recipeId: string }
   | { kind: "edit"; recipeId: string };
 
@@ -36,6 +38,7 @@ export const parseSilaRecipePath = (pathname: string): SilaRecipeRoute => {
 
   if (!second) return { kind: "list" };
   if (second.toLowerCase() === "new") return { kind: "new" };
+  if (second.toLowerCase() === "legacy-upload") return { kind: "legacy-upload" };
 
   if (!isRecipeId(second)) return { kind: "list" };
   if (third === "edit") return { kind: "edit", recipeId: second };
@@ -46,6 +49,8 @@ export const parseSilaRecipePath = (pathname: string): SilaRecipeRoute => {
 export const silaRecipeCatalogPath = (): string => SILA_RECIPES_BASE;
 
 export const silaRecipeNewPath = (): string => `${SILA_RECIPES_BASE}/new`;
+
+export const silaRecipeLegacyUploadPath = (): string => `${SILA_RECIPES_BASE}/legacy-upload`;
 
 export const silaRecipeDetailPath = (recipeId: string): string =>
   `${SILA_RECIPES_BASE}/${encodeURIComponent(recipeId)}`;
