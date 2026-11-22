@@ -1,4 +1,5 @@
 using Buyer.Application.Features.Shared;
+using Buyer.Domain.Common;
 using Buyer.Domain.Dtos;
 using Buyer.Domain.Entities;
 using Buyer.Infrastructure.Contracts.IRepository;
@@ -56,6 +57,14 @@ namespace Buyer.Application.Features.Queries.IdentifySilaStockCountBarcode
                 .FindByCondition(x => x.StockCountId == count.Id && x.MaterialId == material.Id && x.IsActive)
                 .FirstOrDefaultAsync(cancellationToken);
             Dictionary<Guid, List<MaterialUomConversion>> conversions = await UomConverter.GetConversionsAsync(_repository, new[] { material.Id }, cancellationToken);
+
+            InventoryLedger ledger = new InventoryLedger(_repository, buyer.Id, request.UserId);
+            ledger.AddEvent(
+                Common.SILA_REF_STOCK_COUNT,
+                count.Id,
+                "STOCK_COUNT_BARCODE_SCAN",
+                $"Barcode={code}; Material={material.MaterialCode}; OnSheet={(item != null)}");
+            await _repository.SaveAsync();
 
             _logger.LogInfo($"Barcode identified. MaterialId: {material.Id}, OnCountSheet: {item != null}");
             return new SilaStockCountBarcodeDto

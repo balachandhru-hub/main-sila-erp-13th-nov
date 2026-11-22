@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { getInventoryHome, getPendingOutletRequirements } from '../../../../remote-buyer/src/api/silaMe/silaInventoryApi';
+import BarcodeScanner from '../../components/BarcodeScanner';
 import ScreenHeader from '../../components/ScreenHeader';
 import { Empty, ErrorNotice, OfflineBanner } from '../../components/StateViews';
 import { useAccess } from '../../access';
@@ -16,25 +17,27 @@ interface QuickAction {
 }
 
 const QUICK: QuickAction[] = [
-  { label: 'Find Stock', detail: 'Search or scan materials', to: 'inventory/stock' },
-  { label: 'Transfer', detail: 'Quick move between locations', to: 'inventory/transfers/new?mode=quick', visible: (can) => can.manageTransfer },
+  { label: 'Stock Count', detail: 'Scan, photo, or search', to: 'inventory/counts', visible: (can) => can.manageCount || can.approveCount || can.initiateCount },
+  { label: 'Quick Transfer', detail: 'Scan · check stock · move', to: 'inventory/transfers/new?mode=quick', visible: (can) => can.manageTransfer },
   { label: 'ITO', detail: 'Open transfer orders', to: 'inventory/transfers', visible: (can) => can.manageTransfer || can.approveTransfer },
+  { label: 'Goods Issue', detail: 'Issue to cost center', to: 'inventory/goods-issues', visible: (can) => can.postGoodsIssue },
+  { label: 'Find Stock', detail: 'Search materials', to: 'inventory/stock' },
+  { label: 'Request Stock', detail: 'Purchase request', to: 'inventory/purchase-requests', visible: (can) => can.requestPurchase },
+  { label: 'Adjustments', detail: 'Waste & corrections', to: 'inventory/adjustments', visible: (can) => can.postAdjustment },
   { label: 'Receive', detail: 'Incoming transfers & GRN', to: 'receive/pos?mode=receive', visible: (can) => can.postGrn },
-  { label: 'Request Stock', detail: 'Raise a purchase request', to: 'inventory/purchase-requests', visible: (can) => can.requestPurchase },
-  { label: 'Stock Count', detail: 'Count and review', to: 'inventory/counts', visible: (can) => can.manageCount || can.approveCount || can.initiateCount },
-  { label: 'Goods Issue', detail: 'Issue to outlet / cost center', to: 'inventory/goods-issues', visible: (can) => can.postGoodsIssue },
 ];
 
 /**
- * Touch-first Live Inventory hub — Alabaster mobile command center.
- * Reuses getInventoryHome and existing Mobile routes only.
+ * Premium Mobile Live Inventory hub — reuses getInventoryHome KPIs and existing routes only.
+ * Camera scan opens Find Stock with the decoded barcode. Cloud Live Inventory GUI is unchanged.
  */
 const InventoryScreen: React.FC = () => {
   const go = useGo();
   const { can } = useAccess();
-  const { location, loading } = useMyLocation();
+  const { location, locations, loading, reload: reloadLocation, setLocationId } = useMyLocation();
   const [query, setQuery] = useState('');
   const [floorMode, setFloorMode] = useState(false);
+  const [scannerOpen, setScannerOpen] = useState(false);
   const home = useLoad(() => getInventoryHome(location?.id), location ? `inv-home-${location.id}` : null);
   const pending = useLoad(
     () => getPendingOutletRequirements({ sourceLocationId: location?.id, countOnly: true }),
@@ -42,45 +45,104 @@ const InventoryScreen: React.FC = () => {
   );
   const value = (count: number | undefined): string => (home.loading ? '…' : count === undefined ? '—' : String(count));
 
-  const openSearch = () => {
-    const term = query.trim();
-    go(term.length >= 2 ? `inventory/stock?q=${encodeURIComponent(term)}` : 'inventory/stock');
+  const openSearch = (term?: string) => {
+    const text = (term ?? query).trim();
+    go(text.length >= 1 ? `inventory/stock?q=${encodeURIComponent(text)}` : 'inventory/stock');
+  };
+
+  const refresh = () => {
+    home.reload();
+    pending.reload();
+    reloadLocation();
   };
 
   return (
     <>
-      <ScreenHeader title="Live Inventory" eyebrow="Stock" intro="Search, scan, and move stock at your outlet." />
-      <div className={`sm-screen liv-m${floorMode ? ' liv-m--floor' : ''}`}>
+      <ScreenHeader title="Live Inventory" eyebrow="SILA Store" />
+      <div className={`sm-screen liv-m liv-m--premium${floorMode ? ' liv-m--floor' : ''}`} data-testid="mobile-live-inventory">
         <OfflineBanner />
 
-        <section className="liv-m-outlet" aria-label="Assigned outlet">
-          {location ? (
-            <>
-              <p className="liv-m-kicker">Current outlet</p>
-              <strong className="liv-m-outlet__name">{location.locationName}</strong>
-              <span className="sm-meta">
-                {[location.propertyName, location.plantCode, location.storageLocationCode || location.locationCode]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </span>
-            </>
-          ) : (
-            !loading && <Empty text="No operational location assigned." />
-          )}
-          {home.error && <ErrorNotice message={home.error} onRetry={home.reload} />}
-          {can.manageTransfer && (
-            <button
-              type="button"
-              className="sm-btn sm-btn--secondary"
-              style={{ marginTop: 8 }}
-              onClick={() => go('inventory/transfers/new')}
-            >
-              Pending Requirements: {pending.loading ? '…' : pending.value?.count ?? 0}
+        <header className="liv-m-header" aria-label="Location">
+          <div className="liv-m-header__copy">
+            {location ? (
+              <>
+                <p className="liv-m-kicker">{location.propertyName || 'Property'}</p>
+                <strong className="liv-m-outlet__name">{location.locationName}</strong>
+                <span className="sm-meta">
+                  {[location.plantCode, location.storageLocationCode || location.locationCode].filter(Boolean).join(' · ')}
+                </span>
+              </>
+            ) : (
+              !loading && <Empty text="No operational location assigned." />
+            )}
+          </div>
+          <div className="liv-m-header__actions">
+            {locations.length > 1 && (
+              <label className="liv-m-switcher">
+                <span className="sm-meta">Location</span>
+                <select
+                  className="sm-input"
+                  value={location?.id ?? ''}
+                  onChange={(event) => setLocationId(event.target.value)}
+                  aria-label="Switch outlet"
+                >
+                  {locations.map((row) => (
+                    <option key={row.id} value={row.id}>
+                      {row.locationName}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <button type="button" className="sm-btn sm-btn--secondary" onClick={refresh} aria-label="Refresh">
+              Refresh
             </button>
-          )}
-        </section>
+            <button type="button" className="sm-btn" onClick={() => go('tasks/alerts')} aria-label="Notifications">
+              Alerts
+            </button>
+          </div>
+        </header>
 
-        <section className="liv-m-search" aria-label="Search material">
+        {home.error && <ErrorNotice message={home.error} onRetry={home.reload} />}
+
+        {location && (
+          <section className="liv-m-kpis" aria-label="Inventory KPIs">
+            <button type="button" className="liv-m-kpi" onClick={() => go('inventory/stock')}>
+              <strong>{value(home.data?.stockItems)}</strong>
+              <span>Total materials</span>
+            </button>
+            <button type="button" className="liv-m-kpi liv-m-kpi--ok" onClick={() => go('inventory/stock')}>
+              <strong>{value(home.data?.stockItems)}</strong>
+              <span>Available stock</span>
+            </button>
+            <button type="button" className="liv-m-kpi liv-m-kpi--warn" onClick={() => go('inventory/stock?health=LOW')}>
+              <strong>{value(home.data?.lowStockItems)}</strong>
+              <span>Low stock</span>
+            </button>
+            <button type="button" className="liv-m-kpi liv-m-kpi--danger" onClick={() => go('inventory/stock?health=OUT')}>
+              <strong>{value(home.data?.lowStockItems)}</strong>
+              <span>Out / critical</span>
+            </button>
+            <button type="button" className="liv-m-kpi" onClick={() => go('inventory/transfers/new')}>
+              <strong>{pending.loading ? '…' : pending.value?.count ?? 0}</strong>
+              <span>Pending requirements</span>
+            </button>
+            <button type="button" className="liv-m-kpi" onClick={() => go('inventory/transfers?tab=in-transit')}>
+              <strong>{value((home.data?.inTransitToReceive ?? 0) + (home.data?.pendingTransferApprovals ?? 0))}</strong>
+              <span>Pending transfers</span>
+            </button>
+            <button type="button" className="liv-m-kpi" onClick={() => go('inventory/counts')}>
+              <strong>{value(home.data?.openStockCounts)}</strong>
+              <span>Stock count pending</span>
+            </button>
+            <button type="button" className="liv-m-kpi" onClick={() => go('tasks/alerts')}>
+              <strong>{value(home.data?.openAlerts ?? home.data?.pendingActions)}</strong>
+              <span>Inventory variances</span>
+            </button>
+          </section>
+        )}
+
+        <section className="liv-m-search" aria-label="Material search">
           <input
             className="sm-input liv-m-search__input"
             type="search"
@@ -92,38 +154,17 @@ const InventoryScreen: React.FC = () => {
               if (event.key === 'Enter') openSearch();
             }}
           />
-          <button type="button" className="sm-btn sm-btn--primary liv-m-search__btn" onClick={openSearch}>
+          <button type="button" className="sm-btn sm-btn--secondary" onClick={() => setScannerOpen(true)} data-testid="liv-scan-barcode">
+            Scan
+          </button>
+          <button type="button" className="sm-btn sm-btn--primary liv-m-search__btn" onClick={() => openSearch()}>
             Find
           </button>
         </section>
 
-        {location && (
-          <section className="liv-m-alerts" aria-label="Operational alerts">
-            <button type="button" className="liv-m-stat liv-m-stat--warn" onClick={() => go('inventory/stock?health=LOW')}>
-              <strong>{value(home.data?.lowStockItems)}</strong>
-              <span>Low stock</span>
-            </button>
-            <button type="button" className="liv-m-stat" onClick={() => go('inventory/transfers?tab=in-transit')}>
-              <strong>{value(home.data?.inTransitToReceive)}</strong>
-              <span>Incoming</span>
-            </button>
-            <button type="button" className="liv-m-stat" onClick={() => go('tasks/alerts')}>
-              <strong>
-                {value(
-                  home.data?.pendingActions ??
-                    (home.data?.pendingTransferApprovals ?? 0) +
-                      (home.data?.openAlerts ?? 0) +
-                      (home.data?.openStockCounts ?? 0),
-                )}
-              </strong>
-              <span>Pending</span>
-            </button>
-          </section>
-        )}
-
         <section className="liv-m-quick" aria-labelledby="liv-m-quick-title">
           <div className="liv-m-section-head">
-            <h2 id="liv-m-quick-title">Quick actions</h2>
+            <h2 id="liv-m-quick-title">Primary actions</h2>
             <button type="button" className="sm-btn" onClick={() => setFloorMode((value) => !value)}>
               {floorMode ? 'Standard' : 'Floor mode'}
             </button>
@@ -138,13 +179,16 @@ const InventoryScreen: React.FC = () => {
           </div>
         </section>
 
-        <section className="sm-section">
-          <h2>More</h2>
+        <section className="sm-section liv-m-ops" aria-labelledby="liv-m-ops-title">
+          <h2 id="liv-m-ops-title">Operational</h2>
           <ul className="sm-list">
             {[
-              { label: 'All transfers', to: 'inventory/transfers' },
-              { label: 'Purchase requests', to: 'inventory/purchase-requests', show: can.requestPurchase },
-              { label: 'Waste & adjustments', to: 'inventory/adjustments', show: can.postAdjustment },
+              { label: 'Weekly bucket / wishlist requirements', to: 'inventory/transfers/new', show: can.manageTransfer },
+              { label: 'Pending ITO & transfers', to: 'inventory/transfers' },
+              { label: 'Stock count history', to: 'inventory/counts', show: can.manageCount || can.approveCount || can.initiateCount },
+              { label: 'Stock health', to: 'inventory/stock?health=LOW' },
+              { label: 'Transaction history', to: 'tasks/alerts' },
+              { label: 'Recommendations', to: 'inventory/recommendations', show: can.requestPurchase },
             ]
               .filter((entry) => entry.show !== false)
               .map((entry) => (
@@ -160,6 +204,13 @@ const InventoryScreen: React.FC = () => {
           </ul>
         </section>
       </div>
+
+      <BarcodeScanner
+        open={scannerOpen}
+        title="Scan material barcode"
+        onClose={() => setScannerOpen(false)}
+        onDetected={(scanned) => openSearch(scanned.rawValue)}
+      />
     </>
   );
 };

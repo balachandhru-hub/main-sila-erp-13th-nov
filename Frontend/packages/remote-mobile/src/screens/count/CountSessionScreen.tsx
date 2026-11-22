@@ -39,6 +39,7 @@ const CountSessionScreen: React.FC = () => {
   const [notice, setNotice] = useState<NoticeMessage | null>(null);
   const [confirmApprove, setConfirmApprove] = useState(false);
   const [approving, setApproving] = useState(false);
+  const [forceBarcodeScanner, setForceBarcodeScanner] = useState(false);
 
   const canApproveNow = Boolean(can.approveCount && data && (data.status === 'SUBMITTED' || data.status === 'ENQUIRY_PENDING'));
   const editable = data?.status === 'IN_PROGRESS';
@@ -116,6 +117,8 @@ const CountSessionScreen: React.FC = () => {
               <>
                 <BarcodeEntry
                   stockCountId={data.id}
+                  forceOpenScanner={forceBarcodeScanner}
+                  onScannerClosed={() => setForceBarcodeScanner(false)}
                   onFound={(found) =>
                     found.item
                       ? openTarget(toTarget(found.item, 'BARCODE'))
@@ -134,6 +137,7 @@ const CountSessionScreen: React.FC = () => {
                 {!reopened && (
                   <CountPhotoIdentify
                     stockCountId={data.id}
+                    onScanBarcodeInstead={() => setForceBarcodeScanner(true)}
                     onConfirm={(candidate) => {
                       const onSheet = data.items.find((item) => item.materialId === candidate.materialId);
                       openTarget(
@@ -153,7 +157,7 @@ const CountSessionScreen: React.FC = () => {
                 )}
                 {!reopened && (
                   <MaterialPicker
-                    label="Search material"
+                    label="Search Material Manually"
                     onPick={(material) => {
                       const onSheet = data.items.find((item) => item.materialId === material.id);
                       openTarget(

@@ -158,3 +158,81 @@
   font-size: 1.05rem;
   color: #0f172a;
 }
+
+/* Premium Mobile Live Inventory */
+.liv-m--premium {
+  --liv-primary: #0369a1;
+  --liv-ok: #0f766e;
+  --liv-warn: #b45309;
+  --liv-danger: #b91c1c;
+}
+
+.liv-m-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: flex-start;
+  margin-bottom: 0.85rem;
+  padding: 0.85rem 1rem;
+  border-radius: 1rem;
+  border: 0.0625rem solid var(--liv-border);
+  background: linear-gradient(180deg, #f8fbff 0%, #fff 100%);
+  box-shadow: 0 0.125rem 0.5rem rgba(15, 23, 42, 0.04);
+}
+
+.liv-m-header__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  justify-content: flex-end;
+  max-width: 48%;
+}
+
+.liv-m-switcher {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 7rem;
+}
+
+.liv-m-kpis {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 0.85rem;
+}
+
+.liv-m-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  align-items: flex-start;
+  text-align: left;
+  border: 0.0625rem solid var(--liv-border);
+  border-radius: 0.9rem;
+  padding: 0.75rem 0.85rem;
+  background: #fff;
+  font: inherit;
+  cursor: pointer;
+  box-shadow: 0 0.0625rem 0.25rem rgba(15, 23, 42, 0.04);
+}
+
+.liv-m-kpi strong {
+  font-size: 1.2rem;
+  font-variant-numeric: tabular-nums;
+  color: #0f172a;
+}
+
+.liv-m-kpi span {
+  font-size: 0.72rem;
+  color: #64748b;
+}
+
+.liv-m-kpi--ok { border-color: #99f6e4; background: #f0fdfa; }
+.liv-m-kpi--warn { border-color: #fed7aa; background: #fff7ed; }
+.liv-m-kpi--danger { border-color: #fecaca; background: #fef2f2; }
+
+.liv-m-ops h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
