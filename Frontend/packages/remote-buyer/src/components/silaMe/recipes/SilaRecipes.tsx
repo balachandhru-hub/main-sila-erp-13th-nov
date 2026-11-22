@@ -265,12 +265,7 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({
     <div className="sila-me srec-page rstudio-page">
       <header className="rstudio-hero">
         <div className="rstudio-hero__copy">
-          <p className="rstudio-kicker">SILA Recipe Studio</p>
-          <h1 className="rstudio-hero__title">Culinary catalog &amp; recipe workspace</h1>
-          <p className="rstudio-hero__sub">
-            Overview KPIs, catalog, and New/Edit workspace in one place — former Recipe Dashboard is merged here.
-            Browse recipes, then build ingredients from the Material Master shopping catalog.
-          </p>
+          <h1 className="rstudio-hero__title">SILA Recipe Studio</h1>
         </div>
         <div className="rstudio-hero__actions">
           <SilaRecipeExcelPanel
