@@ -134,6 +134,10 @@ namespace Buyer.Infrastructure.Contracts.IRepository
         IMenuPosMappingRepository MenuPosMapping { get; }
         IPmsDemandSnapshotRepository PmsDemandSnapshot { get; }
         IMenuEngineeringSettingsRepository MenuEngineeringSettings { get; }
+        IRecipeLegacyBatchRepository RecipeLegacyBatch { get; }
+        IRecipeLegacyRecipeRepository RecipeLegacyRecipe { get; }
+        IRecipeLegacyMaterialMapRepository RecipeLegacyMaterialMap { get; }
+        IRecipeLegacyImageRepository RecipeLegacyImage { get; }
         bool Save();
         Task<bool> SaveAsync();
     }
