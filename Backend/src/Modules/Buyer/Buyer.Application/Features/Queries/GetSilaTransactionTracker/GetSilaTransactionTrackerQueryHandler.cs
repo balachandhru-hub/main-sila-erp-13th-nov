@@ -180,6 +180,9 @@ namespace Buyer.Application.Features.Queries.GetSilaTransactionTracker
                         || (item.Description != null && item.Description.Contains(material, StringComparison.OrdinalIgnoreCase)))).ToList();
             }
 
+            // One tracker row per ITO / stock-count document (not one row per ledger line).
+            lines = CollapseDocumentLedgerLines(lines);
+
             if (lines.Count == 0)
             {
                 return;
@@ -940,6 +943,38 @@ namespace Buyer.Application.Features.Queries.GetSilaTransactionTracker
             {
                 properties.TryGetValue(location.PropertyId, out BuyerProperty? property);
                 result[location.Id] = (property?.PropertyName, property?.PlantCode, location.StorageLocationCode, property?.CompanyCode);
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// ITO creates OUT+IN lines; stock counts create one ledger line per material. Tracker shows one business
+        /// row per document so review/reprocess stays together.
+        /// </summary>
+        private static List<InventoryTransaction> CollapseDocumentLedgerLines(List<InventoryTransaction> lines)
+        {
+            List<InventoryTransaction> result = new List<InventoryTransaction>();
+            HashSet<string> seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (InventoryTransaction line in lines
+                .OrderByDescending(x => x.ReferenceType == Common.SILA_REF_ITO && x.Direction == Common.SILA_DIRECTION_OUT)
+                .ThenByDescending(x => x.TransactionType == Common.SILA_TXN_TRANSFER_OUT)
+                .ThenByDescending(x => x.Direction == Common.SILA_DIRECTION_OUT)
+                .ThenByDescending(x => x.DateCreated))
+            {
+                bool collapse = line.ReferenceType == Common.SILA_REF_ITO
+                    || line.ReferenceType == Common.SILA_REF_STOCK_COUNT
+                    || line.ReferenceType == Common.SILA_REF_ADJUSTMENT;
+                if (collapse)
+                {
+                    string key = line.ReferenceType + "|" + line.ReferenceId.ToString("D");
+                    if (!seen.Add(key))
+                    {
+                        continue;
+                    }
+                }
+
+                result.Add(line);
             }
 
             return result;

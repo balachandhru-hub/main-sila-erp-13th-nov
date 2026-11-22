@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Buyer.Application.Features.Commands.PostPendingErpPostings;
 using Buyer.Application.Features.Shared;
 using Buyer.Domain.Common;
 using Buyer.Domain.Dtos;
@@ -29,11 +30,13 @@ namespace Buyer.Application.Features.Commands.CreateSilaAdjustment
 
         private readonly IRepositoryWrapper _repository;
         private readonly ILoggerManager _logger;
+        private readonly IMediator _mediator;
 
-        public CreateSilaAdjustmentCommandHandler(IRepositoryWrapper repository, ILoggerManager logger)
+        public CreateSilaAdjustmentCommandHandler(IRepositoryWrapper repository, ILoggerManager logger, IMediator mediator)
         {
             _repository = repository;
             _logger = logger;
+            _mediator = mediator;
         }
 
         public Task<Guid> Handle(CreateSilaAdjustmentCommand request, CancellationToken cancellationToken)
@@ -142,6 +145,7 @@ namespace Buyer.Application.Features.Commands.CreateSilaAdjustment
             }
 
             bool wasteType = OutTypes.Contains(type);
+            Guid? erpPostingId = null;
             if (stockOut)
             {
                 // Waste/damage posts Z01 on FIVE_STOCK_WASTE_UPDATE; other OUT uses Goods Issue Z02.
@@ -152,15 +156,36 @@ namespace Buyer.Application.Features.Commands.CreateSilaAdjustment
                 {
                     posting.IntegrationSystem = SilaInventorySap.API_WASTE;
                 }
+                else
+                {
+                    posting.IntegrationSystem = SilaInventorySap.GoodsIssue.ApiName;
+                }
+
+                erpPostingId = posting.Id;
             }
 
             if (stockIn)
             {
-                ledger.QueueErpPosting(
+                InventoryErpPosting posting = ledger.QueueErpPosting(
                     Common.SILA_REF_ADJUSTMENT, adjustment.Id, adjustment.AdjustmentNumber, location.Id, SilaInventorySap.TYPE_Z01);
+                posting.IntegrationSystem = SilaInventorySap.PositiveAdjustment.ApiName;
+                erpPostingId ??= posting.Id;
             }
 
             await _repository.SaveAsync();
+
+            // Post immediately so the active S4/FIVE resolver on this host wins (avoids stale remote job races).
+            if (erpPostingId != null)
+            {
+                try
+                {
+                    await _mediator.Send(new PostPendingErpPostingsCommand { BuyerId = buyer.Id, PostingId = erpPostingId }, cancellationToken);
+                }
+                catch (Exception exception) when (exception is not OperationCanceledException)
+                {
+                    _logger.LogError($"Immediate ERP send for adjustment failed; Quartz will retry. AdjustmentId: {adjustment.Id}, Error: {SilaLogText.FromException(exception)}");
+                }
+            }
 
             _logger.LogInfo($"Stock adjustment posted. AdjustmentId: {adjustment.Id}, AdjustmentNumber: {adjustment.AdjustmentNumber}, Lines: {lines.Count}");
             return adjustment.Id;

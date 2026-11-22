@@ -129,7 +129,7 @@ namespace Buyer.Tests.Shared
 
             Assert.Equal(SilaInventorySap.TYPE_311, movement);
             Assert.Equal(SilaInventorySap.API_TRANSFER, api);
-            Assert.Contains("FIVE S4 - Transfer Stock", error);
+            Assert.Contains(SilaInventorySap.API_TRANSFER, error);
             Assert.DoesNotContain("POST_GOODS_MOVEMENT", error);
             Assert.True(SilaTrackerRules.TryParseKey("LEDGER~04d701fe-03cc-40da-8e14-7abd582eaa0a", out string source, out Guid id));
             Assert.Equal(SilaTrackerRules.SOURCE_LEDGER, source);
