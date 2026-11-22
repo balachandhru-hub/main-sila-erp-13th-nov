@@ -46,6 +46,12 @@ assert.match(recipes, /silaRecipeLegacyUploadPath/);
 assert.match(recipes, /recipe-legacy-upload-entry/);
 assert.match(recipes, /kind === "legacy-upload"/);
 assert.match(recipes, /SilaRecipeLegacyUpload/);
+// Preserve catalog Filters toggle + compact brand hero (do not regress on mobile/inventory tips).
+assert.match(recipes, /showCategoryFilters/);
+assert.match(recipes, /recipe-category-filters-toggle/);
+assert.match(recipes, /Hide filters/);
+assert.match(recipes, /<h1 className="rstudio-hero__title">SILA Recipe Studio<\/h1>/);
+assert.doesNotMatch(recipes, /Culinary catalog/);
 
 const routes = read("silaRecipeRoutes.ts");
 assert.match(routes, /legacy-upload/);
