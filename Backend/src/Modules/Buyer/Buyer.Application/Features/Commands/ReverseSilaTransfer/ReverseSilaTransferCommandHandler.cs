@@ -147,14 +147,14 @@ namespace Buyer.Application.Features.Commands.ReverseSilaTransfer
             }
 
             string? companyCode = string.IsNullOrWhiteSpace(fromProperty?.CompanyCode) ? null : fromProperty.CompanyCode.Trim();
-            string apiName = rule.ApiName;
-            ApiIntegrationConfiguration? api = await SilaInventorySap.ResolveAsync(
-                _repository, request.OrganizationId, apiName, companyCode, cancellationToken);
-            if (api == null || !string.Equals(api.Name, apiName, StringComparison.Ordinal))
+            // Resolve FIVE / S4 Transfer Stock aliases the same way as queue + ERP posting (mobile and cloud).
+            ApiIntegrationConfiguration? api = await SilaInventorySap.ResolveForRuleAsync(
+                _repository, request.OrganizationId, rule, companyCode, cancellationToken);
+            if (api == null)
             {
                 throw new BadRequestCustomException(
                     SilaInventorySap.SAP_API_CONFIGURATION_NOT_FOUND,
-                    SilaInventorySap.MissingApi(apiName));
+                    SilaInventorySap.MissingApi(rule.ApiName));
             }
 
             foreach ((InternalTransferOrderItem item, decimal quantity) in lines)
