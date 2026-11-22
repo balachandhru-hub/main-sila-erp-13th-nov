@@ -776,11 +776,11 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
                 return new EffectPreparation("The document has no lines to post.", null, null);
             }
 
-            api = await SilaInventorySap.ResolveAnyAsync(
-                _repository, organizationId, SilaInventorySap.ApiNamesFor(rule), posting.CompanyCode, cancellationToken);
+            api = await SilaInventorySap.ResolveForRuleAsync(
+                _repository, organizationId, rule, posting.CompanyCode, cancellationToken);
             if (api == null)
             {
-                return new EffectPreparation(SilaInventorySap.MissingApi(rule.ApiName), null, null);
+                return new EffectPreparation(SilaInventorySap.MissingApiForRule(rule), null, null);
             }
 
             return new EffectPreparation(null, body, api);
@@ -825,11 +825,11 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
             string sapUnit = (string.IsNullOrWhiteSpace(item.Uom) ? UomConverter.BaseUomOf(material) : item.Uom).Trim().ToUpperInvariant();
             decimal physicalQty = item.BaseQuantity;
 
-            ApiIntegrationConfiguration? api = await SilaInventorySap.ResolveAsync(
-                _repository, organizationId, rule.ApiName, posting.CompanyCode, cancellationToken);
+            ApiIntegrationConfiguration? api = await SilaInventorySap.ResolveForRuleAsync(
+                _repository, organizationId, rule, posting.CompanyCode, cancellationToken);
             if (api == null)
             {
-                return await FinishAsync(posting, Common.SILA_POSTING_FAILED, null, SilaInventorySap.MissingApi(rule.ApiName), cancellationToken);
+                return await FinishAsync(posting, Common.SILA_POSTING_FAILED, null, SilaInventorySap.MissingApiForRule(rule), cancellationToken);
             }
 
             DateTime businessDate = DateTime.UtcNow.Date;
