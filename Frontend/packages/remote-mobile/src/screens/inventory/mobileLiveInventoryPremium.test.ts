@@ -16,9 +16,31 @@ assert.match(hub, /mobile-live-inventory/);
 assert.match(hub, /liv-m-kpis/);
 assert.match(hub, /liv-scan-barcode/);
 assert.match(hub, /BarcodeScanner/);
+assert.match(hub, /Scan material/);
+assert.match(hub, /inventory\/scan/);
+assert.match(hub, /inventory\/transactions/);
 assert.match(hub, /Stock Count/);
 assert.match(hub, /Quick Transfer/);
 assert.doesNotMatch(hub, /SilaLiveInventory/); // cloud component not imported
+assert.doesNotMatch(hub, /Transaction history.*tasks\/alerts/);
+
+const scan = read("screens/inventory/ScanMaterialScreen.tsx");
+assert.match(scan, /mobile-scan-material/);
+assert.match(scan, /BarcodeScanner/);
+assert.match(scan, /createQuickTransfer/);
+assert.match(scan, /createLiveStockCount/);
+assert.match(scan, /DAMAGE/);
+assert.match(scan, /reverseTransfer/);
+assert.match(scan, /identifyStockCountPhoto/);
+
+const adj = read("screens/inventory/AdjustmentDetailScreen.tsx");
+assert.match(adj, /History/);
+assert.match(adj, /events/);
+assert.match(adj, /erpReference/);
+
+const tx = read("screens/inventory/InventoryTransactionsScreen.tsx");
+assert.match(tx, /mobile-inventory-transactions/);
+assert.match(tx, /getInventoryTransactions/);
 
 const scanner = read("components/BarcodeScanner.tsx");
 assert.match(scanner, /BarcodeDetector/);

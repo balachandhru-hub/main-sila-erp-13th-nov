@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Buyer.Application.Contracts;
 using Buyer.Application.Features.Shared;
+using Buyer.Domain.Common;
 using Buyer.Domain.Dtos;
 using Buyer.Domain.Entities;
 using Buyer.Infrastructure.Contracts.IRepository;
@@ -43,12 +44,25 @@ namespace Buyer.Application.Features.Queries.GetSilaAdjustment
                 .FindByCondition(x => x.StockAdjustmentId == adjustment.Id && x.IsActive)
                 .OrderBy(x => x.MaterialCode)
                 .ToListAsync(cancellationToken);
+            List<InventoryWorkflowEvent> events = await _repository.InventoryWorkflowEvent
+                .FindByCondition(x => x.BuyerId == buyer.Id && x.IsActive
+                    && x.ReferenceType == Common.SILA_REF_ADJUSTMENT && x.ReferenceId == adjustment.Id)
+                .OrderBy(x => x.DateCreated)
+                .ToListAsync(cancellationToken);
+            InventoryErpPosting? posting = await _repository.InventoryErpPosting
+                .FindByCondition(x => x.BuyerId == buyer.Id && x.IsActive
+                    && x.ReferenceType == Common.SILA_REF_ADJUSTMENT && x.ReferenceId == adjustment.Id)
+                .OrderByDescending(x => x.DateCreated)
+                .FirstOrDefaultAsync(cancellationToken);
+
             Dictionary<Guid, string> locations = await SilaMovementLookup.GetLocationNamesAsync(
                 _repository, buyer.Id, new[] { adjustment.LocationId }, cancellationToken);
             Dictionary<Guid, string> users = await SilaMovementLookup.GetUserNamesAsync(
-                _identityApiClient, _logger, new[] { adjustment.PostedBy }, cancellationToken);
+                _identityApiClient, _logger,
+                events.Select(x => x.ActorUserId).Append(adjustment.PostedBy),
+                cancellationToken);
 
-            _logger.LogInfo($"Stock adjustment fetched. AdjustmentId: {adjustment.Id}, Lines: {items.Count}");
+            _logger.LogInfo($"Stock adjustment fetched. AdjustmentId: {adjustment.Id}, Lines: {items.Count}, Events: {events.Count}");
             return new SilaAdjustmentDetailDto
             {
                 Id = adjustment.Id,
@@ -70,7 +84,18 @@ namespace Buyer.Application.Features.Queries.GetSilaAdjustment
                     Uom = x.Uom,
                     BaseQuantity = x.BaseQuantity,
                     UnitCost = x.UnitCost
-                }).ToList()
+                }).ToList(),
+                Events = events.Select(x => new SilaTransferEventDto
+                {
+                    Action = x.Action,
+                    Comment = x.Comment,
+                    ActorUserId = x.ActorUserId,
+                    ActorName = SilaMovementLookup.NameOf(users, x.ActorUserId),
+                    On = x.DateCreated
+                }).ToList(),
+                ErpStatus = posting?.Status,
+                ErpReference = posting?.ErpReference,
+                ErpPostingId = posting?.Id
             };
         }
     }

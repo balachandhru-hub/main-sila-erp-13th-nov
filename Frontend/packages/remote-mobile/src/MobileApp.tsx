@@ -36,6 +36,8 @@ import AboutScreen from './screens/more/AboutScreen';
 import InventoryScreen from './screens/inventory/InventoryScreen';
 import LiveStockScreen from './screens/inventory/LiveStockScreen';
 import MaterialStockScreen from './screens/inventory/MaterialStockScreen';
+import ScanMaterialScreen from './screens/inventory/ScanMaterialScreen';
+import InventoryTransactionsScreen from './screens/inventory/InventoryTransactionsScreen';
 import TransfersScreen from './screens/inventory/TransfersScreen';
 import TransferFormScreen from './screens/inventory/TransferFormScreen';
 import TransferDetailScreen from './screens/inventory/TransferDetailScreen';
@@ -141,6 +143,8 @@ const MobileSurface: React.FC<{ base: string }> = ({ base }) => {
                 <Route path="receive/pending" element={<PendingGrnScreen />} />
 
                 <Route path="inventory" element={<InventoryScreen />} />
+                <Route path="inventory/scan" element={<ScanMaterialScreen />} />
+                <Route path="inventory/transactions" element={<InventoryTransactionsScreen />} />
                 <Route path="inventory/stock" element={<LiveStockScreen />} />
                 <Route path="inventory/stock/:materialId" element={<MaterialStockScreen />} />
                 <Route path="inventory/transfers" element={<TransfersScreen />} />
