@@ -1,0 +1,224 @@
+/* Legacy Recipe Upload — isolated Recipe Studio migration workspace */
+
+.rlegacy-page {
+  gap: 0.85rem;
+}
+
+.rlegacy-hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.65rem 1rem;
+  border-radius: 1rem;
+  border: 0.0625rem solid #d9e8f7;
+  background: linear-gradient(135deg, #f4f9ff 0%, #ffffff 60%, #f7fff9 100%);
+}
+
+.rlegacy-hero__title {
+  margin: 0;
+  font-size: clamp(1.1rem, 1.5vw, 1.3rem);
+  line-height: 1.2;
+  color: #12355b;
+}
+
+.rlegacy-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.rlegacy-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.rlegacy-tab {
+  border: 0.0625rem solid #d9e8f7;
+  background: #fff;
+  color: #3a5878;
+  border-radius: 999px;
+  padding: 0.4rem 0.85rem;
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.rlegacy-tab[aria-selected="true"] {
+  background: #12355b;
+  border-color: #12355b;
+  color: #fff;
+}
+
+.rlegacy-panel {
+  padding: 1rem 1.1rem;
+  border: 0.0625rem solid #d9e8f7;
+  border-radius: 1rem;
+  background: #fff;
+}
+
+.rlegacy-panel__title {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+  color: #12355b;
+}
+
+.rlegacy-panel__hint {
+  margin: 0 0 0.85rem;
+  color: #5b7a99;
+  font-size: 0.88rem;
+}
+
+.rlegacy-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
+  gap: 0.6rem;
+  margin-bottom: 0.9rem;
+}
+
+.rlegacy-kpi {
+  padding: 0.65rem 0.75rem;
+  border-radius: 0.75rem;
+  background: #f7fbff;
+  border: 0.0625rem solid #e4eef8;
+}
+
+.rlegacy-kpi span {
+  display: block;
+  font-size: 0.72rem;
+  color: #5b7a99;
+}
+
+.rlegacy-kpi strong {
+  font-size: 1.05rem;
+  color: #12355b;
+}
+
+.rlegacy-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.rlegacy-toolbar input[type="search"],
+.rlegacy-toolbar select,
+.rlegacy-toolbar input[type="text"] {
+  min-height: 2.25rem;
+  padding: 0.35rem 0.65rem;
+  border: 0.0625rem solid #c9dae9;
+  border-radius: 0.55rem;
+  font: inherit;
+}
+
+.rlegacy-table-wrap {
+  overflow: auto;
+  border: 0.0625rem solid #e4eef8;
+  border-radius: 0.75rem;
+}
+
+.rlegacy-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.rlegacy-table th,
+.rlegacy-table td {
+  padding: 0.55rem 0.65rem;
+  text-align: left;
+  border-bottom: 0.0625rem solid #eef4fa;
+  vertical-align: top;
+}
+
+.rlegacy-table th {
+  background: #f7fbff;
+  color: #3a5878;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.rlegacy-table tr:hover td {
+  background: #fafcff;
+}
+
+.rlegacy-status {
+  display: inline-block;
+  padding: 0.15rem 0.45rem;
+  border-radius: 0.4rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  background: #eef4fa;
+  color: #3a5878;
+}
+
+.rlegacy-status--valid,
+.rlegacy-status--posted,
+.rlegacy-status--approved,
+.rlegacy-status--assigned,
+.rlegacy-status--published {
+  background: #e7f7ee;
+  color: #1f6b45;
+}
+
+.rlegacy-status--warning,
+.rlegacy-status--returned,
+.rlegacy-status--partial_post,
+.rlegacy-status--partial_publish {
+  background: #fff6e5;
+  color: #8a5a00;
+}
+
+.rlegacy-status--invalid,
+.rlegacy-status--failed,
+.rlegacy-status--rejected,
+.rlegacy-status--unmapped,
+.rlegacy-status--duplicate {
+  background: #fdecee;
+  color: #9b1c2e;
+}
+
+.rlegacy-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 1.1rem;
+  border: 0.1rem dashed #9ec5e8;
+  border-radius: 0.9rem;
+  background: #f8fbfe;
+}
+
+.rlegacy-drop input[type="file"] {
+  font: inherit;
+}
+
+.rlegacy-detail {
+  margin-top: 0.85rem;
+  padding: 0.85rem;
+  border-radius: 0.75rem;
+  background: #f8fbfe;
+  border: 0.0625rem solid #e4eef8;
+}
+
+.rlegacy-detail pre {
+  margin: 0.4rem 0 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.78rem;
+  color: #3a5878;
+}
+
+.rlegacy-history-row {
+  cursor: pointer;
+}
+
+.rlegacy-history-row:focus-visible {
+  outline: 0.125rem solid #2f7cc4;
+  outline-offset: -0.125rem;
+}

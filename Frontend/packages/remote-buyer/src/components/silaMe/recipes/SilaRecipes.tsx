@@ -21,6 +21,7 @@ import {
 import SilaRecipeCatalogGrid from "./SilaRecipeCatalogGrid";
 import SilaRecipeDetailView from "./SilaRecipeDetailView";
 import SilaRecipeExcelPanel from "./SilaRecipeExcelPanel";
+import SilaRecipeLegacyUpload from "./SilaRecipeLegacyUpload";
 import SilaRecipeTable from "./SilaRecipeTable";
 import SilaRecipeWorkspaceShell from "./SilaRecipeWorkspaceShell";
 import { RECIPE_STATUSES, formatCost, recipeLabel } from "./recipeFormat";
@@ -30,6 +31,7 @@ import {
   silaRecipeCatalogPath,
   silaRecipeDetailPath,
   silaRecipeEditPath,
+  silaRecipeLegacyUploadPath,
   silaRecipeNewPath,
 } from "./silaRecipeRoutes";
 import { loadStudioViewMode, resolveStudioKind, saveStudioViewMode, StudioCover, type StudioViewMode } from "./recipeStudioVisuals";
@@ -39,6 +41,8 @@ import "./SilaRecipeStudio.css";
 
 interface SilaRecipesProps {
   canManage: boolean;
+  /** Approvers can decide legacy migration batches and publish. */
+  canApprove?: boolean;
   /** Reserved for later rebuild steps (Material price requests). Unused in Step 1 shell. */
   canRequestPrice?: boolean;
 }
@@ -49,7 +53,11 @@ const PAGE_SIZE = 48;
  * Recipe Studio — catalog/detail + New/Edit workspace shell (Steps 1–6).
  * Canonical URLs under /sila-recipes; SilaRecipeEditor is not mounted.
  */
-const SilaRecipes: React.FC<SilaRecipesProps> = ({ canManage, canRequestPrice: _canRequestPrice = false }) => {
+const SilaRecipes: React.FC<SilaRecipesProps> = ({
+  canManage,
+  canApprove = false,
+  canRequestPrice: _canRequestPrice = false,
+}) => {
   const { pathname, key: locationKey } = useLocation();
   const navigate = useNavigate();
   const route = useMemo(() => parseSilaRecipePath(pathname), [pathname]);
@@ -175,6 +183,18 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({ canManage, canRequestPrice: _
     }
   };
 
+  // --- Legacy Recipe Upload (isolated migration workspace) ---
+  if (route.kind === "legacy-upload") {
+    return (
+      <SilaRecipeLegacyUpload
+        canManage={canManage}
+        canApprove={canApprove}
+        onBack={goCatalog}
+        onOpenRecipe={(recipeId) => navigate(silaRecipeDetailPath(recipeId))}
+      />
+    );
+  }
+
   // --- New Recipe: Recipe Studio workspace (SilaRecipeEditor not mounted) ---
   if (route.kind === "new") {
     if (!canManage) {
@@ -260,6 +280,14 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({ canManage, canRequestPrice: _
             onConfirm={confirmRecipeImport}
             onImported={load}
           />
+          <button
+            type="button"
+            className="sila-btn sila-btn--secondary"
+            onClick={() => navigate(silaRecipeLegacyUploadPath())}
+            data-testid="recipe-legacy-upload-entry"
+          >
+            Legacy Recipe Upload
+          </button>
           <button
             type="button"
             className="sila-btn sila-btn--primary"
