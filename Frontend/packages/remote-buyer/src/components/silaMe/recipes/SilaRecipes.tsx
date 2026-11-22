@@ -333,18 +333,62 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({
         </div>
       </div>
 
-      <div className="rstudio-cats">
-        <button
-          type="button"
-          className="sila-btn sila-btn--secondary"
-          data-testid="recipe-category-filters-toggle"
-          aria-expanded={showCategoryFilters}
-          aria-controls="recipe-category-filters"
-          onClick={() => setShowCategoryFilters((open) => !open)}
-        >
-          {showCategoryFilters ? "Hide filters" : "Filters"}
-        </button>
-      </div>
+      <section className="rstudio-toolbar sila-card">
+        <div className="srec-filters srec-filters--flush">
+          <div className="sila-field srec-grow">
+            <label className="sila-label" htmlFor="srec-search">Search recipes</label>
+            <input
+              id="srec-search"
+              className="sila-input"
+              type="search"
+              placeholder="Name, code or POS"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <div className="sila-field">
+            <label className="sila-label" htmlFor="srec-status">Status</label>
+            <select id="srec-status" className="sila-select" value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }}>
+              <option value="">All</option>
+              {RECIPE_STATUSES.map((code) => (
+                <option key={code} value={code}>{recipeLabel(code)}</option>
+              ))}
+            </select>
+          </div>
+          <div className="sila-field">
+            <label className="sila-label" htmlFor="srec-family-filter">Family / cuisine</label>
+            <select id="srec-family-filter" className="sila-select" value={familyId} onChange={(e) => { setFamilyId(e.target.value); setPage(1); }}>
+              <option value="">All</option>
+              {families.map((family) => (
+                <option key={family.id} value={family.id}>{family.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="sila-field">
+            <label className="sila-label" htmlFor="srec-mode-filter">Recipe type</label>
+            <select id="srec-mode-filter" className="sila-select" value={itemMode} onChange={(e) => { setItemMode(e.target.value); setPage(1); }}>
+              <option value="">All</option>
+              <option value="RECIPE">Recipe</option>
+              <option value="DIRECT">Direct item</option>
+              <option value="BATCH">Batch</option>
+            </select>
+          </div>
+          <button
+            type="button"
+            className="sila-btn sila-btn--secondary"
+            data-testid="recipe-category-filters-toggle"
+            aria-expanded={showCategoryFilters}
+            aria-controls="recipe-category-filters"
+            onClick={() => setShowCategoryFilters((open) => !open)}
+          >
+            {showCategoryFilters ? "Hide filters" : "Filters"}
+          </button>
+          <div className="rstudio-view-toggle" role="group" aria-label="Catalog view">
+            <button type="button" className={`sila-btn sila-btn--sm ${viewMode === "grid" ? "sila-btn--primary" : "sila-btn--secondary"}`} onClick={() => setMode("grid")}>Grid</button>
+            <button type="button" className={`sila-btn sila-btn--sm ${viewMode === "list" ? "sila-btn--primary" : "sila-btn--secondary"}`} onClick={() => setMode("list")}>List</button>
+          </div>
+        </div>
+      </section>
 
       {showCategoryFilters && (
         <div id="recipe-category-filters" data-testid="recipe-category-filters">
@@ -397,53 +441,6 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({
           </nav>
         </div>
       )}
-
-      <section className="rstudio-toolbar sila-card">
-        <div className="srec-filters srec-filters--flush">
-          <div className="sila-field srec-grow">
-            <label className="sila-label" htmlFor="srec-search">Search recipes</label>
-            <input
-              id="srec-search"
-              className="sila-input"
-              type="search"
-              placeholder="Name, code or POS"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-          <div className="sila-field">
-            <label className="sila-label" htmlFor="srec-status">Status</label>
-            <select id="srec-status" className="sila-select" value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }}>
-              <option value="">All</option>
-              {RECIPE_STATUSES.map((code) => (
-                <option key={code} value={code}>{recipeLabel(code)}</option>
-              ))}
-            </select>
-          </div>
-          <div className="sila-field">
-            <label className="sila-label" htmlFor="srec-family-filter">Family / cuisine</label>
-            <select id="srec-family-filter" className="sila-select" value={familyId} onChange={(e) => { setFamilyId(e.target.value); setPage(1); }}>
-              <option value="">All</option>
-              {families.map((family) => (
-                <option key={family.id} value={family.id}>{family.name}</option>
-              ))}
-            </select>
-          </div>
-          <div className="sila-field">
-            <label className="sila-label" htmlFor="srec-mode-filter">Recipe type</label>
-            <select id="srec-mode-filter" className="sila-select" value={itemMode} onChange={(e) => { setItemMode(e.target.value); setPage(1); }}>
-              <option value="">All</option>
-              <option value="RECIPE">Recipe</option>
-              <option value="DIRECT">Direct item</option>
-              <option value="BATCH">Batch</option>
-            </select>
-          </div>
-          <div className="rstudio-view-toggle" role="group" aria-label="Catalog view">
-            <button type="button" className={`sila-btn sila-btn--sm ${viewMode === "grid" ? "sila-btn--primary" : "sila-btn--secondary"}`} onClick={() => setMode("grid")}>Grid</button>
-            <button type="button" className={`sila-btn sila-btn--sm ${viewMode === "list" ? "sila-btn--primary" : "sila-btn--secondary"}`} onClick={() => setMode("list")}>List</button>
-          </div>
-        </div>
-      </section>
 
       {loading ? (
         <Loader size={24} message="Loading Recipe Studio..." />
