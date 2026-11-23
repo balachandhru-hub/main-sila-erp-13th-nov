@@ -50,6 +50,10 @@ namespace Buyer.Application.Features.Shared
             @"^(?<qty>\d+(?:\.\d+)?)\s*(?<uom>kg|kgs|g|grams?|l|liters?|litres?|pcs?|pieces?|boxes?|box|packs?|pack|units?|unit|ea|each)?\s+(?:of\s+)?(?<material>.+)$",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
+        private static readonly Regex PricePattern = new(
+            @"(?:(?:at|@|for|price|priced)?\s*)?(?<price>\d+(?:\.\d+)?)\s*(?<currency>aed|usd|eur|gbp|sar)?\s*(?:per|/)\s*(?<priceuom>kg|kgs?|g|l|ea|each|pc|pcs|unit)?",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
         private static readonly HashSet<string> WeakAffirmations = new(StringComparer.OrdinalIgnoreCase)
         {
             "yes", "y", "ok", "okay", "sure", "yep", "yeah", "ya", "alright", "right", "fine", "go", "do it", "proceed"
@@ -275,6 +279,7 @@ namespace Buyer.Application.Features.Shared
                 }
 
                 result.MaterialHint = CleanMaterialHint(order.Groups["material"].Value);
+                ApplyPriceHint(text, result);
                 if (string.IsNullOrWhiteSpace(result.MaterialHint))
                 {
                     result.NeedsClarification = true;
@@ -306,14 +311,29 @@ namespace Buyer.Application.Features.Shared
             {
                 SilaVoicePoDraftLineDto line = draft.Lines[i];
                 string where = $"Line {(line.LineNumber > 0 ? line.LineNumber : i + 1)}";
-                if (!line.Resolved || string.IsNullOrWhiteSpace(line.MaterialCode))
+                // Text PO lines are allowed: no material code, but description + material group from defaults.
+                bool isTextLine = string.IsNullOrWhiteSpace(line.MaterialCode)
+                    && !string.IsNullOrWhiteSpace(line.Description)
+                    && string.Equals(line.InventoryType, SilaUserPurchasingProfileRules.INVENTORY_NON_STOCK, StringComparison.OrdinalIgnoreCase);
+                if (!line.Resolved && !isTextLine)
                 {
                     validation.Errors.Add($"{where}: material is not resolved. Never invent a material code.");
                     validation.Clarifications.Add(new SilaVoicePoClarificationDto
                     {
                         Code = "MATERIAL_UNRESOLVED",
-                        Message = $"{where}: say the material code or a unique description from the item master.",
+                        Message = $"{where}: say the material code, a unique description from the item master, or continue as a text PO with defaults.",
                         Field = "MaterialCode"
+                    });
+                }
+
+                if (isTextLine && string.IsNullOrWhiteSpace(line.MaterialGroup))
+                {
+                    validation.Errors.Add($"{where}: text PO lines need a material group from your PO defaults.");
+                    validation.Clarifications.Add(new SilaVoicePoClarificationDto
+                    {
+                        Code = "MATERIAL_GROUP",
+                        Message = $"{where}: set MaterialGroup on your PO defaults, then say 'go with default'.",
+                        Field = "MaterialGroup"
                     });
                 }
 
@@ -550,7 +570,7 @@ namespace Buyer.Application.Features.Shared
 
             if (!string.IsNullOrWhiteSpace(preferredSupplierCode))
             {
-                string code = preferredSupplierCode.Trim().ToUpperInvariant();
+                string code = preferredSupplierCode.Trim();
                 SilaSupplier? byCode = await repository.SilaSupplier
                     .FindFirstByConditionAsync(x => x.BuyerId == buyerId && x.IsActive && x.SupplierCode == code);
                 if (byCode != null)
@@ -562,6 +582,14 @@ namespace Buyer.Application.Features.Shared
                     resolution.Note = "Preferred supplier code from purchasing profile.";
                     return resolution;
                 }
+
+                // SAP vendor code from defaults is enough for text / ERP POs even without a local mapping row.
+                resolution.SupplierId = preferredSupplierId is { } id && id != Guid.Empty ? id : Guid.NewGuid();
+                resolution.SupplierCode = code;
+                resolution.SupplierName = code;
+                resolution.Resolved = true;
+                resolution.Note = "Preferred supplier code from PO defaults.";
+                return resolution;
             }
 
             if (!string.IsNullOrWhiteSpace(materialCode))
@@ -703,6 +731,36 @@ namespace Buyer.Application.Features.Shared
             }
         }
 
+        private static void ApplyPriceHint(string transcript, VoicePoParseResult result)
+        {
+            Match price = PricePattern.Match(transcript);
+            if (!price.Success
+                || !decimal.TryParse(price.Groups["price"].Value, NumberStyles.Number, CultureInfo.InvariantCulture, out decimal amount)
+                || amount <= 0)
+            {
+                return;
+            }
+
+            result.UnitPrice = amount;
+            if (price.Groups["currency"].Success && !string.IsNullOrWhiteSpace(price.Groups["currency"].Value))
+            {
+                result.Currency = price.Groups["currency"].Value.Trim().ToUpperInvariant();
+            }
+
+            if (string.IsNullOrWhiteSpace(result.UnitOfMeasure)
+                && price.Groups["priceuom"].Success
+                && !string.IsNullOrWhiteSpace(price.Groups["priceuom"].Value))
+            {
+                result.UnitOfMeasure = NormalizeUom(price.Groups["priceuom"].Value);
+            }
+
+            if (!string.IsNullOrWhiteSpace(result.MaterialHint))
+            {
+                result.MaterialHint = CleanMaterialHint(
+                    PricePattern.Replace(result.MaterialHint, " "));
+            }
+        }
+
         private static string? CleanMaterialHint(string? value)
         {
             if (string.IsNullOrWhiteSpace(value))
@@ -710,7 +768,8 @@ namespace Buyer.Application.Features.Shared
                 return null;
             }
 
-            string cleaned = Regex.Replace(value.Trim(), @"[^\w\s\-/&.]", " ");
+            string cleaned = PricePattern.Replace(value.Trim(), " ");
+            cleaned = Regex.Replace(cleaned, @"[^\w\s\-/&.]", " ");
             cleaned = Regex.Replace(cleaned, @"\s+", " ").Trim();
             return string.IsNullOrWhiteSpace(cleaned) ? null : cleaned;
         }
@@ -755,6 +814,8 @@ namespace Buyer.Application.Features.Shared
         public decimal? Quantity { get; set; }
         public string? UnitOfMeasure { get; set; }
         public string? MaterialHint { get; set; }
+        public decimal? UnitPrice { get; set; }
+        public string? Currency { get; set; }
         public bool NeedsClarification { get; set; }
         public string? ClarificationMessage { get; set; }
     }

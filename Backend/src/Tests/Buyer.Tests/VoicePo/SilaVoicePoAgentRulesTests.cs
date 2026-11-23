@@ -103,6 +103,51 @@ namespace Buyer.Tests.VoicePo
         }
 
         [Fact]
+        public void Text_po_line_without_material_code_is_valid_with_defaults()
+        {
+            SilaVoicePoDraftDto draft = new()
+            {
+                Lines =
+                {
+                    new SilaVoicePoDraftLineDto
+                    {
+                        LineNumber = 1,
+                        Description = "specialty spice blend",
+                        Quantity = 10,
+                        UnitOfMeasure = "KG",
+                        UnitPrice = 25,
+                        MaterialGroup = "0127",
+                        AccountAssignmentCategory = "K",
+                        CostCenter = "1060010108",
+                        GlAccount = "6000000007",
+                        InventoryType = SilaUserPurchasingProfileRules.INVENTORY_NON_STOCK,
+                        SupplierId = Guid.NewGuid(),
+                        SupplierCode = "1000142",
+                        Resolved = true
+                    }
+                }
+            };
+
+            SilaVoicePoDraftValidation validation = SilaVoicePoAgentRules.ValidateDraft(draft);
+
+            Assert.Equal(SilaVoicePoAgentRules.VALIDATION_OK, validation.Status);
+            Assert.Empty(validation.Errors);
+        }
+
+        [Fact]
+        public void Parse_order_intent_extracts_price_and_currency()
+        {
+            VoicePoParseResult result = SilaVoicePoAgentRules.ParseOrderIntent("order 10 kg specialty spice at 25 AED per kg");
+
+            Assert.Equal(VoicePoIntent.AddLine, result.Intent);
+            Assert.Equal(10m, result.Quantity);
+            Assert.Equal("KG", result.UnitOfMeasure);
+            Assert.Equal(25m, result.UnitPrice);
+            Assert.Equal("AED", result.Currency);
+            Assert.Contains("specialty spice", result.MaterialHint!, StringComparison.OrdinalIgnoreCase);
+        }
+
+        [Fact]
         public void Draft_validation_passes_for_resolved_stock_line_without_cost_center()
         {
             SilaVoicePoDraftDto draft = new()

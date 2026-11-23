@@ -185,20 +185,19 @@ namespace Buyer.Application.Features.Commands.ProcessSilaVoicePoTurn
 
             MaterialResolution material = await SilaVoicePoAgentRules.ResolveMaterialAsync(
                 _repository, buyerId, parse.MaterialHint, cancellationToken);
-            if (!material.Resolved || material.Material == null)
+            if (material.Candidates.Count > 1)
             {
-                if (material.Candidates.Count > 1)
-                {
-                    string options = string.Join(", ", material.Candidates.Select(c => $"{c.MaterialCode} ({c.Description})"));
-                    return $"Several materials match. Please say the code: {options}";
-                }
-
-                return material.Note ?? "Material not found. Codes are never invented.";
+                string options = string.Join(", ", material.Candidates.Select(c => $"{c.MaterialCode} ({c.Description})"));
+                return $"Several materials match. Please say the code: {options}";
             }
 
-            ItemBuyerMaster item = material.Material;
-            string inventoryType = SilaUserPurchasingProfileRules.NormalizeInventoryType(
-                item.InventoryType ?? (item.IsInventoryItem ? SilaUserPurchasingProfileRules.INVENTORY_STOCK : SilaUserPurchasingProfileRules.INVENTORY_NON_STOCK));
+            // Unknown material → text PO line (no invented material code). Uses defaults: material group, AA K, GL, etc.
+            bool textPo = !material.Resolved || material.Material == null;
+            ItemBuyerMaster? item = material.Material;
+            string inventoryType = textPo
+                ? SilaUserPurchasingProfileRules.INVENTORY_NON_STOCK
+                : SilaUserPurchasingProfileRules.NormalizeInventoryType(
+                    item!.InventoryType ?? (item.IsInventoryItem ? SilaUserPurchasingProfileRules.INVENTORY_STOCK : SilaUserPurchasingProfileRules.INVENTORY_NON_STOCK));
 
             SilaUserPurchasingDefaultsDto defaults = await SilaUserPurchasingProfileRules.ResolveAsync(
                 _repository,
@@ -212,21 +211,62 @@ namespace Buyer.Application.Features.Commands.ProcessSilaVoicePoTurn
                     OutletId = session.OutletId,
                     LocationId = session.LocationId,
                     PlantCode = draft.PlantCode,
-                    MaterialCode = item.MaterialCode,
+                    MaterialCode = item?.MaterialCode,
                     InventoryType = inventoryType
                 },
                 cancellationToken);
+
+            // Text / consumable POs always carry account assignment from defaults (category K).
+            if (textPo)
+            {
+                defaults.RequiresAccountAssignment = true;
+                defaults.AccountAssignmentCategory ??= "K";
+                draft.AccountAssignmentCategory ??= defaults.AccountAssignmentCategory;
+                draft.CostCenter ??= defaults.CostCenter;
+                draft.GlAccount ??= defaults.GlAccount;
+                draft.MaterialGroup ??= defaults.MaterialGroup;
+            }
+
+            if (!string.IsNullOrWhiteSpace(parse.Currency))
+            {
+                draft.Currency = parse.Currency.Trim().ToUpperInvariant();
+            }
+            else
+            {
+                draft.Currency ??= defaults.DefaultCurrency ?? "AED";
+            }
 
             SupplierResolution supplier = await SilaVoicePoAgentRules.ResolveSupplierAsync(
                 _repository,
                 buyerId,
                 defaults.PreferredSupplierId,
                 defaults.PreferredSupplierCode,
-                item.MaterialCode,
+                item?.MaterialCode,
                 cancellationToken);
 
-            SilaVoicePoDraftLineDto? existing = draft.Lines.FirstOrDefault(l =>
-                string.Equals(l.MaterialCode, item.MaterialCode, StringComparison.OrdinalIgnoreCase));
+            if (textPo && !supplier.Resolved && !string.IsNullOrWhiteSpace(defaults.PreferredSupplierCode))
+            {
+                // Prefer the SAP vendor code from PO defaults even when not in local mapping.
+                supplier = new SupplierResolution
+                {
+                    Resolved = true,
+                    SupplierId = defaults.PreferredSupplierId ?? Guid.NewGuid(),
+                    SupplierCode = defaults.PreferredSupplierCode,
+                    SupplierName = defaults.PreferredSupplierCode,
+                    Note = "Preferred supplier code from PO defaults (text PO)."
+                };
+            }
+
+            string description = textPo
+                ? (parse.MaterialHint ?? "Text item").Trim()
+                : (item!.Description ?? item.MaterialCode ?? parse.MaterialHint ?? "Item");
+
+            SilaVoicePoDraftLineDto? existing = textPo
+                ? draft.Lines.FirstOrDefault(l =>
+                    string.IsNullOrWhiteSpace(l.MaterialCode)
+                    && string.Equals(l.Description, description, StringComparison.OrdinalIgnoreCase))
+                : draft.Lines.FirstOrDefault(l =>
+                    string.Equals(l.MaterialCode, item!.MaterialCode, StringComparison.OrdinalIgnoreCase));
             if (existing != null)
             {
                 existing.Quantity += parse.Quantity ?? 1;
@@ -234,35 +274,43 @@ namespace Buyer.Application.Features.Commands.ProcessSilaVoicePoTurn
                 {
                     existing.UnitOfMeasure = parse.UnitOfMeasure;
                 }
+
+                if (parse.UnitPrice != null)
+                {
+                    existing.UnitPrice = parse.UnitPrice;
+                }
             }
             else
             {
                 SilaVoicePoDraftLineDto line = new()
                 {
                     LineNumber = draft.Lines.Count + 1,
-                    MaterialId = item.Id,
-                    MaterialCode = item.MaterialCode,
-                    // System material description becomes PO item text (PurchaseOrderItemText).
-                    Description = item.Description,
+                    MaterialId = item?.Id,
+                    MaterialCode = textPo ? null : item!.MaterialCode,
+                    Description = description,
                     Quantity = parse.Quantity ?? 1,
                     UnitOfMeasure = parse.UnitOfMeasure
-                        ?? item.OrderUnitOfMeasure
-                        ?? item.BaseUnitOfMeasure,
-                    UnitPrice = item.StandardPrice ?? item.UnitCost,
+                        ?? item?.OrderUnitOfMeasure
+                        ?? item?.BaseUnitOfMeasure
+                        ?? "KG",
+                    UnitPrice = parse.UnitPrice ?? item?.StandardPrice ?? item?.UnitCost,
                     SupplierId = supplier.SupplierId,
                     SupplierCode = supplier.SupplierCode,
                     SupplierName = supplier.SupplierName,
                     StorageLocation = draft.StorageLocation ?? defaults.StorageLocation,
-                    MaterialGroup = defaults.MaterialGroup ?? item.MaterialGroup,
+                    MaterialGroup = defaults.MaterialGroup ?? item?.MaterialGroup,
                     InventoryType = inventoryType,
                     Resolved = true,
-                    ResolutionNote = $"{material.Note} {supplier.Note}".Trim()
+                    ResolutionNote = textPo
+                        ? $"Text PO (no item-master match). {supplier.Note}".Trim()
+                        : $"{material.Note} {supplier.Note}".Trim()
                 };
 
                 if (defaults.RequiresAccountAssignment
+                    || textPo
                     || SilaUserPurchasingProfileRules.RequiresAccountAssignment(inventoryType))
                 {
-                    line.AccountAssignmentCategory = defaults.AccountAssignmentCategory;
+                    line.AccountAssignmentCategory = defaults.AccountAssignmentCategory ?? "K";
                     line.CostCenter = defaults.CostCenter;
                     line.GlAccount = defaults.GlAccount;
                 }
@@ -272,9 +320,12 @@ namespace Buyer.Application.Features.Commands.ProcessSilaVoicePoTurn
 
             SilaVoicePoAgentRules.Renumber(draft);
             SilaVoicePoDraftValidation validation = SilaVoicePoAgentRules.ValidateDraft(draft);
+            string spokenName = description;
             return SilaVoicePoAgentRules.BuildSpokenReply(VoicePoIntent.AddLine, draft, validation,
                 validation.Status == SilaVoicePoAgentRules.VALIDATION_OK
-                    ? $"Added {item.Description}. {SilaVoicePoAgentRules.SummarizeDraft(draft)}"
+                    ? (textPo
+                        ? $"No item-master match — added text line '{spokenName}' with your defaults (material group {defaults.MaterialGroup}, account assignment {defaults.AccountAssignmentCategory ?? "K"}). {SilaVoicePoAgentRules.SummarizeDraft(draft)}"
+                        : $"Added {spokenName}. {SilaVoicePoAgentRules.SummarizeDraft(draft)}")
                     : null);
         }
 
