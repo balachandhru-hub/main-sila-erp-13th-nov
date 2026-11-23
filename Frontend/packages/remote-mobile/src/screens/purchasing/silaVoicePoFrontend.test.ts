@@ -59,7 +59,6 @@ assert.match(naturalTts, /isConversationDonePhrase/);
 assert.match(naturalTts, /startKeepAlive|keepAlive/);
 assert.match(naturalTts, /synthesizeVoiceTts|fetchServerWav|probeBrowserSynth/);
 assert.match(naturalTts, /playWavBlob/);
-assert.match(engineApi, /synthesizeVoiceTts/);
 assert.match(screen, /isSafariLike|resumeListening/);
 assert.match(screen, /clarifications|validationStatus|NEEDS_CLARIFICATION/);
 
@@ -78,6 +77,7 @@ assert.match(dialogue, /isShortConversationalUtterance/);
 
 const engineApi = readFileSync(join(dir, '../../../../remote-buyer/src/api/silaMe/silaVoiceEngineApi.ts'), 'utf8');
 assert.match(engineApi, /\/api\/v1\/buyer\/sila\/voice-engine/);
+assert.match(engineApi, /synthesizeVoiceTts/);
 
 assert.match(api, /export const resolveMyPurchasingDefaults/);
 assert.match(api, /export const startVoicePoSession/);
