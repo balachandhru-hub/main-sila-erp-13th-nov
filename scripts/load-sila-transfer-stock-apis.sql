@@ -1,7 +1,8 @@
 -- SILA ME Transfer Stock API configs for SILA Test Buyer.
--- Activates FIVE S4 - Transfer Stock (311/312) and FIVE S4 - Plant Transfer Stock (301/302).
--- Copies S4 credentials from the existing Transfer / GRN row. Idempotent.
--- POS sales consumption stays on FIVE_POS_UPDATE — this script does not touch it.
+-- Activates S4 - Transfer Stock (311/312) and keeps Plant Transfer Stock (301/302) active.
+-- Matches SilaInventorySap canonical names (FIVE aliases still resolve in code).
+-- Copies S4 credentials from an existing Transfer / GRN / Goods Issue row. Idempotent.
+-- Does not touch POS, waste, Goods Issue, or Positive Stock Adjustment rows.
 
 DECLARE @Buyer uniqueidentifier = '15ce77a3-df16-4474-a5da-f874551782d8';
 DECLARE @Actor uniqueidentifier = '5c4474fc-5eac-410b-bff4-c04f51195ff6';
@@ -15,62 +16,47 @@ DECLARE @BaseUrl nvarchar(500) = N'https://my419951-api.s4hana.cloud.sap';
 DECLARE @Resource nvarchar(500) = N'sap/opu/odata/sap/API_MATERIAL_DOCUMENT_SRV/A_MaterialDocumentHeader';
 DECLARE @Headers nvarchar(max) = N'{"Accept":"application/json","Content-Type":"application/json","DataServiceVersion":"2.0","MaxDataServiceVersion":"2.0","x-csrf-token":"Fetch"}';
 
--- Prefer credentials already on Transfer Stock / Plant Transfer / GRN.
 SELECT TOP 1 @S4User = username, @S4Password = protected_password
 FROM buyersystem.api_integration_configuration
 WHERE buyer_id = @Buyer
   AND is_active = 1
   AND name IN (
-      N'FIVE S4 - Transfer Stock', N'S4 - Transfer Stock',
-      N'FIVE S4 - Plant Transfer Stock', N'S4 - Plant Transfer Stock',
+      N'S4 - Transfer Stock', N'FIVE S4 - Transfer Stock',
+      N'S4 - Plant Transfer Stock', N'FIVE S4 - Plant Transfer Stock',
       N'FIVE S4-GRN POSTING', N'S4 - Goods Issue'
   )
   AND username IS NOT NULL
   AND protected_password IS NOT NULL
 ORDER BY CASE
-    WHEN name IN (N'FIVE S4 - Transfer Stock', N'S4 - Transfer Stock') THEN 0
-    WHEN name IN (N'FIVE S4 - Plant Transfer Stock', N'S4 - Plant Transfer Stock') THEN 1
+    WHEN name IN (N'S4 - Transfer Stock', N'FIVE S4 - Transfer Stock') THEN 0
+    WHEN name IN (N'S4 - Plant Transfer Stock', N'FIVE S4 - Plant Transfer Stock') THEN 1
     ELSE 2
 END;
 
 IF @S4User IS NULL
 BEGIN
-    THROW 50001, 'No S4 credentials found to activate FIVE S4 - Transfer Stock.', 1;
+    THROW 50001, 'No S4 credentials found to activate S4 - Transfer Stock.', 1;
 END;
 
--- Rename legacy S4 display names to the Integration Setup names mobile/cloud resolve.
+-- Rename FIVE display name to the Integration Setup name posting resolves (same pattern as Positive Adj).
 UPDATE buyersystem.api_integration_configuration
-SET name = N'FIVE S4 - Transfer Stock',
+SET name = N'S4 - Transfer Stock',
     process_type = N'POST_TRANSFER_311',
     status = N'ACTIVE',
     is_active = 1,
     date_updated = @Now,
     updated_by = @Actor
 WHERE buyer_id = @Buyer
-  AND name = N'S4 - Transfer Stock'
+  AND name = N'FIVE S4 - Transfer Stock'
   AND NOT EXISTS (
       SELECT 1 FROM buyersystem.api_integration_configuration
-      WHERE buyer_id = @Buyer AND name = N'FIVE S4 - Transfer Stock' AND is_active = 1
-  );
-
-UPDATE buyersystem.api_integration_configuration
-SET name = N'FIVE S4 - Plant Transfer Stock',
-    process_type = N'POST_TRANSFER_301',
-    status = N'ACTIVE',
-    is_active = 1,
-    date_updated = @Now,
-    updated_by = @Actor
-WHERE buyer_id = @Buyer
-  AND name = N'S4 - Plant Transfer Stock'
-  AND NOT EXISTS (
-      SELECT 1 FROM buyersystem.api_integration_configuration
-      WHERE buyer_id = @Buyer AND name = N'FIVE S4 - Plant Transfer Stock' AND is_active = 1
+      WHERE buyer_id = @Buyer AND name = N'S4 - Transfer Stock' AND is_active = 1
   );
 
 -- Ensure same-plant Transfer Stock row exists and is ACTIVE.
 IF NOT EXISTS (
     SELECT 1 FROM buyersystem.api_integration_configuration
-    WHERE buyer_id = @Buyer AND name = N'FIVE S4 - Transfer Stock' AND is_active = 1
+    WHERE buyer_id = @Buyer AND name = N'S4 - Transfer Stock' AND is_active = 1
 )
 BEGIN
     INSERT INTO buyersystem.api_integration_configuration
@@ -83,7 +69,7 @@ BEGIN
     )
     VALUES
     (
-        @TransferId, @Buyer, N'ALL', N'FIVE S4 - Transfer Stock', N'POST_TRANSFER_311', N'REST', N'SAP S/4',
+        @TransferId, @Buyer, N'ALL', N'S4 - Transfer Stock', N'POST_TRANSFER_311', N'REST', N'SAP S/4',
         @BaseUrl, @Resource, N'BASIC', @S4User, @S4Password,
         N'POST', N'JSON', NULL, @Headers,
         30, 2, 100, 0, N'ACTIVE',
@@ -110,14 +96,17 @@ BEGIN
         date_updated = @Now,
         updated_by = @Actor
     WHERE buyer_id = @Buyer
-      AND name = N'FIVE S4 - Transfer Stock'
+      AND name = N'S4 - Transfer Stock'
       AND is_active = 1;
 END;
 
--- Ensure plant-to-plant Transfer Stock row exists and is ACTIVE.
+-- Keep plant-to-plant Transfer Stock active (FIVE name retained; code also accepts S4 alias).
 IF NOT EXISTS (
     SELECT 1 FROM buyersystem.api_integration_configuration
-    WHERE buyer_id = @Buyer AND name = N'FIVE S4 - Plant Transfer Stock' AND is_active = 1
+    WHERE buyer_id = @Buyer
+      AND name IN (N'FIVE S4 - Plant Transfer Stock', N'S4 - Plant Transfer Stock')
+      AND is_active = 1
+      AND status = N'ACTIVE'
 )
 BEGIN
     INSERT INTO buyersystem.api_integration_configuration
@@ -157,11 +146,10 @@ BEGIN
         date_updated = @Now,
         updated_by = @Actor
     WHERE buyer_id = @Buyer
-      AND name = N'FIVE S4 - Plant Transfer Stock'
+      AND name IN (N'FIVE S4 - Plant Transfer Stock', N'S4 - Plant Transfer Stock')
       AND is_active = 1;
 END;
 
--- Durable Material Document sample bodies (runtime still builds the live ITO payload).
 DECLARE @TransferBody nvarchar(max) = N'{
   "DocumentDate": "{{documentDate}}",
   "PostingDate": "{{postingDate}}",
@@ -206,7 +194,7 @@ SET request_body = @TransferBody,
     date_updated = @Now,
     updated_by = @Actor
 WHERE buyer_id = @Buyer
-  AND name = N'FIVE S4 - Transfer Stock'
+  AND name = N'S4 - Transfer Stock'
   AND is_active = 1;
 
 UPDATE buyersystem.api_integration_configuration
@@ -214,10 +202,10 @@ SET request_body = @PlantBody,
     date_updated = @Now,
     updated_by = @Actor
 WHERE buyer_id = @Buyer
-  AND name = N'FIVE S4 - Plant Transfer Stock'
+  AND name IN (N'FIVE S4 - Plant Transfer Stock', N'S4 - Plant Transfer Stock')
   AND is_active = 1;
 
--- Deactivate any leftover S4-named duplicates so Integration Setup shows one active FIVE row.
+-- Deactivate leftover FIVE Transfer Stock duplicate once S4 row is active.
 UPDATE legacy
 SET status = N'INACTIVE',
     is_active = 0,
@@ -225,14 +213,20 @@ SET status = N'INACTIVE',
     updated_by = @Actor
 FROM buyersystem.api_integration_configuration AS legacy
 WHERE legacy.buyer_id = @Buyer
-  AND legacy.name IN (N'S4 - Transfer Stock', N'S4 - Plant Transfer Stock')
+  AND legacy.name = N'FIVE S4 - Transfer Stock'
   AND EXISTS (
-      SELECT 1 FROM buyersystem.api_integration_configuration AS active_five
-      WHERE active_five.buyer_id = @Buyer
-        AND active_five.is_active = 1
-        AND active_five.status = N'ACTIVE'
-        AND (
-              (legacy.name = N'S4 - Transfer Stock' AND active_five.name = N'FIVE S4 - Transfer Stock')
-           OR (legacy.name = N'S4 - Plant Transfer Stock' AND active_five.name = N'FIVE S4 - Plant Transfer Stock')
-        )
+      SELECT 1 FROM buyersystem.api_integration_configuration AS active_s4
+      WHERE active_s4.buyer_id = @Buyer
+        AND active_s4.is_active = 1
+        AND active_s4.status = N'ACTIVE'
+        AND active_s4.name = N'S4 - Transfer Stock'
   );
+
+SELECT id, name, process_type, entity_code, status, is_active
+FROM buyersystem.api_integration_configuration
+WHERE buyer_id = @Buyer
+  AND name IN (
+      N'S4 - Transfer Stock', N'FIVE S4 - Transfer Stock',
+      N'S4 - Plant Transfer Stock', N'FIVE S4 - Plant Transfer Stock'
+  )
+ORDER BY name;
