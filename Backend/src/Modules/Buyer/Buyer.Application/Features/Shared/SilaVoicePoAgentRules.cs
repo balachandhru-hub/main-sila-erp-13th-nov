@@ -333,13 +333,15 @@ namespace Buyer.Application.Features.Shared
                     });
                 }
 
-                if (SilaUserPurchasingProfileRules.RequiresAccountAssignment(line.InventoryType))
+                bool needsAccountAssignment = SilaUserPurchasingProfileRules.RequiresAccountAssignment(line.InventoryType)
+                    || !string.IsNullOrWhiteSpace(line.AccountAssignmentCategory);
+                if (needsAccountAssignment)
                 {
                     if (string.IsNullOrWhiteSpace(line.AccountAssignmentCategory)
                         || string.IsNullOrWhiteSpace(line.CostCenter)
                         || string.IsNullOrWhiteSpace(line.GlAccount))
                     {
-                        validation.Errors.Add($"{where}: consumable items need account assignment category, cost center and GL account.");
+                        validation.Errors.Add($"{where}: account assignment category, cost center and GL account are required.");
                         validation.Clarifications.Add(new SilaVoicePoClarificationDto
                         {
                             Code = "ACCOUNT_ASSIGNMENT",
@@ -389,7 +391,9 @@ namespace Buyer.Application.Features.Shared
                 }
 
                 line.StorageLocation ??= defaults.StorageLocation;
-                if (SilaUserPurchasingProfileRules.RequiresAccountAssignment(line.InventoryType ?? defaults.InventoryType))
+                line.MaterialGroup ??= defaults.MaterialGroup;
+                if (defaults.RequiresAccountAssignment
+                    || SilaUserPurchasingProfileRules.RequiresAccountAssignment(line.InventoryType ?? defaults.InventoryType))
                 {
                     line.AccountAssignmentCategory ??= defaults.AccountAssignmentCategory;
                     line.CostCenter ??= defaults.CostCenter;
@@ -398,13 +402,14 @@ namespace Buyer.Application.Features.Shared
                 }
                 else
                 {
-                    // Stock: do not force CC/GL from profile.
+                    // Stock without a profile AA category: do not force CC/GL.
                     line.AccountAssignmentCategory = null;
                     line.CostCenter = null;
                     line.GlAccount = null;
                 }
             }
 
+            draft.MaterialGroup ??= defaults.MaterialGroup;
             if (defaults.RequiresAccountAssignment)
             {
                 draft.AccountAssignmentCategory ??= defaults.AccountAssignmentCategory;

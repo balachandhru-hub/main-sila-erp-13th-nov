@@ -23,6 +23,7 @@ namespace Buyer.Domain.Dtos
         public string? AccountAssignmentCategory { get; set; }
         public string? CostCenter { get; set; }
         public string? GlAccount { get; set; }
+        public string? MaterialGroup { get; set; }
         public string? ProfitCenter { get; set; }
         public string? BusinessArea { get; set; }
         public string? InternalOrder { get; set; }
@@ -55,6 +56,7 @@ namespace Buyer.Domain.Dtos
         public string? AccountAssignmentCategory { get; set; }
         public string? CostCenter { get; set; }
         public string? GlAccount { get; set; }
+        public string? MaterialGroup { get; set; }
         public string? ProfitCenter { get; set; }
         public string? BusinessArea { get; set; }
         public string? InternalOrder { get; set; }
@@ -87,6 +89,7 @@ namespace Buyer.Domain.Dtos
         public string? AccountAssignmentCategory { get; set; }
         public string? CostCenter { get; set; }
         public string? GlAccount { get; set; }
+        public string? MaterialGroup { get; set; }
         public string? ProfitCenter { get; set; }
         public string? BusinessArea { get; set; }
         public string? InternalOrder { get; set; }

@@ -19,21 +19,36 @@ interface FormState extends SilaUserPurchasingProfileWrite {
   id?: string;
 }
 
+/** SILA Admin default purchasing / account-assignment seed for new profiles. */
+const SILA_ADMIN_PO_DEFAULTS = {
+  companyCode: "1060",
+  plantCode: "1060",
+  storageLocation: "FL01",
+  purchasingOrganization: "1000",
+  purchasingGroup: "001",
+  accountAssignmentCategory: "K",
+  costCenter: "1060010108",
+  glAccount: "3250000109",
+  materialGroup: "0127",
+  defaultPoDocumentType: "NB",
+} as const;
+
 const emptyForm = (userId: string): FormState => ({
   userId,
-  isDefault: false,
-  companyCode: "",
-  plantCode: "",
-  storageLocation: "",
-  purchasingOrganization: "",
-  purchasingGroup: "",
-  accountAssignmentCategory: "",
-  costCenter: "",
-  glAccount: "",
+  isDefault: true,
+  companyCode: SILA_ADMIN_PO_DEFAULTS.companyCode,
+  plantCode: SILA_ADMIN_PO_DEFAULTS.plantCode,
+  storageLocation: SILA_ADMIN_PO_DEFAULTS.storageLocation,
+  purchasingOrganization: SILA_ADMIN_PO_DEFAULTS.purchasingOrganization,
+  purchasingGroup: SILA_ADMIN_PO_DEFAULTS.purchasingGroup,
+  accountAssignmentCategory: SILA_ADMIN_PO_DEFAULTS.accountAssignmentCategory,
+  costCenter: SILA_ADMIN_PO_DEFAULTS.costCenter,
+  glAccount: SILA_ADMIN_PO_DEFAULTS.glAccount,
+  materialGroup: SILA_ADMIN_PO_DEFAULTS.materialGroup,
   profitCenter: "",
   preferredSupplierCode: "",
   defaultCurrency: "",
-  defaultPoDocumentType: "NB",
+  defaultPoDocumentType: SILA_ADMIN_PO_DEFAULTS.defaultPoDocumentType,
   notes: "",
 });
 
@@ -104,6 +119,7 @@ const SilaUserPoDefaults: React.FC<SilaUserPoDefaultsProps> = ({ canManage = tru
       accountAssignmentCategory: row.accountAssignmentCategory ?? "",
       costCenter: row.costCenter ?? "",
       glAccount: row.glAccount ?? "",
+      materialGroup: row.materialGroup ?? "",
       profitCenter: row.profitCenter ?? "",
       businessArea: row.businessArea ?? "",
       internalOrder: row.internalOrder ?? "",
@@ -147,6 +163,7 @@ const SilaUserPoDefaults: React.FC<SilaUserPoDefaultsProps> = ({ canManage = tru
         accountAssignmentCategory: trimOrNull(form.accountAssignmentCategory),
         costCenter: trimOrNull(form.costCenter),
         glAccount: trimOrNull(form.glAccount),
+        materialGroup: trimOrNull(form.materialGroup),
         profitCenter: trimOrNull(form.profitCenter),
         businessArea: trimOrNull(form.businessArea),
         internalOrder: trimOrNull(form.internalOrder),
@@ -206,7 +223,7 @@ const SilaUserPoDefaults: React.FC<SilaUserPoDefaultsProps> = ({ canManage = tru
       <PageHeader
         className="pud-page-header"
         title="PO Defaults & Account Assignment"
-        description="Authorized purchasing and account-assignment defaults per user for Voice PO and manual PO creation."
+        description="Authorized purchasing and account-assignment defaults per user for Voice PO and manual PO creation. New profiles seed SILA Admin defaults (1060 / FL01 / K)."
       />
 
       <section className="sila-card">
@@ -271,6 +288,7 @@ const SilaUserPoDefaults: React.FC<SilaUserPoDefaultsProps> = ({ canManage = tru
                   <th scope="col">Acct</th>
                   <th scope="col">Cost center</th>
                   <th scope="col">G/L</th>
+                  <th scope="col">Mat grp</th>
                   <th scope="col">Supplier</th>
                   {canManage && <th scope="col"><span className="sila-visually-hidden">Actions</span></th>}
                 </tr>
@@ -288,6 +306,7 @@ const SilaUserPoDefaults: React.FC<SilaUserPoDefaultsProps> = ({ canManage = tru
                     <td>{row.accountAssignmentCategory || "—"}</td>
                     <td>{row.costCenter || "—"}</td>
                     <td>{row.glAccount || "—"}</td>
+                    <td>{row.materialGroup || "—"}</td>
                     <td>{row.preferredSupplierCode || "—"}</td>
                     {canManage && (
                       <td>
@@ -399,6 +418,12 @@ const SilaUserPoDefaults: React.FC<SilaUserPoDefaultsProps> = ({ canManage = tru
               <label className="sila-label" htmlFor="spo-form-gl">G/L account</label>
               <input id="spo-form-gl" className="sila-input" value={form.glAccount ?? ""} disabled={busy}
                 onChange={(event) => setField("glAccount", event.target.value)} />
+            </div>
+            <div className="sila-field">
+              <label className="sila-label" htmlFor="spo-form-matgrp">Material group</label>
+              <input id="spo-form-matgrp" className="sila-input" value={form.materialGroup ?? ""} disabled={busy}
+                placeholder="e.g. 0127"
+                onChange={(event) => setField("materialGroup", event.target.value)} />
             </div>
             <div className="sila-field">
               <label className="sila-label" htmlFor="spo-form-pc">Profit center</label>

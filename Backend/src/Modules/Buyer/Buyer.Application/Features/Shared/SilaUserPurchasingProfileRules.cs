@@ -74,6 +74,7 @@ namespace Buyer.Application.Features.Shared
                 AccountAssignmentCategory = row.AccountAssignmentCategory,
                 CostCenter = row.CostCenter,
                 GlAccount = row.GlAccount,
+                MaterialGroup = row.MaterialGroup,
                 ProfitCenter = row.ProfitCenter,
                 BusinessArea = row.BusinessArea,
                 InternalOrder = row.InternalOrder,
@@ -107,6 +108,7 @@ namespace Buyer.Application.Features.Shared
             row.AccountAssignmentCategory = CleanUpper(input.AccountAssignmentCategory, 10);
             row.CostCenter = CleanUpper(input.CostCenter, MAX_CODE);
             row.GlAccount = CleanUpper(input.GlAccount, MAX_CODE);
+            row.MaterialGroup = CleanUpper(input.MaterialGroup, MAX_CODE);
             row.ProfitCenter = CleanUpper(input.ProfitCenter, MAX_CODE);
             row.BusinessArea = CleanUpper(input.BusinessArea, MAX_CODE);
             row.InternalOrder = CleanUpper(input.InternalOrder, MAX_CODE);
@@ -241,10 +243,13 @@ namespace Buyer.Application.Features.Shared
                 request.PlantCode,
                 cancellationToken);
 
+            bool profileForcesAccountAssignment = profile != null
+                && !string.IsNullOrWhiteSpace(profile.AccountAssignmentCategory);
             SilaUserPurchasingDefaultsDto defaults = new()
             {
                 InventoryType = inventoryType,
-                RequiresAccountAssignment = RequiresAccountAssignment(inventoryType)
+                // Profile with an account-assignment category (e.g. SILA Admin K) always applies CC/GL.
+                RequiresAccountAssignment = RequiresAccountAssignment(inventoryType) || profileForcesAccountAssignment
             };
 
             if (profile == null)
@@ -272,6 +277,7 @@ namespace Buyer.Application.Features.Shared
             defaults.PurchasingOrganization = profile.PurchasingOrganization;
             defaults.PurchasingGroup = profile.PurchasingGroup;
             defaults.DefaultDeliveryLocation = profile.DefaultDeliveryLocation;
+            defaults.MaterialGroup = profile.MaterialGroup;
             defaults.ProfitCenter = profile.ProfitCenter;
             defaults.BusinessArea = profile.BusinessArea;
             defaults.InternalOrder = profile.InternalOrder;
@@ -283,7 +289,6 @@ namespace Buyer.Application.Features.Shared
             defaults.DefaultPoDocumentType = profile.DefaultPoDocumentType;
             defaults.DefaultItemCategory = profile.DefaultItemCategory;
 
-            // Stock: never force account assignment from the profile.
             if (defaults.RequiresAccountAssignment)
             {
                 defaults.AccountAssignmentCategory = profile.AccountAssignmentCategory;

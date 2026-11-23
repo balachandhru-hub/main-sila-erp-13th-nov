@@ -242,6 +242,7 @@ namespace Buyer.Application.Features.Commands.ProcessSilaVoicePoTurn
                     LineNumber = draft.Lines.Count + 1,
                     MaterialId = item.Id,
                     MaterialCode = item.MaterialCode,
+                    // System material description becomes PO item text (PurchaseOrderItemText).
                     Description = item.Description,
                     Quantity = parse.Quantity ?? 1,
                     UnitOfMeasure = parse.UnitOfMeasure
@@ -252,12 +253,14 @@ namespace Buyer.Application.Features.Commands.ProcessSilaVoicePoTurn
                     SupplierCode = supplier.SupplierCode,
                     SupplierName = supplier.SupplierName,
                     StorageLocation = draft.StorageLocation ?? defaults.StorageLocation,
+                    MaterialGroup = defaults.MaterialGroup ?? item.MaterialGroup,
                     InventoryType = inventoryType,
                     Resolved = true,
                     ResolutionNote = $"{material.Note} {supplier.Note}".Trim()
                 };
 
-                if (SilaUserPurchasingProfileRules.RequiresAccountAssignment(inventoryType))
+                if (defaults.RequiresAccountAssignment
+                    || SilaUserPurchasingProfileRules.RequiresAccountAssignment(inventoryType))
                 {
                     line.AccountAssignmentCategory = defaults.AccountAssignmentCategory;
                     line.CostCenter = defaults.CostCenter;

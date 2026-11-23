@@ -44,6 +44,8 @@ namespace Buyer.Domain.Entities
         public string? AccountAssignmentCategory { get; set; }
         public string? CostCenter { get; set; }
         public string? GlAccount { get; set; }
+        /// <summary>Default SAP material group applied to Voice/manual PO lines when set (e.g. 0127).</summary>
+        public string? MaterialGroup { get; set; }
         public string? ProfitCenter { get; set; }
         public string? BusinessArea { get; set; }
         public string? InternalOrder { get; set; }

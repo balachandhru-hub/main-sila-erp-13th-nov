@@ -41,6 +41,7 @@ namespace Buyer.Infrastructure.Migrations
                     account_assignment_category = table.Column<string>(type: "nvarchar(10)", maxLength: 10, nullable: true),
                     cost_center = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
                     gl_account = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
+                    material_group = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
                     profit_center = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
                     business_area = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
                     internal_order = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),

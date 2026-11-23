@@ -28,6 +28,7 @@ export interface SilaUserPurchasingProfile {
   accountAssignmentCategory?: string | null;
   costCenter?: string | null;
   glAccount?: string | null;
+  materialGroup?: string | null;
   profitCenter?: string | null;
   businessArea?: string | null;
   internalOrder?: string | null;
@@ -61,6 +62,7 @@ export interface SilaUserPurchasingProfileWrite {
   accountAssignmentCategory?: string | null;
   costCenter?: string | null;
   glAccount?: string | null;
+  materialGroup?: string | null;
   profitCenter?: string | null;
   businessArea?: string | null;
   internalOrder?: string | null;
@@ -92,6 +94,7 @@ export interface SilaPurchasingDefaultsResolved {
   accountAssignmentCategory?: string | null;
   costCenter?: string | null;
   glAccount?: string | null;
+  materialGroup?: string | null;
   profitCenter?: string | null;
   businessArea?: string | null;
   internalOrder?: string | null;
@@ -134,6 +137,7 @@ export interface SilaVoicePoDraftLine {
   costCenter?: string | null;
   accountAssignmentCategory?: string | null;
   glAccount?: string | null;
+  materialGroup?: string | null;
   inventoryType?: string | null;
   resolved?: boolean;
   resolutionNote?: string | null;
@@ -151,6 +155,7 @@ export interface SilaVoicePoDraft {
   accountAssignmentCategory?: string | null;
   costCenter?: string | null;
   glAccount?: string | null;
+  materialGroup?: string | null;
   deliveryDate?: string | null;
   lines: SilaVoicePoDraftLine[];
 }

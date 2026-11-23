@@ -51,6 +51,7 @@ namespace Buyer.Domain.Dtos
         public string? AccountAssignmentCategory { get; set; }
         public string? CostCenter { get; set; }
         public string? GlAccount { get; set; }
+        public string? MaterialGroup { get; set; }
         public DateTime? DeliveryDate { get; set; }
         public List<SilaVoicePoDraftLineDto> Lines { get; set; } = new();
     }
@@ -71,6 +72,7 @@ namespace Buyer.Domain.Dtos
         public string? CostCenter { get; set; }
         public string? AccountAssignmentCategory { get; set; }
         public string? GlAccount { get; set; }
+        public string? MaterialGroup { get; set; }
         public string? InventoryType { get; set; }
         public bool Resolved { get; set; }
         public string? ResolutionNote { get; set; }

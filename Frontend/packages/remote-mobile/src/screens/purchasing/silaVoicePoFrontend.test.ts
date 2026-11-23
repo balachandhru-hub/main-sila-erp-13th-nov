@@ -59,4 +59,11 @@ assert.match(app, /purchasing\/voice-po/);
 assert.match(more, /Create PO by Voice/);
 assert.match(more, /purchasing\/voice-po/);
 
+const home = readFileSync(join(dir, '../home/HomeScreen.tsx'), 'utf8');
+const inventory = readFileSync(join(dir, '../inventory/InventoryScreen.tsx'), 'utf8');
+assert.match(home, /Create PO by Voice/);
+assert.match(home, /purchasing\/voice-po/);
+assert.match(inventory, /Create PO by Voice/);
+assert.match(inventory, /purchasing\/voice-po/);
+
 console.log('silaVoicePoFrontend.test.ts: ok');

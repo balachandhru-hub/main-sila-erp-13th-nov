@@ -24,6 +24,7 @@ const QUICK: QuickAction[] = [
   { label: 'Goods Issue', detail: 'Issue to cost center', to: 'inventory/goods-issues', visible: (can) => can.postGoodsIssue },
   { label: 'Find Stock', detail: 'Search materials', to: 'inventory/stock' },
   { label: 'Request Stock', detail: 'Purchase request', to: 'inventory/purchase-requests', visible: (can) => can.requestPurchase },
+  { label: 'Create PO by Voice', detail: 'Speak or type a PO draft', to: 'purchasing/voice-po', visible: (can) => can.requestPurchase },
   { label: 'Adjustments', detail: 'Waste & corrections', to: 'inventory/adjustments', visible: (can) => can.postAdjustment },
   { label: 'Receive', detail: 'Incoming transfers & GRN', to: 'receive/pos?mode=receive', visible: (can) => can.postGrn },
 ];

@@ -79,6 +79,28 @@ namespace Buyer.Application.Features.Commands.ConfirmSilaVoicePoDraft
             List<SilaVoicePoCreatedOrderDto> created = new();
             try
             {
+                // Refresh line text from ItemBuyerMaster so PO item text is exactly the system description.
+                List<string> materialCodes = draft.Lines
+                    .Select(l => l.MaterialCode?.Trim())
+                    .Where(c => !string.IsNullOrWhiteSpace(c))
+                    .Select(c => c!)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                Dictionary<string, ItemBuyerMaster> materialsByCode = new(StringComparer.OrdinalIgnoreCase);
+                if (materialCodes.Count > 0)
+                {
+                    List<ItemBuyerMaster> materials = await _repository.ItemBuyerMaster
+                        .FindByCondition(x => x.BuyerId == buyer.Id && x.IsActive && materialCodes.Contains(x.MaterialCode))
+                        .ToListAsync(cancellationToken);
+                    foreach (ItemBuyerMaster material in materials)
+                    {
+                        if (!string.IsNullOrWhiteSpace(material.MaterialCode))
+                        {
+                            materialsByCode[material.MaterialCode.Trim()] = material;
+                        }
+                    }
+                }
+
                 foreach (IGrouping<Guid, SilaVoicePoDraftLineDto> group in draft.Lines.GroupBy(l => l.SupplierId!.Value))
                 {
                     SilaVoicePoDraftLineDto first = group.First();
@@ -96,15 +118,38 @@ namespace Buyer.Application.Features.Commands.ConfirmSilaVoicePoDraft
                         StorageLocation = draft.StorageLocation,
                         AccountAssignmentCategory = first.AccountAssignmentCategory ?? draft.AccountAssignmentCategory,
                         GlAccount = first.GlAccount ?? draft.GlAccount,
-                        Lines = group.Select(l => new CreatePurchaseOrderLineDto
+                        Lines = group.Select(l =>
                         {
-                            MaterialCode = l.MaterialCode,
-                            Description = l.Description,
-                            Quantity = l.Quantity,
-                            UnitOfMeasure = l.UnitOfMeasure,
-                            UnitPrice = l.UnitPrice,
-                            StorageLocation = l.StorageLocation ?? draft.StorageLocation,
-                            CostCenter = l.CostCenter ?? draft.CostCenter
+                            ItemBuyerMaster? master = null;
+                            if (!string.IsNullOrWhiteSpace(l.MaterialCode))
+                            {
+                                materialsByCode.TryGetValue(l.MaterialCode.Trim(), out master);
+                            }
+
+                            // Prefer live system description for PurchaseOrderItemText; keep draft text as fallback.
+                            string? itemText = !string.IsNullOrWhiteSpace(master?.Description)
+                                ? master!.Description
+                                : l.Description;
+                            if (!string.IsNullOrWhiteSpace(itemText))
+                            {
+                                l.Description = itemText;
+                            }
+
+                            string? materialGroup = l.MaterialGroup
+                                ?? draft.MaterialGroup
+                                ?? master?.MaterialGroup;
+
+                            return new CreatePurchaseOrderLineDto
+                            {
+                                MaterialCode = l.MaterialCode,
+                                Description = itemText,
+                                Quantity = l.Quantity,
+                                UnitOfMeasure = l.UnitOfMeasure,
+                                UnitPrice = l.UnitPrice,
+                                StorageLocation = l.StorageLocation ?? draft.StorageLocation,
+                                CostCenter = l.CostCenter ?? draft.CostCenter,
+                                MaterialGroup = materialGroup
+                            };
                         }).ToList()
                     };
 
