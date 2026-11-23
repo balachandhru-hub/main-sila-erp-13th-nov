@@ -115,6 +115,12 @@ namespace Buyer.Application.Features.Commands.DecideSilaPurchaseOrder
                     order.ErpPurchaseOrderId = result.ErpPurchaseOrderId;
                 }
 
+                InventoryLedger ledger = new(_repository, buyer.Id, request.UserId);
+                ledger.AddEvent(
+                    Common.SILA_REF_PO,
+                    order.Id,
+                    "SAP_PO",
+                    $"SAP purchase order {result.ErpPurchaseOrderId}");
                 await _repository.SaveAsync();
                 result.Status = order.Status;
             }

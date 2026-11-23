@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Buyer.Application.Features.Shared;
 using Buyer.Domain.Dtos;
 using Buyer.Domain.Entities;
@@ -37,20 +38,21 @@ namespace Buyer.Application.Features.Queries.GetSilaPurchaseOrder
 
             string? supplierCode = await SilaReceivingRules.ErpSupplierCodeAsync(
                 _repository, purchaseOrder.SupplierId, null, null, cancellationToken);
+            CreateContractPurchaseOrderRequestDto? erpOptions = TryReadErpOptions(purchaseOrder.ErpRequestOptions);
             SilaReceivingPoDetailDto result = new SilaReceivingPoDetailDto
             {
                 Id = purchaseOrder.Id,
                 PoNumber = purchaseOrder.PoNumber,
                 SupplierId = purchaseOrder.SupplierId,
                 SupplierName = purchaseOrder.SupplierName,
-                SupplierCode = supplierCode,
+                SupplierCode = supplierCode ?? erpOptions?.SupplierCode,
                 OrderDate = purchaseOrder.OrderDate,
                 Status = purchaseOrder.Status,
-                CompanyCode = purchaseOrder.CompanyCode,
-                PlantCode = purchaseOrder.PlantCode,
+                CompanyCode = purchaseOrder.CompanyCode ?? erpOptions?.CompanyCode,
+                PlantCode = purchaseOrder.PlantCode ?? erpOptions?.Plant,
                 Currency = purchaseOrder.Currency,
                 TotalAmount = purchaseOrder.TotalAmount,
-                EntityCode = purchaseOrder.CompanyCode,
+                EntityCode = purchaseOrder.CompanyCode ?? erpOptions?.CompanyCode,
                 DeliveryDate = purchaseOrder.DeliveryDate,
                 TotalOrderedQuantity = items.Sum(x => x.Quantity),
                 TotalReceivedQuantity = items.Sum(x => x.ReceivedQuantity),
@@ -62,6 +64,12 @@ namespace Buyer.Application.Features.Queries.GetSilaPurchaseOrder
                 ErpPurchaseOrderId = purchaseOrder.ErpPurchaseOrderId,
                 SupplierErpSalesOrderNumber = purchaseOrder.SupplierErpSalesOrderNumber,
                 BucketCode = purchaseOrder.BucketCode,
+                PurchasingOrganization = erpOptions?.PurchasingOrganization,
+                PurchasingGroup = erpOptions?.PurchasingGroup,
+                PurchaseOrderType = erpOptions?.PurchaseOrderType,
+                StorageLocation = erpOptions?.StorageLocation,
+                AccountAssignmentCategory = erpOptions?.AccountAssignmentCategory,
+                GlAccount = erpOptions?.GlAccount,
                 Lines = items.Select(item => new SilaReceivingPoLineDto
                 {
                     Id = item.Id,
@@ -93,6 +101,26 @@ namespace Buyer.Application.Features.Queries.GetSilaPurchaseOrder
             result.DocumentTrack = await SilaDocumentTrack.ForPurchaseOrderAsync(_repository, buyer.Id, purchaseOrder, cancellationToken);
             _logger.LogInfo($"Purchase order for receiving fetched. PurchaseOrderId: {purchaseOrder.Id}, Lines: {result.Lines.Count}");
             return result;
+        }
+
+        private static CreateContractPurchaseOrderRequestDto? TryReadErpOptions(string? json)
+        {
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                return null;
+            }
+
+            try
+            {
+                return JsonSerializer.Deserialize<CreateContractPurchaseOrderRequestDto>(json, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+            }
+            catch (JsonException)
+            {
+                return null;
+            }
         }
     }
 }

@@ -1,5 +1,5 @@
 /* SILA Store service worker. It only controls pages under /mobile. */
-const CACHE = 'sila-store-v3-voice-po';
+const CACHE = 'sila-store-v4-voice-po';
 const SHELL = '/mobile/home';
 const PRECACHE = [
   '/mobile/offline.html',

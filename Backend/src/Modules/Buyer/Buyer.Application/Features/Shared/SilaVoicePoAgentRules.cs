@@ -42,17 +42,21 @@ namespace Buyer.Application.Features.Shared
             WriteIndented = false
         };
 
+        // Longer UOM tokens first so "10kgs" → KG + material "onion", not "s of onion".
+        private const string UomToken =
+            @"kgs|kg|grams?|g|liters?|litres?|l|pieces?|pcs?|pc|boxes?|box|packs?|pack|units?|unit|each|ea";
+
         private static readonly Regex OrderPattern = new(
-            @"\b(?:order|buy|purchase|add|get|need|procure)\b\s+(?:(?<qty>\d+(?:\.\d+)?)\s*(?<uom>kg|kgs|g|grams?|l|liters?|litres?|pcs?|pieces?|boxes?|box|packs?|pack|units?|unit|ea|each)?\s*(?:of\s+)?)?(?<material>.+)$",
+            $@"\b(?:order|buy|purchase|add|get|need|procure)\b\s+(?:(?<qty>\d+(?:\.\d+)?)\s*(?<uom>{UomToken})?\s*(?:of\s+)?)?(?<material>.+)$",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         private static readonly Regex QtyMaterialPattern = new(
-            @"^(?<qty>\d+(?:\.\d+)?)\s*(?<uom>kg|kgs|g|grams?|l|liters?|litres?|pcs?|pieces?|boxes?|box|packs?|pack|units?|unit|ea|each)?\s+(?:of\s+)?(?<material>.+)$",
+            $@"^(?<qty>\d+(?:\.\d+)?)\s*(?<uom>{UomToken})?\s+(?:of\s+)?(?<material>.+)$",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-        // Require an explicit price cue (currency, "at/@/price", or "per"/"/") so quantity is never treated as price.
+        // Explicit "for the price N" / currency / at/@ / per — never treat bare quantity as price.
         private static readonly Regex PricePattern = new(
-            @"(?:(?:\bat\b|@|\bfor\b|\bprice(?:d| is)?\b)\s*)?(?<price>\d+(?:\.\d+)?)\s*(?<currency>aed|usd|eur|gbp|sar)(?:\s*(?:per|/)\s*(?<priceuom>kg|kgs?|g|l|ea|each|pc|pcs|unit)?)?|(?:(?:\bat\b|@|\bprice(?:d| is)?\b)\s*)(?<price2>\d+(?:\.\d+)?)(?:\s*(?:per|/)\s*(?<priceuom2>kg|kgs?|g|l|ea|each|pc|pcs|unit)?)?|(?<price3>\d+(?:\.\d+)?)\s*(?:per|/)\s*(?<priceuom3>kg|kgs?|g|l|ea|each|pc|pcs|unit)",
+            $@"(?:\bfor\s+(?:the\s+)?price\b|\bat\s+(?:the\s+)?price\b|\bpriced?\s+(?:at|is)?\b)\s*(?<price4>\d+(?:\.\d+)?)(?:\s*(?<currency4>aed|usd|eur|gbp|sar))?(?:\s*(?:per|/)\s*(?<priceuom4>{UomToken}))?|(?:(?:\bat\b|@|\bfor\b|\bprice(?:d| is)?\b)\s*)?(?<price>\d+(?:\.\d+)?)\s*(?<currency>aed|usd|eur|gbp|sar)(?:\s*(?:per|/)\s*(?<priceuom>{UomToken}))?|(?:(?:\bat\b|@|\bprice(?:d| is)?\b)\s*)(?<price2>\d+(?:\.\d+)?)(?:\s*(?:per|/)\s*(?<priceuom2>{UomToken}))?|(?<price3>\d+(?:\.\d+)?)\s*(?:per|/)\s*(?<priceuom3>{UomToken})",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         private static readonly HashSet<string> WeakAffirmations = new(StringComparer.OrdinalIgnoreCase)
@@ -921,7 +925,7 @@ namespace Buyer.Application.Features.Shared
                 return;
             }
 
-            string? raw = FirstNonEmptyGroup(price, "price", "price2", "price3");
+            string? raw = FirstNonEmptyGroup(price, "price4", "price", "price2", "price3");
             if (string.IsNullOrWhiteSpace(raw)
                 || !decimal.TryParse(raw, NumberStyles.Number, CultureInfo.InvariantCulture, out decimal amount)
                 || amount <= 0)
@@ -930,12 +934,17 @@ namespace Buyer.Application.Features.Shared
             }
 
             result.UnitPrice = amount;
-            if (price.Groups["currency"].Success && !string.IsNullOrWhiteSpace(price.Groups["currency"].Value))
+            string? currency = FirstNonEmptyGroup(price, "currency4", "currency");
+            if (!string.IsNullOrWhiteSpace(currency))
             {
-                result.Currency = price.Groups["currency"].Value.Trim().ToUpperInvariant();
+                result.Currency = currency.Trim().ToUpperInvariant();
+            }
+            else if (string.IsNullOrWhiteSpace(result.Currency))
+            {
+                result.Currency = "AED";
             }
 
-            string? priceUom = FirstNonEmptyGroup(price, "priceuom", "priceuom2", "priceuom3");
+            string? priceUom = FirstNonEmptyGroup(price, "priceuom4", "priceuom", "priceuom2", "priceuom3");
             if (string.IsNullOrWhiteSpace(result.UnitOfMeasure) && !string.IsNullOrWhiteSpace(priceUom))
             {
                 result.UnitOfMeasure = NormalizeUom(priceUom);
@@ -943,8 +952,7 @@ namespace Buyer.Application.Features.Shared
 
             if (!string.IsNullOrWhiteSpace(result.MaterialHint))
             {
-                result.MaterialHint = CleanMaterialHint(
-                    PricePattern.Replace(result.MaterialHint, " "));
+                result.MaterialHint = CleanMaterialHint(result.MaterialHint);
             }
         }
 
@@ -969,6 +977,12 @@ namespace Buyer.Application.Features.Shared
             }
 
             string cleaned = PricePattern.Replace(value.Trim(), " ");
+            // Strip leftover price cues ("onion for the", "onion at the", …).
+            cleaned = Regex.Replace(
+                cleaned,
+                @"\b(?:for(?:\s+the)?|at(?:\s+the)?|priced?(?:\s+(?:at|is))?)\s*$",
+                " ",
+                RegexOptions.IgnoreCase);
             cleaned = Regex.Replace(cleaned, @"[^\w\s\-/&.]", " ");
             cleaned = Regex.Replace(cleaned, @"\s+", " ").Trim();
             return string.IsNullOrWhiteSpace(cleaned) ? null : cleaned;

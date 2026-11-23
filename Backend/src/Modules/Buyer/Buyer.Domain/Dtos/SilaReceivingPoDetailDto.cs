@@ -27,6 +27,13 @@ namespace Buyer.Domain.Dtos
         public string? ErpPurchaseOrderId { get; set; }
         public string? SupplierErpSalesOrderNumber { get; set; }
         public string? BucketCode { get; set; }
+        /// <summary>From ERP request options saved at create time.</summary>
+        public string? PurchasingOrganization { get; set; }
+        public string? PurchasingGroup { get; set; }
+        public string? PurchaseOrderType { get; set; }
+        public string? StorageLocation { get; set; }
+        public string? AccountAssignmentCategory { get; set; }
+        public string? GlAccount { get; set; }
         public decimal TotalReceivedQuantity { get; set; }
         public decimal TotalOpenQuantity { get; set; }
         public int LineCount { get; set; }

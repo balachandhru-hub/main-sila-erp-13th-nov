@@ -68,9 +68,24 @@ namespace Buyer.Application.Features.Commands.CreatePurchaseOrder
                 SilaTransaction.RunAsync(() => SaveOrderAsync(buyer, order, supplierName, erpOptions, request, cancellationToken)));
             _logger.LogInfo($"Purchase order created. PurchaseOrderId: {purchaseOrderId}, BuyerId: {buyer.Id}");
 
+            PurchaseOrder? created = _repository.PurchaseOrder.FindFirstByCondition(x => x.Id == purchaseOrderId && x.IsActive);
+            if (created != null)
+            {
+                InventoryLedger ledger = new(_repository, buyer.Id, request.UserId);
+                ledger.AddEvent(
+                    Common.SILA_REF_PO,
+                    created.Id,
+                    Common.AUDIT_CREATED,
+                    request.DeferErpUntilApproved
+                        ? $"Purchase order {created.PoNumber} created — pending approval before SAP."
+                        : $"Purchase order {created.PoNumber} created.");
+                await _repository.SaveAsync();
+            }
+
             if (request.DeferErpUntilApproved)
             {
-                PurchaseOrder? deferred = _repository.PurchaseOrder.FindFirstByCondition(x => x.Id == purchaseOrderId && x.IsActive);
+                PurchaseOrder? deferred = created
+                    ?? _repository.PurchaseOrder.FindFirstByCondition(x => x.Id == purchaseOrderId && x.IsActive);
                 if (deferred == null)
                 {
                     throw new NotFoundCustomException("Purchase order not found.", "The purchase order could not be loaded after create.");

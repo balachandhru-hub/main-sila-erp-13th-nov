@@ -153,6 +153,31 @@ namespace Buyer.Tests.VoicePo
         }
 
         [Fact]
+        public void Parse_order_glued_kgs_and_for_the_price()
+        {
+            VoicePoParseResult result = SilaVoicePoAgentRules.ParseOrderIntent("order 10kgs of onion for the price 20");
+
+            Assert.Equal(VoicePoIntent.AddLine, result.Intent);
+            Assert.Equal(10m, result.Quantity);
+            Assert.Equal("KG", result.UnitOfMeasure);
+            Assert.Equal(20m, result.UnitPrice);
+            Assert.Equal("AED", result.Currency);
+            Assert.Equal("onion", result.MaterialHint?.Trim().ToLowerInvariant());
+        }
+
+        [Fact]
+        public void Parse_order_without_price_leaves_unit_price_null()
+        {
+            VoicePoParseResult result = SilaVoicePoAgentRules.ParseOrderIntent("order 10kgs of onion");
+
+            Assert.Equal(VoicePoIntent.AddLine, result.Intent);
+            Assert.Equal(10m, result.Quantity);
+            Assert.Equal("KG", result.UnitOfMeasure);
+            Assert.Null(result.UnitPrice);
+            Assert.Equal("onion", result.MaterialHint?.Trim().ToLowerInvariant());
+        }
+
+        [Fact]
         public void Draft_validation_passes_for_resolved_stock_line_without_cost_center()
         {
             SilaVoicePoDraftDto draft = new()

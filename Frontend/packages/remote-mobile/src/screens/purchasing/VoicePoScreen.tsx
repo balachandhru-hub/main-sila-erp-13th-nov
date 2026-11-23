@@ -12,6 +12,7 @@ import ScreenHeader from '../../components/ScreenHeader';
 import { Empty, ErrorNotice, Notice, type NoticeMessage } from '../../components/StateViews';
 import { useAccess } from '../../access';
 import { useMyLocation } from '../../location';
+import { useGo } from '../../navigation';
 import { errorText } from '../../useLoad';
 import { VOICE2_CONFIG, type Voice2UiState } from './voiceAgent/conversationConfig';
 import {
@@ -67,13 +68,10 @@ const isSafariLike = (): boolean => {
 };
 
 /**
- * Text-first (muted) everywhere except Safari/iOS voice.
- * Covers Chrome/Edge/Chromium/Firefox/headless — avoids TTS and stale voice UX.
+ * Voice is primary in Chrome and Safari. Type fallback stays available via "Type".
+ * Safari still uses one-shot recognition (continuous=false) via isSafariLike().
  */
-const chromeTextPrimary = (): boolean => {
-  if (typeof navigator === 'undefined') return false;
-  return !isSafariLike();
-};
+const chromeTextPrimary = (): boolean => false;
 
 /**
  * SILA Voice 2.0 — continuous conversation on the existing Voice PO agent.
@@ -83,6 +81,7 @@ const chromeTextPrimary = (): boolean => {
 const VoicePoScreen: React.FC = () => {
   const { can, loading: accessLoading } = useAccess();
   const { location: mine } = useMyLocation();
+  const go = useGo();
 
   const [defaults, setDefaults] = useState<SilaPurchasingDefaultsResolved | null>(null);
   const [session, setSession] = useState<SilaVoicePoSession | null>(null);
@@ -92,9 +91,8 @@ const VoicePoScreen: React.FC = () => {
   const [level, setLevel] = useState(0);
   const [sessionActive, setSessionActive] = useState(false);
   const textPrimary = chromeTextPrimary();
-  const [showType, setShowType] = useState(textPrimary);
-  // Chrome: always muted — never speak (speechSynthesis or server WAV).
-  const [ttsMuted, setTtsMuted] = useState(true);
+  const [showType, setShowType] = useState(false);
+  const [ttsMuted, setTtsMuted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [bootError, setBootError] = useState<string | null>(null);
   const [notice, setNotice] = useState<NoticeMessage | null>(null);
@@ -180,23 +178,10 @@ const VoicePoScreen: React.FC = () => {
     }
   }, []);
 
-  /** Chrome text-first: never speak. Safari/voice path honors mute toggle. */
   const speakSafe = useCallback(
-    (text: string): SpeakHandle => {
-      if (textPrimary) {
-        interruptSpeech();
-        return { done: Promise.resolve(), cancel: () => undefined };
-      }
-      return speakNaturally(text, ttsMuted);
-    },
-    [interruptSpeech, textPrimary, ttsMuted],
+    (text: string): SpeakHandle => speakNaturally(text, ttsMuted),
+    [ttsMuted],
   );
-
-  useEffect(() => {
-    if (!textPrimary) return;
-    setTtsMuted(true);
-    interruptSpeech();
-  }, [interruptSpeech, textPrimary]);
 
   useEffect(() => {
     transcriptRef.current = transcript;
@@ -967,11 +952,7 @@ const VoicePoScreen: React.FC = () => {
         title="Create PO by Voice"
         eyebrow="Purchasing"
         back
-        intro={
-          textPrimary
-            ? "Type your order in Chrome. SILA asks for missing price, UOM and other mandatory fields. When finished: confirm transcript → review → Submit for approval."
-            : "Tap Voice once. SILA talks back like Alexa. When finished: confirm transcript → review header & items → Submit with your PO defaults."
-        }
+        intro="Tap Voice once in Chrome or Safari. Say e.g. 'order 10kgs of onion for the price 20'. SILA asks when price or UOM is missing, then confirm → review → Submit for approval."
       />
       <div className="sm-screen vpo" data-testid="voice-po-screen" data-text-primary={textPrimary ? 'true' : 'false'}>
         {!accessLoading && !can.requestPurchase && <Empty text="Voice purchase orders are not available for your role." />}
@@ -1001,12 +982,10 @@ const VoicePoScreen: React.FC = () => {
 
             {(showType || textPrimary) && !inPostTalk && (
               <section className="vpo-card" aria-labelledby="vpo-transcript-title" data-testid="vpo-type-fallback">
-                <h2 id="vpo-transcript-title">{textPrimary ? 'Type your purchase order' : 'Type fallback'}</h2>
-                {textPrimary && (
-                  <p className="sm-meta" data-testid="vpo-chrome-text-note">
-                    Chrome voice is paused for now. Type lines, answer price/UOM prompts, then say you are done.
-                  </p>
-                )}
+                <h2 id="vpo-transcript-title">Type fallback</h2>
+                <p className="sm-meta" data-testid="vpo-chrome-text-note">
+                  Voice is on in Chrome. You can also type lines here — e.g. order 10kgs of onion for the price 20.
+                </p>
                 {(agentReply || session?.spokenReply) && (
                   <p className="vpo-agent-reply" data-testid="vpo-agent-reply">
                     {agentReply || session?.spokenReply}
@@ -1031,10 +1010,10 @@ const VoicePoScreen: React.FC = () => {
                       ? "e.g. 25 AED  or  use one AED"
                       : clarifications.some((c) => (c.code || '').toUpperCase() === 'UOM')
                         ? "e.g. KG  or  EA"
-                        : "e.g. order 25 kg specialty spice at 25 AED"
+                        : "e.g. order 10kgs of onion for the price 20"
                   }
                   value={transcript}
-                  rows={textPrimary ? 4 : 3}
+                  rows={3}
                   onChange={(event) => setTranscript(event.target.value)}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter' && !event.shiftKey) {
@@ -1053,11 +1032,6 @@ const VoicePoScreen: React.FC = () => {
                   >
                     {busy ? 'Sending…' : 'Send'}
                   </button>
-                  {textPrimary && !sessionActive && (
-                    <button type="button" className="sm-btn" data-testid="vpo-start-text" disabled={busy} onClick={() => void activate()}>
-                      Start
-                    </button>
-                  )}
                   {(sessionActive || (session?.draft?.lines?.length ?? 0) > 0) && (
                     <button
                       type="button"
@@ -1213,19 +1187,31 @@ const VoicePoScreen: React.FC = () => {
                     ? `Purchase order ${session.createdPoNumber} was created with your defaults.`
                     : 'Purchase order submitted for approval. It posts to SAP after approval.'}
                 </p>
-                <button
-                  type="button"
-                  className="sm-btn sm-btn--primary"
-                  onClick={() => {
-                    setSession(null);
-                    setConfirmedTranscript('');
-                    setTranscript('');
-                    spokenRef.current = null;
-                    setUi('idle');
-                  }}
-                >
-                  Start another
-                </button>
+                <div className="vpo-actions">
+                  {session?.createdPurchaseOrderId && (
+                    <button
+                      type="button"
+                      className="sm-btn sm-btn--primary"
+                      data-testid="vpo-open-created-po"
+                      onClick={() => go(`receive/pos/${session.createdPurchaseOrderId}`)}
+                    >
+                      Open {session.createdPoNumber || 'purchase order'}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="sm-btn"
+                    onClick={() => {
+                      setSession(null);
+                      setConfirmedTranscript('');
+                      setTranscript('');
+                      spokenRef.current = null;
+                      setUi('idle');
+                    }}
+                  >
+                    Start another
+                  </button>
+                </div>
               </section>
             )}
 
@@ -1234,9 +1220,7 @@ const VoicePoScreen: React.FC = () => {
                 <h2 id="vpo-draft-title">Live draft</h2>
                 {lines.length === 0 ? (
                   <p className="sm-meta">
-                    {textPrimary
-                      ? 'No draft lines yet. Type your order above — SILA will ask for missing price or UOM.'
-                      : 'No draft lines yet. Speak after activating Voice. Say “that’s all” or End Session when finished.'}
+                    No draft lines yet. Speak after activating Voice, or open Type. SILA asks for missing price or UOM.
                   </p>
                 ) : (
                   <ul className="vpo-lines">
@@ -1267,7 +1251,7 @@ const VoicePoScreen: React.FC = () => {
                       disabled={busy}
                       onClick={() => void enterTranscriptConfirmation()}
                     >
-                      {textPrimary ? 'Done — confirm transcript' : 'Done talking — confirm transcript'}
+                      Done talking — confirm transcript
                     </button>
                     {sessionActive && (
                       <button

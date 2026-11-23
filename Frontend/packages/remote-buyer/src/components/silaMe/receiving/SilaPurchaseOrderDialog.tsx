@@ -85,6 +85,12 @@ const SilaPurchaseOrderDialog: React.FC<SilaPurchaseOrderDialogProps> = ({ purch
                   <div><dt>Supplier code</dt><dd>{order.supplierCode || "—"}</dd></div>
                   <div><dt>Entity / company code</dt><dd>{order.entityCode || order.companyCode || "—"}</dd></div>
                   <div><dt>Plant</dt><dd>{order.plantCode || "—"}</dd></div>
+                  <div><dt>Purchasing organization</dt><dd>{order.purchasingOrganization || "—"}</dd></div>
+                  <div><dt>Purchasing group</dt><dd>{order.purchasingGroup || "—"}</dd></div>
+                  <div><dt>PO type</dt><dd>{order.purchaseOrderType || "—"}</dd></div>
+                  <div><dt>Storage location</dt><dd>{order.storageLocation || "—"}</dd></div>
+                  <div><dt>Account assignment</dt><dd>{order.accountAssignmentCategory || "—"}</dd></div>
+                  <div><dt>GL account</dt><dd>{order.glAccount || "—"}</dd></div>
                   <div><dt>Currency</dt><dd>{order.currency || "—"}</dd></div>
                   <div><dt>Order date</dt><dd>{formatDate(order.orderDate)}</dd></div>
                   <div><dt>Expected delivery</dt><dd>{order.deliveryDate ? formatDate(order.deliveryDate) : "—"}</dd></div>
@@ -95,7 +101,7 @@ const SilaPurchaseOrderDialog: React.FC<SilaPurchaseOrderDialogProps> = ({ purch
                   <div><dt>Open lines</dt><dd>{order.openLineCount != null ? `${order.openLineCount} / ${order.lineCount ?? order.lines.length}` : "—"}</dd></div>
                   <div><dt>Source system</dt><dd>{order.sourceSystem || "—"}</dd></div>
                   <div><dt>Source type</dt><dd>{order.sourceType || "—"}</dd></div>
-                  <div><dt>ERP PO id</dt><dd>{order.erpPurchaseOrderId || "—"}</dd></div>
+                  <div><dt>SAP PO number</dt><dd>{order.erpPurchaseOrderId || "—"}</dd></div>
                   <div><dt>Supplier SO</dt><dd>{order.supplierErpSalesOrderNumber || "—"}</dd></div>
                   <div><dt>Bucket</dt><dd>{order.bucketCode || "—"}</dd></div>
                 </dl>

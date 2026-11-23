@@ -111,6 +111,12 @@ export interface SilaPurchaseOrderDetail extends Omit<SilaOpenPurchaseOrder, "li
   erpPurchaseOrderId?: string | null;
   supplierErpSalesOrderNumber?: string | null;
   bucketCode?: string | null;
+  purchasingOrganization?: string | null;
+  purchasingGroup?: string | null;
+  purchaseOrderType?: string | null;
+  storageLocation?: string | null;
+  accountAssignmentCategory?: string | null;
+  glAccount?: string | null;
   totalReceivedQuantity?: number;
   totalOpenQuantity?: number;
   lineCount?: number;
