@@ -44,11 +44,13 @@ assert.match(live, /optionalCols/);
 assert.match(live, /searchLiveInventory\([\s\S]*health/);
 assert.match(live, /getInventoryHome/);
 assert.match(live, /getRecentAlerts/);
-assert.match(live, /Location \(transfer \/ stock count\)|Location \(stock count\)/);
+assert.match(live, /Destination \(transfer \/ stock count\)|Location \(stock count\)/);
 assert.doesNotMatch(live, /PageHeader/);
 assert.doesNotMatch(live, /Your Location/);
-// Location dropdown (transfer / stock count) must not sit on the home list permanently.
-assert.match(live, /selectedId[\s\S]*Location \(transfer \/ stock count\)|if \(selectedId\)[\s\S]*Location \(transfer \/ stock count\)|if \(selectedId\)[\s\S]*Location \(stock count\)/);
+// Destination dropdown (transfer / stock count) must not sit on the home list permanently.
+assert.match(live, /selectedId[\s\S]*Destination \(transfer \/ stock count\)|if \(selectedId\)[\s\S]*Destination \(transfer \/ stock count\)|if \(selectedId\)[\s\S]*Location \(stock count\)/);
+assert.match(live, /New Transfer/);
+assert.match(live, /Quick ITO/);
 
 const css = read("SilaInventory.css");
 assert.match(css, /--liv-canvas:\s*#fafafb/i);

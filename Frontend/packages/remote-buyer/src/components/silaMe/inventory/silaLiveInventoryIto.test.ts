@@ -14,8 +14,11 @@ const live = read("SilaLiveInventory.tsx");
 assert.match(live, /Pending Requirements/);
 assert.match(live, /getPendingOutletRequirements/);
 assert.match(live, /SilaPendingRequirementsPanel/);
-assert.match(live, /Create ITO/);
-assert.match(live, /requireSamePlant:\s*true/);
+assert.match(live, /Create ITO|New Transfer/);
+// New Transfer allows plant-to-plant (301); weekly-bucket panel still forces same-plant 311.
+assert.doesNotMatch(live, /createTransfer\(\{[\s\S]*?requireSamePlant:\s*true/);
+assert.match(live, /Quick ITO/);
+assert.match(live, /transferFromId|liv-transfer-source/);
 
 const panel = read("SilaPendingRequirementsPanel.tsx");
 assert.match(panel, /data-testid="pending-outlet-requirements"/);

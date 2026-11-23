@@ -947,6 +947,9 @@
 }
 
 .liv-table-wrap { padding: 0.25rem 0.5rem 0.75rem; }
+.liv-table tbody tr.liv-row--source td {
+  background: color-mix(in srgb, var(--liv-primary, #0284c7) 10%, transparent);
+}
 .liv-table thead th {
   position: sticky;
   top: 0;
