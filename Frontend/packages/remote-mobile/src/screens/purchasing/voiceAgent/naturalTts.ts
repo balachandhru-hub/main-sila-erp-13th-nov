@@ -26,16 +26,40 @@ const PREFERRED_VOICE_PATTERNS = [
 const CONTINUATION_TAIL =
   /\b(and|or|of|for|from|with|to|the|a|an|ten|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|order|get|buy|need|want|please)\s*$/i;
 
+const SPOKEN_AMOUNT =
+  /^(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)([-\s]+(one|two|three|four|five|six|seven|eight|nine))?$/i;
+
 let unlocked = false;
 let audioCtx: AudioContext | null = null;
 let keepAliveTimer: ReturnType<typeof setInterval> | null = null;
 let browserSynthUsable: boolean | null = null;
 const audioCache = new Map<string, string>();
 
+/**
+ * Short unit-price replies ("20", "20 AED", Chrome STT "2018" for "20 AED") are complete turns —
+ * do not hold the mic open waiting for more words.
+ */
+export const isPriceLikeUtterance = (text: string): boolean => {
+  const trimmed = (text || '').trim().replace(/[.,;:!?]+$/g, '').trim();
+  if (!trimmed) return false;
+  const lower = trimmed.toLowerCase();
+  if (/^(use\s+)?(one|1)\s*(aed|dirhams?)?$/.test(lower)) return true;
+  if (/^(default(\s+price)?|use\s+default(\s+price)?)$/.test(lower)) return true;
+  if (SPOKEN_AMOUNT.test(lower)) return true;
+  // Chrome often glues "20 AED" → "2018" (digits + "18").
+  if (/^\d{2,6}18$/.test(trimmed)) return true;
+  if (/^\d+([.,]\d+)?(\s*(aed|usd|eur|gbp|sar|dirhams?))?$/i.test(trimmed)) return true;
+  if (/^(unit\s+)?price(\s+is)?\s+\d+([.,]\d+)?(\s*(aed|usd|eur|gbp|sar|dirhams?))?$/i.test(trimmed)) {
+    return true;
+  }
+  return false;
+};
+
 /** True when the transcript looks incomplete (do not auto-submit yet). */
 export const looksIncompleteUtterance = (text: string): boolean => {
   const trimmed = text.trim();
   if (!trimmed) return true;
+  if (isPriceLikeUtterance(trimmed)) return false;
   if (/[.!?]"?$/.test(trimmed)) return false;
   if (CONTINUATION_TAIL.test(trimmed)) return true;
   if (trimmed.endsWith('...') || trimmed.endsWith('…')) return true;

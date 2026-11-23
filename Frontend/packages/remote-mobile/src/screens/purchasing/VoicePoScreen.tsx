@@ -21,6 +21,7 @@ import {
 } from './voiceAgent/dialogueIntents';
 import {
   isConversationDonePhrase,
+  isPriceLikeUtterance,
   looksIncompleteUtterance,
   speakNaturally,
   unlockSpeechPlayback,
@@ -544,19 +545,23 @@ const VoicePoScreen: React.FC = () => {
     const text = (finalChunkRef.current || transcriptRef.current).trim();
     if (!text) return;
     const conversational = isShortConversationalUtterance(text);
-    const incomplete = !conversational && looksIncompleteUtterance(text);
+    const priceReply = isPriceLikeUtterance(text);
+    // Bare "20" / STT "2018" must end the turn — do not wait for a second word.
+    const incomplete = !conversational && !priceReply && looksIncompleteUtterance(text);
     const wait = incomplete ? VOICE2_CONFIG.incompleteSilenceMs : VOICE2_CONFIG.endOfSpeechSilenceMs;
     silenceTimerRef.current = window.setTimeout(() => {
       const uttered = (finalChunkRef.current || transcriptRef.current).trim();
       const started = speechStartedAtRef.current;
       const duration = started ? Date.now() - started : 0;
       const shortOk = isShortConversationalUtterance(uttered);
-      const minMs = shortOk ? VOICE2_CONFIG.minGreetingUtteranceMs : VOICE2_CONFIG.minUtteranceMs;
+      const priceOk = isPriceLikeUtterance(uttered);
+      const minMs =
+        shortOk || priceOk ? VOICE2_CONFIG.minGreetingUtteranceMs : VOICE2_CONFIG.minUtteranceMs;
       if (!uttered || duration < minMs) {
         setUi('listening');
         return;
       }
-      if (!shortOk && looksIncompleteUtterance(uttered)) {
+      if (!shortOk && !priceOk && looksIncompleteUtterance(uttered)) {
         if (uttered.split(/\s+/).length < 3) {
           setUi('listening');
           return;
