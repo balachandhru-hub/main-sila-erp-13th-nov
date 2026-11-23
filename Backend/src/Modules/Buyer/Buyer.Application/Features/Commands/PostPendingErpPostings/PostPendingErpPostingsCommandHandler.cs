@@ -464,7 +464,10 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
             }
 
             string movement = SilaInventorySap.MovementForSale(posting.MovementType, sales.GetValueOrDefault(posting.ReferenceId)?.QuantitySold ?? 0);
-            SilaInventorySap.Rule rule = movement == SilaInventorySap.TYPE_Z01 ? SilaInventorySap.PositiveAdjustment : SilaInventorySap.GoodsIssue;
+            // POS consumption is Z01 on FIVE_POS_UPDATE; Z02 is not used for POS sales here.
+            SilaInventorySap.Rule rule = movement == SilaInventorySap.TYPE_Z01
+                ? SilaInventorySap.PosConsumption
+                : SilaInventorySap.GoodsIssue;
             EffectPreparation prepared = await PrepareEffectAsync(
                 posting, pending.Select(x => x.ReferenceId).ToList(), headerLocation, headerProperty, rule, buyer.OrganizationId, cancellationToken);
             string? body = prepared.Body;
@@ -671,7 +674,7 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
 
         /// <summary>
         /// Picks the Material Document rule for stock-count / adjustment postings.
-        /// Waste uses FIVE_STOCK_WASTE_UPDATE (Z01 out / Z02 reverse); otherwise Z01→Positive Adjustment, Z02→Goods Issue.
+        /// Waste uses FIVE_STOCK_WASTE_UPDATE (Z01 out / Z02 reverse); otherwise Z01→Goods Issue (consumption), Z02→Positive Adjustment (reversal).
         /// </summary>
         private static SilaInventorySap.Rule RuleForStockEffect(
             string movement,
@@ -697,15 +700,8 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
                 return SilaInventorySap.WasteIssue;
             }
 
-            // OUT-only Z01 with no IN lines is waste-shaped (never a positive adjustment).
-            if (movement == SilaInventorySap.TYPE_Z01
-                && transactions.Any(x => x.Direction == Common.SILA_DIRECTION_OUT && x.Quantity > 0)
-                && !transactions.Any(x => x.Direction == Common.SILA_DIRECTION_IN && x.Quantity > 0))
-            {
-                return SilaInventorySap.WasteIssue;
-            }
-
-            return movement == SilaInventorySap.TYPE_Z01
+            // Consumptions Z01 (Goods Issue); reversals Z02 (Positive Stock Adjustment).
+            return movement == SilaInventorySap.TYPE_Z02
                 ? SilaInventorySap.PositiveAdjustment
                 : SilaInventorySap.GoodsIssue;
         }
@@ -834,7 +830,7 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
 
         /// <summary>
         /// Live stock-count 701/702: create a Physical Inventory Document with the physical qty, then PostDifferences.
-        /// Reuses FIVE S4 - Positive Stock Adjustment credentials with a path override onto API_PHYSICAL_INVENTORY_DOC_SRV.
+        /// Reuses S4 - Positive Stock Adjustment credentials with a path override onto API_PHYSICAL_INVENTORY_DOC_SRV.
         /// </summary>
         private async Task<string> PostInventoryDifferenceAsync(
             InventoryErpPosting posting,

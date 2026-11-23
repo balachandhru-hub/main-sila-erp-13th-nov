@@ -172,6 +172,7 @@ namespace Buyer.Application.Features.Commands.ReverseSilaAdjustment
                     reverseDirection = originalDirection == Common.SILA_DIRECTION_IN
                         ? Common.SILA_DIRECTION_OUT
                         : Common.SILA_DIRECTION_IN;
+                    // Consumptions Z01 (Goods Issue); reversals Z02 (S4 - Positive Stock Adjustment).
                     SilaInventorySap.Rule rule = SilaInventorySap.ForDirection(reverseDirection);
                     erpMovement = rule.GoodsMovementType;
                     erpApi = rule.ApiName;
