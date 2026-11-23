@@ -45,8 +45,11 @@ namespace Buyer.Domain.Dtos
 
     public class SilaUserPoFlexConfigWriteDto
     {
-        [JsonConverter(typeof(EmptyStringNullableGuidConverter))]
-        public Guid? UserId { get; set; }
+        /// <summary>
+        /// Target user as a GUID string. Login names are rejected with a clear 400
+        /// (clients should resolve username → GUID before save).
+        /// </summary>
+        public string? UserId { get; set; }
         public string? Username { get; set; }
         public string? DisplayName { get; set; }
         public string ConfigType { get; set; } = "PO_CREATE";
