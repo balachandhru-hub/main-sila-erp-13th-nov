@@ -455,7 +455,8 @@ namespace Buyer.Application.Features.Queries.GetSilaReceivingDashboard
 
             List<PurchaseOrder> pendingPos = await _repository.PurchaseOrder
                 .FindByCondition(x => x.BuyerId == buyerId && x.IsActive
-                    && x.Status == Common.PURCHASE_ORDER_PENDING_APPROVAL)
+                    && x.Status == Common.PURCHASE_ORDER_PENDING_APPROVAL
+                    && (x.ErpPurchaseOrderId == null || x.ErpPurchaseOrderId == ""))
                 .OrderByDescending(x => x.DateCreated)
                 .Take(20)
                 .ToListAsync(cancellationToken);

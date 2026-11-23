@@ -129,8 +129,11 @@ assert.match(tasks, /Approve to post Create PO to SAP/);
 
 const poDetail = readFileSync(join(dir, '../receive/PoDetailScreen.tsx'), 'utf8');
 assert.match(poDetail, /decidePurchaseOrder/);
-assert.match(poDetail, /po-approval-actions|Approve purchase order/);
-assert.match(poDetail, /PENDING_APPROVAL/);
+assert.match(poDetail, /po-approval-actions|po-approve/);
+assert.match(poDetail, /awaitingApproval|PENDING_APPROVAL/);
+assert.match(poDetail, /data-testid="po-header"/);
+assert.match(poDetail, /data-testid="po-lines"/);
+assert.match(poDetail, /Already decided/);
 assert.match(home, /receive\/pos\/\$\{.*purchaseOrderId/);
 assert.match(home, /tasks\?tab=approvals/);
 

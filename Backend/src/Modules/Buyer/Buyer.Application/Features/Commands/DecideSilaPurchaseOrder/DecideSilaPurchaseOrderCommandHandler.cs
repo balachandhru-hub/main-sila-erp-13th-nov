@@ -44,10 +44,10 @@ namespace Buyer.Application.Features.Commands.DecideSilaPurchaseOrder
         {
             _logger.LogInfo($"Deciding purchase order approval. PurchaseOrderId: {request.PurchaseOrderId}, Approve: {request.Request.Approve}, UserId: {request.UserId}");
             BuyerBusinessProfile buyer = await SilaAccess.GetBuyerAsync(_repository, _logger, request.OrganizationId);
+            // Must be tracked — FindByCondition is AsNoTracking and status changes would not persist.
             PurchaseOrder? order = await _repository.PurchaseOrder
-                .FindByCondition(x => x.Id == request.PurchaseOrderId && x.BuyerId == buyer.Id && x.IsActive)
-                .FirstOrDefaultAsync(cancellationToken);
-            if (order == null)
+                .FindFirstByConditionAsync(x => x.Id == request.PurchaseOrderId && x.BuyerId == buyer.Id && x.IsActive);
+            if (order == null || !order.IsActive || order.BuyerId != buyer.Id)
             {
                 throw new NotFoundCustomException("Purchase order not found.", "The purchase order is not available.");
             }
@@ -79,8 +79,8 @@ namespace Buyer.Application.Features.Commands.DecideSilaPurchaseOrder
 
             if (decision.Outcome == SilaApprovals.OUTCOME_REJECTED)
             {
-                // Mutate the tracked instance — do not Attach/Update a second copy.
                 order.Status = Common.PURCHASE_ORDER_REJECTED;
+                _repository.PurchaseOrder.Update(order);
                 await _repository.SaveAsync();
                 _logger.LogInfo($"Purchase order approval rejected. PurchaseOrderId: {order.Id}");
                 return PurchaseOrderErpProcessor.Describe(order, null, null);
@@ -93,7 +93,9 @@ namespace Buyer.Application.Features.Commands.DecideSilaPurchaseOrder
                 return PurchaseOrderErpProcessor.Describe(order, null, null);
             }
 
+            // Leave PENDING_APPROVAL immediately so the PO drops from pending lists even if SAP is slow.
             order.Status = Common.PURCHASE_ORDER_APPROVED;
+            _repository.PurchaseOrder.Update(order);
             await _repository.SaveAsync();
 
             _userContext.SetCurrentUserId(request.UserId);
@@ -103,24 +105,42 @@ namespace Buyer.Application.Features.Commands.DecideSilaPurchaseOrder
                 _supplierSalesOrderClient,
                 _userContext,
                 _logger);
-            // ProcessAsync reuses the same DbContext; pass Id and rely on the already-tracked entity.
             PurchaseOrderProcessResultDto result = await processor.ProcessAsync(order.Id, request.UserId, cancellationToken);
 
-            if (!string.IsNullOrWhiteSpace(result.ErpPurchaseOrderId))
+            // Re-load tracked row — ProcessAsync may have mutated via its own FindFirstByCondition.
+            PurchaseOrder? posted = await _repository.PurchaseOrder
+                .FindFirstByConditionAsync(x => x.Id == order.Id && x.IsActive);
+            if (posted != null)
             {
-                // Keep mutating the same tracked instance (no second Attach/Update).
+                order = posted;
+            }
+
+            if (!string.IsNullOrWhiteSpace(result.ErpPurchaseOrderId)
+                || !string.IsNullOrWhiteSpace(order.ErpPurchaseOrderId))
+            {
+                string sap = result.ErpPurchaseOrderId ?? order.ErpPurchaseOrderId!;
                 order.Status = Common.PURCHASE_ORDER_CREATED;
                 if (string.IsNullOrWhiteSpace(order.ErpPurchaseOrderId))
                 {
-                    order.ErpPurchaseOrderId = result.ErpPurchaseOrderId;
+                    order.ErpPurchaseOrderId = sap;
                 }
 
+                _repository.PurchaseOrder.Update(order);
                 InventoryLedger ledger = new(_repository, buyer.Id, request.UserId);
                 ledger.AddEvent(
                     Common.SILA_REF_PO,
                     order.Id,
                     "SAP_PO",
-                    $"SAP purchase order {result.ErpPurchaseOrderId}");
+                    $"SAP purchase order {sap}");
+                await _repository.SaveAsync();
+                result.ErpPurchaseOrderId = order.ErpPurchaseOrderId;
+                result.Status = order.Status;
+            }
+            else
+            {
+                // Approved locally; SAP not yet — keep APPROVED (not PENDING) so Approve stays disabled.
+                order.Status = Common.PURCHASE_ORDER_APPROVED;
+                _repository.PurchaseOrder.Update(order);
                 await _repository.SaveAsync();
                 result.Status = order.Status;
             }

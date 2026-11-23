@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Buyer.Application.Features.Shared;
+using Buyer.Domain.Common;
 using Buyer.Domain.Dtos;
 using Buyer.Domain.Entities;
 using Buyer.Infrastructure.Contracts.IRepository;
@@ -26,6 +27,14 @@ namespace Buyer.Application.Features.Queries.GetSilaPurchaseOrder
             _logger.LogInfo($"Fetching purchase order for receiving. PurchaseOrderId: {request.PurchaseOrderId}, OrganizationId: {request.OrganizationId}");
             BuyerBusinessProfile buyer = await SilaAccess.GetBuyerAsync(_repository, _logger, request.OrganizationId);
             PurchaseOrder purchaseOrder = await SilaReceivingRules.GetPurchaseOrderAsync(_repository, _logger, buyer.Id, request.PurchaseOrderId);
+            // Heal rows left PENDING after SAP succeed (older Approve used AsNoTracking and never saved status).
+            if (purchaseOrder.Status == Common.PURCHASE_ORDER_PENDING_APPROVAL
+                && !string.IsNullOrWhiteSpace(purchaseOrder.ErpPurchaseOrderId))
+            {
+                purchaseOrder.Status = Common.PURCHASE_ORDER_CREATED;
+                _repository.PurchaseOrder.Update(purchaseOrder);
+                await _repository.SaveAsync();
+            }
             List<PurchaseOrderItem> items = await _repository.PurchaseOrderItem
                 .FindByCondition(x => x.PurchaseOrderId == purchaseOrder.Id && x.IsActive)
                 .OrderBy(x => x.LineNumber)

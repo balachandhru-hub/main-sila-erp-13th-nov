@@ -177,6 +177,58 @@ namespace Buyer.Tests.VoicePo
             Assert.Equal("onion", result.MaterialHint?.Trim().ToLowerInvariant());
         }
 
+        [Theory]
+        [InlineData("order 10 kilograms of onion")]
+        [InlineData("order 10 kilos of onion")]
+        [InlineData("order 10 kilo of onion")]
+        [InlineData("order 10 kgs of onion")]
+        public void Parse_order_chrome_stt_kilogram_variants_set_kg_and_ask_price_only(string transcript)
+        {
+            VoicePoParseResult result = SilaVoicePoAgentRules.ParseOrderIntent(transcript);
+
+            Assert.Equal(VoicePoIntent.AddLine, result.Intent);
+            Assert.Equal(10m, result.Quantity);
+            Assert.Equal("KG", result.UnitOfMeasure);
+            Assert.Null(result.UnitPrice);
+            Assert.Equal("onion", result.MaterialHint?.Trim().ToLowerInvariant());
+
+            SilaVoicePoDraftDto draft = new()
+            {
+                CompanyCode = "1000",
+                PlantCode = "1060",
+                PurchasingOrganization = "1000",
+                PurchasingGroup = "001",
+                Currency = "AED",
+                Lines =
+                {
+                    new SilaVoicePoDraftLineDto
+                    {
+                        LineNumber = 1,
+                        Description = result.MaterialHint,
+                        Quantity = result.Quantity ?? 0,
+                        UnitOfMeasure = result.UnitOfMeasure,
+                        UnitPrice = result.UnitPrice,
+                        MaterialGroup = "0127",
+                        AccountAssignmentCategory = "K",
+                        CostCenter = "1060010108",
+                        GlAccount = "6000000007",
+                        InventoryType = SilaUserPurchasingProfileRules.INVENTORY_NON_STOCK,
+                        SupplierId = Guid.NewGuid(),
+                        Resolved = true
+                    }
+                }
+            };
+
+            SilaVoicePoDraftValidation validation = SilaVoicePoAgentRules.ValidateDraft(draft);
+            string? ask = SilaVoicePoAgentRules.PreferMandatoryAsk(validation);
+
+            Assert.Equal(SilaVoicePoAgentRules.VALIDATION_NEEDS_CLARIFICATION, validation.Status);
+            Assert.DoesNotContain(validation.Clarifications, c => c.Code == "UOM");
+            Assert.Contains(validation.Clarifications, c => c.Code == "UNIT_PRICE");
+            Assert.Contains("unit price", ask!, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("unit of measure", ask!, StringComparison.OrdinalIgnoreCase);
+        }
+
         [Fact]
         public void Draft_validation_passes_for_resolved_stock_line_without_cost_center()
         {
@@ -244,7 +296,8 @@ namespace Buyer.Tests.VoicePo
             Assert.Contains(validation.Clarifications, c => c.Code == "UOM");
             Assert.Contains(validation.Clarifications, c => c.Code == "UNIT_PRICE");
             string spoken = SilaVoicePoAgentRules.BuildSpokenReply(VoicePoIntent.AddLine, draft, validation);
-            Assert.Contains("unit of measure", spoken, StringComparison.OrdinalIgnoreCase);
+            // Price is asked first when both are missing.
+            Assert.Contains("unit price", spoken, StringComparison.OrdinalIgnoreCase);
         }
 
         [Fact]

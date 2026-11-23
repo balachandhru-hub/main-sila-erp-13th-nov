@@ -42,16 +42,21 @@ namespace Buyer.Application.Features.Shared
             WriteIndented = false
         };
 
-        // Longer UOM tokens first so "10kgs" → KG + material "onion", not "s of onion".
+        // Longer UOM tokens first so "10kgs" / Chrome STT "10 kilograms" → KG + material "onion".
         private const string UomToken =
-            @"kgs|kg|grams?|g|liters?|litres?|l|pieces?|pcs?|pc|boxes?|box|packs?|pack|units?|unit|each|ea";
+            @"kilograms?|kilos?|kilo|kgs|kg|grammes?|grams?|g|litres?|liters?|liter|litre|l|pieces?|pcs?|pc|boxes?|box|packs?|pack|units?|unit|each|ea";
 
         private static readonly Regex OrderPattern = new(
-            $@"\b(?:order|buy|purchase|add|get|need|procure)\b\s+(?:(?<qty>\d+(?:\.\d+)?)\s*(?<uom>{UomToken})?\s*(?:of\s+)?)?(?<material>.+)$",
+            $@"\b(?:order|buy|purchase|add|get|need|procure)\b\s+(?:(?<qty>\d+(?:\.\d+)?)\s*(?<uom>{UomToken})?\.?\s*(?:of\s+)?)?(?<material>.+)$",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         private static readonly Regex QtyMaterialPattern = new(
-            $@"^(?<qty>\d+(?:\.\d+)?)\s*(?<uom>{UomToken})?\s+(?:of\s+)?(?<material>.+)$",
+            $@"^(?<qty>\d+(?:\.\d+)?)\s*(?<uom>{UomToken})?\.?\s+(?:of\s+)?(?<material>.+)$",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        // When STT splits oddly ("10 of kilograms onion") recover UOM from the material text.
+        private static readonly Regex LeadingUomInMaterial = new(
+            $@"^(?<uom>{UomToken})\.?\s+(?:of\s+)?(?<material>.+)$",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         // Explicit "for the price N" / currency / at/@ / per — never treat bare quantity as price.
@@ -284,6 +289,17 @@ namespace Buyer.Application.Features.Shared
                 }
 
                 result.MaterialHint = CleanMaterialHint(order.Groups["material"].Value);
+                // Chrome often says "kilograms" / "kilos" — recover UOM if the first pattern missed it.
+                if (string.IsNullOrWhiteSpace(result.UnitOfMeasure) && !string.IsNullOrWhiteSpace(result.MaterialHint))
+                {
+                    Match leadingUom = LeadingUomInMaterial.Match(result.MaterialHint);
+                    if (leadingUom.Success)
+                    {
+                        result.UnitOfMeasure = NormalizeUom(leadingUom.Groups["uom"].Value);
+                        result.MaterialHint = CleanMaterialHint(leadingUom.Groups["material"].Value);
+                    }
+                }
+
                 ApplyPriceHint(text, result);
                 if (string.IsNullOrWhiteSpace(result.MaterialHint))
                 {
@@ -758,7 +774,7 @@ namespace Buyer.Application.Features.Shared
             };
         }
 
-        /// <summary>Surface UOM / unit price / account assignment asks before softer header prompts.</summary>
+        /// <summary>Prefer unit price when UOM was already spoken; then UOM / account assignment.</summary>
         public static string? PreferMandatoryAsk(SilaVoicePoDraftValidation validation)
         {
             if (validation.Clarifications.Count == 0)
@@ -766,7 +782,8 @@ namespace Buyer.Application.Features.Shared
                 return null;
             }
 
-            string[] priority = { "UOM", "UNIT_PRICE", "QUANTITY", "ACCOUNT_ASSIGNMENT", "SUPPLIER_UNRESOLVED", "MATERIAL_GROUP", "MATERIAL_UNRESOLVED" };
+            // Price first: "order 10kgs of onion" should ask for price, not UOM, once KG is parsed.
+            string[] priority = { "UNIT_PRICE", "UOM", "QUANTITY", "ACCOUNT_ASSIGNMENT", "SUPPLIER_UNRESOLVED", "MATERIAL_GROUP", "MATERIAL_UNRESOLVED" };
             foreach (string code in priority)
             {
                 SilaVoicePoClarificationDto? hit = validation.Clarifications
@@ -787,14 +804,14 @@ namespace Buyer.Application.Features.Shared
             {
                 SilaVoicePoDraftLineDto line = draft.Lines[i];
                 string where = $"Line {(line.LineNumber > 0 ? line.LineNumber : i + 1)}";
-                if (string.IsNullOrWhiteSpace(line.UnitOfMeasure))
-                {
-                    return $"{where}: what unit of measure should I use (for example KG, EA, L)?";
-                }
-
                 if (line.UnitPrice == null || line.UnitPrice <= 0)
                 {
                     return $"{where}: what is the unit price in {(draft.Currency ?? "AED")}? Reply with the amount, or say 'use one {draft.Currency ?? "AED"}' to default to 1.";
+                }
+
+                if (string.IsNullOrWhiteSpace(line.UnitOfMeasure))
+                {
+                    return $"{where}: what unit of measure should I use (for example KG, EA, L)?";
                 }
             }
 
@@ -990,11 +1007,11 @@ namespace Buyer.Application.Features.Shared
 
         private static string NormalizeUom(string uom)
         {
-            string value = uom.Trim().ToUpperInvariant();
+            string value = uom.Trim().TrimEnd('.').ToUpperInvariant();
             return value switch
             {
-                "KGS" or "KG" => "KG",
-                "GRAMS" or "GRAM" or "G" => "G",
+                "KGS" or "KG" or "KILOGRAM" or "KILOGRAMS" or "KILO" or "KILOS" => "KG",
+                "GRAMS" or "GRAM" or "GRAMME" or "GRAMMES" or "G" => "G",
                 "LITERS" or "LITRES" or "LITER" or "LITRE" or "L" => "L",
                 "PCS" or "PC" or "PIECES" or "PIECE" or "EA" or "EACH" or "UNITS" or "UNIT" => "EA",
                 "BOXES" or "BOX" => "BOX",
