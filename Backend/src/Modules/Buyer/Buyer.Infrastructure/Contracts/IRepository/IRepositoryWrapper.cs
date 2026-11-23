@@ -139,6 +139,9 @@ namespace Buyer.Infrastructure.Contracts.IRepository
         IRecipeLegacyMaterialMapRepository RecipeLegacyMaterialMap { get; }
         IRecipeLegacyImageRepository RecipeLegacyImage { get; }
         ISilaUserPurchasingProfileRepository SilaUserPurchasingProfile { get; }
+        ISilaUserPoFlexConfigRepository SilaUserPoFlexConfig { get; }
+        ISilaUserPoFlexParamRepository SilaUserPoFlexParam { get; }
+        ISilaUserPoFlexConditionRepository SilaUserPoFlexCondition { get; }
         ISilaVoicePoSessionRepository SilaVoicePoSession { get; }
         ISilaVoicePoTurnRepository SilaVoicePoTurn { get; }
         bool Save();
