@@ -1,5 +1,5 @@
 /* SILA Store service worker. It only controls pages under /mobile. */
-const CACHE = 'sila-store-v2';
+const CACHE = 'sila-store-v3-voice-po';
 const SHELL = '/mobile/home';
 const PRECACHE = [
   '/mobile/offline.html',
@@ -27,14 +27,24 @@ self.addEventListener('activate', (event) => {
 const leaveToNetwork = (url) => {
   if (url.origin !== self.location.origin) return true;
   if (url.pathname.startsWith('/api') || url.pathname.includes('messageHub')) return true;
-  if (url.pathname.startsWith('/@') || url.pathname.startsWith('/src/') || url.pathname.startsWith('/node_modules')) return true;
+  // Never cache Vite / module sources — always network (dev + HMR).
+  if (
+    url.pathname.startsWith('/@')
+    || url.pathname.startsWith('/src/')
+    || url.pathname.startsWith('/node_modules')
+    || url.pathname.includes('/@fs/')
+    || url.pathname.includes('VoicePo')
+    || url.search.includes('t=')
+  ) {
+    return true;
+  }
   return false;
 };
 
-const isStaticAsset = (pathname) =>
-  pathname.startsWith('/assets/')
-  || pathname.startsWith('/mobile/')
-  || /\.(?:js|css|png|svg|webp|woff2?|ico)$/.test(pathname);
+const isPrecacheOnly = (pathname) =>
+  pathname.startsWith('/mobile/icon')
+  || pathname.endsWith('.webmanifest')
+  || pathname.endsWith('/mobile/offline.html');
 
 self.addEventListener('fetch', (event) => {
   const request = event.request;
@@ -49,7 +59,7 @@ self.addEventListener('fetch', (event) => {
     event.respondWith((async () => {
       const cache = await caches.open(CACHE);
       try {
-        const response = await fetch(request);
+        const response = await fetch(request, { cache: 'no-store' });
         if (response.ok) {
           await cache.put(request, response.clone());
           await cache.put(SHELL, response.clone());
@@ -65,7 +75,25 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  if (!isStaticAsset(url.pathname)) return;
+  // Network-first for app JS/CSS so Voice PO and other screens pick up deploys.
+  if (!isPrecacheOnly(url.pathname) && /\.(?:js|css)$/.test(url.pathname)) {
+    event.respondWith((async () => {
+      try {
+        const response = await fetch(request, { cache: 'no-store' });
+        if (response.ok) {
+          const cache = await caches.open(CACHE);
+          await cache.put(request, response.clone());
+        }
+        return response;
+      } catch {
+        const cache = await caches.open(CACHE);
+        return (await cache.match(request)) || Response.error();
+      }
+    })());
+    return;
+  }
+
+  if (!isPrecacheOnly(url.pathname) && !url.pathname.startsWith('/mobile/')) return;
 
   event.respondWith((async () => {
     const cache = await caches.open(CACHE);

@@ -66,11 +66,13 @@ const isSafariLike = (): boolean => {
   return isSafari || isIos;
 };
 
-/** Chromium family (Chrome, Edge, Android Chrome). Keep Safari/iOS on voice for now. */
+/**
+ * Text-first (muted) everywhere except Safari/iOS voice.
+ * Covers Chrome/Edge/Chromium/Firefox/headless — avoids TTS and stale voice UX.
+ */
 const chromeTextPrimary = (): boolean => {
   if (typeof navigator === 'undefined') return false;
-  const ua = navigator.userAgent || '';
-  return /chrome|chromium|crios|edg/i.test(ua) && !isSafariLike();
+  return !isSafariLike();
 };
 
 /**
@@ -1231,7 +1233,11 @@ const VoicePoScreen: React.FC = () => {
               <section className="vpo-card" aria-labelledby="vpo-draft-title">
                 <h2 id="vpo-draft-title">Live draft</h2>
                 {lines.length === 0 ? (
-                  <p className="sm-meta">No draft lines yet. Speak after activating Voice. Say “that’s all” or End Session when finished.</p>
+                  <p className="sm-meta">
+                    {textPrimary
+                      ? 'No draft lines yet. Type your order above — SILA will ask for missing price or UOM.'
+                      : 'No draft lines yet. Speak after activating Voice. Say “that’s all” or End Session when finished.'}
+                  </p>
                 ) : (
                   <ul className="vpo-lines">
                     {lines.map((line, index) => (
@@ -1261,7 +1267,7 @@ const VoicePoScreen: React.FC = () => {
                       disabled={busy}
                       onClick={() => void enterTranscriptConfirmation()}
                     >
-                      Done talking — confirm transcript
+                      {textPrimary ? 'Done — confirm transcript' : 'Done talking — confirm transcript'}
                     </button>
                     {sessionActive && (
                       <button

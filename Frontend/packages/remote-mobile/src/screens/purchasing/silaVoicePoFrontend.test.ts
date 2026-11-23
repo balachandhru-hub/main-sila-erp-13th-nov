@@ -66,6 +66,9 @@ assert.match(screen, /vpo-agent-reply|vpo-mandatory-asks/);
 assert.match(screen, /speakSafe/);
 assert.match(screen, /Unit price is required before submit|unpriced|UNIT_PRICE/);
 assert.match(screen, /textPrimary[\s\S]*interruptSpeech|always muted/);
+assert.match(screen, /!isSafariLike\(\)/);
+assert.match(readFileSync(join(dir, '../../pwa.ts'), 'utf8'), /reg\.update|SKIP_WAITING/);
+assert.match(readFileSync(join(dir, '../../../public/mobile/sw.js'), 'utf8'), /sila-store-v3-voice-po/);
 
 assert.match(screen, /resolveDialogueIntent/);
 assert.match(screen, /isShortConversationalUtterance/);
