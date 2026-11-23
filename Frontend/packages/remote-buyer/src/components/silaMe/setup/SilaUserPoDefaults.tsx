@@ -233,6 +233,11 @@ const SilaUserPoDefaults: React.FC<SilaUserPoDefaultsProps> = ({ canManage = tru
 
   const handleSave = async () => {
     if (!editor) return;
+    const targetUserId = trim(editor.userId);
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetUserId)) {
+      toastService.error("A valid User ID (GUID) is required before saving.");
+      return;
+    }
     const parameters = editor.parameters
       .map((row, i) => ({
         paramKey: trim(row.paramKey),
@@ -256,7 +261,7 @@ const SilaUserPoDefaults: React.FC<SilaUserPoDefaultsProps> = ({ canManage = tru
       .filter((row) => row.whenParam && row.thenParam);
 
     const payload: SilaUserPoFlexConfigWrite = {
-      userId: editor.userId,
+      userId: targetUserId,
       displayName: trim(editor.displayName) || null,
       configType: editor.configType || "PO_CREATE",
       name: trim(editor.name) || null,
