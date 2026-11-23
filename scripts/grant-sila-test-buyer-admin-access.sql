@@ -16,19 +16,21 @@ FROM (VALUES
     ('RECIPE', 'Recipe approval'),
     ('ITO', 'Internal transfer approval'),
     ('INVENTORY', 'Inventory count approval'),
-    ('MATERIAL_PRICE', 'Material price approval')
+    ('MATERIAL_PRICE', 'Material price approval'),
+    ('PURCHASE_ORDER', 'Purchase order approval')
 ) v([key], description)
 WHERE NOT EXISTS (
     SELECT 1 FROM MasterDataDb.masterdata.metadata m
     WHERE m.type = 'APPROVAL_TYPE' AND m.[key] = v.[key] AND m.is_active = 1);
 
--- Ensure the four SILA flows exist (ALL scope).
+-- Ensure the SILA flows exist (ALL scope).
 DECLARE @flows TABLE (code NVARCHAR(40), name NVARCHAR(120), type NVARCHAR(40));
 INSERT INTO @flows VALUES
     ('SILA-RECIPE', 'Recipe approval', 'RECIPE'),
     ('SILA-ITO', 'Internal transfer approval', 'ITO'),
     ('SILA-INVENTORY', 'Inventory count approval', 'INVENTORY'),
-    ('SILA-MATERIAL-PRICE', 'Material price approval', 'MATERIAL_PRICE');
+    ('SILA-MATERIAL-PRICE', 'Material price approval', 'MATERIAL_PRICE'),
+    ('SILA-PURCHASE-ORDER', 'Purchase order approval', 'PURCHASE_ORDER');
 
 INSERT INTO BuyerSystemDB.buyersystem.master_approval_flow
     (id, approval_code, approval_name, buyer_id, date_created, date_updated, created_by, updated_by, is_active, currency, total_amount, type, scope_kind)
@@ -48,7 +50,7 @@ JOIN BuyerSystemDB.buyersystem.master_approval_flow f ON f.id = m.approval_flow_
 WHERE f.buyer_id = @buyer
   AND f.is_active = 1
   AND m.is_active = 1
-  AND f.approval_code IN ('SILA-RECIPE', 'SILA-ITO', 'SILA-INVENTORY', 'SILA-MATERIAL-PRICE')
+  AND f.approval_code IN ('SILA-RECIPE', 'SILA-ITO', 'SILA-INVENTORY', 'SILA-MATERIAL-PRICE', 'SILA-PURCHASE-ORDER')
   AND NOT EXISTS (
       SELECT 1 FROM BuyerSystemDB.buyersystem.approval_flow_user_mapping have
       WHERE have.approval_flow_id = f.id AND have.user_id = @adminUser AND have.is_active = 1);
@@ -60,7 +62,7 @@ SELECT NEWID(), f.id, @adminUser, 1, @now, @now, @actor, @actor, 1
 FROM BuyerSystemDB.buyersystem.master_approval_flow f
 WHERE f.buyer_id = @buyer
   AND f.is_active = 1
-  AND f.approval_code IN ('SILA-RECIPE', 'SILA-ITO', 'SILA-INVENTORY', 'SILA-MATERIAL-PRICE')
+  AND f.approval_code IN ('SILA-RECIPE', 'SILA-ITO', 'SILA-INVENTORY', 'SILA-MATERIAL-PRICE', 'SILA-PURCHASE-ORDER')
   AND NOT EXISTS (
       SELECT 1 FROM BuyerSystemDB.buyersystem.approval_flow_user_mapping have
       WHERE have.approval_flow_id = f.id AND have.user_id = @adminUser AND have.is_active = 1);
