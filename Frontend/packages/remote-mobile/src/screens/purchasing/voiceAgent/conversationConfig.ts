@@ -30,4 +30,7 @@ export type Voice2UiState =
   | 'processing'
   | 'speaking'
   | 'awaitingConfirmation'
+  | 'confirmTranscript'
+  | 'reviewPo'
+  | 'done'
   | 'error';

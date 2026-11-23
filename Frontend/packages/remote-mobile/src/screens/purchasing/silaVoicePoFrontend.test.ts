@@ -27,8 +27,12 @@ assert.match(screen, /scheduleEndOfTurn|endOfSpeechSilenceMs|VOICE2_CONFIG/);
 assert.match(screen, /echoCancellation/);
 assert.match(screen, /noiseSuppression/);
 assert.match(screen, /autoGainControl/);
-assert.match(screen, /Confirm — create draft PO/);
+assert.match(screen, /Submit — create draft PO/);
+assert.match(screen, /Confirm transcript/);
+assert.match(screen, /Review header/);
 assert.match(screen, /End Session/);
+assert.match(screen, /enterTranscriptConfirmation/);
+assert.match(screen, /unlockSpeechPlayback/);
 assert.doesNotMatch(screen, /data-testid="vpo-recording-controls"/);
 assert.doesNotMatch(screen, /data-testid="vpo-start-recording"/);
 
@@ -50,6 +54,9 @@ assert.match(overlayCss, /#dc2626/i);
 const naturalTts = readFileSync(join(dir, 'voiceAgent/naturalTts.ts'), 'utf8');
 assert.match(naturalTts, /pickNaturalVoice/);
 assert.match(naturalTts, /looksIncompleteUtterance/);
+assert.match(naturalTts, /unlockSpeechPlayback/);
+assert.match(naturalTts, /isConversationDonePhrase/);
+assert.match(naturalTts, /startKeepAlive|keepAlive/);
 
 const engineApi = readFileSync(join(dir, '../../../../remote-buyer/src/api/silaMe/silaVoiceEngineApi.ts'), 'utf8');
 assert.match(engineApi, /\/api\/v1\/buyer\/sila\/voice-engine/);

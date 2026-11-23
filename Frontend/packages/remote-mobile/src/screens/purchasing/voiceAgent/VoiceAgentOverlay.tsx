@@ -37,6 +37,12 @@ const statusFor = (state: Voice2UiState, health: SilaVoiceEngineHealth | null, m
       return muted ? 'Speaking (muted)' : 'Speaking…';
     case 'awaitingConfirmation':
       return 'Please review and confirm';
+    case 'confirmTranscript':
+      return 'Confirm the transcript';
+    case 'reviewPo':
+      return 'Review header & items, then Submit';
+    case 'done':
+      return 'Purchase order submitted';
     case 'error':
       return 'Something went wrong — tap Voice to retry';
     default:

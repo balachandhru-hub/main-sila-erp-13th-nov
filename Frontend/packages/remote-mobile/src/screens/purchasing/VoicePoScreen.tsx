@@ -14,7 +14,13 @@ import { useAccess } from '../../access';
 import { useMyLocation } from '../../location';
 import { errorText } from '../../useLoad';
 import { VOICE2_CONFIG, type Voice2UiState } from './voiceAgent/conversationConfig';
-import { looksIncompleteUtterance, speakNaturally, type SpeakHandle } from './voiceAgent/naturalTts';
+import {
+  isConversationDonePhrase,
+  looksIncompleteUtterance,
+  speakNaturally,
+  unlockSpeechPlayback,
+  type SpeakHandle,
+} from './voiceAgent/naturalTts';
 import VoiceAgentOverlay from './voiceAgent/VoiceAgentOverlay';
 import './VoicePoScreen.css';
 
@@ -59,6 +65,7 @@ const VoicePoScreen: React.FC = () => {
   const [defaults, setDefaults] = useState<SilaPurchasingDefaultsResolved | null>(null);
   const [session, setSession] = useState<SilaVoicePoSession | null>(null);
   const [transcript, setTranscript] = useState('');
+  const [confirmedTranscript, setConfirmedTranscript] = useState('');
   const [uiState, setUiState] = useState<Voice2UiState>('idle');
   const [level, setLevel] = useState(0);
   const [sessionActive, setSessionActive] = useState(false);
@@ -85,6 +92,7 @@ const VoicePoScreen: React.FC = () => {
   const turnIdRef = useRef(0);
   const spokenRef = useRef<string | null>(null);
   const levelRef = useRef(0);
+  const sessionDataRef = useRef<SilaVoicePoSession | null>(null);
 
   const setUi = useCallback((next: Voice2UiState) => {
     uiStateRef.current = next;
@@ -148,6 +156,10 @@ const VoicePoScreen: React.FC = () => {
   }, [transcript]);
 
   useEffect(() => {
+    sessionDataRef.current = session;
+  }, [session]);
+
+  useEffect(() => {
     return () => {
       sessionActiveRef.current = false;
       clearSilenceTimer();
@@ -190,18 +202,60 @@ const VoicePoScreen: React.FC = () => {
       language: 'en',
     });
     setSession(started);
+    sessionDataRef.current = started;
     return started;
   }, [defaults, mine, session]);
 
   const resumeListening = useCallback(() => {
     if (!sessionActiveRef.current) return;
-    if (uiStateRef.current === 'processing' || uiStateRef.current === 'transcribing') return;
+    if (
+      uiStateRef.current === 'processing' ||
+      uiStateRef.current === 'transcribing' ||
+      uiStateRef.current === 'confirmTranscript' ||
+      uiStateRef.current === 'reviewPo' ||
+      uiStateRef.current === 'done'
+    ) {
+      return;
+    }
     setUi('listening');
     speechStartedAtRef.current = null;
     finalChunkRef.current = '';
     setTranscript('');
     transcriptRef.current = '';
   }, [setUi]);
+
+  const enterTranscriptConfirmation = useCallback(
+    async (seed?: string) => {
+      turnIdRef.current += 1;
+      sessionActiveRef.current = false;
+      setSessionActive(false);
+      clearSilenceTimer();
+      interruptSpeech();
+      stopRecognition();
+      stopMeter();
+      const current = sessionDataRef.current;
+      const fromTurns =
+        current?.turns
+          ?.filter((turn) => (turn.role || '').toUpperCase() === 'USER' && turn.transcript)
+          .map((turn) => turn.transcript)
+          .join(' ') || '';
+      const summary = (seed || transcriptRef.current || current?.latestTranscript || fromTurns || '').trim();
+      setConfirmedTranscript(summary);
+      setUi('confirmTranscript');
+      setNotice({
+        tone: 'success',
+        text: 'Confirm the transcript, then review header and items before Submit.',
+      });
+      const handle = speakNaturally(
+        'Okay. Please confirm the transcript on screen, then review the purchase order and press Submit.',
+        ttsMuted,
+      );
+      speakHandleRef.current = handle;
+      await handle.done;
+      speakHandleRef.current = null;
+    },
+    [clearSilenceTimer, interruptSpeech, setUi, stopMeter, stopRecognition, ttsMuted],
+  );
 
   const submitTurn = useCallback(
     async (text: string, channel: 'VOICE' | 'TEXT' = 'VOICE') => {
@@ -215,6 +269,12 @@ const VoicePoScreen: React.FC = () => {
       setNotice(null);
       interruptSpeech();
       try {
+        const lineCount = session?.draft?.lines?.length ?? 0;
+        if (isConversationDonePhrase(cleaned) && lineCount > 0) {
+          await enterTranscriptConfirmation(cleaned);
+          return;
+        }
+
         const active = await ensureSession();
         if (turnId !== turnIdRef.current) return;
         const next = await sendVoicePoTurn(active.id, {
@@ -223,12 +283,27 @@ const VoicePoScreen: React.FC = () => {
         });
         if (turnId !== turnIdRef.current) return;
         setSession(next);
+        sessionDataRef.current = next;
         setTranscript('');
         transcriptRef.current = '';
         finalChunkRef.current = '';
 
         const reply = (next.spokenReply || '').trim();
-        const awaiting = next.status === 'REVIEW' || (next.draft?.lines?.length ?? 0) > 0;
+        const hasLines = (next.draft?.lines?.length ?? 0) > 0;
+        if (isConversationDonePhrase(cleaned) && hasLines) {
+          if (reply && reply !== spokenRef.current) {
+            spokenRef.current = reply;
+            setUi('speaking');
+            const handle = speakNaturally(reply, ttsMuted);
+            speakHandleRef.current = handle;
+            await handle.done;
+            speakHandleRef.current = null;
+          }
+          await enterTranscriptConfirmation(cleaned);
+          return;
+        }
+
+        const awaiting = next.status === 'REVIEW' || hasLines;
         if (awaiting && /confirm/i.test(reply)) {
           setUi('awaitingConfirmation');
         }
@@ -259,7 +334,16 @@ const VoicePoScreen: React.FC = () => {
         setBusy(false);
       }
     },
-    [clearSilenceTimer, ensureSession, interruptSpeech, resumeListening, setUi, ttsMuted],
+    [
+      clearSilenceTimer,
+      ensureSession,
+      enterTranscriptConfirmation,
+      interruptSpeech,
+      resumeListening,
+      session?.draft?.lines?.length,
+      setUi,
+      ttsMuted,
+    ],
   );
 
   const scheduleEndOfTurn = useCallback(() => {
@@ -416,24 +500,19 @@ const VoicePoScreen: React.FC = () => {
 
   const activate = useCallback(async () => {
     setNotice(null);
+    setConfirmedTranscript('');
     setUi('activating');
     interruptSpeech();
     try {
-      // Unlock audio playback on the user gesture.
-      if (typeof window !== 'undefined' && window.speechSynthesis) {
-        window.speechSynthesis.cancel();
-        const unlock = new SpeechSynthesisUtterance(' ');
-        unlock.volume = 0;
-        window.speechSynthesis.speak(unlock);
-        window.speechSynthesis.cancel();
-      }
+      // Unlock audible TTS on the user gesture (required for Alexa-like talk-back).
+      unlockSpeechPlayback();
       await startMeter();
       sessionActiveRef.current = true;
       setSessionActive(true);
       await ensureSession();
       beginRecognition();
       setUi('listening');
-      const greeting = 'Hi, I am SILA. What would you like to order?';
+      const greeting = "Hi, I'm SILA, your purchasing agent. What would you like to order?";
       spokenRef.current = greeting;
       setUi('speaking');
       const handle = speakNaturally(greeting, ttsMuted);
@@ -462,6 +541,11 @@ const VoicePoScreen: React.FC = () => {
   ]);
 
   const endSession = useCallback(async () => {
+    const hasDraft = (session?.draft?.lines?.length ?? 0) > 0;
+    if (hasDraft && (uiStateRef.current !== 'confirmTranscript' && uiStateRef.current !== 'reviewPo' && uiStateRef.current !== 'done')) {
+      await enterTranscriptConfirmation();
+      return;
+    }
     turnIdRef.current += 1;
     sessionActiveRef.current = false;
     setSessionActive(false);
@@ -470,6 +554,7 @@ const VoicePoScreen: React.FC = () => {
     stopRecognition();
     stopMeter();
     setTranscript('');
+    setConfirmedTranscript('');
     setUi('idle');
     if (!session) return;
     setBusy(true);
@@ -482,9 +567,29 @@ const VoicePoScreen: React.FC = () => {
     } finally {
       setBusy(false);
     }
-  }, [clearSilenceTimer, interruptSpeech, session, setUi, stopMeter, stopRecognition]);
+  }, [clearSilenceTimer, enterTranscriptConfirmation, interruptSpeech, session, setUi, stopMeter, stopRecognition]);
 
-  const confirm = async () => {
+  const confirmTranscript = () => {
+    if (!confirmedTranscript.trim()) {
+      setNotice({ tone: 'error', text: 'Confirm or edit the transcript before continuing.' });
+      return;
+    }
+    setUi('reviewPo');
+    setNotice({
+      tone: 'success',
+      text: 'Review header and item values. Submit creates the draft PO using your defaults.',
+    });
+    const handle = speakNaturally(
+      'Here is your purchase order summary. Review the header and items, then press Submit.',
+      ttsMuted,
+    );
+    speakHandleRef.current = handle;
+    void handle.done.then(() => {
+      speakHandleRef.current = null;
+    });
+  };
+
+  const submitPo = async () => {
     if (!session) return;
     setBusy(true);
     setNotice(null);
@@ -496,9 +601,9 @@ const VoicePoScreen: React.FC = () => {
         idempotencyKey: `${session.id}-${Date.now()}`,
       });
       setSession(next);
-      const po = next.createdPoNumber ? ` PO ${next.createdPoNumber}.` : '';
-      setNotice({ tone: 'success', text: `Draft purchase order created.${po}` });
-      const reply = next.spokenReply || `Purchase order draft created${po}`;
+      const po = next.createdPoNumber ? ` Purchase order ${next.createdPoNumber}.` : '';
+      setNotice({ tone: 'success', text: `Draft purchase order created with your defaults.${po}` });
+      const reply = next.spokenReply || `Done. Draft purchase order created.${po}`;
       setUi('speaking');
       const handle = speakNaturally(reply, ttsMuted);
       speakHandleRef.current = handle;
@@ -508,19 +613,22 @@ const VoicePoScreen: React.FC = () => {
       setSessionActive(false);
       stopRecognition();
       stopMeter();
-      setUi('idle');
+      setUi('done');
     } catch (err: unknown) {
       setNotice({ tone: 'error', text: errorText(err) });
       setUi('error');
-      if (sessionActiveRef.current) resumeListening();
+      setUi('reviewPo');
     } finally {
       setBusy(false);
     }
   };
 
   const lines = session?.draft?.lines ?? [];
-  const canConfirm = Boolean(session && openSession(session.status) && lines.length > 0);
+  const draft = session?.draft;
+  const canSubmit = Boolean(session && openSession(session.status) && lines.length > 0);
   const ctx = session?.purchasingContext ?? defaults;
+  const turns = session?.turns ?? [];
+  const inPostTalk = uiState === 'confirmTranscript' || uiState === 'reviewPo' || uiState === 'done';
 
   return (
     <>
@@ -528,33 +636,35 @@ const VoicePoScreen: React.FC = () => {
         title="Create PO by Voice"
         eyebrow="Purchasing"
         back
-        intro="Tap Voice once. SILA listens, replies, and continues the conversation automatically."
+        intro="Tap Voice once. SILA talks back like Alexa. When finished: confirm transcript → review header & items → Submit with your PO defaults."
       />
       <div className="sm-screen vpo" data-testid="voice-po-screen">
         {!accessLoading && !can.requestPurchase && <Empty text="Voice purchase orders are not available for your role." />}
         {can.requestPurchase && (
           <>
-            <VoiceAgentOverlay
-              level={level}
-              state={uiState}
-              transcript={transcript}
-              reply={session?.spokenReply || undefined}
-              muted={ttsMuted}
-              sessionActive={sessionActive}
-              activating={uiState === 'activating'}
-              onActivate={() => void activate()}
-              onEndSession={() => void endSession()}
-              onToggleMute={() => {
-                setTtsMuted((value) => !value);
-                interruptSpeech();
-              }}
-              onShowType={() => setShowType((value) => !value)}
-            />
+            {!inPostTalk && (
+              <VoiceAgentOverlay
+                level={level}
+                state={uiState}
+                transcript={transcript}
+                reply={session?.spokenReply || undefined}
+                muted={ttsMuted}
+                sessionActive={sessionActive}
+                activating={uiState === 'activating'}
+                onActivate={() => void activate()}
+                onEndSession={() => void endSession()}
+                onToggleMute={() => {
+                  setTtsMuted((value) => !value);
+                  interruptSpeech();
+                }}
+                onShowType={() => setShowType((value) => !value)}
+              />
+            )}
 
             {bootError && <ErrorNotice message={bootError} onRetry={() => window.location.reload()} />}
             <Notice notice={notice} />
 
-            {showType && (
+            {showType && !inPostTalk && (
               <section className="vpo-card" aria-labelledby="vpo-transcript-title" data-testid="vpo-type-fallback">
                 <h2 id="vpo-transcript-title">Type fallback</h2>
                 <label className="sm-visually-hidden" htmlFor="vpo-transcript">
@@ -582,61 +692,213 @@ const VoicePoScreen: React.FC = () => {
               </section>
             )}
 
-            <section className="vpo-card" aria-labelledby="vpo-draft-title">
-              <h2 id="vpo-draft-title">Draft review</h2>
-              {lines.length === 0 ? (
-                <p className="sm-meta">No draft lines yet. Speak your request after activating Voice.</p>
-              ) : (
-                <ul className="vpo-lines">
-                  {lines.map((line, index) => (
-                    <li
-                      key={`${line.materialCode ?? 'line'}-${index}`}
-                      className={`vpo-line${line.uncertain || line.resolved === false ? ' vpo-line--uncertain' : ''}`}
-                    >
-                      <div className="vpo-line__title">
-                        <span>
-                          {line.materialName || line.description || line.materialCode || `Line ${index + 1}`}
-                          {line.materialCode && (line.materialName || line.description) ? ` (${line.materialCode})` : ''}
-                        </span>
-                        <span>
-                          {line.quantity ?? '—'} {line.uom || line.unitOfMeasure || ''}
-                        </span>
-                      </div>
-                      <div className="vpo-line__meta">
-                        Supplier: {line.supplierName || line.supplierCode || '—'}
-                        {line.unitPrice != null ? ` · ${line.unitPrice}${line.currency ? ` ${line.currency}` : ''}` : ''}
-                        <br />
-                        Account: {line.accountAssignmentCategory || ctx?.accountAssignmentCategory || '—'}
-                        {line.costCenter || ctx?.costCenter ? ` · CC ${line.costCenter || ctx?.costCenter}` : ''}
-                        {line.glAccount || ctx?.glAccount ? ` · GL ${line.glAccount || ctx?.glAccount}` : ''}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <div className="vpo-confirm-row">
-                <button
-                  type="button"
-                  className="sm-btn sm-btn--primary sm-btn--block"
-                  data-testid="vpo-confirm"
-                  disabled={busy || !canConfirm}
-                  onClick={() => void confirm()}
-                >
-                  Confirm — create draft PO
-                </button>
-                {sessionActive && (
+            {uiState === 'confirmTranscript' && (
+              <section className="vpo-card" aria-labelledby="vpo-confirm-transcript-title" data-testid="vpo-confirm-transcript">
+                <h2 id="vpo-confirm-transcript-title">Confirm transcript</h2>
+                <p className="sm-meta">Edit if needed, then continue to review header and item values.</p>
+                {turns.length > 0 && (
+                  <ul className="vpo-turns" data-testid="vpo-turn-list">
+                    {turns.map((turn) => (
+                      <li key={turn.id} className={`vpo-turn vpo-turn--${(turn.role || 'USER').toLowerCase()}`}>
+                        <strong>{(turn.role || '').toUpperCase() === 'AGENT' ? 'Agent' : 'You'}</strong>
+                        <span>{turn.transcript || turn.spokenText || '—'}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <textarea
+                  className="vpo-transcript"
+                  data-testid="vpo-confirmed-transcript"
+                  value={confirmedTranscript}
+                  onChange={(event) => setConfirmedTranscript(event.target.value)}
+                />
+                <div className="vpo-confirm-row">
                   <button
                     type="button"
-                    className="sm-btn sm-btn--block"
-                    data-testid="vpo-cancel"
+                    className="sm-btn sm-btn--primary sm-btn--block"
+                    data-testid="vpo-confirm-transcript-btn"
                     disabled={busy}
-                    onClick={() => void endSession()}
+                    onClick={confirmTranscript}
                   >
-                    End Session
+                    Confirm transcript — review PO
                   </button>
+                  <button type="button" className="sm-btn sm-btn--block" data-testid="vpo-cancel" disabled={busy} onClick={() => void endSession()}>
+                    Cancel conversation
+                  </button>
+                </div>
+              </section>
+            )}
+
+            {uiState === 'reviewPo' && (
+              <section className="vpo-card" aria-labelledby="vpo-review-title" data-testid="vpo-review-panel">
+                <h2 id="vpo-review-title">Review header & items</h2>
+                <p className="sm-meta">Values include your PO defaults. Press Submit to create the draft purchase order.</p>
+                <h3 className="vpo-subhead">Header</h3>
+                <dl className="vpo-context" data-testid="vpo-review-header">
+                  <div>
+                    <dt>Company</dt>
+                    <dd>{draft?.companyCode || ctx?.companyCode || '—'}</dd>
+                  </div>
+                  <div>
+                    <dt>Plant</dt>
+                    <dd>{draft?.plantCode || ctx?.plantCode || '—'}</dd>
+                  </div>
+                  <div>
+                    <dt>SLoc</dt>
+                    <dd>{draft?.storageLocation || ctx?.storageLocation || '—'}</dd>
+                  </div>
+                  <div>
+                    <dt>POrg</dt>
+                    <dd>{draft?.purchasingOrganization || ctx?.purchasingOrganization || '—'}</dd>
+                  </div>
+                  <div>
+                    <dt>PGrp</dt>
+                    <dd>{draft?.purchasingGroup || ctx?.purchasingGroup || '—'}</dd>
+                  </div>
+                  <div>
+                    <dt>Currency</dt>
+                    <dd>{draft?.currency || ctx?.defaultCurrency || '—'}</dd>
+                  </div>
+                  <div>
+                    <dt>Acct / CC / GL</dt>
+                    <dd>
+                      {draft?.accountAssignmentCategory || ctx?.accountAssignmentCategory || '—'}
+                      {draft?.costCenter || ctx?.costCenter ? ` · ${draft?.costCenter || ctx?.costCenter}` : ''}
+                      {draft?.glAccount || ctx?.glAccount ? ` · ${draft?.glAccount || ctx?.glAccount}` : ''}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Delivery</dt>
+                    <dd>{draft?.deliveryDate ? new Date(draft.deliveryDate).toLocaleDateString() : '—'}</dd>
+                  </div>
+                </dl>
+                <h3 className="vpo-subhead">Items</h3>
+                {lines.length === 0 ? (
+                  <p className="sm-meta">No draft lines yet.</p>
+                ) : (
+                  <ul className="vpo-lines" data-testid="vpo-review-items">
+                    {lines.map((line, index) => (
+                      <li
+                        key={`${line.materialCode ?? 'line'}-${index}`}
+                        className={`vpo-line${line.uncertain || line.resolved === false ? ' vpo-line--uncertain' : ''}`}
+                      >
+                        <div className="vpo-line__title">
+                          <span>
+                            {line.materialName || line.description || line.materialCode || `Line ${index + 1}`}
+                            {line.materialCode && (line.materialName || line.description) ? ` (${line.materialCode})` : ''}
+                          </span>
+                          <span>
+                            {line.quantity ?? '—'} {line.uom || line.unitOfMeasure || ''}
+                          </span>
+                        </div>
+                        <div className="vpo-line__meta">
+                          Supplier: {line.supplierName || line.supplierCode || '—'}
+                          {line.unitPrice != null ? ` · ${line.unitPrice}${line.currency ? ` ${line.currency}` : ''}` : ''}
+                          <br />
+                          Account: {line.accountAssignmentCategory || draft?.accountAssignmentCategory || ctx?.accountAssignmentCategory || '—'}
+                          {line.costCenter || draft?.costCenter || ctx?.costCenter
+                            ? ` · CC ${line.costCenter || draft?.costCenter || ctx?.costCenter}`
+                            : ''}
+                          {line.glAccount || draft?.glAccount || ctx?.glAccount
+                            ? ` · GL ${line.glAccount || draft?.glAccount || ctx?.glAccount}`
+                            : ''}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
                 )}
-              </div>
-            </section>
+                <div className="vpo-confirm-row">
+                  <button
+                    type="button"
+                    className="sm-btn sm-btn--primary sm-btn--block"
+                    data-testid="vpo-confirm"
+                    disabled={busy || !canSubmit}
+                    onClick={() => void submitPo()}
+                  >
+                    {busy ? 'Submitting…' : 'Submit — create draft PO'}
+                  </button>
+                  <button type="button" className="sm-btn sm-btn--block" disabled={busy} onClick={() => void endSession()}>
+                    Cancel conversation
+                  </button>
+                </div>
+              </section>
+            )}
+
+            {uiState === 'done' && (
+              <section className="vpo-card" data-testid="vpo-done-panel">
+                <h2>Submitted</h2>
+                <p className="sm-meta">
+                  {session?.createdPoNumber
+                    ? `Purchase order ${session.createdPoNumber} was created with your defaults.`
+                    : 'Draft purchase order created with your defaults.'}
+                </p>
+                <button
+                  type="button"
+                  className="sm-btn sm-btn--primary"
+                  onClick={() => {
+                    setSession(null);
+                    setConfirmedTranscript('');
+                    setTranscript('');
+                    spokenRef.current = null;
+                    setUi('idle');
+                  }}
+                >
+                  Start another
+                </button>
+              </section>
+            )}
+
+            {!inPostTalk && (
+              <section className="vpo-card" aria-labelledby="vpo-draft-title">
+                <h2 id="vpo-draft-title">Live draft</h2>
+                {lines.length === 0 ? (
+                  <p className="sm-meta">No draft lines yet. Speak after activating Voice. Say “that’s all” or End Session when finished.</p>
+                ) : (
+                  <ul className="vpo-lines">
+                    {lines.map((line, index) => (
+                      <li
+                        key={`${line.materialCode ?? 'line'}-${index}`}
+                        className={`vpo-line${line.uncertain || line.resolved === false ? ' vpo-line--uncertain' : ''}`}
+                      >
+                        <div className="vpo-line__title">
+                          <span>
+                            {line.materialName || line.description || line.materialCode || `Line ${index + 1}`}
+                            {line.materialCode && (line.materialName || line.description) ? ` (${line.materialCode})` : ''}
+                          </span>
+                          <span>
+                            {line.quantity ?? '—'} {line.uom || line.unitOfMeasure || ''}
+                          </span>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {lines.length > 0 && (
+                  <div className="vpo-confirm-row">
+                    <button
+                      type="button"
+                      className="sm-btn sm-btn--primary sm-btn--block"
+                      data-testid="vpo-done-talking"
+                      disabled={busy}
+                      onClick={() => void enterTranscriptConfirmation()}
+                    >
+                      Done talking — confirm transcript
+                    </button>
+                    {sessionActive && (
+                      <button
+                        type="button"
+                        className="sm-btn sm-btn--block"
+                        data-testid="vpo-cancel"
+                        disabled={busy}
+                        onClick={() => void endSession()}
+                      >
+                        End Session
+                      </button>
+                    )}
+                  </div>
+                )}
+              </section>
+            )}
           </>
         )}
       </div>
