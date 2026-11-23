@@ -71,7 +71,9 @@
 .sva-orb--userSpeaking { animation: sva-speak-pulse 0.95s ease-in-out infinite; }
 .sva-orb--processing,
 .sva-orb--transcribing { animation: sva-process 1.8s linear infinite; }
-.sva-orb--speaking { animation: sva-speak-pulse 0.85s ease-in-out infinite; }
+.sva-orb--speaking,
+.sva-orb--acknowledging { animation: sva-speak-pulse 0.85s ease-in-out infinite; }
+.sva-orb--closing { animation: sva-await 2.4s ease-in-out infinite; }
 .sva-orb--awaitingConfirmation { animation: sva-await 2.4s ease-in-out infinite; }
 .sva-orb--error { filter: saturate(0.85); }
 
@@ -165,6 +167,8 @@
   .sva-orb--processing,
   .sva-orb--transcribing,
   .sva-orb--speaking,
+  .sva-orb--acknowledging,
+  .sva-orb--closing,
   .sva-orb--awaitingConfirmation { animation: none; }
 }
 

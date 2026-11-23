@@ -15,6 +15,10 @@ import { useMyLocation } from '../../location';
 import { errorText } from '../../useLoad';
 import { VOICE2_CONFIG, type Voice2UiState } from './voiceAgent/conversationConfig';
 import {
+  isShortConversationalUtterance,
+  resolveDialogueIntent,
+} from './voiceAgent/dialogueIntents';
+import {
   isConversationDonePhrase,
   looksIncompleteUtterance,
   speakNaturally,
@@ -93,6 +97,9 @@ const VoicePoScreen: React.FC = () => {
   const spokenRef = useRef<string | null>(null);
   const levelRef = useRef(0);
   const sessionDataRef = useRef<SilaVoicePoSession | null>(null);
+  const speakStartedAtRef = useRef(0);
+  const recognitionRunningRef = useRef(false);
+  const beginRecognitionRef = useRef<() => void>(() => undefined);
 
   const setUi = useCallback((next: Voice2UiState) => {
     uiStateRef.current = next;
@@ -120,6 +127,7 @@ const VoicePoScreen: React.FC = () => {
   const stopRecognition = useCallback(() => {
     const recognition = recognitionRef.current;
     recognitionRef.current = null;
+    recognitionRunningRef.current = false;
     if (recognition) {
       recognition.onresult = null;
       recognition.onerror = null;
@@ -213,7 +221,8 @@ const VoicePoScreen: React.FC = () => {
       uiStateRef.current === 'transcribing' ||
       uiStateRef.current === 'confirmTranscript' ||
       uiStateRef.current === 'reviewPo' ||
-      uiStateRef.current === 'done'
+      uiStateRef.current === 'done' ||
+      uiStateRef.current === 'closing'
     ) {
       return;
     }
@@ -222,6 +231,13 @@ const VoicePoScreen: React.FC = () => {
     finalChunkRef.current = '';
     setTranscript('');
     transcriptRef.current = '';
+    // Recognition often ends during SPEAKING/PROCESSING — re-arm so the loop continues.
+    if (!recognitionRef.current || !recognitionRunningRef.current) {
+      window.setTimeout(() => {
+        if (!sessionActiveRef.current) return;
+        beginRecognitionRef.current();
+      }, 80);
+    }
   }, [setUi]);
 
   const enterTranscriptConfirmation = useCallback(
@@ -257,6 +273,37 @@ const VoicePoScreen: React.FC = () => {
     [clearSilenceTimer, interruptSpeech, setUi, stopMeter, stopRecognition, ttsMuted],
   );
 
+  const speakAndResume = useCallback(
+    async (reply: string, turnId: number, nextUi: Voice2UiState = 'listening') => {
+      const spoken = (reply || '').trim();
+      if (!spoken) {
+        if (nextUi === 'listening') resumeListening();
+        else setUi(nextUi);
+        return;
+      }
+      spokenRef.current = spoken;
+      setUi(nextUi === 'closing' ? 'closing' : 'acknowledging');
+      speakStartedAtRef.current = Date.now();
+      const handle = speakNaturally(spoken, ttsMuted);
+      speakHandleRef.current = handle;
+      await handle.done;
+      speakHandleRef.current = null;
+      if (turnId !== turnIdRef.current) return;
+      if (nextUi === 'closing') {
+        sessionActiveRef.current = false;
+        setSessionActive(false);
+        clearSilenceTimer();
+        stopRecognition();
+        stopMeter();
+        setUi('idle');
+        return;
+      }
+      if (!sessionActiveRef.current) return;
+      resumeListening();
+    },
+    [clearSilenceTimer, resumeListening, setUi, stopMeter, stopRecognition, ttsMuted],
+  );
+
   const submitTurn = useCallback(
     async (text: string, channel: 'VOICE' | 'TEXT' = 'VOICE') => {
       const cleaned = text.trim();
@@ -265,20 +312,51 @@ const VoicePoScreen: React.FC = () => {
       clearSilenceTimer();
       const turnId = ++turnIdRef.current;
       setBusy(true);
-      setUi('processing');
       setNotice(null);
       interruptSpeech();
       try {
-        const lineCount = session?.draft?.lines?.length ?? 0;
-        if (isConversationDonePhrase(cleaned) && lineCount > 0) {
-          await enterTranscriptConfirmation(cleaned);
+        // Local dialogue manager: wake / greeting / social / farewell before PO agent.
+        const dialogue = resolveDialogueIntent(cleaned);
+        if (dialogue.localOnly) {
+          setTranscript('');
+          transcriptRef.current = '';
+          finalChunkRef.current = '';
+          if (dialogue.intent === 'FAREWELL') {
+            await speakAndResume(dialogue.spokenReply || "You're welcome. Have a great day!", turnId, 'closing');
+            return;
+          }
+          setUi('acknowledging');
+          await speakAndResume(
+            dialogue.spokenReply || "Hi! I'm here. How can I help you today?",
+            turnId,
+            'listening',
+          );
           return;
         }
 
+        const businessText = (dialogue.businessTranscript || cleaned).trim();
+        if (dialogue.spokenReply) {
+          // Combined wake + command: acknowledge, then continue into PO agent.
+          setUi('acknowledging');
+          speakStartedAtRef.current = Date.now();
+          const ack = speakNaturally(dialogue.spokenReply, ttsMuted);
+          speakHandleRef.current = ack;
+          await ack.done;
+          if (turnId !== turnIdRef.current || !sessionActiveRef.current) return;
+          speakHandleRef.current = null;
+        }
+
+        const lineCount = session?.draft?.lines?.length ?? 0;
+        if (isConversationDonePhrase(businessText) && lineCount > 0) {
+          await enterTranscriptConfirmation(businessText);
+          return;
+        }
+
+        setUi('processing');
         const active = await ensureSession();
         if (turnId !== turnIdRef.current) return;
         const next = await sendVoicePoTurn(active.id, {
-          transcript: cleaned,
+          transcript: businessText,
           channel,
         });
         if (turnId !== turnIdRef.current) return;
@@ -290,27 +368,19 @@ const VoicePoScreen: React.FC = () => {
 
         const reply = (next.spokenReply || '').trim();
         const hasLines = (next.draft?.lines?.length ?? 0) > 0;
-        if (isConversationDonePhrase(cleaned) && hasLines) {
+        if (isConversationDonePhrase(businessText) && hasLines) {
           if (reply && reply !== spokenRef.current) {
-            spokenRef.current = reply;
-            setUi('speaking');
-            const handle = speakNaturally(reply, ttsMuted);
-            speakHandleRef.current = handle;
-            await handle.done;
-            speakHandleRef.current = null;
+            await speakAndResume(reply, turnId, 'listening');
           }
-          await enterTranscriptConfirmation(cleaned);
+          await enterTranscriptConfirmation(businessText);
           return;
         }
 
         const awaiting = next.status === 'REVIEW' || hasLines;
-        if (awaiting && /confirm/i.test(reply)) {
-          setUi('awaitingConfirmation');
-        }
-
         if (reply && reply !== spokenRef.current) {
           spokenRef.current = reply;
           setUi('speaking');
+          speakStartedAtRef.current = Date.now();
           const handle = speakNaturally(reply, ttsMuted);
           speakHandleRef.current = handle;
           await handle.done;
@@ -342,6 +412,7 @@ const VoicePoScreen: React.FC = () => {
       resumeListening,
       session?.draft?.lines?.length,
       setUi,
+      speakAndResume,
       ttsMuted,
     ],
   );
@@ -349,20 +420,30 @@ const VoicePoScreen: React.FC = () => {
   const scheduleEndOfTurn = useCallback(() => {
     clearSilenceTimer();
     if (!VOICE2_CONFIG.autoEndOfTurn || !sessionActiveRef.current) return;
+    // Do not finalize a new user turn while SILA is acknowledging / speaking (except barge-in path).
+    if (
+      uiStateRef.current === 'acknowledging' ||
+      uiStateRef.current === 'processing' ||
+      uiStateRef.current === 'transcribing'
+    ) {
+      return;
+    }
     const text = (finalChunkRef.current || transcriptRef.current).trim();
     if (!text) return;
-    const incomplete = looksIncompleteUtterance(text);
+    const conversational = isShortConversationalUtterance(text);
+    const incomplete = !conversational && looksIncompleteUtterance(text);
     const wait = incomplete ? VOICE2_CONFIG.incompleteSilenceMs : VOICE2_CONFIG.endOfSpeechSilenceMs;
     silenceTimerRef.current = window.setTimeout(() => {
       const uttered = (finalChunkRef.current || transcriptRef.current).trim();
       const started = speechStartedAtRef.current;
       const duration = started ? Date.now() - started : 0;
-      if (!uttered || duration < VOICE2_CONFIG.minUtteranceMs) {
+      const shortOk = isShortConversationalUtterance(uttered);
+      const minMs = shortOk ? VOICE2_CONFIG.minGreetingUtteranceMs : VOICE2_CONFIG.minUtteranceMs;
+      if (!uttered || duration < minMs) {
         setUi('listening');
         return;
       }
-      if (looksIncompleteUtterance(uttered)) {
-        // Still incomplete after extended wait — ask naturally via agent if short, else submit.
+      if (!shortOk && looksIncompleteUtterance(uttered)) {
         if (uttered.split(/\s+/).length < 3) {
           setUi('listening');
           return;
@@ -380,16 +461,26 @@ const VoicePoScreen: React.FC = () => {
       return;
     }
     stopRecognition();
+    recognitionRunningRef.current = false;
     const recognition = new SpeechRecognitionCtor();
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = 'en-US';
     recognition.onresult = (event) => {
       if (!sessionActiveRef.current) return;
-      // Barge-in while speaking
-      if (uiStateRef.current === 'speaking' && VOICE2_CONFIG.bargeInEnabled) {
+      const sinceSpeak = Date.now() - speakStartedAtRef.current;
+      const speakingNow =
+        uiStateRef.current === 'speaking' || uiStateRef.current === 'acknowledging';
+      // Barge-in while speaking (after mute window to avoid SILA hearing herself).
+      if (
+        speakingNow &&
+        VOICE2_CONFIG.bargeInEnabled &&
+        sinceSpeak >= VOICE2_CONFIG.bargeInMuteMs
+      ) {
         interruptSpeech();
         setUi('userSpeaking');
+      } else if (speakingNow && sinceSpeak < VOICE2_CONFIG.bargeInMuteMs) {
+        return;
       }
       let finalText = '';
       let interim = '';
@@ -422,32 +513,50 @@ const VoicePoScreen: React.FC = () => {
         setUi('error');
         sessionActiveRef.current = false;
         setSessionActive(false);
+        recognitionRunningRef.current = false;
         return;
       }
       if (event.error === 'aborted' || event.error === 'no-speech') return;
     };
     recognition.onend = () => {
+      recognitionRunningRef.current = false;
       if (!sessionActiveRef.current) return;
-      // Keep recognition alive for continuous conversation.
-      if (uiStateRef.current === 'processing' || uiStateRef.current === 'transcribing' || uiStateRef.current === 'speaking') {
+      // Defer restart while processing/speaking; resumeListening re-arms afterward.
+      if (
+        uiStateRef.current === 'processing' ||
+        uiStateRef.current === 'transcribing' ||
+        uiStateRef.current === 'speaking' ||
+        uiStateRef.current === 'acknowledging'
+      ) {
         return;
       }
       try {
         recognition.start();
+        recognitionRunningRef.current = true;
       } catch {
         window.setTimeout(() => {
           if (!sessionActiveRef.current) return;
           try {
             recognition.start();
+            recognitionRunningRef.current = true;
           } catch {
-            /* ignore */
+            beginRecognitionRef.current();
           }
         }, 250);
       }
     };
     recognitionRef.current = recognition;
-    recognition.start();
+    try {
+      recognition.start();
+      recognitionRunningRef.current = true;
+    } catch {
+      recognitionRunningRef.current = false;
+    }
   }, [interruptSpeech, scheduleEndOfTurn, setUi, stopRecognition]);
+
+  useEffect(() => {
+    beginRecognitionRef.current = beginRecognition;
+  }, [beginRecognition]);
 
   const startMeter = useCallback(async () => {
     const stream = await navigator.mediaDevices.getUserMedia({
@@ -484,10 +593,14 @@ const VoicePoScreen: React.FC = () => {
       setLevel(pct);
 
       // Energy VAD for barge-in / speaking detection alongside SpeechRecognition.
+      const speakingNow =
+        uiStateRef.current === 'speaking' || uiStateRef.current === 'acknowledging';
+      const sinceSpeak = Date.now() - speakStartedAtRef.current;
       if (
         sessionActiveRef.current &&
-        uiStateRef.current === 'speaking' &&
+        speakingNow &&
         VOICE2_CONFIG.bargeInEnabled &&
+        sinceSpeak >= VOICE2_CONFIG.bargeInMuteMs &&
         pct >= VOICE2_CONFIG.bargeInLevelThreshold
       ) {
         interruptSpeech();
@@ -511,10 +624,10 @@ const VoicePoScreen: React.FC = () => {
       setSessionActive(true);
       await ensureSession();
       beginRecognition();
-      setUi('listening');
-      const greeting = "Hi, I'm SILA, your purchasing agent. What would you like to order?";
+      const greeting = "Hi! I'm here. How can I help you today?";
       spokenRef.current = greeting;
-      setUi('speaking');
+      setUi('acknowledging');
+      speakStartedAtRef.current = Date.now();
       const handle = speakNaturally(greeting, ttsMuted);
       speakHandleRef.current = handle;
       await handle.done;

@@ -166,11 +166,66 @@ class VoiceEngine:
                 llm = await self.llm.interpret(
                     transcript="confirm purchase order" if confirm else text,
                     session_state={"draft": session.draft, "context": session.context},
-                    allowed_intents=["ADD_PO_LINE", "GO_WITH_DEFAULT", "CONFIRM_PO", "CANCEL", "PO_UTTERANCE", "ASK_REPEAT"],
+                    allowed_intents=[
+                        "ADD_PO_LINE",
+                        "GO_WITH_DEFAULT",
+                        "CONFIRM_PO",
+                        "CANCEL",
+                        "PO_UTTERANCE",
+                        "ASK_REPEAT",
+                        "WAKE_ACK",
+                        "GREETING",
+                        "AVAILABILITY",
+                        "SOCIAL",
+                        "GRATITUDE",
+                        "FAREWELL",
+                    ],
                     language=session.language,
                 )
                 if confirm:
                     llm.intent = "CONFIRM_PO"
+
+                # Conversational intents: speak locally; do not invoke the PO agent.
+                if llm.intent in {
+                    "WAKE_ACK",
+                    "GREETING",
+                    "AVAILABILITY",
+                    "SOCIAL",
+                    "GRATITUDE",
+                    "FAREWELL",
+                }:
+                    spoken = llm.spoken_reply or "Hi! I'm here."
+                    session.spoken_reply = spoken
+                    session.turns.append(
+                        {
+                            "role": "user",
+                            "transcript": text if self.settings.transcript_retention_seconds else None,
+                            "intent": llm.intent,
+                        }
+                    )
+                    if llm.intent == "FAREWELL":
+                        try:
+                            session.transition(ConversationState.COMPLETED)
+                        except ValueError:
+                            session.state = ConversationState.COMPLETED
+                    else:
+                        try:
+                            session.transition(ConversationState.SPEAKING)
+                            session.transition(ConversationState.LISTENING)
+                        except ValueError:
+                            session.state = ConversationState.LISTENING
+                    tts = await self.tts.synthesize(spoken, session.language)
+                    return {
+                        "ok": True,
+                        "sessionId": session.id,
+                        "state": session.state.value,
+                        "intent": llm.intent,
+                        "spokenReply": spoken,
+                        "ttsProvider": tts.provider,
+                        "asrStatus": asr_status,
+                        "qualityNotes": quality_notes,
+                        "localDialogue": True,
+                    }
 
                 session.transition(ConversationState.RESOLVING)
                 ctx = {

@@ -58,6 +58,19 @@ assert.match(naturalTts, /unlockSpeechPlayback/);
 assert.match(naturalTts, /isConversationDonePhrase/);
 assert.match(naturalTts, /startKeepAlive|keepAlive/);
 
+assert.match(screen, /resolveDialogueIntent/);
+assert.match(screen, /isShortConversationalUtterance/);
+assert.match(screen, /acknowledging/);
+assert.match(screen, /beginRecognitionRef/);
+assert.match(overlay, /Hi! I'm here/);
+assert.match(overlay, /Say Hey SILA/);
+
+const dialogue = readFileSync(join(dir, 'voiceAgent/dialogueIntents.ts'), 'utf8');
+assert.match(dialogue, /WAKE_ACK/);
+assert.match(dialogue, /AVAILABILITY/);
+assert.match(dialogue, /resolveDialogueIntent/);
+assert.match(dialogue, /isShortConversationalUtterance/);
+
 const engineApi = readFileSync(join(dir, '../../../../remote-buyer/src/api/silaMe/silaVoiceEngineApi.ts'), 'utf8');
 assert.match(engineApi, /\/api\/v1\/buyer\/sila\/voice-engine/);
 

@@ -9,10 +9,14 @@ export const VOICE2_CONFIG = {
   incompleteSilenceMs: 1400,
   /** Minimum spoken duration before a turn can complete (ms). */
   minUtteranceMs: 450,
+  /** Shorter floor for wake / greeting phrases. */
+  minGreetingUtteranceMs: 180,
   /** Ignore tiny RMS blips. */
   speechLevelThreshold: 10,
   /** Strong speech for barge-in while SILA is speaking. */
   bargeInLevelThreshold: 22,
+  /** Ignore barge-in briefly after TTS starts (blocks self-echo). */
+  bargeInMuteMs: 700,
   /** Inactivity before session soft-pauses listening (ms). */
   inactivityTimeoutMs: 120_000,
   continuousConversation: true,
@@ -24,6 +28,7 @@ export const VOICE2_CONFIG = {
 export type Voice2UiState =
   | 'idle'
   | 'activating'
+  | 'acknowledging'
   | 'listening'
   | 'userSpeaking'
   | 'transcribing'
@@ -32,5 +37,6 @@ export type Voice2UiState =
   | 'awaitingConfirmation'
   | 'confirmTranscript'
   | 'reviewPo'
+  | 'closing'
   | 'done'
   | 'error';

@@ -42,6 +42,7 @@ def test_wake_word_transcript_only():
     wake = PhraseWakeWord("hey sila", 0.5)
     assert wake.detect(normalize_pcm16(b"\x00\x00")) is False
     assert wake.match_transcript("Hey SILA order rice") is True
+    assert wake.match_transcript("Hi SILA") is True
     assert wake.match_transcript("order rice") is False
 
 
@@ -62,6 +63,26 @@ async def test_rules_llm_intents():
         allowed_intents=["GO_WITH_DEFAULT"],
     )
     assert default.intent == "GO_WITH_DEFAULT"
+    hey = await llm.interpret(transcript="Hey SILA", session_state={}, allowed_intents=["WAKE_ACK"])
+    assert hey.intent == "WAKE_ACK"
+    assert "here" in (hey.spoken_reply or "").lower()
+    hi = await llm.interpret(transcript="Hi SILA", session_state={}, allowed_intents=["GREETING"])
+    assert hi.intent == "GREETING"
+    avail = await llm.interpret(
+        transcript="SILA, are you there?",
+        session_state={},
+        allowed_intents=["AVAILABILITY"],
+    )
+    assert avail.intent == "AVAILABILITY"
+    combined = await llm.interpret(
+        transcript="Hey SILA order ten bottles",
+        session_state={},
+        allowed_intents=["ADD_PO_LINE", "PO_UTTERANCE"],
+    )
+    assert combined.intent in {"ADD_PO_LINE", "PO_UTTERANCE"}
+    assert "ten bottles" in (combined.structured or {}).get("transcript", "").lower() or "order" in (
+        combined.structured or {}
+    ).get("transcript", "").lower()
 
 
 def test_material_matcher_ambiguity():
