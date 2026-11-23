@@ -58,7 +58,11 @@ assert.match(cloudNav, /PO Defaults & Account Assignment/);
 assert.match(cloudWorkspace, /SilaUserPoDefaults/);
 assert.match(cloudWorkspace, /silaUserPoDefaults/);
 assert.match(cloudDefaults, /PO Defaults & Account Assignment/);
-assert.match(cloudDefaults, /listPurchasingProfiles/);
+assert.match(cloudDefaults, /listPoFlexConfigs/);
+assert.match(cloudDefaults, /upsertPoFlexConfig/);
+assert.match(cloudDefaults, /isOpen=\{Boolean\(editor\)\}/);
+assert.match(cloudDefaults, /Add parameter/);
+assert.match(cloudDefaults, /Add condition/);
 
 assert.match(app, /VoicePoScreen/);
 assert.match(app, /purchasing\/voice-po/);
