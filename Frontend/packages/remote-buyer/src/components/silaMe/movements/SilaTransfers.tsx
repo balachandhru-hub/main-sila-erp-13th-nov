@@ -18,6 +18,8 @@ import "./SilaMovements.css";
 interface SilaTransfersProps {
   /** Shows the "To approve" tab and the approve / reject / dispatch actions. */
   canApprove: boolean;
+  /** Opens this transfer detail when Inventory Transactions deep-links an ITO row. */
+  initialTransferId?: string | null;
 }
 
 const TABS: { key: SilaTransferTab; label: string; approverOnly?: boolean }[] = [
@@ -39,7 +41,7 @@ const EMPTY_TEXT: Record<SilaTransferTab, string> = {
 };
 
 /** Internal transfer orders between the locations of one property. */
-const SilaTransfers: React.FC<SilaTransfersProps> = ({ canApprove }) => {
+const SilaTransfers: React.FC<SilaTransfersProps> = ({ canApprove, initialTransferId = null }) => {
   const [tab, setTab] = useState<SilaTransferTab>("mine");
   const [rows, setRows] = useState<SilaTransferListItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,7 +50,7 @@ const SilaTransfers: React.FC<SilaTransfersProps> = ({ canApprove }) => {
   const [myLocationIds, setMyLocationIds] = useState<string[]>([]);
   const [locationsError, setLocationsError] = useState<string | null>(null);
   const [form, setForm] = useState<"standard" | "quick" | null>(null);
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(initialTransferId);
   const [filters, setFilters] = useState<SilaTransferFilters>(EMPTY_FILTERS);
   const [page, setPage] = useState(1);
 
@@ -67,6 +69,10 @@ const SilaTransfers: React.FC<SilaTransfersProps> = ({ canApprove }) => {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (initialTransferId) setOpenId(initialTransferId);
+  }, [initialTransferId]);
 
   // Locations for the new-transfer forms.
   useEffect(() => {

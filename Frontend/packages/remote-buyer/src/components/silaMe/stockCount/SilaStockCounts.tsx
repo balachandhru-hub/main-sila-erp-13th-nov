@@ -71,6 +71,10 @@ const SilaStockCounts: React.FC<SilaStockCountsProps> = ({ canApprove, initialCo
   }, [load]);
 
   useEffect(() => {
+    if (initialCountId) setOpenedId(initialCountId);
+  }, [initialCountId]);
+
+  useEffect(() => {
     if (!creating) return;
     setLocationsError(null);
     getMyLocations()
