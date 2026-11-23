@@ -207,15 +207,20 @@ namespace Buyer.Application.Features.Commands.ReverseSilaGoodsReceipt
             DateTime postingDate = (input.PostingDate ?? DateTime.UtcNow).Date;
             DateTime documentDate = (input.DocumentDate ?? postingDate).Date;
 
+            // S/4 102 expects the ERP PO number (same as 101), not SILA PO000012.
+            string sapPurchaseOrder = !string.IsNullOrWhiteSpace(purchaseOrder.ErpPurchaseOrderId)
+                ? purchaseOrder.ErpPurchaseOrderId!.Trim()
+                : !string.IsNullOrWhiteSpace(receipt.PoNumber)
+                    ? receipt.PoNumber.Trim()
+                    : purchaseOrder.PoNumber?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(sapPurchaseOrder))
+            {
+                throw new BadRequestCustomException("GRN_REVERSAL_REQUIRED_FIELD_MISSING", "Purchase order number is missing on the GRN.");
+            }
+
             List<SilaGrnReversalSapLine> sapLines = new List<SilaGrnReversalSapLine>();
             foreach ((GoodsReceiptItem item, decimal qty) in selected)
             {
-                if (string.IsNullOrWhiteSpace(item.MaterialCode))
-                {
-                    throw new BadRequestCustomException("GRN_REVERSAL_REQUIRED_FIELD_MISSING",
-                        "Material is missing on GRN line " + item.Id.ToString("D") + ".");
-                }
-
                 if (string.IsNullOrWhiteSpace(item.Uom))
                 {
                     throw new BadRequestCustomException("GRN_REVERSAL_REQUIRED_FIELD_MISSING",
@@ -228,8 +233,13 @@ namespace Buyer.Application.Features.Commands.ReverseSilaGoodsReceipt
                         "PO item was not found for GRN line " + item.Id.ToString("D") + ".");
                 }
 
+                // Text / account-assigned GRN lines have no Material (same as 101 post).
+                string? materialCode = !string.IsNullOrWhiteSpace(item.MaterialCode)
+                    ? item.MaterialCode.Trim()
+                    : !string.IsNullOrWhiteSpace(poItem.MaterialCode) ? poItem.MaterialCode.Trim() : null;
+
                 string poItemNumber = SilaGrnSap.FormatPurchaseOrderItem(poItem.LineNumber);
-                SilaGrnPostedSapLine? posted = SilaGrnSap.FindPostedLine(postedLines, item.MaterialCode!, poItemNumber);
+                SilaGrnPostedSapLine? posted = SilaGrnSap.FindPostedLine(postedLines, materialCode ?? string.Empty, poItemNumber);
                 string plant = !string.IsNullOrWhiteSpace(posted?.Plant) ? posted!.Plant : defaultPlant!;
                 string? sloc = posted != null
                     ? posted.StorageLocation
@@ -237,20 +247,15 @@ namespace Buyer.Application.Features.Commands.ReverseSilaGoodsReceipt
                         ? poItem.StorageLocation!.Trim()
                         : location?.StorageLocationCode?.Trim();
 
-                if (string.IsNullOrWhiteSpace(receipt.PoNumber))
-                {
-                    throw new BadRequestCustomException("GRN_REVERSAL_REQUIRED_FIELD_MISSING", "Purchase order number is missing on the GRN.");
-                }
-
                 sapLines.Add(new SilaGrnReversalSapLine
                 {
-                    Material = item.MaterialCode!,
+                    Material = materialCode ?? string.Empty,
                     Plant = plant,
                     StorageLocation = sloc,
                     Quantity = qty,
                     EntryUnit = item.Uom!,
-                    PurchaseOrder = receipt.PoNumber.Trim(),
-                    PurchaseOrderItem = SilaGrnSap.FormatPurchaseOrderItem(poItem.LineNumber)
+                    PurchaseOrder = sapPurchaseOrder,
+                    PurchaseOrderItem = poItemNumber
                 });
             }
 
@@ -532,22 +537,36 @@ namespace Buyer.Application.Features.Commands.ReverseSilaGoodsReceipt
             HashSet<Guid> used = new HashSet<Guid>();
             foreach ((string material, string poItem, decimal qty) in parsed)
             {
-                GoodsReceiptItem? match = items.FirstOrDefault(item =>
-                    !used.Contains(item.Id)
-                    && string.Equals(item.MaterialCode?.Trim(), material, StringComparison.OrdinalIgnoreCase)
-                    && Math.Max(0, item.AcceptedQty - item.ReversedQty) + TOLERANCE >= qty);
-                if (match == null)
+                GoodsReceiptItem? match = null;
+                if (!string.IsNullOrWhiteSpace(material))
                 {
                     match = items.FirstOrDefault(item =>
                         !used.Contains(item.Id)
+                        && string.Equals(item.MaterialCode?.Trim(), material, StringComparison.OrdinalIgnoreCase)
+                        && Math.Max(0, item.AcceptedQty - item.ReversedQty) + TOLERANCE >= qty);
+                    match ??= items.FirstOrDefault(item =>
+                        !used.Contains(item.Id)
                         && string.Equals(item.MaterialCode?.Trim(), material, StringComparison.OrdinalIgnoreCase));
+                }
+                else
+                {
+                    // Text / account-assigned 101 lines omit Material — match unused blank-material lines.
+                    match = items.FirstOrDefault(item =>
+                        !used.Contains(item.Id)
+                        && string.IsNullOrWhiteSpace(item.MaterialCode)
+                        && Math.Max(0, item.AcceptedQty - item.ReversedQty) + TOLERANCE >= qty);
+                    match ??= items.FirstOrDefault(item =>
+                        !used.Contains(item.Id)
+                        && string.IsNullOrWhiteSpace(item.MaterialCode));
                 }
 
                 if (match == null)
                 {
                     throw new BadRequestCustomException(
                         "GRN_LINE_NOT_FOUND",
-                        "Could not match SAP reversal line material " + material + " / " + poItem + " for local finalization.");
+                        "Could not match SAP reversal line material "
+                            + (string.IsNullOrWhiteSpace(material) ? "(text)" : material)
+                            + " / " + poItem + " for local finalization.");
                 }
 
                 used.Add(match.Id);
