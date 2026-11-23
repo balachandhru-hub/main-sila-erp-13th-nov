@@ -77,8 +77,10 @@ export const mobilePathForInbox = (item: SilaInboxItem): string => {
   if (item.invoiceId) return `receive/invoices/${item.invoiceId}`;
   if (item.transferId) return "inventory/transfers?tab=to-approve";
   if (item.goodsReceiptId) return `receive/grns/${item.goodsReceiptId}`;
-  // Voice/text POs awaiting approval are decided on the Approvals tab (not receiving).
-  if (item.purchaseOrderId && !item.invoiceId && !item.creditMemoId) return "tasks?tab=approvals";
+  // Voice/text POs awaiting approval open the PO detail (Approve / Reject).
+  if (item.purchaseOrderId && !item.invoiceId && !item.creditMemoId) {
+    return `receive/pos/${item.purchaseOrderId}`;
+  }
   if (item.purchaseOrderId) return `receive/pos/${item.purchaseOrderId}`;
   return "tasks?tab=approvals";
 };

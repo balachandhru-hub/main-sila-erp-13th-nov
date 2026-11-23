@@ -108,12 +108,14 @@ export const CloudApprovals: React.FC = () => {
         <ul className="sm-list">
           {purchaseOrderApprovals.map((item) => (
             <li key={item.key} className="sm-card">
-              <div className="sm-row">
-                <strong className="sm-title">{item.title}</strong>
-                <StatusBadge status={item.status || 'PENDING_APPROVAL'} />
-              </div>
-              <span className="sm-meta">{item.detail}</span>
-              <span className="sm-meta">Approve to post Create PO to SAP.</span>
+              <button type="button" className="sm-list-btn" onClick={() => go(`receive/pos/${item.purchaseOrderId}`)}>
+                <div className="sm-row">
+                  <strong className="sm-title">{item.title}</strong>
+                  <StatusBadge status={item.status || 'PENDING_APPROVAL'} />
+                </div>
+                <span className="sm-meta">{item.detail}</span>
+                <span className="sm-meta">Open to review lines, then Approve to post Create PO to SAP.</span>
+              </button>
               <DecisionActions
                 busy={busyId === item.key}
                 onDecide={(approve, comment) =>

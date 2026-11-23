@@ -79,8 +79,8 @@ namespace Buyer.Application.Features.Commands.DecideSilaPurchaseOrder
 
             if (decision.Outcome == SilaApprovals.OUTCOME_REJECTED)
             {
+                // Mutate the tracked instance — do not Attach/Update a second copy.
                 order.Status = Common.PURCHASE_ORDER_REJECTED;
-                _repository.PurchaseOrder.Update(order);
                 await _repository.SaveAsync();
                 _logger.LogInfo($"Purchase order approval rejected. PurchaseOrderId: {order.Id}");
                 return PurchaseOrderErpProcessor.Describe(order, null, null);
@@ -94,7 +94,6 @@ namespace Buyer.Application.Features.Commands.DecideSilaPurchaseOrder
             }
 
             order.Status = Common.PURCHASE_ORDER_APPROVED;
-            _repository.PurchaseOrder.Update(order);
             await _repository.SaveAsync();
 
             _userContext.SetCurrentUserId(request.UserId);
@@ -104,18 +103,20 @@ namespace Buyer.Application.Features.Commands.DecideSilaPurchaseOrder
                 _supplierSalesOrderClient,
                 _userContext,
                 _logger);
+            // ProcessAsync reuses the same DbContext; pass Id and rely on the already-tracked entity.
             PurchaseOrderProcessResultDto result = await processor.ProcessAsync(order.Id, request.UserId, cancellationToken);
 
-            // After ERP success keep a clear local status for mobile.
-            PurchaseOrder? refreshed = await _repository.PurchaseOrder
-                .FindByCondition(x => x.Id == order.Id && x.IsActive)
-                .FirstOrDefaultAsync(cancellationToken);
-            if (refreshed != null && !string.IsNullOrWhiteSpace(refreshed.ErpPurchaseOrderId))
+            if (!string.IsNullOrWhiteSpace(result.ErpPurchaseOrderId))
             {
-                refreshed.Status = Common.PURCHASE_ORDER_CREATED;
-                _repository.PurchaseOrder.Update(refreshed);
+                // Keep mutating the same tracked instance (no second Attach/Update).
+                order.Status = Common.PURCHASE_ORDER_CREATED;
+                if (string.IsNullOrWhiteSpace(order.ErpPurchaseOrderId))
+                {
+                    order.ErpPurchaseOrderId = result.ErpPurchaseOrderId;
+                }
+
                 await _repository.SaveAsync();
-                result.Status = refreshed.Status;
+                result.Status = order.Status;
             }
 
             _logger.LogInfo(
