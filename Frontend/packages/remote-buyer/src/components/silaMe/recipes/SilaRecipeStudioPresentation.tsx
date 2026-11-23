@@ -71,6 +71,7 @@ import {
   saveTargetFoodCostPercent,
   suggestClassification,
   suggestSellingPrice,
+  type ClassificationSuggestion,
 } from "./recipeStudioSuggestions";
 import SilaRecipeCanvas from "./SilaRecipeCanvas";
 import SilaRecipeMaterialLibrary from "./SilaRecipeMaterialLibrary";
@@ -123,6 +124,10 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
   const [editorMode, setEditorMode] = useState<"quick" | "advanced">("advanced");
   const [targetFoodCost, setTargetFoodCost] = useState(() => String(loadTargetFoodCostPercent()));
   const [classConfirmed, setClassConfirmed] = useState(false);
+  /** Once the user edits class/family/category/template, stop overwriting from ingredients. */
+  const [classificationLocked, setClassificationLocked] = useState(false);
+  const [catalogExpanded, setCatalogExpanded] = useState(false);
+  const autoClassKeyRef = useRef("");
   const [menuItem, setMenuItem] = useState("");
   const [posCode, setPosCode] = useState("");
   const [posItem, setPosItem] = useState("");
@@ -210,6 +215,8 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
     setPosItem(form.posItem);
     setOutletNote(form.outletNote);
     setClassConfirmed(form.classConfirmed);
+    setClassificationLocked(Boolean(form.classConfirmed || form.familyId || form.categoryId));
+    autoClassKeyRef.current = "";
     setLines(form.lines);
     setOutletPrices(form.outletPrices);
     setOutletPos(form.outletPos);
@@ -415,8 +422,9 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
     });
   };
 
-  const applyTemplate = (template: RecipeTemplate) => {
+  const applyTemplate = (template: RecipeTemplate, options?: { lock?: boolean }) => {
     markDirty();
+    if (options?.lock !== false) setClassificationLocked(true);
     setProductClass(template.productClass);
     setRecipeFormat(template.recipeFormat);
     setItemMode(template.itemMode);
@@ -431,6 +439,31 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
         && category.name.toLowerCase() === template.subcategory.toLowerCase(),
     );
     if (match) setCategoryId(match.id);
+  };
+
+  const lockClassification = () => setClassificationLocked(true);
+
+  const applyIngredientDefaults = (suggestion: ClassificationSuggestion) => {
+    markDirty();
+    if (suggestion.familyId) setFamilyId(suggestion.familyId);
+    if (suggestion.categoryId) setCategoryId(suggestion.categoryId);
+    if (suggestion.productClass) {
+      setProductClass(suggestion.productClass);
+      if (suggestion.itemMode) setItemMode(suggestion.itemMode);
+      else setItemMode(defaultItemModeForClass(suggestion.productClass));
+    }
+    if (suggestion.recipeFormat) setRecipeFormat(suggestion.recipeFormat);
+    if (suggestion.subcategory) setSubcategory(suggestion.subcategory);
+    if (suggestion.cuisine) setCuisine(suggestion.cuisine);
+    if (suggestion.mealPeriod) setMealPeriod(suggestion.mealPeriod);
+    if (suggestion.templateId) {
+      const template = RECIPE_TEMPLATES.find((item) => item.id === suggestion.templateId);
+      if (template) {
+        setYieldQty(template.servingQty);
+        setServingUom(template.servingUom);
+      }
+    }
+    setClassConfirmed(true);
   };
 
   const buildRequest = () => {
@@ -782,13 +815,33 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
 
   const applyClassificationSuggestion = () => {
     if (!canEdit || !classification) return;
-    markDirty();
-    setFamilyId(classification.familyId || familyId);
-    setCategoryId(classification.categoryId || categoryId);
-    if (classification.cuisine) setCuisine(classification.cuisine);
-    if (classification.mealPeriod) setMealPeriod(classification.mealPeriod);
-    setClassConfirmed(true);
+    applyIngredientDefaults(classification);
+    setClassificationLocked(true);
   };
+
+  // Ingredient-first: soft-fill class / family / category / template from added ingredients until the user edits them.
+  useEffect(() => {
+    if (!canEdit || classificationLocked || !classification || lines.length === 0) return;
+    const key = [
+      classification.templateId ?? "",
+      classification.familyId,
+      classification.categoryId,
+      classification.productClass ?? "",
+      lines.map((line) => line.material?.id ?? "").join(","),
+    ].join("|");
+    if (key === autoClassKeyRef.current) return;
+    autoClassKeyRef.current = key;
+    applyIngredientDefaults(classification);
+  }, [canEdit, classificationLocked, classification, lines]);
+
+  useEffect(() => {
+    if (!catalogExpanded) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setCatalogExpanded(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [catalogExpanded]);
 
   const costLabel = (value: number | null | undefined): string =>
     value == null ? "COST PENDING" : formatCost(value, currency);
@@ -885,12 +938,19 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
           <div>
             <h2 className="rstudio-panel__title">My Recipe</h2>
             <p className="rstudio-panel__hint">
-              Ingredient-first canvas. Add from the catalog, edit quantity/UOM, and preview draft costs locally.
+              Start with ingredients from the Material Catalog. Category, class, family and template autofill from those ingredients — change any field if needed.
             </p>
           </div>
 
           <div className="rstudio-section rstudio-section--sky">
             <p className="rstudio-section__label">Recipe header</p>
+            {canEdit && classification && !classificationLocked && lines.length > 0 && (
+              <p className="rstudio-panel__hint" data-testid="recipe-ingredient-autofill-note">
+                Autofilled from ingredients
+                {classification.templateLabel ? `: ${classification.templateLabel}` : ""}
+                {" — "}{classification.reason}. Edit any field to keep your choice.
+              </p>
+            )}
             <div className="rstudio-mode-toggle" role="group" aria-label="Creation mode">
               <button
                 type="button"
@@ -918,7 +978,7 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
                       key={template.id}
                       type="button"
                       className="sila-btn sila-btn--secondary sila-btn--sm"
-                      onClick={() => applyTemplate(template)}
+                      onClick={() => applyTemplate(template, { lock: true })}
                     >
                       {template.label}
                     </button>
@@ -962,6 +1022,7 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
                     disabled={!canEdit}
                     onChange={(e) => {
                       const next = e.target.value as SilaProductClass;
+                      lockClassification();
                       setHeader(setProductClass, next);
                       const mode = defaultItemModeForClass(next);
                       setItemMode(mode);
@@ -983,6 +1044,7 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
                     onChange={(e) => {
                       const next = e.target.value as SilaRecipeFormat;
                       const found = RECIPE_FORMATS.find((item) => item.id === next);
+                      lockClassification();
                       setHeader(setRecipeFormat, next);
                       if (found) setItemMode(found.itemMode);
                       setClassConfirmed(true);
@@ -1001,6 +1063,7 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
                     value={familyId}
                     disabled={!canEdit}
                     onChange={(e) => {
+                      lockClassification();
                       setHeader(setFamilyId, e.target.value);
                       setClassConfirmed(true);
                     }}
@@ -1020,6 +1083,7 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
                     disabled={!canEdit}
                     onChange={(e) => {
                       const id = e.target.value;
+                      lockClassification();
                       setHeader(setCategoryId, id);
                       const cat = categories.find((item) => item.id === id);
                       if (cat?.productClass) {
@@ -1479,12 +1543,29 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
         </section>
 
         {/* RIGHT — Material Catalog */}
-        <aside className="rstudio-panel rstudio-panel--catalog" aria-label="Material Catalog">
-          <div>
-            <h2 className="rstudio-panel__title">Material Catalog</h2>
-            <p className="rstudio-panel__hint">
-              Live ItemBuyerMaster search. Drag or tap Add. Stock reflects the selected outlet when available.
-            </p>
+        <aside
+          className={`rstudio-panel rstudio-panel--catalog${catalogExpanded ? " is-expanded" : ""}`}
+          aria-label="Material Catalog"
+          data-testid="recipe-material-catalog"
+        >
+          <div className="rstudio-catalog-head">
+            <div>
+              <h2 className="rstudio-panel__title">Material Catalog</h2>
+              <p className="rstudio-panel__hint">
+                {catalogExpanded
+                  ? "Fullscreen pick — Add / Add selected pushes ingredients into the current recipe."
+                  : "First step: pick ingredients. Expand for fullscreen browsing. Stock reflects the selected outlet when available."}
+              </p>
+            </div>
+            <button
+              type="button"
+              className="sila-btn sila-btn--secondary sila-btn--sm"
+              data-testid="recipe-catalog-expand"
+              aria-expanded={catalogExpanded}
+              onClick={() => setCatalogExpanded((open) => !open)}
+            >
+              {catalogExpanded ? "Exit fullscreen" : "Expand"}
+            </button>
           </div>
           <div className="rstudio-section rstudio-section--mint rstudio-section--catalog-live">
             <SilaRecipeMaterialLibrary
