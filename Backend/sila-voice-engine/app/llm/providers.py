@@ -11,7 +11,21 @@ from app.settings import VoiceSettings
 _CANCEL = re.compile(r"\b(cancel|stop|never ?mind|abort)\b", re.I)
 _CONFIRM = re.compile(r"\b(confirm purchase order|confirm the (po|order)|create the (po|purchase order))\b", re.I)
 _DEFAULT = re.compile(r"\b(go with default|use (my )?default|default order|usual order)\b", re.I)
-_WAKE = re.compile(r"^\s*hey[, ]?sila[,!]?\s*", re.I)
+_WAKE_PREFIX = re.compile(
+    r"^\s*(?:hey|hi|hello|okay|ok|good\s+(?:morning|afternoon|evening))\s*,?\s*sila[,!]?\s*",
+    re.I,
+)
+_PURE_WAKE = re.compile(
+    r"^\s*(?:hey|hi|hello|okay|ok|good\s+(?:morning|afternoon|evening))\s*,?\s*sila[,!]?\s*$",
+    re.I,
+)
+_AVAIL = re.compile(r"^\s*(?:sila[,!]?\s+)?(?:are you there|can you hear me|you there)\??\s*$", re.I)
+_SOCIAL = re.compile(r"^\s*(?:how are you|how'?s it going|what'?s up)\b", re.I)
+_GRATITUDE = re.compile(r"^\s*(?:thanks|thank you|thx)\b", re.I)
+_FAREWELL = re.compile(
+    r"^\s*(?:no[, ]?(?:thank you|thanks)?|that'?s all|nothing else|goodbye|bye(?:\s+sila)?|stop(?:\s+sila)?|end conversation)\b",
+    re.I,
+)
 
 
 class RulesLlm:
@@ -25,9 +39,47 @@ class RulesLlm:
         allowed_intents: list[str],
         language: str | None = None,
     ) -> LlmTurnResult:
-        text = _WAKE.sub("", transcript or "").strip()
-        lower = text.lower()
+        raw = (transcript or "").strip()
         agent = "PURCHASE_ORDER_AGENT" if "PURCHASE_ORDER_AGENT" in allowed_intents else None
+
+        if _AVAIL.search(raw):
+            return LlmTurnResult(
+                intent="AVAILABILITY",
+                spoken_reply="Yes, I'm here. Go ahead.",
+                agent_id=None,
+            )
+        if _PURE_WAKE.search(raw):
+            hey = bool(re.match(r"^\s*hey\b", raw, re.I))
+            return LlmTurnResult(
+                intent="WAKE_ACK" if hey else "GREETING",
+                spoken_reply=(
+                    "Hi! I'm here. How can I help you today?"
+                    if hey
+                    else "Hello! What can I help you with?"
+                ),
+                agent_id=None,
+            )
+        if _SOCIAL.search(raw):
+            return LlmTurnResult(
+                intent="SOCIAL",
+                spoken_reply="I'm doing well, thank you. How can I help with purchasing?",
+                agent_id=None,
+            )
+        if _FAREWELL.search(raw):
+            return LlmTurnResult(
+                intent="FAREWELL",
+                spoken_reply="You're welcome. Have a great day!",
+                agent_id=None,
+            )
+        if _GRATITUDE.search(raw):
+            return LlmTurnResult(
+                intent="GRATITUDE",
+                spoken_reply="You're welcome.",
+                agent_id=None,
+            )
+
+        text = _WAKE_PREFIX.sub("", raw).strip()
+        lower = text.lower()
 
         if not text:
             return LlmTurnResult(

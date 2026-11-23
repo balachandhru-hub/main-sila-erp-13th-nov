@@ -25,6 +25,8 @@ const statusFor = (state: Voice2UiState, health: SilaVoiceEngineHealth | null, m
   switch (state) {
     case 'activating':
       return 'Activating…';
+    case 'acknowledging':
+      return "Hi! I'm here.";
     case 'listening':
       return "I'm listening…";
     case 'userSpeaking':
@@ -32,7 +34,7 @@ const statusFor = (state: Voice2UiState, health: SilaVoiceEngineHealth | null, m
     case 'transcribing':
       return 'Understanding…';
     case 'processing':
-      return 'Understanding…';
+      return 'Let me check that for you…';
     case 'speaking':
       return muted ? 'Speaking (muted)' : 'Speaking…';
     case 'awaitingConfirmation':
@@ -41,12 +43,14 @@ const statusFor = (state: Voice2UiState, health: SilaVoiceEngineHealth | null, m
       return 'Confirm the transcript';
     case 'reviewPo':
       return 'Review header & items, then Submit';
+    case 'closing':
+      return 'Have a great day!';
     case 'done':
       return 'Purchase order submitted';
     case 'error':
       return 'Something went wrong — tap Voice to retry';
     default:
-      return health ? 'Tap Voice to start' : 'Voice standby — tap to activate';
+      return health ? 'Say Hey SILA' : 'Say Hey SILA';
   }
 };
 

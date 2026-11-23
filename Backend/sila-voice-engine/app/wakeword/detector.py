@@ -6,12 +6,25 @@ from app.interfaces.protocols import AudioFrame
 from app.settings import VoiceSettings
 
 
+_WAKE_PHRASES = (
+    "hey sila",
+    "hi sila",
+    "hello sila",
+    "okay sila",
+    "ok sila",
+    "good morning sila",
+    "good evening sila",
+    "good afternoon sila",
+)
+
+
 class PhraseWakeWord:
     """Lightweight transcript-side wake check for push-to-talk / ASR text (not ambient streaming)."""
 
     def __init__(self, phrase: str = "hey sila", sensitivity: float = 0.5) -> None:
         self.phrase = (phrase or "hey sila").strip().lower()
         self.sensitivity = sensitivity
+        self.phrases = tuple(dict.fromkeys((self.phrase, *_WAKE_PHRASES)))
 
     def detect(self, frame: AudioFrame) -> bool:
         # Server does not continuously ingest ambient audio for wake-word.
@@ -20,11 +33,16 @@ class PhraseWakeWord:
 
     def match_transcript(self, transcript: str) -> bool:
         text = (transcript or "").strip().lower()
-        if not text or not self.phrase:
+        if not text:
             return False
-        if self.phrase in text:
-            return True
-        # Loose token overlap for mild ASR drift.
+        for phrase in self.phrases:
+            if not phrase:
+                continue
+            if text == phrase or text.startswith(phrase + " ") or text.startswith(phrase + ","):
+                return True
+            if phrase in text and len(text.split()) <= len(phrase.split()) + 1:
+                return True
+        # Loose token overlap for mild ASR drift on the primary phrase.
         want = set(self.phrase.split())
         have = set(text.replace(",", " ").split())
         if not want:

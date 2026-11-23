@@ -84,18 +84,20 @@ const startKeepAlive = () => {
 export const unlockSpeechPlayback = (): void => {
   if (typeof window === 'undefined' || !window.speechSynthesis) return;
   try {
-    window.speechSynthesis.cancel();
     window.speechSynthesis.resume();
-    const unlock = new SpeechSynthesisUtterance(' ');
-    unlock.volume = 0.01;
+    // Do not cancel immediately — Chromium needs the gesture-tied utterance to start.
+    const unlock = new SpeechSynthesisUtterance('Hi');
+    unlock.volume = 0.001;
     unlock.rate = 2;
+    unlock.pitch = 1;
     window.speechSynthesis.speak(unlock);
-    window.speechSynthesis.cancel();
     unlocked = true;
   } catch {
     /* ignore */
   }
 };
+
+export const isSpeechUnlocked = (): boolean => unlocked;
 
 /** Speak with a warmer, less robotic cadence. Resolves when playback ends or is cancelled. */
 export const speakNaturally = (text: string, muted = false): SpeakHandle => {
