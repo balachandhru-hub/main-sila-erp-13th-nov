@@ -91,7 +91,8 @@ const VoicePoScreen: React.FC = () => {
   const [sessionActive, setSessionActive] = useState(false);
   const textPrimary = chromeTextPrimary();
   const [showType, setShowType] = useState(textPrimary);
-  const [ttsMuted, setTtsMuted] = useState(textPrimary);
+  // Chrome: always muted — never speak (speechSynthesis or server WAV).
+  const [ttsMuted, setTtsMuted] = useState(true);
   const [busy, setBusy] = useState(false);
   const [bootError, setBootError] = useState<string | null>(null);
   const [notice, setNotice] = useState<NoticeMessage | null>(null);
@@ -176,6 +177,24 @@ const VoicePoScreen: React.FC = () => {
       window.speechSynthesis.cancel();
     }
   }, []);
+
+  /** Chrome text-first: never speak. Safari/voice path honors mute toggle. */
+  const speakSafe = useCallback(
+    (text: string): SpeakHandle => {
+      if (textPrimary) {
+        interruptSpeech();
+        return { done: Promise.resolve(), cancel: () => undefined };
+      }
+      return speakNaturally(text, ttsMuted);
+    },
+    [interruptSpeech, textPrimary, ttsMuted],
+  );
+
+  useEffect(() => {
+    if (!textPrimary) return;
+    setTtsMuted(true);
+    interruptSpeech();
+  }, [interruptSpeech, textPrimary]);
 
   useEffect(() => {
     transcriptRef.current = transcript;
@@ -326,15 +345,16 @@ const VoicePoScreen: React.FC = () => {
         tone: 'success',
         text: 'Confirm the transcript, then review header and items before Submit.',
       });
-      const handle = speakNaturally(
-        'Okay. Please confirm the transcript on screen, then review the purchase order and press Submit.',
-        ttsMuted,
-      );
-      speakHandleRef.current = handle;
-      await handle.done;
-      speakHandleRef.current = null;
+      if (!textPrimary) {
+        const handle = speakSafe(
+          'Okay. Please confirm the transcript on screen, then review the purchase order and press Submit.',
+        );
+        speakHandleRef.current = handle;
+        await handle.done;
+        speakHandleRef.current = null;
+      }
     },
-    [clearSilenceTimer, interruptSpeech, setUi, stopMeter, stopRecognition, ttsMuted],
+    [clearSilenceTimer, interruptSpeech, setUi, speakSafe, stopMeter, stopRecognition, textPrimary],
   );
 
   const speakAndResume = useCallback(
@@ -349,7 +369,7 @@ const VoicePoScreen: React.FC = () => {
       stopRecognition();
       setUi(nextUi === 'closing' ? 'closing' : 'acknowledging');
       speakStartedAtRef.current = Date.now();
-      const handle = speakNaturally(spoken, ttsMuted);
+      const handle = speakSafe(spoken);
       speakHandleRef.current = handle;
       await handle.done;
       speakHandleRef.current = null;
@@ -366,7 +386,7 @@ const VoicePoScreen: React.FC = () => {
       if (!sessionActiveRef.current) return;
       resumeListening();
     },
-    [clearSilenceTimer, resumeListening, setUi, stopMeter, stopRecognition, ttsMuted],
+    [clearSilenceTimer, resumeListening, setUi, speakSafe, stopMeter, stopRecognition],
   );
 
   const submitTurn = useCallback(
@@ -425,7 +445,7 @@ const VoicePoScreen: React.FC = () => {
           // Combined wake + command: acknowledge, then continue into PO agent.
           setUi('acknowledging');
           speakStartedAtRef.current = Date.now();
-          const ack = speakNaturally(dialogue.spokenReply, ttsMuted);
+          const ack = speakSafe(dialogue.spokenReply);
           speakHandleRef.current = ack;
           await ack.done;
           if (turnId !== turnIdRef.current || !sessionActiveRef.current) return;
@@ -485,7 +505,7 @@ const VoicePoScreen: React.FC = () => {
         if (reply) {
           setUi('speaking');
           speakStartedAtRef.current = Date.now();
-          const handle = speakNaturally(reply, ttsMuted);
+          const handle = speakSafe(reply);
           speakHandleRef.current = handle;
           await handle.done;
           if (turnId !== turnIdRef.current || !sessionActiveRef.current) return;
@@ -517,9 +537,9 @@ const VoicePoScreen: React.FC = () => {
       session?.draft?.lines?.length,
       setUi,
       speakAndResume,
+      speakSafe,
       stopRecognition,
       textPrimary,
-      ttsMuted,
     ],
   );
 
@@ -785,7 +805,7 @@ const VoicePoScreen: React.FC = () => {
       setAgentReply(greeting);
       setUi('acknowledging');
       speakStartedAtRef.current = Date.now();
-      const handle = speakNaturally(greeting, ttsMuted);
+      const handle = speakSafe(greeting);
       speakHandleRef.current = handle;
       await handle.done;
       speakHandleRef.current = null;
@@ -806,11 +826,11 @@ const VoicePoScreen: React.FC = () => {
     interruptSpeech,
     resumeListening,
     setUi,
+    speakSafe,
     startMeter,
     stopMeter,
     stopRecognition,
     textPrimary,
-    ttsMuted,
   ]);
 
   const endSession = useCallback(async () => {
@@ -852,18 +872,38 @@ const VoicePoScreen: React.FC = () => {
       tone: 'success',
       text: 'Review header and item values. Submit creates the draft PO using your defaults.',
     });
-    const handle = speakNaturally(
-      'Here is your purchase order summary. Review the header and items, then press Submit.',
-      ttsMuted,
-    );
-    speakHandleRef.current = handle;
-    void handle.done.then(() => {
-      speakHandleRef.current = null;
-    });
+    if (!textPrimary) {
+      const handle = speakSafe(
+        'Here is your purchase order summary. Review the header and items, then press Submit.',
+      );
+      speakHandleRef.current = handle;
+      void handle.done.then(() => {
+        speakHandleRef.current = null;
+      });
+    }
   };
 
   const submitPo = async () => {
     if (!session) return;
+    const openAsks = (session.clarifications ?? []).filter((c) =>
+      ['UNIT_PRICE', 'UOM', 'QUANTITY', 'ACCOUNT_ASSIGNMENT', 'MATERIAL_GROUP'].includes(
+        (c.code || '').toUpperCase(),
+      ),
+    );
+    const unpriced = (session.draft?.lines ?? []).some((line) => !(Number(line.unitPrice) > 0));
+    const missingUom = (session.draft?.lines ?? []).some((line) => !(line.unitOfMeasure || '').trim());
+    if (openAsks.length > 0 || unpriced || missingUom) {
+      const ask =
+        openAsks[0]?.message ||
+        (missingUom
+          ? 'Unit of measure is required before submit.'
+          : 'Unit price is required before submit. Reply with the amount, or say use one AED.');
+      setNotice({ tone: 'warning', text: ask });
+      setAgentReply(ask);
+      setShowType(true);
+      setUi('listening');
+      return;
+    }
     setBusy(true);
     setNotice(null);
     interruptSpeech();
@@ -882,20 +922,25 @@ const VoicePoScreen: React.FC = () => {
       const reply =
         next.spokenReply ||
         `Done. Purchase order submitted for approval.${po} It will post to SAP once approved.`;
-      setUi('speaking');
-      const handle = speakNaturally(reply, ttsMuted);
-      speakHandleRef.current = handle;
-      await handle.done;
-      speakHandleRef.current = null;
+      setAgentReply(reply);
+      if (!textPrimary) {
+        setUi('speaking');
+        const handle = speakSafe(reply);
+        speakHandleRef.current = handle;
+        await handle.done;
+        speakHandleRef.current = null;
+      }
       sessionActiveRef.current = false;
       setSessionActive(false);
       stopRecognition();
       stopMeter();
       setUi('done');
     } catch (err: unknown) {
-      setNotice({ tone: 'error', text: errorText(err) });
-      setUi('error');
-      setUi('reviewPo');
+      const msg = errorText(err);
+      setNotice({ tone: 'error', text: msg });
+      setAgentReply(msg);
+      setShowType(true);
+      setUi('listening');
     } finally {
       setBusy(false);
     }

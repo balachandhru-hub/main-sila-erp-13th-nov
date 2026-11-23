@@ -293,6 +293,10 @@ export const speakNaturally = (text: string, muted = false): SpeakHandle => {
     };
 
     if (!text || muted || typeof window === 'undefined') {
+      // Hard mute: cancel any leftover browser/server speech immediately.
+      if (typeof window !== 'undefined' && window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
       finish();
       return;
     }

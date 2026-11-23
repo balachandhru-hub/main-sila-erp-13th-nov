@@ -50,8 +50,9 @@ namespace Buyer.Application.Features.Shared
             @"^(?<qty>\d+(?:\.\d+)?)\s*(?<uom>kg|kgs|g|grams?|l|liters?|litres?|pcs?|pieces?|boxes?|box|packs?|pack|units?|unit|ea|each)?\s+(?:of\s+)?(?<material>.+)$",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
+        // Require an explicit price cue (currency, "at/@/price", or "per"/"/") so quantity is never treated as price.
         private static readonly Regex PricePattern = new(
-            @"(?:(?:at|@|for|price|priced)?\s*)?(?<price>\d+(?:\.\d+)?)\s*(?<currency>aed|usd|eur|gbp|sar)?\s*(?:per|/)\s*(?<priceuom>kg|kgs?|g|l|ea|each|pc|pcs|unit)?",
+            @"(?:(?:\bat\b|@|\bfor\b|\bprice(?:d| is)?\b)\s*)?(?<price>\d+(?:\.\d+)?)\s*(?<currency>aed|usd|eur|gbp|sar)(?:\s*(?:per|/)\s*(?<priceuom>kg|kgs?|g|l|ea|each|pc|pcs|unit)?)?|(?:(?:\bat\b|@|\bprice(?:d| is)?\b)\s*)(?<price2>\d+(?:\.\d+)?)(?:\s*(?:per|/)\s*(?<priceuom2>kg|kgs?|g|l|ea|each|pc|pcs|unit)?)?|(?<price3>\d+(?:\.\d+)?)\s*(?:per|/)\s*(?<priceuom3>kg|kgs?|g|l|ea|each|pc|pcs|unit)",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         private static readonly HashSet<string> WeakAffirmations = new(StringComparer.OrdinalIgnoreCase)
@@ -306,8 +307,8 @@ namespace Buyer.Application.Features.Shared
         }
 
         /// <param name="forConfirm">
-        /// When true, missing unit price is filled by <see cref="ApplyDefaultUnitPrices"/> before validation
-        /// (1 AED default). During conversation turns, missing price/UOM still ask the user.
+        /// Confirm still requires unit price (and UOM). Price is never invented here —
+        /// the user must provide it or say "use one AED" first.
         /// </param>
         public static SilaVoicePoDraftValidation ValidateDraft(SilaVoicePoDraftDto? draft, bool forConfirm = false)
         {
@@ -317,11 +318,6 @@ namespace Buyer.Application.Features.Shared
                 validation.Status = VALIDATION_INVALID;
                 validation.Errors.Add("The draft has no lines.");
                 return validation;
-            }
-
-            if (forConfirm)
-            {
-                ApplyDefaultUnitPrices(draft);
             }
 
             for (int i = 0; i < draft.Lines.Count; i++)
@@ -376,13 +372,16 @@ namespace Buyer.Application.Features.Shared
                     });
                 }
 
-                if (!forConfirm && (line.UnitPrice == null || line.UnitPrice <= 0))
+                // Always require a positive unit price before create — never invent it.
+                if (line.UnitPrice == null || line.UnitPrice <= 0)
                 {
                     validation.Errors.Add($"{where}: unit price is required.");
                     validation.Clarifications.Add(new SilaVoicePoClarificationDto
                     {
                         Code = "UNIT_PRICE",
-                        Message = $"{where}: what is the unit price in {(draft.Currency ?? "AED")}? Say the amount, or say 'use one {draft.Currency ?? "AED"}' to default to 1.",
+                        Message = forConfirm
+                            ? $"{where}: unit price is required before submit. Reply with the amount in {(draft.Currency ?? "AED")}, or say 'use one {draft.Currency ?? "AED"}' to default to 1."
+                            : $"{where}: what is the unit price in {(draft.Currency ?? "AED")}? Reply with the amount, or say 'use one {draft.Currency ?? "AED"}' to default to 1.",
                         Field = "UnitPrice"
                     });
                 }
@@ -724,11 +723,9 @@ namespace Buyer.Application.Features.Shared
 
         public static string BuildSpokenReply(VoicePoIntent intent, SilaVoicePoDraftDto draft, SilaVoicePoDraftValidation validation, string? extra = null)
         {
-            // Prefer asking for missing mandatory fields (price / UOM / headers) over a generic "added" reply.
-            string? ask = PreferMandatoryAsk(validation);
-            if (!string.IsNullOrWhiteSpace(ask)
-                && validation.Status != VALIDATION_OK
-                && intent is VoicePoIntent.AddLine or VoicePoIntent.GoWithDefault or VoicePoIntent.SetUnitPrice or VoicePoIntent.None or VoicePoIntent.Unknown)
+            // Missing UOM / price / other mandatory fields always win over "added" success copy.
+            string? ask = PreferMandatoryAsk(validation) ?? PreferMandatoryAskFromDraft(draft);
+            if (!string.IsNullOrWhiteSpace(ask))
             {
                 return ask;
             }
@@ -738,36 +735,27 @@ namespace Buyer.Application.Features.Shared
                 return extra.Trim();
             }
 
-            if (!string.IsNullOrWhiteSpace(extra) && string.IsNullOrWhiteSpace(ask))
-            {
-                return extra.Trim();
-            }
-
             return intent switch
             {
                 VoicePoIntent.AddLine when validation.Status == VALIDATION_OK =>
                     $"Added. Draft has {draft.Lines.Count} line{(draft.Lines.Count == 1 ? string.Empty : "s")}. Say 'confirm purchase order' when ready.",
                 VoicePoIntent.GoWithDefault when validation.Status == VALIDATION_OK => "Applied your purchasing defaults.",
-                VoicePoIntent.GoWithDefault => ask ?? "Applied your purchasing defaults. Some fields still need a value.",
+                VoicePoIntent.GoWithDefault => "Applied your purchasing defaults. Some fields still need a value.",
                 VoicePoIntent.SetUnitPrice when validation.Status == VALIDATION_OK =>
                     $"Got it. {SummarizeDraft(draft)}",
-                VoicePoIntent.SetUnitPrice => ask
-                    ?? validation.Clarifications.FirstOrDefault()?.Message
-                    ?? "Unit price updated.",
+                VoicePoIntent.SetUnitPrice => "Unit price updated.",
                 VoicePoIntent.DoubleQuantity => "Doubled the quantities on the draft.",
                 VoicePoIntent.RemoveLine => draft.Lines.Count == 0 ? "Removed the line. The draft is empty." : "Removed the line.",
                 VoicePoIntent.Review => SummarizeDraft(draft),
                 VoicePoIntent.Confirm => "Confirmation received.",
                 VoicePoIntent.Cancel => "Session cancelled.",
-                _ => ask
-                    ?? validation.Clarifications.FirstOrDefault()?.Message
-                    ?? validation.Errors.FirstOrDefault()
+                _ => validation.Errors.FirstOrDefault()
                     ?? "How can I help with this purchase order?"
             };
         }
 
         /// <summary>Surface UOM / unit price / account assignment asks before softer header prompts.</summary>
-        private static string? PreferMandatoryAsk(SilaVoicePoDraftValidation validation)
+        public static string? PreferMandatoryAsk(SilaVoicePoDraftValidation validation)
         {
             if (validation.Clarifications.Count == 0)
             {
@@ -786,6 +774,27 @@ namespace Buyer.Application.Features.Shared
             }
 
             return validation.Clarifications.FirstOrDefault()?.Message;
+        }
+
+        /// <summary>Hard fallback when validation status was wrongly OK but price/UOM are still blank.</summary>
+        private static string? PreferMandatoryAskFromDraft(SilaVoicePoDraftDto draft)
+        {
+            for (int i = 0; i < draft.Lines.Count; i++)
+            {
+                SilaVoicePoDraftLineDto line = draft.Lines[i];
+                string where = $"Line {(line.LineNumber > 0 ? line.LineNumber : i + 1)}";
+                if (string.IsNullOrWhiteSpace(line.UnitOfMeasure))
+                {
+                    return $"{where}: what unit of measure should I use (for example KG, EA, L)?";
+                }
+
+                if (line.UnitPrice == null || line.UnitPrice <= 0)
+                {
+                    return $"{where}: what is the unit price in {(draft.Currency ?? "AED")}? Reply with the amount, or say 'use one {draft.Currency ?? "AED"}' to default to 1.";
+                }
+            }
+
+            return null;
         }
 
         private static bool TryParseUnitPriceAnswer(string normalized, string original, out decimal? unitPrice)
@@ -830,7 +839,17 @@ namespace Buyer.Application.Features.Shared
             }
 
             IEnumerable<string> parts = draft.Lines.Select(l =>
-                $"{l.Quantity:0.####} {l.UnitOfMeasure ?? ""} {l.Description ?? l.MaterialCode}".Trim());
+            {
+                string priceBit = l.UnitPrice is > 0 ? $" @ {l.UnitPrice:0.####}" : " (price pending)";
+                return $"{l.Quantity:0.####} {l.UnitOfMeasure ?? "?"} {l.Description ?? l.MaterialCode}{priceBit}".Trim();
+            });
+            SilaVoicePoDraftValidation check = ValidateDraft(draft);
+            if (check.Status != VALIDATION_OK)
+            {
+                string? ask = PreferMandatoryAsk(check);
+                return $"Draft: {string.Join("; ", parts)}.{(string.IsNullOrWhiteSpace(ask) ? string.Empty : " " + ask)}";
+            }
+
             return $"Draft: {string.Join("; ", parts)}. Say 'confirm purchase order' to create it.";
         }
 
@@ -897,8 +916,14 @@ namespace Buyer.Application.Features.Shared
         private static void ApplyPriceHint(string transcript, VoicePoParseResult result)
         {
             Match price = PricePattern.Match(transcript);
-            if (!price.Success
-                || !decimal.TryParse(price.Groups["price"].Value, NumberStyles.Number, CultureInfo.InvariantCulture, out decimal amount)
+            if (!price.Success)
+            {
+                return;
+            }
+
+            string? raw = FirstNonEmptyGroup(price, "price", "price2", "price3");
+            if (string.IsNullOrWhiteSpace(raw)
+                || !decimal.TryParse(raw, NumberStyles.Number, CultureInfo.InvariantCulture, out decimal amount)
                 || amount <= 0)
             {
                 return;
@@ -910,11 +935,10 @@ namespace Buyer.Application.Features.Shared
                 result.Currency = price.Groups["currency"].Value.Trim().ToUpperInvariant();
             }
 
-            if (string.IsNullOrWhiteSpace(result.UnitOfMeasure)
-                && price.Groups["priceuom"].Success
-                && !string.IsNullOrWhiteSpace(price.Groups["priceuom"].Value))
+            string? priceUom = FirstNonEmptyGroup(price, "priceuom", "priceuom2", "priceuom3");
+            if (string.IsNullOrWhiteSpace(result.UnitOfMeasure) && !string.IsNullOrWhiteSpace(priceUom))
             {
-                result.UnitOfMeasure = NormalizeUom(price.Groups["priceuom"].Value);
+                result.UnitOfMeasure = NormalizeUom(priceUom);
             }
 
             if (!string.IsNullOrWhiteSpace(result.MaterialHint))
@@ -922,6 +946,19 @@ namespace Buyer.Application.Features.Shared
                 result.MaterialHint = CleanMaterialHint(
                     PricePattern.Replace(result.MaterialHint, " "));
             }
+        }
+
+        private static string? FirstNonEmptyGroup(Match match, params string[] names)
+        {
+            foreach (string name in names)
+            {
+                if (match.Groups[name].Success && !string.IsNullOrWhiteSpace(match.Groups[name].Value))
+                {
+                    return match.Groups[name].Value;
+                }
+            }
+
+            return null;
         }
 
         private static string? CleanMaterialHint(string? value)

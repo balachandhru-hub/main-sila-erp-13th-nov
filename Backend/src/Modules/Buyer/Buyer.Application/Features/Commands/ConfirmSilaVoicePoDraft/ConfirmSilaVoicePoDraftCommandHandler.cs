@@ -55,18 +55,21 @@ namespace Buyer.Application.Features.Commands.ConfirmSilaVoicePoDraft
             }
 
             SilaVoicePoDraftDto draft = SilaVoicePoAgentRules.DeserializeDraft(session.DraftJson) ?? new SilaVoicePoDraftDto();
-            // Confirm path: ask was already done in conversation; fill remaining price with 1 AED, then hard-validate.
+            // Confirm does not invent price — user must have provided it or said "use one AED".
             SilaVoicePoDraftValidation validation = SilaVoicePoAgentRules.ValidateDraft(draft, forConfirm: true);
             SilaVoicePoSessionMapper.WriteValidation(session, validation);
             if (validation.Status != SilaVoicePoAgentRules.VALIDATION_OK)
             {
-                session.SpokenReply = validation.Clarifications.FirstOrDefault()?.Message
+                string ask = SilaVoicePoAgentRules.PreferMandatoryAsk(validation)
+                    ?? validation.Clarifications.FirstOrDefault()?.Message
                     ?? validation.Errors.FirstOrDefault()
                     ?? "Draft is not ready to confirm.";
+                session.SpokenReply = ask;
+                session.Status = SilaVoicePoAgentRules.STATUS_OPEN;
                 await _repository.SaveAsync();
                 throw new BadRequestCustomException(
-                    "Voice PO draft is not valid.",
-                    string.Join(" ", validation.Errors.Concat(validation.Clarifications.Select(c => c.Message))));
+                    "Voice PO draft is missing mandatory fields.",
+                    ask);
             }
 
             session.DraftJson = SilaVoicePoAgentRules.SerializeDraft(draft);

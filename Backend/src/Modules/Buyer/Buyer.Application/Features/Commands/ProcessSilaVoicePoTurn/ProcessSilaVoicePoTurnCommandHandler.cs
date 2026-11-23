@@ -71,6 +71,17 @@ namespace Buyer.Application.Features.Commands.ProcessSilaVoicePoTurn
             }
 
             SilaVoicePoDraftValidation validation = SilaVoicePoAgentRules.ValidateDraft(draft);
+            // Always prefer a mandatory-field ask over any "added / confirm" success copy.
+            if (validation.Status != SilaVoicePoAgentRules.VALIDATION_OK)
+            {
+                string? ask = SilaVoicePoAgentRules.PreferMandatoryAsk(validation)
+                    ?? SilaVoicePoAgentRules.BuildSpokenReply(parse.Intent, draft, validation);
+                if (!string.IsNullOrWhiteSpace(ask))
+                {
+                    spoken = ask;
+                }
+            }
+
             SilaVoicePoSessionMapper.WriteDraft(session, draft);
             SilaVoicePoSessionMapper.WriteValidation(session, validation);
             session.SpokenReply = spoken;
@@ -298,15 +309,9 @@ namespace Buyer.Application.Features.Commands.ProcessSilaVoicePoTurn
             }
             else
             {
-                // Do not invent UOM or price — ValidateDraft asks the user; confirm defaults price to 1 AED.
-                string? resolvedUom = parse.UnitOfMeasure
-                    ?? item?.OrderUnitOfMeasure
-                    ?? item?.BaseUnitOfMeasure;
-                decimal? resolvedPrice = parse.UnitPrice ?? item?.StandardPrice ?? item?.UnitCost;
-                if (resolvedPrice is <= 0)
-                {
-                    resolvedPrice = null;
-                }
+                // Never invent UOM or price from the item master — ask the user (or "use one AED").
+                string? resolvedUom = parse.UnitOfMeasure;
+                decimal? resolvedPrice = parse.UnitPrice is > 0 ? parse.UnitPrice : null;
 
                 SilaVoicePoDraftLineDto line = new()
                 {
@@ -344,12 +349,19 @@ namespace Buyer.Application.Features.Commands.ProcessSilaVoicePoTurn
             SilaVoicePoAgentRules.Renumber(draft);
             SilaVoicePoDraftValidation validation = SilaVoicePoAgentRules.ValidateDraft(draft);
             string spokenName = description;
-            return SilaVoicePoAgentRules.BuildSpokenReply(VoicePoIntent.AddLine, draft, validation,
-                validation.Status == SilaVoicePoAgentRules.VALIDATION_OK
-                    ? (textPo
-                        ? $"No item-master match — added text line '{spokenName}' with your defaults (material group {defaults.MaterialGroup}, account assignment {defaults.AccountAssignmentCategory ?? "K"}). {SilaVoicePoAgentRules.SummarizeDraft(draft)}"
-                        : $"Added {spokenName}. {SilaVoicePoAgentRules.SummarizeDraft(draft)}")
-                    : null);
+            // Never claim "added" while price/UOM (or other mandatory fields) are still missing.
+            if (validation.Status != SilaVoicePoAgentRules.VALIDATION_OK)
+            {
+                return SilaVoicePoAgentRules.BuildSpokenReply(VoicePoIntent.AddLine, draft, validation);
+            }
+
+            return SilaVoicePoAgentRules.BuildSpokenReply(
+                VoicePoIntent.AddLine,
+                draft,
+                validation,
+                textPo
+                    ? $"No item-master match — added text line '{spokenName}' with your defaults (material group {defaults.MaterialGroup}, account assignment {defaults.AccountAssignmentCategory ?? "K"}). {SilaVoicePoAgentRules.SummarizeDraft(draft)}"
+                    : $"Added {spokenName}. {SilaVoicePoAgentRules.SummarizeDraft(draft)}");
         }
 
         private async Task<SilaVoicePoSession> GetOpenSessionAsync(Guid buyerId, Guid userId, Guid sessionId)

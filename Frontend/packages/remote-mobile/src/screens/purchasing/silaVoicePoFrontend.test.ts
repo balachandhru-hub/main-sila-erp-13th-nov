@@ -63,6 +63,9 @@ assert.match(screen, /isSafariLike|resumeListening/);
 assert.match(screen, /clarifications|validationStatus|NEEDS_CLARIFICATION/);
 assert.match(screen, /chromeTextPrimary|Type your purchase order|Chrome voice is paused/);
 assert.match(screen, /vpo-agent-reply|vpo-mandatory-asks/);
+assert.match(screen, /speakSafe/);
+assert.match(screen, /Unit price is required before submit|unpriced|UNIT_PRICE/);
+assert.match(screen, /textPrimary[\s\S]*interruptSpeech|always muted/);
 
 assert.match(screen, /resolveDialogueIntent/);
 assert.match(screen, /isShortConversationalUtterance/);
