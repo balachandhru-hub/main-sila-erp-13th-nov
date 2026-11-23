@@ -105,6 +105,7 @@ namespace Buyer.Application.Features.Commands.CreateSilaGoodsIssue
             }
 
             ledger.QueueErpPosting(Common.SILA_REF_GOODS_ISSUE, issue.Id, issue.IssueNumber, from.Id, Common.SILA_MOVEMENT_GOODS_ISSUE);
+            ledger.AddEvent(Common.SILA_REF_GOODS_ISSUE, issue.Id, "CREATED", $"Goods issue {issue.IssueNumber}");
             await _repository.SaveAsync();
 
             _logger.LogInfo($"Goods issue posted. GoodsIssueId: {issue.Id}, IssueNumber: {issue.IssueNumber}, Lines: {lines.Count}");

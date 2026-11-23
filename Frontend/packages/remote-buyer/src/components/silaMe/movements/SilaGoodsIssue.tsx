@@ -1,14 +1,17 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { EmptyState, Loader, Modal, PageHeader } from "@vosox/shared-ui";
+import { EmptyState, Loader, Modal, PageHeader, toastService } from "@vosox/shared-ui";
 import { formatQty, getLocations, getMyLocations, type SilaLocation } from "../../../api/silaMe/silaInventoryApi";
 import {
   getGoodsIssue,
   getGoodsIssues,
+  reverseGoodsIssue,
   type SilaGoodsIssueDetail,
   type SilaGoodsIssueListItem,
 } from "../../../api/silaMe/silaMovementsApi";
 import { formatDateTime } from "../../cart/lineFormat";
 import SilaGoodsIssueForm from "./SilaGoodsIssueForm";
+import SilaTxnErpHistory from "./SilaTxnErpHistory";
+import { movementLabel } from "./movementFormat";
 import "../silaMeTheme.css";
 import "./SilaMovements.css";
 
@@ -21,6 +24,7 @@ const GoodsIssueDialog: React.FC<GoodsIssueDialogProps> = ({ goodsIssueId, onClo
   const [issue, setIssue] = useState<SilaGoodsIssueDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [reversing, setReversing] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -38,6 +42,24 @@ const GoodsIssueDialog: React.FC<GoodsIssueDialogProps> = ({ goodsIssueId, onClo
     load();
   }, [load]);
 
+  const events = issue?.events ?? [];
+  const alreadyReversed = events.some((event) => (event.action ?? "").toUpperCase() === "REVERSE");
+  const canReverse = Boolean(issue) && !alreadyReversed;
+
+  const onReverse = async () => {
+    if (!issue || reversing) return;
+    setReversing(true);
+    try {
+      await reverseGoodsIssue(issue.id, { reason: `Reverse ${issue.issueNumber}` });
+      toastService.success("Goods issue reverse posted.");
+      await load();
+    } catch (err: unknown) {
+      toastService.error(err instanceof Error ? err.message : "Could not reverse the goods issue.");
+    } finally {
+      setReversing(false);
+    }
+  };
+
   return (
     <Modal
       isOpen
@@ -47,7 +69,18 @@ const GoodsIssueDialog: React.FC<GoodsIssueDialogProps> = ({ goodsIssueId, onClo
         heading: issue ? `Goods issue ${issue.issueNumber}` : "Goods issue",
         subHeading: issue ? `${issue.fromLocationName ?? "—"} → ${issue.toLocationName ?? "—"}` : undefined,
       }}
-      footerProps={{ secondaryButton: { text: "Close", onClick: onClose } }}
+      footerProps={{
+        secondaryButton: { text: "Close", onClick: onClose },
+        ...(canReverse
+          ? {
+              primaryButton: {
+                text: reversing ? "Reversing..." : "Reverse",
+                onClick: onReverse,
+                disabled: reversing,
+              },
+            }
+          : {}),
+      }}
     >
       <div className="sila-root sila-me smov-dialog">
         {loading ? (
@@ -78,7 +111,24 @@ const GoodsIssueDialog: React.FC<GoodsIssueDialogProps> = ({ goodsIssueId, onClo
                 <dt className="sila-meta-label">Comment</dt>
                 <dd className="sila-meta-value">{issue.comment || "—"}</dd>
               </div>
+              {issue.erpReference && (
+                <div className="sila-meta-item">
+                  <dt className="sila-meta-label">ERP ID</dt>
+                  <dd className="sila-meta-value">{issue.erpReference}</dd>
+                </div>
+              )}
+              {issue.erpStatus && (
+                <div className="sila-meta-item">
+                  <dt className="sila-meta-label">ERP status</dt>
+                  <dd className="sila-meta-value">{movementLabel(issue.erpStatus)}</dd>
+                </div>
+              )}
             </dl>
+            <SilaTxnErpHistory
+              erpStatus={issue.erpStatus}
+              erpReference={issue.erpReference}
+              events={events}
+            />
             <div className="sila-table-wrap">
               <table className="sila-table">
                 <thead>
@@ -104,6 +154,18 @@ const GoodsIssueDialog: React.FC<GoodsIssueDialogProps> = ({ goodsIssueId, onClo
                 </tbody>
               </table>
             </div>
+            {canReverse && (
+              <div className="sila-btn-group smov-actions">
+                <button
+                  type="button"
+                  className="sila-btn sila-btn--danger"
+                  disabled={reversing}
+                  onClick={() => void onReverse()}
+                >
+                  {reversing ? "Reversing..." : "Reverse"}
+                </button>
+              </div>
+            )}
           </>
         )}
       </div>

@@ -8,6 +8,7 @@ using Buyer.Application.Features.Queries.GetSilaStockCountPhoto;
 using Buyer.Application.Features.Commands.CancelSilaStockCount;
 using Buyer.Application.Features.Commands.CountSilaStockCountItem;
 using Buyer.Application.Features.Commands.CreateSilaStockCount;
+using Buyer.Application.Features.Commands.ReverseSilaStockCount;
 using Buyer.Application.Features.Commands.RespondSilaEnquiry;
 using Buyer.Application.Features.Commands.ReviewSilaEnquiry;
 using Buyer.Application.Features.Commands.SubmitSilaStockCount;
@@ -308,6 +309,32 @@ namespace Buyer.API.Controllers
                 StatusCode = 200,
                 Message = "Success",
                 Description = "Stock count cancelled."
+            });
+        }
+
+        [HttpPost]
+        [Route("api/v1/buyer/sila/stock-counts/{stockCountId:guid}/reverse")]
+        [ApiAuthorization(Name = "APPROVE_SILA_STOCK_COUNT")]
+        [SwaggerOperation("ReverseSilaStockCount")]
+        [SwaggerResponse(200, type: typeof(SuccessResponseDto))]
+        public async Task<IActionResult> Reverse([FromRoute] Guid stockCountId, [FromBody] SilaStockCountReverseDto? request)
+        {
+            _logger.LogDebug($"Reversing stock count. StockCountId: {stockCountId}");
+            Guid id = await _mediator.Send(new ReverseSilaStockCountCommand
+            {
+                OrganizationId = GetOrganizationId(),
+                UserId = GetUserId(),
+                RoleId = GetRoleId(),
+                StockCountId = stockCountId,
+                Reason = request?.Reason
+            });
+            _logger.LogDebug($"Stock count reverse posted. AdjustmentId: {id}");
+            return Ok(new SuccessResponseDto
+            {
+                Id = id.ToString(),
+                StatusCode = 200,
+                Message = "Success",
+                Description = "Stock count reverse posted."
             });
         }
 

@@ -16,7 +16,10 @@ import {
 } from "../../../api/silaMe/silaMovementsApi";
 import { formatDate, formatDateTime } from "../../cart/lineFormat";
 import { formatValue, movementBadgeClass, movementLabel, relationshipLabel } from "./movementFormat";
+import SilaTxnErpHistory from "./SilaTxnErpHistory";
 import TransferApprovals from "./TransferApprovals";
+import "../silaMeTheme.css";
+import "./SilaMovements.css";
 
 interface SilaTransferDetailProps {
   transferId: string;
@@ -400,22 +403,12 @@ const SilaTransferDetail: React.FC<SilaTransferDetailProps> = ({ transferId, can
 
             <TransferApprovals approvals={transfer.approvals ?? []} uom={transfer.items.length === 1 ? transfer.items[0].uom : undefined} />
 
-            <section aria-labelledby="smov-timeline-title">
-              <h3 id="smov-timeline-title" className="sila-section-title">History</h3>
-              {transfer.events.length === 0 ? (
-                <EmptyState title="No events yet" />
-              ) : (
-                <ol className="smov-timeline">
-                  {transfer.events.map((event, index) => (
-                    <li key={`${event.on}-${index}`} className="smov-event">
-                      <span className="sila-cell-strong">{movementLabel(event.action)}</span>
-                      <span className="smov-sub">{event.actorName} · {formatDateTime(event.on)}</span>
-                      {event.comment && <span className="smov-event-comment">{event.comment}</span>}
-                    </li>
-                  ))}
-                </ol>
-              )}
-            </section>
+            <SilaTxnErpHistory
+              sapMaterialDocument={transfer.sapMaterialDocument}
+              erpReference={transfer.sapMaterialDocument}
+              erpStatus={transfer.sapMaterialDocument ? "POSTED" : undefined}
+              events={transfer.events}
+            />
           </>
         )}
       </div>

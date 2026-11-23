@@ -11,7 +11,8 @@ using SharedKernel.LoggerServices;
 namespace Buyer.Application.Features.Commands.ReverseSilaAdjustment
 {
     /// <summary>
-    /// Reverses part or all of a waste/damage adjustment: local stock IN, SAP Z02 on FIVE_STOCK_WASTE_UPDATE.
+    /// Reverses a posted stock adjustment: opposite local stock move + ERP queue.
+    /// Waste types post Z02 IN on the waste API; stock-count / manual / opening flip the original ledger direction.
     /// </summary>
     public class ReverseSilaAdjustmentCommandHandler : IRequestHandler<ReverseSilaAdjustmentCommand, Guid>
     {
@@ -36,56 +37,55 @@ namespace Buyer.Application.Features.Commands.ReverseSilaAdjustment
                 .FindFirstByConditionAsync(x => x.Id == request.AdjustmentId && x.BuyerId == buyer.Id && x.IsActive);
             if (original == null)
             {
-                throw new NotFoundCustomException("Adjustment not found.", "Select an active waste or damage adjustment to reverse.");
+                throw new NotFoundCustomException("Adjustment not found.", "Select an active adjustment to reverse.");
             }
 
-            if (!SilaInventorySap.IsWasteAdjustmentType(original.AdjustmentType))
+            if (!CanReverse(original.AdjustmentType))
             {
                 throw new BadRequestCustomException(
-                    "Only waste adjustments can be reversed this way.",
-                    "Reverse applies to WASTE, DAMAGE, BREAKAGE, SPOILAGE or EXPIRED.");
+                    "This adjustment type cannot be reversed.",
+                    "Reverse applies to waste types, stock-count adjustments, manual adjustments and opening stock.");
             }
 
             InventoryLocation location = await SilaAccess.GetLocationAsync(_repository, _logger, buyer.Id, original.LocationId);
             await SilaAccess.EnsureLocationAccessAsync(_repository, _logger, buyer.Id, request.UserId, request.RoleId, location.Id, cancellationToken);
 
+            bool alreadyReversed = await _repository.InventoryWorkflowEvent
+                .FindByCondition(x => x.BuyerId == buyer.Id && x.IsActive
+                    && x.ReferenceType == Common.SILA_REF_ADJUSTMENT && x.ReferenceId == original.Id
+                    && x.Action == "REVERSE")
+                .AnyAsync(cancellationToken);
+            if (alreadyReversed)
+            {
+                throw new BadRequestCustomException("Already reversed.", "This adjustment already has a reverse event.");
+            }
+
             List<StockAdjustmentItem> lines = await _repository.StockAdjustmentItem
                 .FindByCondition(x => x.StockAdjustmentId == original.Id && x.IsActive)
                 .ToListAsync(cancellationToken);
-            StockAdjustmentItem? line = request.Request.MaterialId != null && request.Request.MaterialId != Guid.Empty
-                ? lines.FirstOrDefault(x => x.MaterialId == request.Request.MaterialId)
-                : lines.FirstOrDefault();
-            if (line == null)
+            if (lines.Count == 0)
+            {
+                throw new BadRequestCustomException("No lines to reverse.", "The original adjustment has no active lines.");
+            }
+
+            bool waste = SilaInventorySap.IsWasteAdjustmentType(original.AdjustmentType);
+            List<StockAdjustmentItem> targets = waste
+                && request.Request.MaterialId != null
+                && request.Request.MaterialId != Guid.Empty
+                ? lines.Where(x => x.MaterialId == request.Request.MaterialId).ToList()
+                : lines;
+            if (targets.Count == 0)
             {
                 throw new BadRequestCustomException("No line to reverse.", "The original adjustment has no matching material line.");
             }
 
-            ItemBuyerMaster? material = await _repository.ItemBuyerMaster
-                .FindFirstByConditionAsync(x => x.Id == line.MaterialId && x.BuyerId == buyer.Id && x.IsActive);
-            if (material == null || !SilaMaterialRules.HoldsStock(material))
-            {
-                throw new BadRequestCustomException("Material is not stocked.", "Choose an active stock inventory material.");
-            }
+            List<InventoryTransaction> ledgerLines = await _repository.InventoryTransaction
+                .FindByCondition(x => x.BuyerId == buyer.Id && x.IsActive
+                    && x.ReferenceType == Common.SILA_REF_ADJUSTMENT && x.ReferenceId == original.Id)
+                .ToListAsync(cancellationToken);
 
-            Dictionary<Guid, List<MaterialUomConversion>> conversions = await UomConverter.GetConversionsAsync(
-                _repository, new[] { material.Id }, cancellationToken);
-            string enteredUom = string.IsNullOrWhiteSpace(request.Request.Uom)
-                ? (string.IsNullOrWhiteSpace(line.Uom) ? UomConverter.BaseUomOf(material) : line.Uom.Trim().ToUpperInvariant())
-                : request.Request.Uom.Trim().ToUpperInvariant();
-            decimal enteredQty = request.Request.Quantity ?? line.Quantity;
-            if (enteredQty <= 0)
-            {
-                throw new BadRequestCustomException("Quantity must be greater than zero.", "Enter a positive reverse quantity.");
-            }
-
-            if (enteredQty > SilaInputRules.MAX_QUANTITY)
-            {
-                throw new BadRequestCustomException("Quantity is too large.", "Enter a quantity of at most 1,000,000,000.");
-            }
-
-            decimal baseQuantity = UomConverter.ToBase(_logger, material, enteredQty, enteredUom, conversions);
             string reason = string.IsNullOrWhiteSpace(request.Request.Reason)
-                ? $"Reverse {original.AdjustmentNumber}: {enteredQty:0.####} {enteredUom}"
+                ? $"Reverse {original.AdjustmentNumber}"
                 : request.Request.Reason.Trim();
             SilaInputRules.MaxLength(_logger, reason, SilaInputRules.COMMENT_LENGTH, "Reason");
 
@@ -102,47 +102,140 @@ namespace Buyer.Application.Features.Commands.ReverseSilaAdjustment
                 IsActive = true
             };
             _repository.StockAdjustment.Create(reverse);
-            _repository.StockAdjustmentItem.Create(new StockAdjustmentItem
-            {
-                Id = Guid.NewGuid(),
-                StockAdjustmentId = reverse.Id,
-                MaterialId = material.Id,
-                MaterialCode = material.MaterialCode ?? string.Empty,
-                MaterialName = material.Description ?? material.MaterialCode ?? string.Empty,
-                Quantity = enteredQty,
-                Uom = enteredUom,
-                BaseQuantity = baseQuantity,
-                IsActive = true
-            });
 
             InventoryLedger ledger = new InventoryLedger(_repository, buyer.Id, request.UserId);
-            await ledger.PostAsync(new InventoryMovement
-            {
-                LocationId = location.Id,
-                Material = material,
-                Direction = Common.SILA_DIRECTION_IN,
-                TransactionType = original.AdjustmentType,
-                BaseQuantity = Math.Abs(baseQuantity),
-                EnteredQuantity = Math.Abs(enteredQty),
-                EnteredUom = enteredUom,
-                ReferenceType = Common.SILA_REF_ADJUSTMENT,
-                ReferenceId = reverse.Id,
-                ReferenceNumber = reverse.AdjustmentNumber,
-                Reason = reason
-            }, cancellationToken);
+            Dictionary<Guid, ItemBuyerMaster> materials = await SilaAccess.GetMaterialsAsync(
+                _repository, _logger, buyer.Id, targets.Select(x => x.MaterialId), cancellationToken);
+            Dictionary<Guid, List<MaterialUomConversion>> conversions = await UomConverter.GetConversionsAsync(
+                _repository, materials.Keys, cancellationToken);
 
-            InventoryErpPosting posting = ledger.QueueErpPosting(
-                Common.SILA_REF_ADJUSTMENT,
-                reverse.Id,
-                reverse.AdjustmentNumber,
-                location.Id,
-                SilaInventorySap.TYPE_Z02);
-            posting.IntegrationSystem = SilaInventorySap.API_WASTE;
-            ledger.AddEvent(Common.SILA_REF_ADJUSTMENT, reverse.Id, "REVERSE", $"Z02 reverse of {original.AdjustmentNumber}");
+            string? erpMovement = null;
+            string? erpApi = null;
+
+            foreach (StockAdjustmentItem line in targets)
+            {
+                if (!materials.TryGetValue(line.MaterialId, out ItemBuyerMaster? material) || !SilaMaterialRules.HoldsStock(material))
+                {
+                    throw new BadRequestCustomException("Material is not stocked.", "Choose an active stock inventory material.");
+                }
+
+                InventoryTransaction? originalTxn = ledgerLines
+                    .Where(x => x.MaterialId == line.MaterialId)
+                    .OrderByDescending(x => x.DateCreated)
+                    .FirstOrDefault();
+
+                string enteredUom;
+                decimal enteredQty;
+                decimal baseQuantity;
+                string reverseDirection;
+
+                if (waste)
+                {
+                    enteredUom = string.IsNullOrWhiteSpace(request.Request.Uom)
+                        ? (string.IsNullOrWhiteSpace(line.Uom) ? UomConverter.BaseUomOf(material) : line.Uom.Trim().ToUpperInvariant())
+                        : request.Request.Uom.Trim().ToUpperInvariant();
+                    enteredQty = request.Request.Quantity ?? line.Quantity;
+                    if (enteredQty <= 0)
+                    {
+                        throw new BadRequestCustomException("Quantity must be greater than zero.", "Enter a positive reverse quantity.");
+                    }
+
+                    if (enteredQty > SilaInputRules.MAX_QUANTITY)
+                    {
+                        throw new BadRequestCustomException("Quantity is too large.", "Enter a quantity of at most 1,000,000,000.");
+                    }
+
+                    baseQuantity = UomConverter.ToBase(_logger, material, enteredQty, enteredUom, conversions);
+                    reverseDirection = Common.SILA_DIRECTION_IN;
+                    erpMovement = SilaInventorySap.TYPE_Z02;
+                    erpApi = SilaInventorySap.API_WASTE;
+                }
+                else
+                {
+                    // Stock-count / manual / opening: reverse the ledger variance (not the physical line qty).
+                    decimal ledgerQty = originalTxn != null && originalTxn.Quantity > 0
+                        ? originalTxn.Quantity
+                        : Math.Abs(line.BaseQuantity);
+                    if (ledgerQty <= 0)
+                    {
+                        throw new BadRequestCustomException("Nothing to reverse.", "The original adjustment has no stock quantity for this line.");
+                    }
+
+                    enteredUom = originalTxn != null && !string.IsNullOrWhiteSpace(originalTxn.EnteredUom)
+                        ? originalTxn.EnteredUom
+                        : (string.IsNullOrWhiteSpace(line.Uom) ? UomConverter.BaseUomOf(material) : line.Uom.Trim().ToUpperInvariant());
+                    enteredQty = originalTxn != null && originalTxn.EnteredQuantity > 0
+                        ? originalTxn.EnteredQuantity
+                        : ledgerQty;
+                    baseQuantity = ledgerQty;
+                    string originalDirection = originalTxn?.Direction ?? Common.SILA_DIRECTION_OUT;
+                    reverseDirection = originalDirection == Common.SILA_DIRECTION_IN
+                        ? Common.SILA_DIRECTION_OUT
+                        : Common.SILA_DIRECTION_IN;
+                    SilaInventorySap.Rule rule = SilaInventorySap.ForDirection(reverseDirection);
+                    erpMovement = rule.GoodsMovementType;
+                    erpApi = rule.ApiName;
+                }
+
+                _repository.StockAdjustmentItem.Create(new StockAdjustmentItem
+                {
+                    Id = Guid.NewGuid(),
+                    StockAdjustmentId = reverse.Id,
+                    MaterialId = material.Id,
+                    MaterialCode = material.MaterialCode ?? string.Empty,
+                    MaterialName = material.Description ?? material.MaterialCode ?? string.Empty,
+                    Quantity = enteredQty,
+                    Uom = enteredUom,
+                    BaseQuantity = baseQuantity,
+                    IsActive = true
+                });
+
+                await ledger.PostAsync(new InventoryMovement
+                {
+                    LocationId = location.Id,
+                    Material = material,
+                    Direction = reverseDirection,
+                    TransactionType = original.AdjustmentType,
+                    BaseQuantity = Math.Abs(baseQuantity),
+                    EnteredQuantity = Math.Abs(enteredQty),
+                    EnteredUom = enteredUom,
+                    ReferenceType = Common.SILA_REF_ADJUSTMENT,
+                    ReferenceId = reverse.Id,
+                    ReferenceNumber = reverse.AdjustmentNumber,
+                    Reason = reason
+                }, cancellationToken);
+            }
+
+            if (!string.IsNullOrWhiteSpace(erpMovement))
+            {
+                InventoryErpPosting posting = ledger.QueueErpPosting(
+                    Common.SILA_REF_ADJUSTMENT,
+                    reverse.Id,
+                    reverse.AdjustmentNumber,
+                    location.Id,
+                    erpMovement);
+                posting.IntegrationSystem = erpApi;
+            }
+
+            ledger.AddEvent(Common.SILA_REF_ADJUSTMENT, original.Id, "REVERSE", $"Reversed as {reverse.AdjustmentNumber}: {reason}");
+            ledger.AddEvent(Common.SILA_REF_ADJUSTMENT, reverse.Id, "REVERSE", $"{erpMovement ?? "STOCK"} reverse of {original.AdjustmentNumber}");
             await _repository.SaveAsync();
 
-            _logger.LogInfo($"Waste adjustment reversed. Original: {original.AdjustmentNumber}, ReverseId: {reverse.Id}, Qty: {enteredQty} {enteredUom}");
+            _logger.LogInfo($"Adjustment reversed. Original: {original.AdjustmentNumber}, ReverseId: {reverse.Id}, Type: {original.AdjustmentType}");
             return reverse.Id;
+        }
+
+        private static bool CanReverse(string? adjustmentType)
+        {
+            if (SilaInventorySap.IsWasteAdjustmentType(adjustmentType))
+            {
+                return true;
+            }
+
+            string type = (adjustmentType ?? string.Empty).Trim().ToUpperInvariant();
+            return type is Common.SILA_TXN_STOCK_COUNT_ADJUSTMENT
+                or Common.SILA_TXN_MANUAL_ADJUSTMENT
+                or Common.SILA_TXN_OPENING_STOCK;
         }
     }
 }

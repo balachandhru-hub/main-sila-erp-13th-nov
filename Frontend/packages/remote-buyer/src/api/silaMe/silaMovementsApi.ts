@@ -207,6 +207,10 @@ export interface SilaGoodsIssueItem {
 export interface SilaGoodsIssueDetail extends Omit<SilaGoodsIssueListItem, "lineCount"> {
   comment?: string | null;
   items: SilaGoodsIssueItem[];
+  events?: SilaTransferEvent[];
+  erpStatus?: string | null;
+  erpReference?: string | null;
+  erpPostingId?: string | null;
 }
 
 /** Approved weekly bucket quantity of a material not yet issued (base unit). */
@@ -457,9 +461,26 @@ export const getGoodsIssues = async (locationId?: string): Promise<SilaGoodsIssu
 export const getGoodsIssue = async (goodsIssueId: string): Promise<SilaGoodsIssueDetail> => {
   try {
     const response = await axiosInstance.get<SilaGoodsIssueDetail>(`${BASE}/goods-issues/${goodsIssueId}`);
-    return { ...response.data, items: list(response.data?.items) };
+    return {
+      ...response.data,
+      items: list(response.data?.items),
+      events: list(response.data?.events),
+    };
   } catch (error: unknown) {
     throw new Error(readError(error, "Could not load the goods issue."));
+  }
+};
+
+/** Reverse a posted goods issue (stock returns to the store). */
+export const reverseGoodsIssue = async (
+  goodsIssueId: string,
+  payload?: { reason?: string | null },
+): Promise<string> => {
+  try {
+    const response = await axiosInstance.post<CreatedResponse>(`${BASE}/goods-issues/${goodsIssueId}/reverse`, payload ?? {});
+    return response.data?.id;
+  } catch (error: unknown) {
+    throw new Error(readError(error, "Could not reverse the goods issue."));
   }
 };
 

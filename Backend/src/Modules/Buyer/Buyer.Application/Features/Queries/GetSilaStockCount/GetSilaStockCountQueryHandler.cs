@@ -48,6 +48,13 @@ namespace Buyer.Application.Features.Queries.GetSilaStockCount
             InventoryLocation? location = context.Locations.GetValueOrDefault(count.LocationId);
             Dictionary<Guid, InventoryErpPosting> postings = await SilaCountPosting.GetPostingsAsync(_repository, buyer.Id, new[] { count.Id }, cancellationToken);
             string? currency = await SilaCountContext.CurrencyAsync(_repository, buyer.Id, materialIds, cancellationToken);
+            List<InventoryWorkflowEvent> events = await _repository.InventoryWorkflowEvent
+                .FindByCondition(x => x.BuyerId == buyer.Id && x.IsActive
+                    && x.ReferenceType == Common.SILA_REF_STOCK_COUNT && x.ReferenceId == count.Id)
+                .OrderBy(x => x.DateCreated)
+                .ToListAsync(cancellationToken);
+            InventoryErpPosting? headerPosting = postings.GetValueOrDefault(count.Id)
+                ?? postings.Values.OrderByDescending(x => x.DateCreated).FirstOrDefault();
 
             bool canSee = SilaStockCountRules.CanSeeSystemQty(count, request.RoleId);
             int counted = items.Count(x => x.Status != Common.SILA_COUNT_LINE_NOT_COUNTED);
@@ -86,7 +93,19 @@ namespace Buyer.Application.Features.Queries.GetSilaStockCount
                 ApprovedByName = context.NameOf(count.ApprovedBy),
                 Items = items
                     .Select(x => SilaStockCountRules.MapItem(x, canSee, barcodes.TryGetValue(x.MaterialId, out string? barcode) ? barcode : null, conversions))
-                    .ToList()
+                    .ToList(),
+                Events = events.Select(x => new SilaTransferEventDto
+                {
+                    Action = x.Action,
+                    Comment = x.Comment,
+                    ActorUserId = x.ActorUserId,
+                    ActorName = context.NameOf(x.ActorUserId)
+                        ?? (x.ActorUserId == Guid.Empty ? "System" : x.ActorUserId.ToString()),
+                    On = x.DateCreated
+                }).ToList(),
+                ErpStatus = headerPosting?.Status,
+                ErpReference = headerPosting?.ErpReference,
+                ErpPostingId = headerPosting?.Id
             };
 
             await AddEnquiriesAndPhotosAsync(result, buyer.Id, count.Id, cancellationToken);
