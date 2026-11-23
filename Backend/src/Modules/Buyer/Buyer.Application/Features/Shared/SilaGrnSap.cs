@@ -73,9 +73,14 @@ namespace Buyer.Application.Features.Shared
                 .ToString("yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture);
         }
 
+        /// <summary>
+        /// S/4 item number for a SILA line. Create PO sends (index+1)*10 (10, 20, …);
+        /// GRN 101 must use the same EKPO item or M7/001 is returned.
+        /// </summary>
         public static string FormatPurchaseOrderItem(int lineNumber)
         {
-            return lineNumber.ToString("00000", CultureInfo.InvariantCulture);
+            int sapItem = lineNumber <= 0 ? 10 : lineNumber * 10;
+            return sapItem.ToString("00000", CultureInfo.InvariantCulture);
         }
 
         public const string POSTING_MISMATCH = "GRN_REQUEST_MAPPING_MISMATCH";
