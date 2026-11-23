@@ -114,6 +114,20 @@
   gap: 0.75rem;
 }
 
+.rstudio-catalog-head__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.rstudio-view-toggle {
+  display: inline-flex;
+  gap: 0.35rem;
+  align-items: center;
+}
+
 .rstudio-panel--catalog.is-expanded {
   position: fixed;
   inset: 0.75rem;
@@ -551,18 +565,47 @@
   display: none;
 }
 
-/* Nested catalog is narrower than the old full Studio column — keep one card per row
-   and pin the Add control so it cannot be clipped out of the card grid. */
-.rstudio-panel--catalog .srec-lib-list.rstudio-catalog-grid,
-.rstudio-panel--catalog .rstudio-catalog-grid {
-  grid-template-columns: 1fr;
+/* List: one row per material (side panel + Expand list mode). */
+.rstudio-panel--catalog .srec-lib-list.rstudio-catalog-grid.is-list,
+.rstudio-panel--catalog .rstudio-catalog-grid.is-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
 }
 
-.rstudio-panel--catalog .srec-lib-card {
+.rstudio-panel--catalog .srec-lib-card.is-list {
   grid-template-columns: auto auto auto minmax(0, 1fr);
   grid-template-areas:
     "check drag cover body"
     "action action action action";
+  align-items: start;
+}
+
+/* Grid: multi-column tiles — fuller when Material Catalog is Expanded. */
+.rstudio-panel--catalog .srec-lib-list.rstudio-catalog-grid.is-grid,
+.rstudio-panel--catalog .rstudio-catalog-grid.is-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  gap: 0.75rem;
+}
+
+.rstudio-panel--catalog:not(.is-expanded) .srec-lib-list.rstudio-catalog-grid.is-grid,
+.rstudio-panel--catalog:not(.is-expanded) .rstudio-catalog-grid.is-grid {
+  grid-template-columns: 1fr;
+}
+
+.rstudio-panel--catalog.is-expanded .srec-lib-list.rstudio-catalog-grid.is-grid,
+.rstudio-panel--catalog.is-expanded .rstudio-catalog-grid.is-grid {
+  grid-template-columns: repeat(auto-fill, minmax(15.5rem, 1fr));
+}
+
+.rstudio-panel--catalog .srec-lib-card.is-grid {
+  grid-template-columns: auto auto;
+  grid-template-areas:
+    "check drag"
+    "cover cover"
+    "body body"
+    "action action";
   align-items: start;
 }
 
@@ -575,6 +618,11 @@
   justify-self: stretch;
   width: 100%;
   margin-top: 0.35rem;
+}
+
+.rstudio-panel--catalog .srec-lib-card.is-grid > .rstudio-cover {
+  width: 100%;
+  min-height: 5.5rem;
 }
 
 @media (max-width: 1100px) {

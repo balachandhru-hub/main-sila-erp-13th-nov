@@ -127,6 +127,7 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
   /** Once the user edits class/family/category/template, stop overwriting from ingredients. */
   const [classificationLocked, setClassificationLocked] = useState(false);
   const [catalogExpanded, setCatalogExpanded] = useState(false);
+  const [catalogLayout, setCatalogLayout] = useState<"grid" | "list">("grid");
   const autoClassKeyRef = useRef("");
   const [menuItem, setMenuItem] = useState("");
   const [posCode, setPosCode] = useState("");
@@ -1557,15 +1558,37 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
                   : "First step: pick ingredients. Expand for fullscreen browsing. Stock reflects the selected outlet when available."}
               </p>
             </div>
-            <button
-              type="button"
-              className="sila-btn sila-btn--secondary sila-btn--sm"
-              data-testid="recipe-catalog-expand"
-              aria-expanded={catalogExpanded}
-              onClick={() => setCatalogExpanded((open) => !open)}
-            >
-              {catalogExpanded ? "Exit fullscreen" : "Expand"}
-            </button>
+            <div className="rstudio-catalog-head__actions">
+              <div className="rstudio-view-toggle" role="group" aria-label="Material catalog layout">
+                <button
+                  type="button"
+                  className={`sila-btn sila-btn--sm ${catalogLayout === "grid" ? "sila-btn--primary" : "sila-btn--secondary"}`}
+                  data-testid="recipe-material-catalog-grid"
+                  aria-pressed={catalogLayout === "grid"}
+                  onClick={() => setCatalogLayout("grid")}
+                >
+                  Grid
+                </button>
+                <button
+                  type="button"
+                  className={`sila-btn sila-btn--sm ${catalogLayout === "list" ? "sila-btn--primary" : "sila-btn--secondary"}`}
+                  data-testid="recipe-material-catalog-list"
+                  aria-pressed={catalogLayout === "list"}
+                  onClick={() => setCatalogLayout("list")}
+                >
+                  List
+                </button>
+              </div>
+              <button
+                type="button"
+                className="sila-btn sila-btn--secondary sila-btn--sm"
+                data-testid="recipe-catalog-expand"
+                aria-expanded={catalogExpanded}
+                onClick={() => setCatalogExpanded((open) => !open)}
+              >
+                {catalogExpanded ? "Exit fullscreen" : "Expand"}
+              </button>
+            </div>
           </div>
           <div className="rstudio-section rstudio-section--mint rstudio-section--catalog-live">
             <SilaRecipeMaterialLibrary
@@ -1589,6 +1612,8 @@ const SilaRecipeStudioPresentation: React.FC<SilaRecipeStudioPresentationProps> 
               recommendReason={materialRecs.reason}
               outletLocationId={outletLocationId || null}
               locked={!canEdit}
+              layout={catalogLayout}
+              onLayoutChange={setCatalogLayout}
             />
           </div>
         </aside>
