@@ -61,6 +61,8 @@ assert.match(naturalTts, /synthesizeVoiceTts|fetchServerWav|probeBrowserSynth/);
 assert.match(naturalTts, /playWavBlob/);
 assert.match(screen, /isSafariLike|resumeListening/);
 assert.match(screen, /clarifications|validationStatus|NEEDS_CLARIFICATION/);
+assert.match(screen, /chromeTextPrimary|Type your purchase order|Chrome voice is paused/);
+assert.match(screen, /vpo-agent-reply|vpo-mandatory-asks/);
 
 assert.match(screen, /resolveDialogueIntent/);
 assert.match(screen, /isShortConversationalUtterance/);

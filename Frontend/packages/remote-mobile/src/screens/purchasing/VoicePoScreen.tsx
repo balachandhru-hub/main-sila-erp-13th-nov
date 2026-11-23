@@ -66,6 +66,13 @@ const isSafariLike = (): boolean => {
   return isSafari || isIos;
 };
 
+/** Chromium family (Chrome, Edge, Android Chrome). Keep Safari/iOS on voice for now. */
+const chromeTextPrimary = (): boolean => {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  return /chrome|chromium|crios|edg/i.test(ua) && !isSafariLike();
+};
+
 /**
  * SILA Voice 2.0 — continuous conversation on the existing Voice PO agent.
  * One activation → auto listen → end-of-speech → auto turn → natural TTS → resume listen.
@@ -82,11 +89,13 @@ const VoicePoScreen: React.FC = () => {
   const [uiState, setUiState] = useState<Voice2UiState>('idle');
   const [level, setLevel] = useState(0);
   const [sessionActive, setSessionActive] = useState(false);
-  const [showType, setShowType] = useState(false);
-  const [ttsMuted, setTtsMuted] = useState(false);
+  const textPrimary = chromeTextPrimary();
+  const [showType, setShowType] = useState(textPrimary);
+  const [ttsMuted, setTtsMuted] = useState(textPrimary);
   const [busy, setBusy] = useState(false);
   const [bootError, setBootError] = useState<string | null>(null);
   const [notice, setNotice] = useState<NoticeMessage | null>(null);
+  const [agentReply, setAgentReply] = useState<string | null>(null);
 
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -202,12 +211,46 @@ const VoicePoScreen: React.FC = () => {
       .catch((err: unknown) => {
         if (!active) return;
         setDefaults({ profileFound: false, resolved: false, validationErrors: [] });
-        setNotice({ tone: 'warn', text: errorText(err) });
+        setNotice({ tone: 'warning', text: errorText(err) });
       });
     return () => {
       active = false;
     };
   }, [can.requestPurchase, mine?.id, mine?.locationType, mine?.propertyId]);
+
+  // Chrome text-first: open a session and show the composer without requiring Voice.
+  useEffect(() => {
+    if (!can.requestPurchase || !textPrimary || session) return;
+    let active = true;
+    void (async () => {
+      try {
+        const started = await startVoicePoSession({
+          locationId: mine?.id ?? null,
+          propertyId: mine?.propertyId ?? null,
+          outletId: mine?.locationType === 'OUTLET' ? mine.id : null,
+          purchasingProfileId: defaults?.profileId ?? null,
+          language: 'en',
+        });
+        if (!active) return;
+        setSession(started);
+        sessionDataRef.current = started;
+        sessionActiveRef.current = true;
+        setSessionActive(true);
+        setShowType(true);
+        setUi('listening');
+        const greeting =
+          "Type your order — for example 'order 25 kg specialty spice at 25 AED'. I will ask for any missing price or UOM.";
+        setAgentReply(greeting);
+        setNotice({ tone: 'info', text: greeting });
+      } catch (err: unknown) {
+        if (!active) return;
+        setNotice({ tone: 'error', text: errorText(err) });
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [can.requestPurchase, defaults?.profileId, mine?.id, mine?.locationType, mine?.propertyId, session, textPrimary]);
 
   const ensureSession = useCallback(async (): Promise<SilaVoicePoSession> => {
     if (session && openSession(session.status)) return session;
@@ -346,6 +389,7 @@ const VoicePoScreen: React.FC = () => {
       if (channel === 'VOICE' || isSafariLike()) {
         stopRecognition();
       }
+      const preferText = channel === 'TEXT' || textPrimary;
       try {
         // Local dialogue manager: wake / greeting / social / farewell before PO agent.
         const dialogue = resolveDialogueIntent(cleaned);
@@ -353,21 +397,31 @@ const VoicePoScreen: React.FC = () => {
           setTranscript('');
           transcriptRef.current = '';
           finalChunkRef.current = '';
+          const localReply = dialogue.spokenReply || "Hi! I'm here. How can I help you today?";
+          setAgentReply(localReply);
           if (dialogue.intent === 'FAREWELL') {
-            await speakAndResume(dialogue.spokenReply || "You're welcome. Have a great day!", turnId, 'closing');
+            if (preferText) {
+              setNotice({ tone: 'info', text: localReply });
+              sessionActiveRef.current = false;
+              setSessionActive(false);
+              setUi('idle');
+              return;
+            }
+            await speakAndResume(localReply || "You're welcome. Have a great day!", turnId, 'closing');
+            return;
+          }
+          if (preferText) {
+            setNotice({ tone: 'info', text: localReply });
+            setUi('listening');
             return;
           }
           setUi('acknowledging');
-          await speakAndResume(
-            dialogue.spokenReply || "Hi! I'm here. How can I help you today?",
-            turnId,
-            'listening',
-          );
+          await speakAndResume(localReply, turnId, 'listening');
           return;
         }
 
         const businessText = (dialogue.businessTranscript || cleaned).trim();
-        if (dialogue.spokenReply) {
+        if (dialogue.spokenReply && !preferText) {
           // Combined wake + command: acknowledge, then continue into PO agent.
           setUi('acknowledging');
           speakStartedAtRef.current = Date.now();
@@ -389,7 +443,7 @@ const VoicePoScreen: React.FC = () => {
         if (turnId !== turnIdRef.current) return;
         const next = await sendVoicePoTurn(active.id, {
           transcript: businessText,
-          channel,
+          channel: preferText ? 'TEXT' : channel,
         });
         if (turnId !== turnIdRef.current) return;
         setSession(next);
@@ -402,12 +456,18 @@ const VoicePoScreen: React.FC = () => {
         const clarifications = next.clarifications ?? [];
         const needsAsk =
           (next.validationStatus || '').toUpperCase() === 'NEEDS_CLARIFICATION' || clarifications.length > 0;
+        if (reply) {
+          setAgentReply(reply);
+          spokenRef.current = reply;
+        }
         if (needsAsk && reply) {
           setNotice({ tone: 'warning', text: reply });
+        } else if (reply && preferText) {
+          setNotice({ tone: 'info', text: reply });
         }
         const hasLines = (next.draft?.lines?.length ?? 0) > 0;
         if (isConversationDonePhrase(businessText) && hasLines) {
-          if (reply) {
+          if (reply && !preferText) {
             await speakAndResume(reply, turnId, 'listening');
           }
           await enterTranscriptConfirmation(businessText);
@@ -415,8 +475,14 @@ const VoicePoScreen: React.FC = () => {
         }
 
         const awaiting = next.status === 'REVIEW' || hasLines;
+        if (preferText) {
+          // Text-first (Chrome): keep the composer open; do not speak or re-arm mic.
+          setUi(needsAsk ? 'listening' : awaiting && /confirm/i.test(reply) ? 'awaitingConfirmation' : 'listening');
+          setShowType(true);
+          return;
+        }
+
         if (reply) {
-          spokenRef.current = reply;
           setUi('speaking');
           speakStartedAtRef.current = Date.now();
           const handle = speakNaturally(reply, ttsMuted);
@@ -452,6 +518,7 @@ const VoicePoScreen: React.FC = () => {
       setUi,
       speakAndResume,
       stopRecognition,
+      textPrimary,
       ttsMuted,
     ],
   );
@@ -680,6 +747,28 @@ const VoicePoScreen: React.FC = () => {
   const activate = useCallback(async () => {
     setNotice(null);
     setConfirmedTranscript('');
+    // Chrome: text is the primary path until Chrome voice is re-enabled.
+    if (textPrimary) {
+      setShowType(true);
+      setTtsMuted(true);
+      sessionActiveRef.current = true;
+      setSessionActive(true);
+      setUi('listening');
+      try {
+        const started = await ensureSession();
+        setSession(started);
+        const greeting =
+          "Type your order below — for example 'order 25 kg specialty spice at 25 AED'. I will ask for any missing price or UOM.";
+        setAgentReply(greeting);
+        setNotice({ tone: 'info', text: greeting });
+      } catch (err: unknown) {
+        setNotice({ tone: 'error', text: errorText(err) });
+        setUi('error');
+        sessionActiveRef.current = false;
+        setSessionActive(false);
+      }
+      return;
+    }
     setUi('activating');
     interruptSpeech();
     stopRecognition();
@@ -693,6 +782,7 @@ const VoicePoScreen: React.FC = () => {
       // Speak greeting first, then open the mic — Safari cannot keep recognition alive under TTS.
       const greeting = "Hi! I'm here. How can I help you today?";
       spokenRef.current = greeting;
+      setAgentReply(greeting);
       setUi('acknowledging');
       speakStartedAtRef.current = Date.now();
       const handle = speakNaturally(greeting, ttsMuted);
@@ -719,6 +809,7 @@ const VoicePoScreen: React.FC = () => {
     startMeter,
     stopMeter,
     stopRecognition,
+    textPrimary,
     ttsMuted,
   ]);
 
@@ -817,24 +908,34 @@ const VoicePoScreen: React.FC = () => {
   const turns = session?.turns ?? [];
   const inPostTalk = uiState === 'confirmTranscript' || uiState === 'reviewPo' || uiState === 'done';
 
+  const clarifications = session?.clarifications ?? [];
+  const missingHints = clarifications
+    .map((item) => item.message || item.code)
+    .filter(Boolean)
+    .slice(0, 4);
+
   return (
     <>
       <ScreenHeader
         title="Create PO by Voice"
         eyebrow="Purchasing"
         back
-        intro="Tap Voice once. SILA talks back like Alexa. When finished: confirm transcript → review header & items → Submit with your PO defaults."
+        intro={
+          textPrimary
+            ? "Type your order in Chrome. SILA asks for missing price, UOM and other mandatory fields. When finished: confirm transcript → review → Submit for approval."
+            : "Tap Voice once. SILA talks back like Alexa. When finished: confirm transcript → review header & items → Submit with your PO defaults."
+        }
       />
-      <div className="sm-screen vpo" data-testid="voice-po-screen">
+      <div className="sm-screen vpo" data-testid="voice-po-screen" data-text-primary={textPrimary ? 'true' : 'false'}>
         {!accessLoading && !can.requestPurchase && <Empty text="Voice purchase orders are not available for your role." />}
         {can.requestPurchase && (
           <>
-            {!inPostTalk && (
+            {!inPostTalk && !textPrimary && (
               <VoiceAgentOverlay
                 level={level}
                 state={uiState}
                 transcript={transcript}
-                reply={session?.spokenReply || undefined}
+                reply={agentReply || session?.spokenReply || undefined}
                 muted={ttsMuted}
                 sessionActive={sessionActive}
                 activating={uiState === 'activating'}
@@ -851,19 +952,49 @@ const VoicePoScreen: React.FC = () => {
             {bootError && <ErrorNotice message={bootError} onRetry={() => window.location.reload()} />}
             <Notice notice={notice} />
 
-            {showType && !inPostTalk && (
+            {(showType || textPrimary) && !inPostTalk && (
               <section className="vpo-card" aria-labelledby="vpo-transcript-title" data-testid="vpo-type-fallback">
-                <h2 id="vpo-transcript-title">Type fallback</h2>
+                <h2 id="vpo-transcript-title">{textPrimary ? 'Type your purchase order' : 'Type fallback'}</h2>
+                {textPrimary && (
+                  <p className="sm-meta" data-testid="vpo-chrome-text-note">
+                    Chrome voice is paused for now. Type lines, answer price/UOM prompts, then say you are done.
+                  </p>
+                )}
+                {(agentReply || session?.spokenReply) && (
+                  <p className="vpo-agent-reply" data-testid="vpo-agent-reply">
+                    {agentReply || session?.spokenReply}
+                  </p>
+                )}
+                {missingHints.length > 0 && (
+                  <ul className="vpo-asks" data-testid="vpo-mandatory-asks">
+                    {missingHints.map((hint) => (
+                      <li key={hint}>{hint}</li>
+                    ))}
+                  </ul>
+                )}
                 <label className="sm-visually-hidden" htmlFor="vpo-transcript">
-                  Editable transcript
+                  Order text
                 </label>
                 <textarea
                   id="vpo-transcript"
                   className="vpo-transcript"
                   data-testid="vpo-transcript"
-                  placeholder="Type if voice is unavailable…"
+                  placeholder={
+                    clarifications.some((c) => (c.code || '').toUpperCase() === 'UNIT_PRICE')
+                      ? "e.g. 25 AED  or  use one AED"
+                      : clarifications.some((c) => (c.code || '').toUpperCase() === 'UOM')
+                        ? "e.g. KG  or  EA"
+                        : "e.g. order 25 kg specialty spice at 25 AED"
+                  }
                   value={transcript}
+                  rows={textPrimary ? 4 : 3}
                   onChange={(event) => setTranscript(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' && !event.shiftKey) {
+                      event.preventDefault();
+                      if (!busy && transcript.trim()) void submitTurn(transcript, 'TEXT');
+                    }
+                  }}
                 />
                 <div className="vpo-actions">
                   <button
@@ -875,6 +1006,22 @@ const VoicePoScreen: React.FC = () => {
                   >
                     {busy ? 'Sending…' : 'Send'}
                   </button>
+                  {textPrimary && !sessionActive && (
+                    <button type="button" className="sm-btn" data-testid="vpo-start-text" disabled={busy} onClick={() => void activate()}>
+                      Start
+                    </button>
+                  )}
+                  {(sessionActive || (session?.draft?.lines?.length ?? 0) > 0) && (
+                    <button
+                      type="button"
+                      className="sm-btn"
+                      data-testid="vpo-text-done"
+                      disabled={busy || (session?.draft?.lines?.length ?? 0) === 0}
+                      onClick={() => void enterTranscriptConfirmation()}
+                    >
+                      Done — review
+                    </button>
+                  )}
                 </div>
               </section>
             )}
