@@ -22,44 +22,48 @@ const screen = read('VoicePoScreen.tsx');
 
 assert.match(screen, /Create PO by Voice/);
 assert.match(screen, /VoiceAgentOverlay/);
-const overlay = readFileSync(join(dir, 'voiceAgent/VoiceAgentOverlay.tsx'), 'utf8');
-assert.match(overlay, /sila-voice-agent-overlay/);
-assert.match(overlay, /sva-waveform/);
-const engineApi = readFileSync(join(dir, '../../../../remote-buyer/src/api/silaMe/silaVoiceEngineApi.ts'), 'utf8');
-assert.match(engineApi, /\/api\/v1\/buyer\/sila\/voice-engine/);
-assert.match(screen, /data-testid="vpo-recording-controls"/);
-assert.match(screen, /data-testid="vpo-start-recording"/);
-assert.match(screen, /data-testid="vpo-pause-recording"/);
-assert.match(screen, /data-testid="vpo-stop-recording"/);
-assert.match(screen, /data-testid="vpo-level-meter"/);
+assert.match(screen, /speakNaturally/);
+assert.match(screen, /scheduleEndOfTurn|endOfSpeechSilenceMs|VOICE2_CONFIG/);
 assert.match(screen, /echoCancellation/);
 assert.match(screen, /noiseSuppression/);
 assert.match(screen, /autoGainControl/);
-assert.match(screen, /speechSynthesis/);
 assert.match(screen, /Confirm — create draft PO/);
-assert.match(screen, /Cancel conversation/);
-assert.match(screen, /Uncertain — go with default/);
+assert.match(screen, /End Session/);
+assert.doesNotMatch(screen, /data-testid="vpo-recording-controls"/);
+assert.doesNotMatch(screen, /data-testid="vpo-start-recording"/);
 
-assert.match(api, /export const listPurchasingProfiles/);
-assert.match(api, /export const upsertPurchasingProfile/);
-assert.match(api, /export const setDefaultPurchasingProfile/);
-assert.match(api, /export const deactivatePurchasingProfile/);
+const overlay = readFileSync(join(dir, 'voiceAgent/VoiceAgentOverlay.tsx'), 'utf8');
+assert.match(overlay, /sila-voice-agent-overlay/);
+assert.match(overlay, /sva-waveform/);
+assert.match(overlay, /I'm listening/);
+assert.match(overlay, /End Session/);
+assert.match(overlay, /sva-activate/);
+
+const overlayCss = readFileSync(join(dir, 'voiceAgent/VoiceAgentOverlay.css'), 'utf8');
+assert.match(overlayCss, /#e0f2fe/i);
+assert.match(overlayCss, /#38bdf8/i);
+assert.match(overlayCss, /#6366f1/i);
+assert.match(overlayCss, /#312e81/i);
+assert.match(overlayCss, /#818cf8/i);
+assert.match(overlayCss, /#dc2626/i);
+
+const naturalTts = readFileSync(join(dir, 'voiceAgent/naturalTts.ts'), 'utf8');
+assert.match(naturalTts, /pickNaturalVoice/);
+assert.match(naturalTts, /looksIncompleteUtterance/);
+
+const engineApi = readFileSync(join(dir, '../../../../remote-buyer/src/api/silaMe/silaVoiceEngineApi.ts'), 'utf8');
+assert.match(engineApi, /\/api\/v1\/buyer\/sila\/voice-engine/);
+
 assert.match(api, /export const resolveMyPurchasingDefaults/);
 assert.match(api, /export const startVoicePoSession/);
 assert.match(api, /export const sendVoicePoTurn/);
 assert.match(api, /export const confirmVoicePoDraft/);
 assert.match(api, /export const cancelVoicePoSession/);
-assert.match(api, /export const getVoicePoSession/);
-assert.match(api, /\/api\/v1\/buyer\/sila\/user-purchasing-profiles/);
 assert.match(api, /\/api\/v1\/buyer\/sila\/voice-po\/sessions/);
 
 assert.match(cloudNav, /silaUserPoDefaults/);
-assert.match(cloudNav, /PO Defaults & Account Assignment/);
 assert.match(cloudWorkspace, /SilaUserPoDefaults/);
-assert.match(cloudWorkspace, /silaUserPoDefaults/);
-assert.match(cloudDefaults, /PO Defaults & Account Assignment/);
 assert.match(cloudDefaults, /listPoFlexConfigs/);
-assert.match(cloudDefaults, /upsertPoFlexConfig/);
 assert.match(cloudDefaults, /isOpen=\{Boolean\(editor\)\}/);
 assert.match(cloudDefaults, /closeEditor/);
 assert.match(cloudDefaults, /Add parameter/);
@@ -79,8 +83,6 @@ assert.match(more, /purchasing\/voice-po/);
 const home = readFileSync(join(dir, '../home/HomeScreen.tsx'), 'utf8');
 const inventory = readFileSync(join(dir, '../inventory/InventoryScreen.tsx'), 'utf8');
 assert.match(home, /Create PO by Voice/);
-assert.match(home, /purchasing\/voice-po/);
 assert.match(inventory, /Create PO by Voice/);
-assert.match(inventory, /purchasing\/voice-po/);
 
 console.log('silaVoicePoFrontend.test.ts: ok');

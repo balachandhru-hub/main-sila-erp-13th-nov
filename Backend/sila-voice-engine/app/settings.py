@@ -96,6 +96,13 @@ class VoiceSettings(BaseModel):
     request_timeout_seconds: float = 30.0
     max_concurrency: int = 4
 
+    # Voice 2.0 continuous conversation (client-driven; server-aware flags)
+    continuous_conversation: bool = True
+    auto_end_of_turn: bool = True
+    barge_in_enabled: bool = True
+    end_of_speech_silence_ms: int = 700
+
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> VoiceSettings:
