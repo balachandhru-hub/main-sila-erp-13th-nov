@@ -23,12 +23,9 @@ namespace Buyer.Domain.Serialization
                     return null;
                 }
 
-                if (Guid.TryParse(raw.Trim(), out Guid value))
-                {
-                    return value;
-                }
-
-                throw new JsonException($"The JSON value could not be converted to System.Nullable`1[System.Guid]. Path value: '{raw}'.");
+                // Non-GUID strings (e.g. login names) → null so callers get a friendly 400,
+                // not a System.Text.Json conversion exception.
+                return Guid.TryParse(raw.Trim(), out Guid value) ? value : null;
             }
 
             if (reader.TokenType == JsonTokenType.StartObject)

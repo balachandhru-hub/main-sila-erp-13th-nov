@@ -26,7 +26,7 @@ namespace Buyer.Application.Features.Commands.UpsertSilaUserPoFlexConfig
             BuyerBusinessProfile buyer = await SilaAccess.GetBuyerAsync(_repository, _logger, request.OrganizationId);
             SilaUserPoFlexConfigWriteDto input = request.Request ?? new SilaUserPoFlexConfigWriteDto();
             Guid targetUserId = request.AdminScope
-                ? (input.UserId ?? throw new BadRequestCustomException("User ID is required.", "Enter the user GUID for this PO defaults config."))
+                ? ResolveTargetUserId(input)
                 : request.UserId;
             string configType = SilaUserPoFlexRules.NormalizeType(input.ConfigType);
 
@@ -156,6 +156,32 @@ namespace Buyer.Application.Features.Commands.UpsertSilaUserPoFlexConfig
             await _repository.SaveAsync();
             _logger.LogInfo($"PO flex config upserted. Id: {row.Id}, UserId: {row.UserId}, Type: {configType}");
             return SilaUserPoFlexRules.ToDto(row, savedParams, savedConditions);
+        }
+
+        private static Guid ResolveTargetUserId(SilaUserPoFlexConfigWriteDto input)
+        {
+            string? raw = (input.UserId ?? string.Empty).Trim();
+            if (Guid.TryParse(raw, out Guid parsed))
+            {
+                return parsed;
+            }
+
+            if (!string.IsNullOrWhiteSpace(raw))
+            {
+                throw new BadRequestCustomException(
+                    "User ID must be a GUID.",
+                    $"'{raw}' is not a user GUID. Use “Use signed-in user” or paste the user’s GUID (login names are not accepted here).");
+            }
+
+            string? username = (input.Username ?? string.Empty).Trim();
+            if (Guid.TryParse(username, out parsed))
+            {
+                return parsed;
+            }
+
+            throw new BadRequestCustomException(
+                "User ID is required.",
+                "Enter the user GUID for this PO defaults config.");
         }
 
         private static string? Clean(string? value, int max)

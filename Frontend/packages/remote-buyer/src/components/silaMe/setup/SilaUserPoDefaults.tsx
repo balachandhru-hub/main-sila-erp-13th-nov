@@ -3,6 +3,7 @@ import { EmptyState, Loader, Modal, PageHeader, toastService } from "@vosox/shar
 import {
   deactivatePoFlexConfig,
   listPoFlexConfigs,
+  resolvePoFlexUserId,
   upsertPoFlexConfig,
   type SilaUserPoFlexCondition,
   type SilaUserPoFlexConfig,
@@ -79,7 +80,16 @@ const trim = (value?: string | null) => (value ?? "").trim();
  * Not a fixed-column profile table.
  */
 const SilaUserPoDefaults: React.FC<SilaUserPoDefaultsProps> = ({ canManage = true }) => {
-  const currentUserId = useBuyerAuthStore((state) => state.personDetail?.userId || "");
+  const personDetail = useBuyerAuthStore((state) => state.personDetail);
+  const currentUserId = personDetail?.userId || "";
+  const signedInIdentity = useMemo(
+    () => ({
+      userId: personDetail?.userId,
+      userName: personDetail?.userName,
+      email: personDetail?.email,
+    }),
+    [personDetail?.email, personDetail?.userId, personDetail?.userName],
+  );
   const [userId, setUserId] = useState("");
   const [configType, setConfigType] = useState<string>("PO_CREATE");
   const [loadedUserId, setLoadedUserId] = useState("");
@@ -89,6 +99,11 @@ const SilaUserPoDefaults: React.FC<SilaUserPoDefaultsProps> = ({ canManage = tru
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [busy, setBusy] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+
+  const toGuid = useCallback(
+    (raw: string) => resolvePoFlexUserId(raw, signedInIdentity),
+    [signedInIdentity],
+  );
 
   const closeEditor = useCallback(() => {
     if (!busy) setEditor(null);
@@ -129,22 +144,22 @@ const SilaUserPoDefaults: React.FC<SilaUserPoDefaultsProps> = ({ canManage = tru
 
   const resolveTargetUserId = useCallback(() => {
     const candidate = (loadedUserId || userId || currentUserId || "").trim();
-    return candidate;
-  }, [currentUserId, loadedUserId, userId]);
+    return toGuid(candidate) || toGuid(currentUserId) || "";
+  }, [currentUserId, loadedUserId, toGuid, userId]);
 
   const load = useCallback(async (id: string, type: string) => {
-    const trimmed = id.trim();
-    if (!trimmed) {
-      toastService.error("Enter a User ID (GUID) to load configs.");
+    const resolved = toGuid(id);
+    if (!resolved) {
+      toastService.error("Enter a User ID (GUID) or your login name, then Load.");
       return;
     }
     setLoading(true);
     setError(null);
     try {
-      const data = await listPoFlexConfigs(trimmed, type, true);
+      const data = await listPoFlexConfigs(resolved, type, true);
       setRows(data);
-      setLoadedUserId(trimmed);
-      setUserId(trimmed);
+      setLoadedUserId(resolved);
+      setUserId(resolved);
     } catch (err: unknown) {
       setRows([]);
       setLoadedUserId("");
@@ -152,12 +167,12 @@ const SilaUserPoDefaults: React.FC<SilaUserPoDefaultsProps> = ({ canManage = tru
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [toGuid]);
 
   const openCreate = () => {
     const target = resolveTargetUserId();
     if (!target) {
-      toastService.error("Enter a User ID (GUID), or sign in, then Add.");
+      toastService.error("Enter a User ID (GUID) or your login name, or sign in, then Add.");
       return;
     }
     setUserId(target);
@@ -233,9 +248,9 @@ const SilaUserPoDefaults: React.FC<SilaUserPoDefaultsProps> = ({ canManage = tru
 
   const handleSave = async () => {
     if (!editor) return;
-    const targetUserId = trim(editor.userId);
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetUserId)) {
-      toastService.error("A valid User ID (GUID) is required before saving.");
+    const targetUserId = toGuid(editor.userId) || "";
+    if (!targetUserId) {
+      toastService.error("A valid User ID (GUID) is required before saving. Login names are mapped only for the signed-in user.");
       return;
     }
     const parameters = editor.parameters
@@ -314,7 +329,7 @@ const SilaUserPoDefaults: React.FC<SilaUserPoDefaultsProps> = ({ canManage = tru
                 id="spo-user-id"
                 className="sila-input"
                 type="text"
-                placeholder="GUID of the user"
+                placeholder="GUID or your login name"
                 value={userId}
                 onChange={(event) => setUserId(event.target.value)}
                 onKeyDown={(event) => {

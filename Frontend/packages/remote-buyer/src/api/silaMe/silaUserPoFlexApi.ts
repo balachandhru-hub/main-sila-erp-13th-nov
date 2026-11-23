@@ -98,6 +98,27 @@ const sanitizeWrite = (request: SilaUserPoFlexConfigWrite): SilaUserPoFlexConfig
   return body;
 };
 
+/** Map a typed User ID field (GUID or signed-in login name) to a GUID. */
+export const resolvePoFlexUserId = (
+  raw: string | null | undefined,
+  signedIn?: { userId?: string | null; userName?: string | null; email?: string | null } | null,
+): string | null => {
+  const trimmed = (raw ?? "").trim();
+  const guid = asGuidOrNull(trimmed);
+  if (guid) return guid;
+
+  const signedGuid = asGuidOrNull(signedIn?.userId);
+  if (!trimmed || !signedGuid) return null;
+
+  const login = (signedIn?.userName ?? "").trim().toLowerCase();
+  const email = (signedIn?.email ?? "").trim().toLowerCase();
+  const key = trimmed.toLowerCase();
+  if ((login && key === login) || (email && key === email)) {
+    return signedGuid;
+  }
+  return null;
+};
+
 export const listPoFlexConfigs = async (
   userId: string,
   configType = "PO_CREATE",
