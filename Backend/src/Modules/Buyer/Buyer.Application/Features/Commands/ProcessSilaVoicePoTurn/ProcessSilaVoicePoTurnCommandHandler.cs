@@ -146,6 +146,22 @@ namespace Buyer.Application.Features.Commands.ProcessSilaVoicePoTurn
                 case VoicePoIntent.DoubleQuantity:
                     SilaVoicePoAgentRules.DoubleQuantities(draft);
                     return SilaVoicePoAgentRules.BuildSpokenReply(parse.Intent, draft, SilaVoicePoAgentRules.ValidateDraft(draft));
+                case VoicePoIntent.SetUnitPrice:
+                {
+                    SilaVoicePoDraftLineDto? target = draft.Lines.LastOrDefault(l => l.UnitPrice == null || l.UnitPrice <= 0)
+                        ?? draft.Lines.LastOrDefault();
+                    if (target == null)
+                    {
+                        return "There is no draft line to price. Add a material first.";
+                    }
+
+                    decimal price = parse.UnitPrice is > 0 ? parse.UnitPrice.Value : 1m;
+                    target.UnitPrice = price;
+                    target.ResolutionNote = string.IsNullOrWhiteSpace(target.ResolutionNote)
+                        ? $"Unit price set to {price}."
+                        : $"{target.ResolutionNote} Unit price set to {price}.";
+                    return SilaVoicePoAgentRules.BuildSpokenReply(parse.Intent, draft, SilaVoicePoAgentRules.ValidateDraft(draft));
+                }
                 case VoicePoIntent.RemoveLine:
                 {
                     bool removed = SilaVoicePoAgentRules.RemoveLine(draft, parse.MaterialHint);

@@ -453,6 +453,39 @@ namespace Buyer.Application.Features.Queries.GetSilaReceivingDashboard
                 }
             }
 
+            List<PurchaseOrder> pendingPos = await _repository.PurchaseOrder
+                .FindByCondition(x => x.BuyerId == buyerId && x.IsActive
+                    && x.Status == Common.PURCHASE_ORDER_PENDING_APPROVAL)
+                .OrderByDescending(x => x.DateCreated)
+                .Take(20)
+                .ToListAsync(cancellationToken);
+            foreach (PurchaseOrder pendingPo in pendingPos)
+            {
+                dashboard.Approvals.Add(new SilaHomeApprovalDto
+                {
+                    Type = "Purchase Order Approval",
+                    Document = pendingPo.PoNumber,
+                    SupplierName = pendingPo.SupplierName,
+                    Amount = pendingPo.TotalAmount,
+                    Age = AgeText(pendingPo.DateCreated, now),
+                    Status = pendingPo.Status,
+                    Action = "REVIEW",
+                    PurchaseOrderId = pendingPo.Id
+                });
+                dashboard.Tasks.Add(new SilaReceivingTaskDto
+                {
+                    Priority = "ACTION_REQUIRED",
+                    Type = "PURCHASE_ORDER",
+                    Title = "Approve purchase order",
+                    PoNumber = pendingPo.PoNumber,
+                    SupplierName = pendingPo.SupplierName,
+                    Age = AgeText(pendingPo.DateCreated, now),
+                    Status = pendingPo.Status,
+                    Action = "REVIEW",
+                    PurchaseOrderId = pendingPo.Id
+                });
+            }
+
             dashboard.Tasks = dashboard.Tasks
                 .OrderBy(x => x.Priority == "CRITICAL" ? 0 : 1)
                 .ThenBy(x => x.ExpectedDate)
@@ -755,10 +788,22 @@ namespace Buyer.Application.Features.Queries.GetSilaReceivingDashboard
                 _repository, buyerId, Common.SILA_REF_INVOICE, userId, cancellationToken, administrator);
             List<Guid> memos = await SilaApprovals.PendingForUserAsync(
                 _repository, buyerId, Common.SILA_REF_CREDIT_MEMO, userId, cancellationToken, administrator);
+            List<Guid> purchaseOrders = await SilaApprovals.PendingForUserAsync(
+                _repository, buyerId, Common.SILA_REF_PO, userId, cancellationToken, administrator);
             dashboard.Approvals = dashboard.Approvals.Where(row =>
                 (row.InvoiceId != null && invoices.Contains(row.InvoiceId.Value))
                 || (row.CreditMemoId != null && memos.Contains(row.CreditMemoId.Value))
+                || (IsPurchaseOrderApproval(row) && purchaseOrders.Contains(row.PurchaseOrderId!.Value))
                 || row.TransferId != null).ToList();
+        }
+
+        private static bool IsPurchaseOrderApproval(SilaHomeApprovalDto row)
+        {
+            return row.PurchaseOrderId != null
+                && row.InvoiceId == null
+                && row.CreditMemoId == null
+                && row.TransferId == null
+                && row.GoodsReceiptId == null;
         }
 
         /// <summary>
@@ -773,6 +818,9 @@ namespace Buyer.Application.Features.Queries.GetSilaReceivingDashboard
             bool viewCreditMemo = HasPermission(codes, "VIEW_SILA_CREDIT_MEMO");
             bool approveInvoice = viewInvoice && HasPermission(codes, "APPROVE_SILA_INVOICE");
             bool approveCreditMemo = viewCreditMemo && HasPermission(codes, "APPROVE_SILA_CREDIT_MEMO");
+            bool approvePurchaseOrder = HasPermission(codes, "CREATE_PURCHASE_ORDER")
+                || HasPermission(codes, "REQUEST_SILA_PURCHASE")
+                || HasPermission(codes, "GET_PURCHASE_ORDER");
             bool viewTransfer = HasPermission(codes, "VIEW_SILA_INVENTORY")
                 || HasPermission(codes, "APPROVE_SILA_TRANSFER")
                 || HasPermission(codes, "MANAGE_SILA_TRANSFER");
@@ -807,6 +855,11 @@ namespace Buyer.Application.Features.Queries.GetSilaReceivingDashboard
                     return approveInvoice;
                 }
 
+                if (IsPurchaseOrderApproval(row))
+                {
+                    return approvePurchaseOrder;
+                }
+
                 if (row.TransferId != null)
                 {
                     return viewTransfer;
@@ -823,9 +876,20 @@ namespace Buyer.Application.Features.Queries.GetSilaReceivingDashboard
                 .Where(x => x.CreditMemoId != null)
                 .Select(x => x.CreditMemoId!.Value)
                 .ToHashSet();
+            HashSet<Guid> eligiblePurchaseOrderApprovals = dashboard.Approvals
+                .Where(IsPurchaseOrderApproval)
+                .Select(x => x.PurchaseOrderId!.Value)
+                .ToHashSet();
 
             dashboard.Tasks = dashboard.Tasks.Where(task =>
             {
+                if (IsPurchaseOrderTask(task))
+                {
+                    return approvePurchaseOrder
+                        && task.PurchaseOrderId != null
+                        && eligiblePurchaseOrderApprovals.Contains(task.PurchaseOrderId.Value);
+                }
+
                 if (IsCreditMemoTask(task))
                 {
                     if (IsCreditMemoApprovalTask(task))
@@ -918,6 +982,12 @@ namespace Buyer.Application.Features.Queries.GetSilaReceivingDashboard
             return string.Equals(task.Title, "Approve credit memo", StringComparison.OrdinalIgnoreCase)
                 || (string.Equals(task.Type, "CREDIT_MEMO", StringComparison.OrdinalIgnoreCase)
                     && string.Equals(task.Status, Common.SILA_CREDIT_MEMO_PENDING_APPROVAL, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static bool IsPurchaseOrderTask(SilaReceivingTaskDto task)
+        {
+            return string.Equals(task.Type, "PURCHASE_ORDER", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(task.Title, "Approve purchase order", StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool HasPermission(List<string> codes, string code)

@@ -23,7 +23,9 @@ export const inboxItemsFromDashboard = (data: SilaReceivingDashboard | null | un
   const items: SilaInboxItem[] = [];
   const seen = new Set<string>();
   for (const row of data?.approvals ?? []) {
-    const key = row.creditMemoId || row.invoiceId || row.transferId || row.document;
+    const poOnly =
+      !!row.purchaseOrderId && !row.invoiceId && !row.creditMemoId && !row.transferId && !row.goodsReceiptId;
+    const key = row.creditMemoId || row.invoiceId || row.transferId || (poOnly ? row.purchaseOrderId! : null) || row.document;
     if (seen.has(key)) continue;
     seen.add(key);
     items.push({
@@ -75,6 +77,8 @@ export const mobilePathForInbox = (item: SilaInboxItem): string => {
   if (item.invoiceId) return `receive/invoices/${item.invoiceId}`;
   if (item.transferId) return "inventory/transfers?tab=to-approve";
   if (item.goodsReceiptId) return `receive/grns/${item.goodsReceiptId}`;
+  // Voice/text POs awaiting approval are decided on the Approvals tab (not receiving).
+  if (item.purchaseOrderId && !item.invoiceId && !item.creditMemoId) return "tasks?tab=approvals";
   if (item.purchaseOrderId) return `receive/pos/${item.purchaseOrderId}`;
   return "tasks?tab=approvals";
 };

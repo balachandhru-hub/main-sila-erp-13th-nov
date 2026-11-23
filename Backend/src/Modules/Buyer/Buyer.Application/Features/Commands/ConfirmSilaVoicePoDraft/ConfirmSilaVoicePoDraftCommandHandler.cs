@@ -55,7 +55,8 @@ namespace Buyer.Application.Features.Commands.ConfirmSilaVoicePoDraft
             }
 
             SilaVoicePoDraftDto draft = SilaVoicePoAgentRules.DeserializeDraft(session.DraftJson) ?? new SilaVoicePoDraftDto();
-            SilaVoicePoDraftValidation validation = SilaVoicePoAgentRules.ValidateDraft(draft);
+            // Confirm path: ask was already done in conversation; fill remaining price with 1 AED, then hard-validate.
+            SilaVoicePoDraftValidation validation = SilaVoicePoAgentRules.ValidateDraft(draft, forConfirm: true);
             SilaVoicePoSessionMapper.WriteValidation(session, validation);
             if (validation.Status != SilaVoicePoAgentRules.VALIDATION_OK)
             {
@@ -65,8 +66,10 @@ namespace Buyer.Application.Features.Commands.ConfirmSilaVoicePoDraft
                 await _repository.SaveAsync();
                 throw new BadRequestCustomException(
                     "Voice PO draft is not valid.",
-                    string.Join(" ", validation.Errors));
+                    string.Join(" ", validation.Errors.Concat(validation.Clarifications.Select(c => c.Message))));
             }
+
+            session.DraftJson = SilaVoicePoAgentRules.SerializeDraft(draft);
 
             if (!string.IsNullOrWhiteSpace(request.Request.IdempotencyKey))
             {
@@ -158,8 +161,25 @@ namespace Buyer.Application.Features.Commands.ConfirmSilaVoicePoDraft
                         OrganizationId = request.OrganizationId,
                         UserId = request.UserId,
                         Request = orderRequest,
-                        SupplierName = first.SupplierName
+                        SupplierName = first.SupplierName,
+                        DeferErpUntilApproved = true
                     }, cancellationToken);
+
+                    await SilaApprovals.StartAsync(
+                        _repository,
+                        _logger,
+                        buyer.Id,
+                        Common.SILA_APPROVAL_TYPE_PURCHASE_ORDER,
+                        Common.SILA_REF_PO,
+                        result.Id,
+                        version: 1,
+                        new ApprovalScope
+                        {
+                            CompanyCode = draft.CompanyCode,
+                            PropertyId = session.PropertyId,
+                            LocationId = session.LocationId ?? session.OutletId
+                        },
+                        cancellationToken);
 
                     created.Add(new SilaVoicePoCreatedOrderDto
                     {
@@ -176,12 +196,13 @@ namespace Buyer.Application.Features.Commands.ConfirmSilaVoicePoDraft
                     ? created[0].PoNumber
                     : string.Join(",", created.Select(c => c.PoNumber).Where(n => !string.IsNullOrWhiteSpace(n)));
                 session.SpokenReply = created.Count == 1
-                    ? $"Purchase order {session.CreatedPoNumber} created."
-                    : $"Created {created.Count} purchase orders: {session.CreatedPoNumber}.";
+                    ? $"Purchase order {session.CreatedPoNumber} is ready for approval. It will post to SAP after approval."
+                    : $"Created {created.Count} purchase orders for approval: {session.CreatedPoNumber}.";
                 session.DraftJson = JsonSerializer.Serialize(new
                 {
                     draft,
-                    createdOrders = created
+                    createdOrders = created,
+                    awaitingApproval = true
                 });
 
                 InventoryLedger ledger = new(_repository, buyer.Id, request.UserId);

@@ -715,8 +715,13 @@ const VoicePoScreen: React.FC = () => {
       });
       setSession(next);
       const po = next.createdPoNumber ? ` Purchase order ${next.createdPoNumber}.` : '';
-      setNotice({ tone: 'success', text: `Draft purchase order created with your defaults.${po}` });
-      const reply = next.spokenReply || `Done. Draft purchase order created.${po}`;
+      setNotice({
+        tone: 'success',
+        text: `Purchase order submitted for approval.${po} It posts to SAP after approval.`,
+      });
+      const reply =
+        next.spokenReply ||
+        `Done. Purchase order submitted for approval.${po} It will post to SAP once approved.`;
       setUi('speaking');
       const handle = speakNaturally(reply, ttsMuted);
       speakHandleRef.current = handle;
@@ -943,7 +948,7 @@ const VoicePoScreen: React.FC = () => {
                 <p className="sm-meta">
                   {session?.createdPoNumber
                     ? `Purchase order ${session.createdPoNumber} was created with your defaults.`
-                    : 'Draft purchase order created with your defaults.'}
+                    : 'Purchase order submitted for approval. It posts to SAP after approval.'}
                 </p>
                 <button
                   type="button"

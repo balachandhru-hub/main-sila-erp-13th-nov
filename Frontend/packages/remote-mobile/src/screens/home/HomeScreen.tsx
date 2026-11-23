@@ -171,7 +171,7 @@ const HomeScreen: React.FC = () => {
           <ul className="sm-list">
             {approvals.map((row, index) => (
               <li key={`${row.document}-${index}`}>
-                <button type="button" className="sm-list-btn" onClick={() => row.creditMemoId ? go(`receive/credit-memos/${row.creditMemoId}`) : row.invoiceId ? go(`receive/invoices/${row.invoiceId}`) : row.transferId ? go('inventory/transfers?tab=to-approve') : undefined}>
+                <button type="button" className="sm-list-btn" onClick={() => row.creditMemoId ? go(`receive/credit-memos/${row.creditMemoId}`) : row.invoiceId ? go(`receive/invoices/${row.invoiceId}`) : row.transferId ? go('inventory/transfers?tab=to-approve') : row.purchaseOrderId ? go('tasks?tab=approvals') : undefined}>
                   <span className="sm-row"><strong>{row.document}</strong><StatusBadge status={row.status} /></span>
                   <span className="sm-meta">{row.type}{row.supplierName ? ` · ${row.supplierName}` : ''} · {row.age}</span>
                 </button>

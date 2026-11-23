@@ -107,6 +107,11 @@ namespace Buyer.Tests.VoicePo
         {
             SilaVoicePoDraftDto draft = new()
             {
+                CompanyCode = "1000",
+                PlantCode = "1060",
+                PurchasingOrganization = "1000",
+                PurchasingGroup = "001",
+                Currency = "AED",
                 Lines =
                 {
                     new SilaVoicePoDraftLineDto
@@ -152,6 +157,11 @@ namespace Buyer.Tests.VoicePo
         {
             SilaVoicePoDraftDto draft = new()
             {
+                CompanyCode = "1000",
+                PlantCode = "1060",
+                PurchasingOrganization = "1000",
+                PurchasingGroup = "001",
+                Currency = "AED",
                 Lines =
                 {
                     new SilaVoicePoDraftLineDto
@@ -161,6 +171,7 @@ namespace Buyer.Tests.VoicePo
                         Description = "Rice",
                         Quantity = 5,
                         UnitOfMeasure = "KG",
+                        UnitPrice = 12,
                         SupplierId = Guid.NewGuid(),
                         InventoryType = SilaUserPurchasingProfileRules.INVENTORY_STOCK,
                         Resolved = true
@@ -172,6 +183,86 @@ namespace Buyer.Tests.VoicePo
 
             Assert.Equal(SilaVoicePoAgentRules.VALIDATION_OK, validation.Status);
             Assert.Empty(validation.Errors);
+        }
+
+        [Fact]
+        public void Conversation_validation_asks_for_missing_unit_price_and_uom()
+        {
+            SilaVoicePoDraftDto draft = new()
+            {
+                CompanyCode = "1000",
+                PlantCode = "1060",
+                PurchasingOrganization = "1000",
+                PurchasingGroup = "001",
+                Currency = "AED",
+                Lines =
+                {
+                    new SilaVoicePoDraftLineDto
+                    {
+                        LineNumber = 1,
+                        Description = "specialty spice blend",
+                        Quantity = 25,
+                        MaterialGroup = "0127",
+                        AccountAssignmentCategory = "K",
+                        CostCenter = "1060010108",
+                        GlAccount = "6000000007",
+                        InventoryType = SilaUserPurchasingProfileRules.INVENTORY_NON_STOCK,
+                        SupplierId = Guid.NewGuid(),
+                        Resolved = true
+                    }
+                }
+            };
+
+            SilaVoicePoDraftValidation validation = SilaVoicePoAgentRules.ValidateDraft(draft);
+
+            Assert.Equal(SilaVoicePoAgentRules.VALIDATION_NEEDS_CLARIFICATION, validation.Status);
+            Assert.Contains(validation.Clarifications, c => c.Code == "UOM");
+            Assert.Contains(validation.Clarifications, c => c.Code == "UNIT_PRICE");
+        }
+
+        [Fact]
+        public void Confirm_validation_defaults_missing_unit_price_to_one_aed()
+        {
+            SilaVoicePoDraftDto draft = new()
+            {
+                CompanyCode = "1000",
+                PlantCode = "1060",
+                PurchasingOrganization = "1000",
+                PurchasingGroup = "001",
+                Currency = "AED",
+                Lines =
+                {
+                    new SilaVoicePoDraftLineDto
+                    {
+                        LineNumber = 1,
+                        Description = "specialty spice blend",
+                        Quantity = 25,
+                        UnitOfMeasure = "KG",
+                        MaterialGroup = "0127",
+                        AccountAssignmentCategory = "K",
+                        CostCenter = "1060010108",
+                        GlAccount = "6000000007",
+                        InventoryType = SilaUserPurchasingProfileRules.INVENTORY_NON_STOCK,
+                        SupplierId = Guid.NewGuid(),
+                        Resolved = true
+                    }
+                }
+            };
+
+            SilaVoicePoDraftValidation validation = SilaVoicePoAgentRules.ValidateDraft(draft, forConfirm: true);
+
+            Assert.Equal(SilaVoicePoAgentRules.VALIDATION_OK, validation.Status);
+            Assert.Equal(1m, draft.Lines[0].UnitPrice);
+            Assert.Contains("Default unit price 1 AED", draft.Lines[0].ResolutionNote ?? string.Empty);
+        }
+
+        [Fact]
+        public void Use_one_aed_phrase_sets_unit_price_intent()
+        {
+            VoicePoParseResult result = SilaVoicePoAgentRules.ParseOrderIntent("use one AED");
+
+            Assert.Equal(VoicePoIntent.SetUnitPrice, result.Intent);
+            Assert.Equal(1m, result.UnitPrice);
         }
 
         [Fact]

@@ -289,6 +289,14 @@ namespace Buyer.Application.Features.Shared
                 return result;
             }
 
+            // Price-only answers while a draft line awaits unit price (not part of an "order …" line).
+            if (TryParseUnitPriceAnswer(normalized, text, out decimal? answeredPrice))
+            {
+                result.Intent = VoicePoIntent.SetUnitPrice;
+                result.UnitPrice = answeredPrice;
+                return result;
+            }
+
             result.Intent = VoicePoIntent.Unknown;
             result.NeedsClarification = true;
             result.ClarificationMessage =
@@ -297,7 +305,11 @@ namespace Buyer.Application.Features.Shared
             return result;
         }
 
-        public static SilaVoicePoDraftValidation ValidateDraft(SilaVoicePoDraftDto? draft)
+        /// <param name="forConfirm">
+        /// When true, missing unit price is filled by <see cref="ApplyDefaultUnitPrices"/> before validation
+        /// (1 AED default). During conversation turns, missing price/UOM still ask the user.
+        /// </param>
+        public static SilaVoicePoDraftValidation ValidateDraft(SilaVoicePoDraftDto? draft, bool forConfirm = false)
         {
             SilaVoicePoDraftValidation validation = new();
             if (draft == null || draft.Lines == null || draft.Lines.Count == 0)
@@ -305,6 +317,11 @@ namespace Buyer.Application.Features.Shared
                 validation.Status = VALIDATION_INVALID;
                 validation.Errors.Add("The draft has no lines.");
                 return validation;
+            }
+
+            if (forConfirm)
+            {
+                ApplyDefaultUnitPrices(draft);
             }
 
             for (int i = 0; i < draft.Lines.Count; i++)
@@ -340,6 +357,34 @@ namespace Buyer.Application.Features.Shared
                 if (line.Quantity <= 0)
                 {
                     validation.Errors.Add($"{where}: quantity must be greater than zero.");
+                    validation.Clarifications.Add(new SilaVoicePoClarificationDto
+                    {
+                        Code = "QUANTITY",
+                        Message = $"{where}: how many units do you need?",
+                        Field = "Quantity"
+                    });
+                }
+
+                if (string.IsNullOrWhiteSpace(line.UnitOfMeasure))
+                {
+                    validation.Errors.Add($"{where}: unit of measure is required.");
+                    validation.Clarifications.Add(new SilaVoicePoClarificationDto
+                    {
+                        Code = "UOM",
+                        Message = $"{where}: what unit of measure should I use (for example KG, EA, L)?",
+                        Field = "UnitOfMeasure"
+                    });
+                }
+
+                if (!forConfirm && (line.UnitPrice == null || line.UnitPrice <= 0))
+                {
+                    validation.Errors.Add($"{where}: unit price is required.");
+                    validation.Clarifications.Add(new SilaVoicePoClarificationDto
+                    {
+                        Code = "UNIT_PRICE",
+                        Message = $"{where}: what is the unit price in {(draft.Currency ?? "AED")}? Say the amount, or say 'use one {draft.Currency ?? "AED"}' to default to 1.",
+                        Field = "UnitPrice"
+                    });
                 }
 
                 if (line.SupplierId == null || line.SupplierId == Guid.Empty)
@@ -372,6 +417,32 @@ namespace Buyer.Application.Features.Shared
                 }
             }
 
+            // FIVE Create PO header fields (same set used for successful SAP PO 4500005033).
+            void RequireHeader(string? value, string field, string ask)
+            {
+                if (!string.IsNullOrWhiteSpace(value))
+                {
+                    return;
+                }
+
+                validation.Errors.Add($"{field} is required.");
+                validation.Clarifications.Add(new SilaVoicePoClarificationDto
+                {
+                    Code = field.ToUpperInvariant(),
+                    Message = ask,
+                    Field = field
+                });
+            }
+
+            RequireHeader(draft.CompanyCode, "CompanyCode", "Company code is missing from your PO defaults. Say 'go with default' after updating defaults.");
+            RequireHeader(draft.PlantCode, "PlantCode", "Plant is missing from your PO defaults. Say 'go with default' after updating defaults.");
+            RequireHeader(draft.PurchasingOrganization, "PurchasingOrganization", "Purchasing organization is missing from your PO defaults.");
+            RequireHeader(draft.PurchasingGroup, "PurchasingGroup", "Purchasing group is missing from your PO defaults.");
+            if (string.IsNullOrWhiteSpace(draft.Currency))
+            {
+                draft.Currency = "AED";
+            }
+
             if (validation.Errors.Count == 0)
             {
                 validation.Status = VALIDATION_OK;
@@ -386,6 +457,21 @@ namespace Buyer.Application.Features.Shared
             }
 
             return validation;
+        }
+
+        /// <summary>Applies 1 AED (or draft currency) when a line still has no positive unit price.</summary>
+        public static void ApplyDefaultUnitPrices(SilaVoicePoDraftDto draft)
+        {
+            string currency = string.IsNullOrWhiteSpace(draft.Currency) ? "AED" : draft.Currency.Trim().ToUpperInvariant();
+            draft.Currency = currency;
+            foreach (SilaVoicePoDraftLineDto line in draft.Lines)
+            {
+                if (line.UnitPrice == null || line.UnitPrice <= 0)
+                {
+                    line.UnitPrice = 1m;
+                    line.ResolutionNote = AppendNote(line.ResolutionNote, $"Default unit price 1 {currency}.");
+                }
+            }
         }
 
         public static void ApplyGoWithDefault(SilaVoicePoDraftDto draft, SilaUserPurchasingDefaultsDto defaults)
@@ -648,6 +734,10 @@ namespace Buyer.Application.Features.Shared
                 VoicePoIntent.AddLine when validation.Status == VALIDATION_OK =>
                     $"Added. Draft has {draft.Lines.Count} line{(draft.Lines.Count == 1 ? string.Empty : "s")}. Say 'confirm purchase order' when ready.",
                 VoicePoIntent.GoWithDefault => "Applied your purchasing defaults.",
+                VoicePoIntent.SetUnitPrice when validation.Status == VALIDATION_OK =>
+                    $"Got it. {SummarizeDraft(draft)}",
+                VoicePoIntent.SetUnitPrice => validation.Clarifications.FirstOrDefault()?.Message
+                    ?? "Unit price updated.",
                 VoicePoIntent.DoubleQuantity => "Doubled the quantities on the draft.",
                 VoicePoIntent.RemoveLine => draft.Lines.Count == 0 ? "Removed the line. The draft is empty." : "Removed the line.",
                 VoicePoIntent.Review => SummarizeDraft(draft),
@@ -657,6 +747,40 @@ namespace Buyer.Application.Features.Shared
                     ?? validation.Errors.FirstOrDefault()
                     ?? "How can I help with this purchase order?"
             };
+        }
+
+        private static bool TryParseUnitPriceAnswer(string normalized, string original, out decimal? unitPrice)
+        {
+            unitPrice = null;
+            if (Regex.IsMatch(normalized, @"\b(use|default|go with)\b.*\b(one|1)\b.*\b(aed|price|dirham)?\b")
+                || normalized is "use one aed" or "use 1 aed" or "default price" or "one aed")
+            {
+                unitPrice = 1m;
+                return true;
+            }
+
+            Match priced = Regex.Match(
+                original,
+                @"\b(?:price(?:\s+is)?|at|for)\s*(?<amount>\d+(?:[.,]\d+)?)\s*(?:aed|usd|eur)?\b",
+                RegexOptions.IgnoreCase);
+            if (!priced.Success)
+            {
+                priced = Regex.Match(original, @"^\s*(?<amount>\d+(?:[.,]\d+)?)\s*(?:aed|usd|eur)?\s*$", RegexOptions.IgnoreCase);
+            }
+
+            if (priced.Success
+                && decimal.TryParse(
+                    priced.Groups["amount"].Value.Replace(',', '.'),
+                    NumberStyles.Number,
+                    CultureInfo.InvariantCulture,
+                    out decimal amount)
+                && amount > 0)
+            {
+                unitPrice = amount;
+                return true;
+            }
+
+            return false;
         }
 
         public static string SummarizeDraft(SilaVoicePoDraftDto draft)
@@ -797,6 +921,7 @@ namespace Buyer.Application.Features.Shared
 
     public enum VoicePoIntent
     {
+        SetUnitPrice = 100,
         None,
         Unknown,
         AddLine,

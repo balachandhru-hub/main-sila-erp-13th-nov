@@ -1,5 +1,5 @@
 import React from 'react';
-import { getReceivingDashboard } from '../../../../remote-buyer/src/api/silaMe/silaReceivingApi';
+import { decidePurchaseOrder, getReceivingDashboard } from '../../../../remote-buyer/src/api/silaMe/silaReceivingApi';
 import { getTransfers } from '../../../../remote-buyer/src/api/silaMe/silaMovementsApi';
 import { decidePriceChange, getPriceApprovals } from '../../../../remote-buyer/src/api/silaMe/silaMaterialsApi';
 import { approveRecipe, getRecipeApprovals, rejectRecipe } from '../../../../remote-buyer/src/api/silaMe/silaRecipeApi';
@@ -11,6 +11,9 @@ import { formatDate, formatMoney } from '../../format';
 import { useGo } from '../../navigation';
 import { errorText, useLoad } from '../../useLoad';
 import { grnErpStatus, isGrnException, loadRecentGrns } from '../receive/grnStatus';
+
+const isPurchaseOrderApproval = (item: { purchaseOrderId?: string | null; invoiceId?: string | null; creditMemoId?: string | null; transferId?: string | null; goodsReceiptId?: string | null }) =>
+  !!item.purchaseOrderId && !item.invoiceId && !item.creditMemoId && !item.transferId && !item.goodsReceiptId;
 
 /** Transfers waiting for my approval (source or destination). */
 export const ItoApprovals: React.FC = () => {
@@ -66,7 +69,7 @@ const DecisionActions: React.FC<{ busy: boolean; onDecide: (approve: boolean, co
   );
 };
 
-/** Price, recipe, invoice and credit memo approvals waiting for me. */
+/** Price, recipe, invoice, credit memo and purchase order approvals waiting for me. */
 export const CloudApprovals: React.FC = () => {
   const go = useGo();
   const { can } = useAccess();
@@ -76,7 +79,9 @@ export const CloudApprovals: React.FC = () => {
   const [busyId, setBusyId] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const documentApprovals = (inbox.data ?? []).filter((item) => item.kind === 'approval');
-  if (!can.approvePrice && !can.approveRecipe && documentApprovals.length === 0 && !inbox.loading) {
+  const purchaseOrderApprovals = documentApprovals.filter(isPurchaseOrderApproval);
+  const otherDocumentApprovals = documentApprovals.filter((item) => !isPurchaseOrderApproval(item));
+  if (!can.approvePrice && !can.approveRecipe && !can.requestPurchase && documentApprovals.length === 0 && !inbox.loading) {
     return <Empty text="No approvals for your role." />;
   }
 
@@ -97,11 +102,33 @@ export const CloudApprovals: React.FC = () => {
     <>
       {error && <ErrorNotice message={error} />}
       {inbox.error && <ErrorNotice message={inbox.error} onRetry={inbox.reload} />}
-      <section className="sm-section" aria-labelledby="sm-doc-approvals">
-        <h2 id="sm-doc-approvals">Waiting for my approval · {inbox.loading ? '…' : documentApprovals.length}</h2>
-        {!inbox.loading && documentApprovals.length === 0 && <Empty text="No invoice, credit memo or transfer approvals waiting for you." />}
+      <section className="sm-section" aria-labelledby="sm-po-approvals">
+        <h2 id="sm-po-approvals">Purchase order approvals · {inbox.loading ? '…' : purchaseOrderApprovals.length}</h2>
+        {!inbox.loading && purchaseOrderApprovals.length === 0 && <Empty text="No purchase orders waiting for your approval." />}
         <ul className="sm-list">
-          {documentApprovals.map((item) => (
+          {purchaseOrderApprovals.map((item) => (
+            <li key={item.key} className="sm-card">
+              <div className="sm-row">
+                <strong className="sm-title">{item.title}</strong>
+                <StatusBadge status={item.status || 'PENDING_APPROVAL'} />
+              </div>
+              <span className="sm-meta">{item.detail}</span>
+              <span className="sm-meta">Approve to post Create PO to SAP.</span>
+              <DecisionActions
+                busy={busyId === item.key}
+                onDecide={(approve, comment) =>
+                  decide(item.key, () => decidePurchaseOrder(item.purchaseOrderId!, approve, comment), inbox.reload)
+                }
+              />
+            </li>
+          ))}
+        </ul>
+      </section>
+      <section className="sm-section" aria-labelledby="sm-doc-approvals">
+        <h2 id="sm-doc-approvals">Waiting for my approval · {inbox.loading ? '…' : otherDocumentApprovals.length}</h2>
+        {!inbox.loading && otherDocumentApprovals.length === 0 && <Empty text="No invoice, credit memo or transfer approvals waiting for you." />}
+        <ul className="sm-list">
+          {otherDocumentApprovals.map((item) => (
             <li key={item.key}>
               <button type="button" className="sm-list-btn" onClick={() => go(mobilePathForInbox(item))}>
                 <span className="sm-row">

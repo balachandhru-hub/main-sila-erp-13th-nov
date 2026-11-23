@@ -68,6 +68,18 @@ namespace Buyer.Application.Features.Commands.CreatePurchaseOrder
                 SilaTransaction.RunAsync(() => SaveOrderAsync(buyer, order, supplierName, erpOptions, request, cancellationToken)));
             _logger.LogInfo($"Purchase order created. PurchaseOrderId: {purchaseOrderId}, BuyerId: {buyer.Id}");
 
+            if (request.DeferErpUntilApproved)
+            {
+                PurchaseOrder? deferred = _repository.PurchaseOrder.FindFirstByCondition(x => x.Id == purchaseOrderId && x.IsActive);
+                if (deferred == null)
+                {
+                    throw new NotFoundCustomException("Purchase order not found.", "The purchase order could not be loaded after create.");
+                }
+
+                _logger.LogInfo($"Purchase order ERP deferred until approval. PurchaseOrderId: {purchaseOrderId}, Status: {deferred.Status}");
+                return PurchaseOrderErpProcessor.Describe(deferred, null, null);
+            }
+
             // The order exists now. The hand-offs never undo it.
             PurchaseOrderErpProcessor processor = new PurchaseOrderErpProcessor(
                 _repository,
@@ -112,6 +124,11 @@ namespace Buyer.Application.Features.Commands.CreatePurchaseOrder
                 if (line.Quantity <= 0 || line.Quantity > MAX_VALUE)
                 {
                     throw new BadRequestCustomException("Line is not valid.", $"{where}: the quantity must be above 0 and at most {MAX_VALUE:0}.");
+                }
+
+                if (string.IsNullOrWhiteSpace(line.UnitOfMeasure))
+                {
+                    throw new BadRequestCustomException("Line is not valid.", $"{where}: unit of measure is required.");
                 }
 
                 if (line.UnitPrice != null && (line.UnitPrice < 0 || line.UnitPrice > MAX_VALUE))
@@ -193,7 +210,9 @@ namespace Buyer.Application.Features.Commands.CreatePurchaseOrder
                 CompanyCode = Clean(request.CompanyCode),
                 PlantCode = Clean(request.PlantCode),
                 Currency = currency,
-                Status = Common.PURCHASE_ORDER_CREATED,
+                Status = command.DeferErpUntilApproved
+                    ? Common.PURCHASE_ORDER_PENDING_APPROVAL
+                    : Common.PURCHASE_ORDER_CREATED,
                 OrderDate = request.OrderDate ?? DateTime.UtcNow,
                 DeliveryDate = request.DeliveryDate,
                 ErpRequestOptions = erpOptions == null ? null : JsonSerializer.Serialize(erpOptions)

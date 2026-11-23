@@ -104,5 +104,16 @@ const home = readFileSync(join(dir, '../home/HomeScreen.tsx'), 'utf8');
 const inventory = readFileSync(join(dir, '../inventory/InventoryScreen.tsx'), 'utf8');
 assert.match(home, /Create PO by Voice/);
 assert.match(inventory, /Create PO by Voice/);
+assert.match(screen, /submitted for approval/);
+assert.match(screen, /posts to SAP after approval/);
+
+const tasks = readFileSync(join(dir, '../tasks/TaskTabs.tsx'), 'utf8');
+assert.match(tasks, /decidePurchaseOrder/);
+assert.match(tasks, /Purchase order approvals/);
+assert.match(tasks, /Approve to post Create PO to SAP/);
+
+const receivingApi = readFileSync(join(dir, '../../../../remote-buyer/src/api/silaMe/silaReceivingApi.ts'), 'utf8');
+assert.match(receivingApi, /export const decidePurchaseOrder/);
+assert.match(receivingApi, /purchase-orders\/\$\{purchaseOrderId\}\/approval/);
 
 console.log('silaVoicePoFrontend.test.ts: ok');
