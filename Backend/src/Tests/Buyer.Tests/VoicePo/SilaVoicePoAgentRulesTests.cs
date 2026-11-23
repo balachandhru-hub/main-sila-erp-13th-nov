@@ -183,12 +183,36 @@ namespace Buyer.Tests.VoicePo
         [InlineData("20 AED")]
         [InlineData("20 dirhams")]
         [InlineData("twenty")]
+        [InlineData("2018")] // Chrome STT often glues "20 AED" → "2018"
         public void Parse_bare_price_answer_defaults_to_aed(string transcript)
         {
             VoicePoParseResult result = SilaVoicePoAgentRules.ParseOrderIntent(transcript);
 
             Assert.Equal(VoicePoIntent.SetUnitPrice, result.Intent);
             Assert.Equal(20m, result.UnitPrice);
+            Assert.Equal("AED", result.Currency);
+        }
+
+        [Theory]
+        [InlineData("2518", 25)]
+        [InlineData("518", 5)]
+        [InlineData("10018", 100)]
+        public void Parse_chrome_stt_glued_aed_price(string transcript, int expected)
+        {
+            VoicePoParseResult result = SilaVoicePoAgentRules.ParseOrderIntent(transcript);
+
+            Assert.Equal(VoicePoIntent.SetUnitPrice, result.Intent);
+            Assert.Equal(expected, result.UnitPrice);
+            Assert.Equal("AED", result.Currency);
+        }
+
+        [Fact]
+        public void Parse_bare_eighteen_stays_price_eighteen_not_glued_aed()
+        {
+            VoicePoParseResult result = SilaVoicePoAgentRules.ParseOrderIntent("18");
+
+            Assert.Equal(VoicePoIntent.SetUnitPrice, result.Intent);
+            Assert.Equal(18m, result.UnitPrice);
             Assert.Equal("AED", result.Currency);
         }
 

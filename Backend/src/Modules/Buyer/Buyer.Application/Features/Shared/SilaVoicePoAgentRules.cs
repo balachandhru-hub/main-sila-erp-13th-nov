@@ -850,6 +850,18 @@ namespace Buyer.Application.Features.Shared
                 return true;
             }
 
+            // Chrome STT often glues "20 AED" into "2018" (digits + "18"). Not bare "18".
+            Match gluedAed = Regex.Match(cleanedNorm, @"^(?<amount>\d{1,6})18$");
+            if (gluedAed.Success
+                && cleanedNorm.Length >= 3
+                && decimal.TryParse(gluedAed.Groups["amount"].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out decimal gluedAmount)
+                && gluedAmount > 0)
+            {
+                unitPrice = gluedAmount;
+                currency = "AED";
+                return true;
+            }
+
             // Whole utterance only — never match "at 25" inside "order 10 kg X at 25 AED".
             Match priced = Regex.Match(
                 cleaned,
