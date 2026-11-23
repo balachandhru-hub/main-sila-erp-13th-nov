@@ -146,10 +146,17 @@ const VoicePoScreen: React.FC = () => {
       outletId: mine?.locationType === 'OUTLET' ? mine.id : null,
     })
       .then((data) => {
-        if (active) setDefaults(data);
+        if (!active) return;
+        setDefaults(data);
+        if (data.message && !(data.profileFound || data.resolved)) {
+          setNotice({ tone: 'warn', text: data.message });
+        }
       })
       .catch((err: unknown) => {
-        if (active) setBootError(errorText(err));
+        if (!active) return;
+        // Keep the screen usable; show a notice instead of a hard boot block.
+        setDefaults({ profileFound: false, resolved: false, validationErrors: [] });
+        setNotice({ tone: 'warn', text: errorText(err) });
       });
     return () => {
       active = false;

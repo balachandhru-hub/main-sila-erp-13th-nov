@@ -409,6 +409,17 @@ export const resolveMyPurchasingDefaults = async (params?: {
     });
     return normalizeDefaults(response.data) ?? { profileFound: false, resolved: false, validationErrors: [] };
   } catch (error: unknown) {
+    const status = (error as { response?: { status?: number } })?.response?.status;
+    // Soft-fail undeployed Buyer API so the Voice PO screen still opens with guidance.
+    if (status === 404) {
+      return {
+        profileFound: false,
+        resolved: false,
+        validationErrors: [],
+        message:
+          "Purchasing defaults API is not on the connected Buyer server yet. Restart Buyer.API on this branch, then reload. Cloud Setup → PO Defaults seeds SILA Admin (1060/FL01/K).",
+      };
+    }
     throw new Error(readError(error, "Could not resolve purchasing defaults."));
   }
 };
