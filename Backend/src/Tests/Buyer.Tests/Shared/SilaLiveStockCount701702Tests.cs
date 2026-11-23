@@ -9,12 +9,12 @@ namespace Buyer.Tests.Shared
         [Fact]
         public void LiveStockCount_Uses_Z01_Z02_Material_Documents()
         {
-            Assert.Equal("FIVE S4 - Positive Stock Adjustment", SilaInventorySap.ForDirection("IN").ApiName);
-            Assert.Equal("Z01", SilaInventorySap.ForDirection("IN").GoodsMovementType);
+            Assert.Equal("S4 - Positive Stock Adjustment", SilaInventorySap.ForDirection("IN").ApiName);
+            Assert.Equal("Z02", SilaInventorySap.ForDirection("IN").GoodsMovementType);
             Assert.True(SilaInventorySap.ForDirection("IN").IncreasesStock);
 
-            Assert.Equal("FIVE S4 - Goods Issue", SilaInventorySap.ForDirection("OUT").ApiName);
-            Assert.Equal("Z02", SilaInventorySap.ForDirection("OUT").GoodsMovementType);
+            Assert.Equal("S4 - Goods Issue", SilaInventorySap.ForDirection("OUT").ApiName);
+            Assert.Equal("Z01", SilaInventorySap.ForDirection("OUT").GoodsMovementType);
             Assert.False(SilaInventorySap.ForDirection("OUT").IncreasesStock);
         }
 
@@ -34,11 +34,11 @@ namespace Buyer.Tests.Shared
         [Fact]
         public void InventoryDifference_Uses_Positive_Adjustment_Api_With_701_And_702()
         {
-            Assert.Equal("FIVE S4 - Positive Stock Adjustment", SilaInventorySap.InventoryDifferenceSurplus.ApiName);
+            Assert.Equal("S4 - Positive Stock Adjustment", SilaInventorySap.InventoryDifferenceSurplus.ApiName);
             Assert.Equal("701", SilaInventorySap.InventoryDifferenceSurplus.GoodsMovementType);
             Assert.True(SilaInventorySap.InventoryDifferenceSurplus.IncreasesStock);
 
-            Assert.Equal("FIVE S4 - Positive Stock Adjustment", SilaInventorySap.InventoryDifferenceShortage.ApiName);
+            Assert.Equal("S4 - Positive Stock Adjustment", SilaInventorySap.InventoryDifferenceShortage.ApiName);
             Assert.Equal("702", SilaInventorySap.InventoryDifferenceShortage.GoodsMovementType);
             Assert.False(SilaInventorySap.InventoryDifferenceShortage.IncreasesStock);
         }

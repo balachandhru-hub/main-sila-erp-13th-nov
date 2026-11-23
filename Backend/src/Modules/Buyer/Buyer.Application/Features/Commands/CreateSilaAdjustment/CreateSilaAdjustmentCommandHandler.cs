@@ -149,8 +149,8 @@ namespace Buyer.Application.Features.Commands.CreateSilaAdjustment
             Guid? erpPostingId = null;
             if (stockOut)
             {
-                // Waste/damage posts Z01 on FIVE_STOCK_WASTE_UPDATE; other OUT uses Goods Issue Z02.
-                string movement = wasteType ? SilaInventorySap.TYPE_Z01 : SilaInventorySap.TYPE_Z02;
+                // Waste/damage posts Z01 on FIVE_STOCK_WASTE_UPDATE; other consumptions use Goods Issue Z01.
+                string movement = SilaInventorySap.TYPE_Z01;
                 InventoryErpPosting posting = ledger.QueueErpPosting(
                     Common.SILA_REF_ADJUSTMENT, adjustment.Id, adjustment.AdjustmentNumber, location.Id, movement);
                 if (wasteType)
@@ -168,7 +168,7 @@ namespace Buyer.Application.Features.Commands.CreateSilaAdjustment
             if (stockIn)
             {
                 InventoryErpPosting posting = ledger.QueueErpPosting(
-                    Common.SILA_REF_ADJUSTMENT, adjustment.Id, adjustment.AdjustmentNumber, location.Id, SilaInventorySap.TYPE_Z01);
+                    Common.SILA_REF_ADJUSTMENT, adjustment.Id, adjustment.AdjustmentNumber, location.Id, SilaInventorySap.TYPE_Z02);
                 posting.IntegrationSystem = SilaInventorySap.PositiveAdjustment.ApiName;
                 erpPostingId ??= posting.Id;
             }

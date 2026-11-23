@@ -29,9 +29,10 @@ namespace Buyer.Application.Features.Shared
         public const string API_GOODS_ISSUE = "S4 - Goods Issue";
         /// <summary>Revoked / prior display name still accepted when resolving the same Goods Issue connector.</summary>
         public const string API_GOODS_ISSUE_LEGACY = "FIVE S4 - Goods Issue";
-        public const string API_POSITIVE_ADJUSTMENT = "FIVE S4 - Positive Stock Adjustment";
-        /// <summary>Alias display name still accepted when resolving Positive Stock Adjustment.</summary>
-        public const string API_POSITIVE_ADJUSTMENT_LEGACY = "S4 - Positive Stock Adjustment";
+        /// <summary>Canonical Integration Setup name (active): positive stock adjustment / reversal (Z02).</summary>
+        public const string API_POSITIVE_ADJUSTMENT = "S4 - Positive Stock Adjustment";
+        /// <summary>Revoked / prior display name still accepted when resolving Positive Stock Adjustment.</summary>
+        public const string API_POSITIVE_ADJUSTMENT_LEGACY = "FIVE S4 - Positive Stock Adjustment";
         /// <summary>Waste / damage / breakage / spoilage / expired via Integration Setup FIVE_STOCK_WASTE_UPDATE (Z01 out, Z02 reverse).</summary>
         public const string API_WASTE = "FIVE_STOCK_WASTE_UPDATE";
         /// <summary>SAP goods-movement reason for wastage (required by FIVE_STOCK_WASTE_UPDATE sample).</summary>
@@ -39,7 +40,7 @@ namespace Buyer.Application.Features.Shared
 
         /// <summary>Non-POS goods issue configurations (S4 - Goods Issue). POS sales use <see cref="PosUpdateApiNames"/>.</summary>
         public static readonly string[] GoodsIssueApiNames = { API_GOODS_ISSUE, API_GOODS_ISSUE_LEGACY };
-        /// <summary>Positive stock adjustment names (surplus / stock-count IN).</summary>
+        /// <summary>Positive stock adjustment names (reversal / stock-count IN — Z02).</summary>
         public static readonly string[] PositiveAdjustmentApiNames = { API_POSITIVE_ADJUSTMENT, API_POSITIVE_ADJUSTMENT_LEGACY };
         /// <summary>Waste adjustment API names.</summary>
         public static readonly string[] WasteApiNames = { API_WASTE };
@@ -89,8 +90,8 @@ namespace Buyer.Application.Features.Shared
         public static readonly Rule PlantTransfer = new Rule(API_PLANT_TRANSFER, CODE_TRANSFER, TYPE_301, true);
         /// <summary>Explicit 302 reversal on FIVE S4 - Plant Transfer Stock (same API as 301).</summary>
         public static readonly Rule PlantTransferReversal = new Rule(API_PLANT_TRANSFER, CODE_TRANSFER_REVERSAL, TYPE_302, true);
-        /// <summary>Non-POS goods issue (stock decrease) via S4 - Goods Issue (Z02). Resolves FIVE / S4 name aliases.</summary>
-        public static readonly Rule GoodsIssue = new Rule(API_GOODS_ISSUE, CODE_ISSUE, TYPE_Z02, false, increasesStock: false);
+        /// <summary>Non-POS consumption (stock decrease) via S4 - Goods Issue (Z01). Resolves FIVE / S4 name aliases.</summary>
+        public static readonly Rule GoodsIssue = new Rule(API_GOODS_ISSUE, CODE_ISSUE, TYPE_Z01, false, increasesStock: false);
         /// <summary>
         /// POS sales consumption via FIVE_POS_UPDATE: GoodsMovementCode 03, GoodsMovementType Z01.
         /// Stock decreases (IncreasesStock = false) even though the movement type is Z01.
@@ -100,8 +101,8 @@ namespace Buyer.Application.Features.Shared
         /// <summary>POS RETURN/VOID via FIVE_POS_UPDATE restores stock (IN) with Z01.</summary>
         public static readonly Rule PosReversal = new Rule(
             SilaStockCountSap.API_CONFIG_NAME, CODE_ISSUE, TYPE_Z01, false, increasesStock: true);
-        /// <summary>Non-POS positive stock adjustments restore stock (IN).</summary>
-        public static readonly Rule PositiveAdjustment = new Rule(API_POSITIVE_ADJUSTMENT, CODE_ISSUE, TYPE_Z01, false, increasesStock: true);
+        /// <summary>Non-POS reverse / surplus restores stock (IN) via S4 - Positive Stock Adjustment (Z02).</summary>
+        public static readonly Rule PositiveAdjustment = new Rule(API_POSITIVE_ADJUSTMENT, CODE_ISSUE, TYPE_Z02, false, increasesStock: true);
         /// <summary>
         /// Waste / damage out via FIVE_STOCK_WASTE_UPDATE (Z01). Stock decreases.
         /// Reason code omitted: SAP M7/146 rejects GoodsMovementReasonCode 0001 for Z01 on this tenant.
@@ -112,9 +113,9 @@ namespace Buyer.Application.Features.Shared
         public static readonly Rule WasteReversal = new Rule(
             API_WASTE, CODE_ISSUE, TYPE_Z02, false, increasesStock: true);
         /// <summary>
-        /// Live Inventory stock-count surplus (701). Credentials from FIVE S4 - Positive Stock Adjustment;
+        /// Live Inventory stock-count surplus (701). Credentials from S4 - Positive Stock Adjustment;
         /// posting uses API_PHYSICAL_INVENTORY_DOC_SRV (Material Document API rejects 701 with M7/096).
-        /// Prefer <see cref="ForDirection"/> (Z01/Z02) for Live Inventory stock count when 701/702 is unavailable.
+        /// Prefer <see cref="ForDirection"/> (Z01 consume / Z02 reverse) for Live Inventory stock count when 701/702 is unavailable.
         /// </summary>
         public static readonly Rule InventoryDifferenceSurplus = new Rule(API_POSITIVE_ADJUSTMENT, CODE_ISSUE, TYPE_701, false, increasesStock: true);
         /// <summary>
@@ -122,7 +123,7 @@ namespace Buyer.Application.Features.Shared
         /// </summary>
         public static readonly Rule InventoryDifferenceShortage = new Rule(API_POSITIVE_ADJUSTMENT, CODE_ISSUE, TYPE_702, false, increasesStock: false);
 
-        /// <summary>OUT uses GoodsIssue (Z02) for non-POS; IN uses PositiveAdjustment (Z01).</summary>
+        /// <summary>OUT uses GoodsIssue (Z01) for consumption; IN uses PositiveAdjustment (Z02) for reverse/surplus.</summary>
         public static Rule ForDirection(string? direction)
         {
             return direction == Common.SILA_DIRECTION_IN ? PositiveAdjustment : GoodsIssue;
@@ -159,7 +160,8 @@ namespace Buyer.Application.Features.Shared
 
         public static string DirectionForMovement(string? movementType)
         {
-            if (movementType == TYPE_Z01 || movementType == TYPE_701)
+            // Z02 reverse / 701 surplus increase stock (IN). Z01 consumption / 702 shortage decrease (OUT).
+            if (movementType == TYPE_Z02 || movementType == TYPE_701)
             {
                 return Common.SILA_DIRECTION_IN;
             }
