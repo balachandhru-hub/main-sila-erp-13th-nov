@@ -17,8 +17,20 @@ const PAGE_SIZE = 50;
 
 const formatDate = (value: string | null | undefined): string => (value ? new Date(value).toLocaleDateString() : "—");
 
+const canOpenDocument = (row: SilaInventoryTransaction): boolean => {
+  if (!row.referenceId) return false;
+  const type = (row.referenceType || "").trim().toUpperCase();
+  return type === "ITO" || type === "ITO_REV" || type === "ADJUSTMENT"
+    || type === "GOODS_ISSUE" || type === "GI" || type === "STOCK_COUNT";
+};
+
+interface SilaInventoryTransactionsProps {
+  /** Opens the source document detail for a ledger row (ITO / ADJ / GI / stock count). */
+  onOpenDocument?: (referenceType: string, referenceId: string) => void;
+}
+
 /** The inventory ledger of the caller's locations, newest first. */
-const SilaInventoryTransactions: React.FC = () => {
+const SilaInventoryTransactions: React.FC<SilaInventoryTransactionsProps> = ({ onOpenDocument }) => {
   const [locations, setLocations] = useState<SilaLocation[]>([]);
   const [locationId, setLocationId] = useState("");
   const [type, setType] = useState("");
@@ -153,38 +165,56 @@ const SilaInventoryTransactions: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row) => (
-                  <tr key={row.id}>
-                    <td className="sila-cell-strong">{row.transactionNumber}</td>
-                    <td>{formatDate(row.businessDate)}</td>
-                    <td>
-                      <span className={`sila-badge ${row.direction === "IN" ? "sila-badge--success" : "sila-badge--warning"}`}>
-                        {row.direction}
-                      </span>
-                      <span className="sinv-sub">{silaLabel(row.transactionType)}</span>
-                    </td>
-                    <td>
-                      {row.locationName || "—"}
-                      <span className="sinv-sub">{row.locationCode}</span>
-                    </td>
-                    <td>
-                      {row.materialCode || "—"}
-                      <span className="sinv-sub">{row.materialDescription}</span>
-                    </td>
-                    <td className="sinv-num">
-                      {row.direction === "OUT" ? "-" : ""}{formatQty(row.quantity)} {row.baseUom}
-                      {row.enteredUom && row.enteredUom !== row.baseUom && (
-                        <span className="sinv-sub">{formatQty(row.enteredQuantity)} {row.enteredUom}</span>
-                      )}
-                    </td>
-                    <td className="sinv-num">{formatQty(row.value)}</td>
-                    <td>
-                      {row.referenceNumber || silaLabel(row.referenceType)}
-                      {row.referenceNumber && <span className="sinv-sub">{silaLabel(row.referenceType)}</span>}
-                      {row.reason && <span className="sinv-sub">{row.reason}</span>}
-                    </td>
-                  </tr>
-                ))}
+                {rows.map((row) => {
+                  const openable = Boolean(onOpenDocument) && canOpenDocument(row);
+                  return (
+                    <tr
+                      key={row.id}
+                      onClick={openable ? () => onOpenDocument?.(row.referenceType, row.referenceId) : undefined}
+                      onKeyDown={openable ? (event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          onOpenDocument?.(row.referenceType, row.referenceId);
+                        }
+                      } : undefined}
+                      role={openable ? "button" : undefined}
+                      tabIndex={openable ? 0 : undefined}
+                      style={openable ? { cursor: "pointer" } : undefined}
+                      aria-label={openable
+                        ? `Open ${row.referenceNumber || row.transactionNumber}`
+                        : undefined}
+                    >
+                      <td className="sila-cell-strong">{row.transactionNumber}</td>
+                      <td>{formatDate(row.businessDate)}</td>
+                      <td>
+                        <span className={`sila-badge ${row.direction === "IN" ? "sila-badge--success" : "sila-badge--warning"}`}>
+                          {row.direction}
+                        </span>
+                        <span className="sinv-sub">{silaLabel(row.transactionType)}</span>
+                      </td>
+                      <td>
+                        {row.locationName || "—"}
+                        <span className="sinv-sub">{row.locationCode}</span>
+                      </td>
+                      <td>
+                        {row.materialCode || "—"}
+                        <span className="sinv-sub">{row.materialDescription}</span>
+                      </td>
+                      <td className="sinv-num">
+                        {row.direction === "OUT" ? "-" : ""}{formatQty(row.quantity)} {row.baseUom}
+                        {row.enteredUom && row.enteredUom !== row.baseUom && (
+                          <span className="sinv-sub">{formatQty(row.enteredQuantity)} {row.enteredUom}</span>
+                        )}
+                      </td>
+                      <td className="sinv-num">{formatQty(row.value)}</td>
+                      <td>
+                        {row.referenceNumber || silaLabel(row.referenceType)}
+                        {row.referenceNumber && <span className="sinv-sub">{silaLabel(row.referenceType)}</span>}
+                        {row.reason && <span className="sinv-sub">{row.reason}</span>}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

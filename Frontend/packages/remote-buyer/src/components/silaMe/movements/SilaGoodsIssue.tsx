@@ -111,8 +111,13 @@ const GoodsIssueDialog: React.FC<GoodsIssueDialogProps> = ({ goodsIssueId, onClo
   );
 };
 
+interface SilaGoodsIssueProps {
+  /** Opens this goods issue when Inventory Transactions deep-links a GI ledger row. */
+  initialGoodsIssueId?: string | null;
+}
+
 /** Goods issues from a store to an outlet. */
-const SilaGoodsIssue: React.FC = () => {
+const SilaGoodsIssue: React.FC<SilaGoodsIssueProps> = ({ initialGoodsIssueId = null }) => {
   const [rows, setRows] = useState<SilaGoodsIssueListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -120,7 +125,7 @@ const SilaGoodsIssue: React.FC = () => {
   const [outlets, setOutlets] = useState<SilaLocation[]>([]);
   const [locationsError, setLocationsError] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(initialGoodsIssueId);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -137,6 +142,10 @@ const SilaGoodsIssue: React.FC = () => {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (initialGoodsIssueId) setOpenId(initialGoodsIssueId);
+  }, [initialGoodsIssueId]);
 
   useEffect(() => {
     let active = true;

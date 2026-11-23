@@ -15,6 +15,11 @@ import { movementLabel } from "./movementFormat";
 import "../silaMeTheme.css";
 import "./SilaMovements.css";
 
+interface SilaStockAdjustmentsProps {
+  /** Opens this adjustment when Inventory Transactions deep-links an ADJ / IT ledger row. */
+  initialAdjustmentId?: string | null;
+}
+
 interface AdjustmentDialogProps {
   adjustmentId: string;
   onClose: () => void;
@@ -113,7 +118,7 @@ const AdjustmentDialog: React.FC<AdjustmentDialogProps> = ({ adjustmentId, onClo
 };
 
 /** Opening stock, waste / damage / breakage / spoilage / expired and manual stock adjustments. */
-const SilaStockAdjustments: React.FC = () => {
+const SilaStockAdjustments: React.FC<SilaStockAdjustmentsProps> = ({ initialAdjustmentId = null }) => {
   const [rows, setRows] = useState<SilaAdjustmentListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -122,7 +127,7 @@ const SilaStockAdjustments: React.FC = () => {
   const [locationFilter, setLocationFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [formOpen, setFormOpen] = useState(false);
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(initialAdjustmentId);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -139,6 +144,10 @@ const SilaStockAdjustments: React.FC = () => {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (initialAdjustmentId) setOpenId(initialAdjustmentId);
+  }, [initialAdjustmentId]);
 
   useEffect(() => {
     let active = true;

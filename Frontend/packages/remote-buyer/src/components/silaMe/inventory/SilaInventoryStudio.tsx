@@ -57,6 +57,10 @@ interface SilaInventoryStudioProps {
   /** Deep-link tab when opened from a legacy inventory nav key. */
   initialTab?: InventoryStudioTab;
   initialCountId?: string | null;
+  /** Deep-link open ids from Inventory Transactions (ITO / ADJ / GI). */
+  initialTransferId?: string | null;
+  initialAdjustmentId?: string | null;
+  initialGoodsIssueId?: string | null;
   onOpenLive?: (health?: string) => void;
   onOpenCount?: (stockCountId: string) => void;
   onOpenPhysicalInventory?: () => void;
@@ -73,6 +77,9 @@ const SilaInventoryStudio: React.FC<SilaInventoryStudioProps> = ({
   showRecommendations = false,
   initialTab = "overview",
   initialCountId = null,
+  initialTransferId = null,
+  initialAdjustmentId = null,
+  initialGoodsIssueId = null,
   onOpenLive,
   onOpenCount,
   onOpenPhysicalInventory,
@@ -174,9 +181,15 @@ const SilaInventoryStudio: React.FC<SilaInventoryStudioProps> = ({
         )}
         {tab === "recipe-availability" && <SilaRecipeAvailability />}
         {tab === "analytics" && <SilaInventoryAnalytics />}
-        {tab === "transfers" && <SilaTransfers canApprove={can.approveTransfer} />}
-        {tab === "goods-issue" && can.postGoodsIssue && <SilaGoodsIssue />}
-        {tab === "adjustments" && can.postAdjustment && <SilaStockAdjustments />}
+        {tab === "transfers" && (
+          <SilaTransfers canApprove={can.approveTransfer} initialTransferId={initialTransferId} />
+        )}
+        {tab === "goods-issue" && can.postGoodsIssue && (
+          <SilaGoodsIssue initialGoodsIssueId={initialGoodsIssueId} />
+        )}
+        {tab === "adjustments" && can.postAdjustment && (
+          <SilaStockAdjustments initialAdjustmentId={initialAdjustmentId} />
+        )}
         {tab === "stock-counts" && (
           <SilaStockCounts canApprove={can.approveCount} initialCountId={initialCountId} />
         )}

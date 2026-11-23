@@ -56,6 +56,9 @@ const SilaMeWorkspace: React.FC<SilaMeWorkspaceProps> = ({ navKey, role, permiss
   const [previewPersona, setPreviewPersona] = useState<SilaHomePersona>("self");
   // Screens that open a specific record in another screen pass it through here.
   const [countToOpen, setCountToOpen] = useState<string | null>(null);
+  const [transferToOpen, setTransferToOpen] = useState<string | null>(null);
+  const [adjustmentToOpen, setAdjustmentToOpen] = useState<string | null>(null);
+  const [goodsIssueToOpen, setGoodsIssueToOpen] = useState<string | null>(null);
   const [liveSearch, setLiveSearch] = useState<string | undefined>(undefined);
   const [liveHealth, setLiveHealth] = useState<string | undefined>(undefined);
 
@@ -64,12 +67,39 @@ const SilaMeWorkspace: React.FC<SilaMeWorkspaceProps> = ({ navKey, role, permiss
     onNavigate("silaStockCounts");
   };
 
+  /** Inventory Transactions row → existing source-document detail (ITO / ADJ / GI / stock count). */
+  const openLedgerDocument = (referenceType: string, referenceId: string) => {
+    if (!referenceId) return;
+    const type = referenceType.trim().toUpperCase();
+    if (type === "ITO" || type === "ITO_REV") {
+      setTransferToOpen(referenceId);
+      onNavigate("silaTransfers");
+      return;
+    }
+    if (type === "ADJUSTMENT") {
+      setAdjustmentToOpen(referenceId);
+      onNavigate("silaAdjustments");
+      return;
+    }
+    if (type === "GOODS_ISSUE" || type === "GI") {
+      setGoodsIssueToOpen(referenceId);
+      onNavigate("silaGoodsIssue");
+      return;
+    }
+    if (type === "STOCK_COUNT") {
+      openCount(referenceId);
+    }
+  };
+
   const renderInventoryStudio = () => (
     <SilaInventoryStudio
       permissions={can}
       showRecommendations={homeCaps.recommendation}
       initialTab={inventoryStudioTabFromNav(navKey)}
       initialCountId={countToOpen}
+      initialTransferId={transferToOpen}
+      initialAdjustmentId={adjustmentToOpen}
+      initialGoodsIssueId={goodsIssueToOpen}
       onOpenLive={(health) => {
         setLiveHealth(health);
         setLiveSearch(undefined);
@@ -120,7 +150,7 @@ const SilaMeWorkspace: React.FC<SilaMeWorkspaceProps> = ({ navKey, role, permiss
           />
         );
       case "silaTransactions":
-        return <SilaInventoryTransactions />;
+        return <SilaInventoryTransactions onOpenDocument={openLedgerDocument} />;
       case "silaInventoryStudio":
       case "silaStockHealth":
       case "silaRecipeAvailability":

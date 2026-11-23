@@ -37,5 +37,15 @@ assert.doesNotMatch(inventoryBlock, /Internal Transfers/);
 const workspace = readFileSync(join(dir, "../SilaMeWorkspace.tsx"), "utf8");
 assert.match(workspace, /SilaInventoryStudio/);
 assert.match(workspace, /silaInventoryStudio/);
+assert.match(workspace, /openLedgerDocument/);
+assert.match(workspace, /onOpenDocument=\{openLedgerDocument\}/);
+assert.match(workspace, /initialTransferId/);
+assert.match(workspace, /initialAdjustmentId/);
+assert.match(workspace, /initialGoodsIssueId/);
+
+const transactions = read("SilaInventoryTransactions.tsx");
+assert.match(transactions, /onOpenDocument/);
+assert.match(transactions, /canOpenDocument/);
+assert.match(transactions, /Open \$\{row\.referenceNumber/);
 
 console.log("silaInventoryStudio.test.ts: ok");
