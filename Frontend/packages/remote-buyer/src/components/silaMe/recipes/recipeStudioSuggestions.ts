@@ -1,11 +1,12 @@
 import type { SilaIngredientOption, SilaRecipeMaster } from "../../../api/silaMe/silaRecipeToolsApi";
-import type { SilaRecipeListItem } from "../../../api/silaMe/silaRecipeApi";
+import type { SilaProductClass, SilaRecipeFormat, SilaRecipeListItem, SilaRecipeMode } from "../../../api/silaMe/silaRecipeApi";
 import type { MenuItemDetail } from "../../../api/silaMe/silaMenuEngineeringApi";
 import type { SilaLocation } from "../../../api/silaMe/silaInventoryApi";
 import { toNumber, type IngredientLine, type LineCost } from "./recipeEditorModel";
 import { costPerServing } from "./recipeFormat";
 import { loadRecentMaterials } from "./recipeBuilderState";
-import { resolveStudioKind } from "./recipeStudioVisuals";
+import { RECIPE_TEMPLATES, type RecipeTemplate } from "./recipeHospitality";
+import { resolveStudioKind, type StudioVisualKind } from "./recipeStudioVisuals";
 
 const TARGET_FOOD_COST_KEY = "sila.recipeStudio.targetFoodCostPercent";
 
@@ -35,7 +36,47 @@ export interface ClassificationSuggestion {
   cuisine?: string;
   mealPeriod?: string;
   reason: string;
+  /** Soft defaults from the first ingredients — user may override. */
+  productClass?: SilaProductClass;
+  recipeFormat?: SilaRecipeFormat;
+  itemMode?: SilaRecipeMode;
+  subcategory?: string;
+  templateId?: string;
+  templateLabel?: string;
 }
+
+const productClassFromText = (text: string): SilaProductClass => {
+  if (/\b(tobacco|shisha|cigarette|cigar)\b/i.test(text)) return "TOBACCO";
+  if (/\b(minibar)\b/i.test(text)) return "MINIBAR";
+  if (/\b(beverage|drink|juice|coffee|tea|soda|wine|beer|spirit|liquor|cocktail|mixer)\b/i.test(text)) {
+    return "BEVERAGE";
+  }
+  return "FOOD";
+};
+
+const templateForKind = (kind: StudioVisualKind, productClass: SilaProductClass, text: string): RecipeTemplate | null => {
+  if (productClass === "TOBACCO") return RECIPE_TEMPLATES.find((item) => item.id === "shisha") ?? null;
+  if (productClass === "MINIBAR") return RECIPE_TEMPLATES.find((item) => item.id === "minibar-item") ?? null;
+  if (/\b(cocktail|spirit|liquor|gin|vodka|rum|whisky|whiskey)\b/i.test(text)) {
+    return RECIPE_TEMPLATES.find((item) => item.id === "cocktail") ?? null;
+  }
+  if (/\b(coffee|espresso|latte|cappuccino)\b/i.test(text)) {
+    return RECIPE_TEMPLATES.find((item) => item.id === "coffee") ?? null;
+  }
+  if (kind === "sauce" || /\b(sauce|gravy|dressing)\b/i.test(text)) {
+    return RECIPE_TEMPLATES.find((item) => item.id === "batch-sauce") ?? null;
+  }
+  if (/\b(combo|bundle|meal)\b/i.test(text)) {
+    return RECIPE_TEMPLATES.find((item) => item.id === "combo-meal") ?? null;
+  }
+  if (productClass === "BEVERAGE") {
+    return RECIPE_TEMPLATES.find((item) => item.id === "cocktail") ?? null;
+  }
+  if (kind === "main" || kind === "meat" || kind === "seafood" || kind === "starter" || kind === "dessert") {
+    return RECIPE_TEMPLATES.find((item) => item.id === "main-course") ?? null;
+  }
+  return RECIPE_TEMPLATES.find((item) => item.id === "main-course") ?? null;
+};
 
 export interface NameSuggestion {
   name: string;
@@ -77,31 +118,60 @@ export const suggestRecipeNames = (lines: IngredientLine[]): NameSuggestion[] =>
   ].filter((item, index, all) => all.findIndex((x) => x.name.toLowerCase() === item.name.toLowerCase()) === index);
 };
 
-/** Suggest recipe family/category from ingredient composition vs configured masters. */
+/** Suggest recipe family/category/class/template from ingredient composition vs configured masters. */
 export const suggestClassification = (
   lines: IngredientLine[],
   families: SilaRecipeMaster[],
   categories: SilaRecipeMaster[],
 ): ClassificationSuggestion | null => {
   if (lines.length === 0 || (families.length === 0 && categories.length === 0)) return null;
-  const text = lines.map((line) => `${line.material?.description ?? ""} ${line.material?.materialCode ?? ""}`).join(" ");
+  const text = lines
+    .map((line) => `${line.material?.description ?? ""} ${line.material?.materialCode ?? ""}`)
+    .join(" ");
   const kind = resolveStudioKind(text);
+  const productClass = productClassFromText(text);
+  const template = templateForKind(kind, productClass, text);
   const category =
-    categories.find((item) => resolveStudioKind(item.name, item.code) === kind)
+    categories.find(
+      (item) =>
+        (!item.productClass || item.productClass === productClass)
+        && (
+          (template && item.name.toLowerCase() === template.subcategory.toLowerCase())
+          || resolveStudioKind(item.name, item.code) === kind
+          || item.name.toLowerCase().includes(kind)
+        ),
+    )
+    ?? categories.find((item) => !item.productClass || item.productClass === productClass)
+    ?? categories.find((item) => resolveStudioKind(item.name, item.code) === kind)
     ?? categories.find((item) => item.name.toLowerCase().includes(kind))
     ?? categories[0];
   const family =
-    families.find((item) => /food|beverage|fnb|f&b/i.test(`${item.name} ${item.code}`))
+    families.find((item) => {
+      const blob = `${item.name} ${item.code}`;
+      if (productClass === "BEVERAGE") return /beverage|drink|bar|fnb|f&b/i.test(blob);
+      if (productClass === "TOBACCO") return /tobacco|shisha/i.test(blob);
+      if (productClass === "MINIBAR") return /minibar/i.test(blob);
+      return /food|fnb|f&b|culinary/i.test(blob);
+    })
+    ?? families.find((item) => /food|beverage|fnb|f&b/i.test(`${item.name} ${item.code}`))
     ?? families[0];
-  if (!family && !category) return null;
+  if (!family && !category && !template) return null;
   return {
     familyId: family?.id ?? "",
     familyName: family?.name ?? "Not Classified",
     categoryId: category?.id ?? "",
-    categoryName: category?.name ?? "Not Classified",
+    categoryName: category?.name ?? template?.subcategory ?? "Not Classified",
     cuisine: family?.name,
     mealPeriod: mealPeriodFromKind(kind),
-    reason: `Based on ingredient mix (${kind})`,
+    productClass,
+    recipeFormat: template?.recipeFormat,
+    itemMode: template?.itemMode,
+    subcategory: template?.subcategory ?? category?.name,
+    templateId: template?.id,
+    templateLabel: template?.label,
+    reason: template
+      ? `From ingredients → ${template.label} (${kind})`
+      : `Based on ingredient mix (${kind})`,
   };
 };
 

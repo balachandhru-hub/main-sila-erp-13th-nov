@@ -94,6 +94,40 @@
   box-shadow: 0 0.35rem 1rem rgba(18, 53, 91, 0.05);
 }
 
+/* Ingredient canvas first in the recipe column (after the title). */
+.rstudio-panel--recipe > .rstudio-section--canvas {
+  order: 1;
+}
+
+.rstudio-panel--recipe > :not(.rstudio-section--canvas) {
+  order: 2;
+}
+
+.rstudio-panel--recipe > div:first-child {
+  order: 0;
+}
+
+.rstudio-catalog-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.rstudio-panel--catalog.is-expanded {
+  position: fixed;
+  inset: 0.75rem;
+  z-index: 40;
+  max-height: none;
+  overflow: auto;
+  box-shadow: 0 1rem 2.5rem rgba(18, 53, 91, 0.22);
+  border-radius: 1rem;
+}
+
+.rstudio-panel--catalog.is-expanded .rstudio-section--catalog-live {
+  min-height: calc(100vh - 8rem);
+}
+
 .rstudio-panel__title {
   margin: 0;
   font-size: 1rem;
