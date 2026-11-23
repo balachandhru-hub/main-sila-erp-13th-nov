@@ -61,8 +61,15 @@ assert.match(cloudDefaults, /PO Defaults & Account Assignment/);
 assert.match(cloudDefaults, /listPoFlexConfigs/);
 assert.match(cloudDefaults, /upsertPoFlexConfig/);
 assert.match(cloudDefaults, /isOpen=\{Boolean\(editor\)\}/);
+assert.match(cloudDefaults, /closeEditor/);
 assert.match(cloudDefaults, /Add parameter/);
 assert.match(cloudDefaults, /Add condition/);
+const flexApi = readFileSync(join(dir, '../../../../remote-buyer/src/api/silaMe/silaUserPoFlexApi.ts'), 'utf8');
+assert.match(flexApi, /asGuidOrNull|GUID_RE/);
+assert.match(flexApi, /sanitizeWrite/);
+const modal = readFileSync(join(dir, '../../../../shared-ui/src/components/Modal/Modal.tsx'), 'utf8');
+assert.match(modal, /onCloseRef/);
+assert.match(modal, /\[isOpen\]/);
 
 assert.match(app, /VoicePoScreen/);
 assert.match(app, /purchasing\/voice-po/);

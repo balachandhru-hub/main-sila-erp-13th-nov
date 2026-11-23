@@ -90,6 +90,10 @@ const SilaUserPoDefaults: React.FC<SilaUserPoDefaultsProps> = ({ canManage = tru
   const [busy, setBusy] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
 
+  const closeEditor = useCallback(() => {
+    if (!busy) setEditor(null);
+  }, [busy]);
+
   useEffect(() => {
     if (!userId && currentUserId) {
       setUserId(currentUserId);
@@ -433,7 +437,7 @@ const SilaUserPoDefaults: React.FC<SilaUserPoDefaultsProps> = ({ canManage = tru
 
       <Modal
         isOpen={Boolean(editor)}
-        onClose={() => !busy && setEditor(null)}
+        onClose={closeEditor}
         size="lg"
         style={{ maxWidth: 820 }}
         headerProps={{ heading: editor?.id ? `Edit ${typeLabel} defaults` : `Add ${typeLabel} defaults` }}

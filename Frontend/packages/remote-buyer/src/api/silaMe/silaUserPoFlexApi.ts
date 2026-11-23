@@ -53,14 +53,45 @@ export interface SilaUserPoFlexConfigWrite {
 
 const list = <T>(value: T[] | null | undefined): T[] => (Array.isArray(value) ? value : []);
 
+/** ASP.NET Guid? rejects "" — only send well-formed GUIDs (or omit). */
+const GUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const asGuidOrNull = (value?: string | null): string | null => {
+  const trimmed = (value ?? "").trim();
+  return GUID_RE.test(trimmed) ? trimmed : null;
+};
+
+const sanitizeWrite = (request: SilaUserPoFlexConfigWrite): SilaUserPoFlexConfigWrite => ({
+  ...request,
+  userId: asGuidOrNull(request.userId),
+  parameters: list(request.parameters).map((row) => ({
+    paramKey: row.paramKey,
+    paramValue: row.paramValue ?? null,
+    sortOrder: row.sortOrder ?? 0,
+    ...(asGuidOrNull(row.id) ? { id: asGuidOrNull(row.id) } : {}),
+  })),
+  conditions: list(request.conditions).map((row) => ({
+    whenParam: row.whenParam,
+    whenOperator: row.whenOperator || "EQ",
+    whenValue: row.whenValue ?? null,
+    thenParam: row.thenParam,
+    thenValue: row.thenValue ?? null,
+    sortOrder: row.sortOrder ?? 0,
+    ...(asGuidOrNull(row.id) ? { id: asGuidOrNull(row.id) } : {}),
+  })),
+});
+
 export const listPoFlexConfigs = async (
   userId: string,
   configType = "PO_CREATE",
   activeOnly = true,
 ): Promise<SilaUserPoFlexConfig[]> => {
+  const safeUserId = asGuidOrNull(userId);
+  if (!safeUserId) {
+    throw new Error("Enter a valid User ID (GUID) to load configs.");
+  }
   try {
     const response = await axiosInstance.get<SilaUserPoFlexConfig[]>(BASE, {
-      params: { userId, configType, activeOnly },
+      params: { userId: safeUserId, configType, activeOnly },
     });
     return list(response.data).map((row) => ({
       ...row,
@@ -76,10 +107,15 @@ export const upsertPoFlexConfig = async (
   request: SilaUserPoFlexConfigWrite,
   id?: string,
 ): Promise<SilaUserPoFlexConfig> => {
+  const payload = sanitizeWrite(request);
+  if (!payload.userId) {
+    throw new Error("A valid User ID (GUID) is required to save PO defaults.");
+  }
+  const safeId = asGuidOrNull(id);
   try {
-    const response = id
-      ? await axiosInstance.put<SilaUserPoFlexConfig>(`${BASE}/${id}`, request)
-      : await axiosInstance.post<SilaUserPoFlexConfig>(BASE, request);
+    const response = safeId
+      ? await axiosInstance.put<SilaUserPoFlexConfig>(`${BASE}/${safeId}`, payload)
+      : await axiosInstance.post<SilaUserPoFlexConfig>(BASE, payload);
     const data = response.data;
     return {
       ...data,
