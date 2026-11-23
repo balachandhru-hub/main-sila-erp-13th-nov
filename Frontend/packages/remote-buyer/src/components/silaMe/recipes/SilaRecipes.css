@@ -315,17 +315,36 @@
   gap: var(--sila-space-2);
 }
 
-.srec-lib-list.rstudio-catalog-grid {
+.srec-lib-list.rstudio-catalog-grid.is-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--sila-space-2);
   max-height: none;
 }
 
+.srec-lib-list.rstudio-catalog-grid.is-grid > .srec-builder-panel__subtitle {
+  grid-column: 1 / -1;
+}
+
+.srec-lib-list.rstudio-catalog-grid.is-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sila-space-2);
+  max-height: none;
+}
+
 @media (min-width: 90rem) {
-  .srec-lib-list.rstudio-catalog-grid {
+  .srec-lib-list.rstudio-catalog-grid.is-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+}
+
+.rstudio-catalog-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sila-space-2);
 }
 
 .srec-lib-card {

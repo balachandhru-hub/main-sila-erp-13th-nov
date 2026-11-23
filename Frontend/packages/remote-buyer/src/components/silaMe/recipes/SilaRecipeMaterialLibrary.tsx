@@ -11,6 +11,7 @@ import { loadRecentMaterials, rememberMaterial } from "./recipeBuilderState";
 import { resolveStudioKind, StudioCover } from "./recipeStudioVisuals";
 
 type CatalogTab = "recommended" | "all" | "recent";
+type CatalogLayout = "grid" | "list";
 
 interface SilaRecipeMaterialLibraryProps {
   addedIds: string[];
@@ -26,6 +27,9 @@ interface SilaRecipeMaterialLibraryProps {
   outletLocationId?: string | null;
   /** When true, add/replace/drag into the recipe is disabled. */
   locked?: boolean;
+  /** Grid (tiles) or List (rows). Controlled from Material Catalog Expand head when provided. */
+  layout?: CatalogLayout;
+  onLayoutChange?: (layout: CatalogLayout) => void;
 }
 
 const EMPTY_FACETS: SilaIngredientFacets = { materialGroups: [], categories: [], suppliers: [], materialTypes: [], supplierOptions: [] };
@@ -42,8 +46,16 @@ const SilaRecipeMaterialLibrary: React.FC<SilaRecipeMaterialLibraryProps> = ({
   recommendReason = "Browse Material Master to begin.",
   outletLocationId = null,
   locked = false,
+  layout: layoutProp,
+  onLayoutChange,
 }) => {
   const [tab, setTab] = useState<CatalogTab>("recommended");
+  const [internalLayout, setInternalLayout] = useState<CatalogLayout>("grid");
+  const layout = layoutProp ?? internalLayout;
+  const setLayout = (next: CatalogLayout) => {
+    if (onLayoutChange) onLayoutChange(next);
+    else setInternalLayout(next);
+  };
   const [facets, setFacets] = useState<SilaIngredientFacets>(EMPTY_FACETS);
   const [search, setSearch] = useState("");
   const [materialGroup, setMaterialGroup] = useState("");
@@ -176,7 +188,7 @@ const SilaRecipeMaterialLibrary: React.FC<SilaRecipeMaterialLibraryProps> = ({
     return (
       <article
         key={material.id}
-        className={`srec-lib-card${selected[material.id] ? " is-selected" : ""}${isAdded ? " is-added" : ""}`}
+        className={`srec-lib-card${layout === "grid" ? " is-grid" : " is-list"}${selected[material.id] ? " is-selected" : ""}${isAdded ? " is-added" : ""}`}
       >
         <label className="srec-lib-check">
           <input type="checkbox" checked={Boolean(selected[material.id])} onChange={() => toggle(material.id)} aria-label={`Select ${material.materialCode}`} />
@@ -190,7 +202,7 @@ const SilaRecipeMaterialLibrary: React.FC<SilaRecipeMaterialLibraryProps> = ({
         >
           ⠿
         </span>
-        <StudioCover compact kind={kind} title={material.description || material.materialCode} />
+        <StudioCover compact={layout === "list"} kind={kind} title={material.description || material.materialCode} />
         <div className="srec-lib-body">
           <div className="srec-lib-title">
             <strong>{material.description}</strong>
@@ -238,7 +250,7 @@ const SilaRecipeMaterialLibrary: React.FC<SilaRecipeMaterialLibraryProps> = ({
   };
 
   return (
-    <section className="srec-builder-panel srec-lib rstudio-catalog" aria-label="Recommended Material Catalog">
+    <section className={`srec-builder-panel srec-lib rstudio-catalog is-layout-${layout}`} aria-label="Recommended Material Catalog">
       <header className="srec-builder-panel__head">
         <div>
           <h2 className="srec-builder-panel__title">Recommended Material Catalog</h2>
@@ -246,23 +258,47 @@ const SilaRecipeMaterialLibrary: React.FC<SilaRecipeMaterialLibraryProps> = ({
         </div>
       </header>
 
-      <div className="rstudio-catalog-tabs" role="tablist" aria-label="Catalog views">
-        {([
-          ["recommended", "Recommended"],
-          ["all", "All Materials"],
-          ["recent", "Recently Used"],
-        ] as const).map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            role="tab"
-            aria-selected={tab === id}
-            className={`rstudio-chip${tab === id ? " is-active" : ""}`}
-            onClick={() => setTab(id)}
-          >
-            {label}
-          </button>
-        ))}
+      <div className="rstudio-catalog-toolbar">
+        <div className="rstudio-catalog-tabs" role="tablist" aria-label="Catalog views">
+          {([
+            ["recommended", "Recommended"],
+            ["all", "All Materials"],
+            ["recent", "Recently Used"],
+          ] as const).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={tab === id}
+              className={`rstudio-chip${tab === id ? " is-active" : ""}`}
+              onClick={() => setTab(id)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {!layoutProp && (
+          <div className="rstudio-view-toggle" role="group" aria-label="Material catalog layout">
+            <button
+              type="button"
+              className={`sila-btn sila-btn--sm ${layout === "grid" ? "sila-btn--primary" : "sila-btn--secondary"}`}
+              data-testid="recipe-material-catalog-grid"
+              aria-pressed={layout === "grid"}
+              onClick={() => setLayout("grid")}
+            >
+              Grid
+            </button>
+            <button
+              type="button"
+              className={`sila-btn sila-btn--sm ${layout === "list" ? "sila-btn--primary" : "sila-btn--secondary"}`}
+              data-testid="recipe-material-catalog-list"
+              aria-pressed={layout === "list"}
+              onClick={() => setLayout("list")}
+            >
+              List
+            </button>
+          </div>
+        )}
       </div>
 
       {tab === "recommended" && <p className="sila-help rstudio-catalog-reason">{recommendReason}</p>}
@@ -363,7 +399,11 @@ const SilaRecipeMaterialLibrary: React.FC<SilaRecipeMaterialLibraryProps> = ({
               : "No materials matched."}
         </span>
       ) : (
-        <div className="srec-lib-list rstudio-catalog-grid">
+        <div
+          className={`srec-lib-list rstudio-catalog-grid is-${layout}`}
+          data-testid="recipe-material-catalog-results"
+          data-layout={layout}
+        >
           {tab === "all" && (
             <h3 className="srec-builder-panel__subtitle">Materials ({Math.min(results.length, total)} of {total})</h3>
           )}
