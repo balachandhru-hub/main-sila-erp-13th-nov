@@ -233,8 +233,21 @@ namespace Buyer.Application.Services
             string? payload = null;
             if (!string.IsNullOrWhiteSpace(order.ErpRequestOptions))
             {
+                bool fiveCreatePo = (!string.IsNullOrWhiteSpace(configuration.Name)
+                        && configuration.Name.Contains("FIVE", StringComparison.OrdinalIgnoreCase)
+                        && configuration.Name.Contains("Create PO", StringComparison.OrdinalIgnoreCase))
+                    || (!string.IsNullOrWhiteSpace(configuration.ResourcePath)
+                        && configuration.ResourcePath.Contains("API_PURCHASEORDER_PROCESS_SRV", StringComparison.OrdinalIgnoreCase));
                 payload = ContractPurchaseOrderPayload.Build(
-                    order, items, ContractPurchaseOrderPayload.ReadOptions(order.ErpRequestOptions), configuration.RequestBody, null);
+                    order,
+                    items,
+                    ContractPurchaseOrderPayload.ReadOptions(order.ErpRequestOptions),
+                    // Static sample bodies without tokens must not be sent as-is — build a live OData body instead.
+                    configuration.RequestBody != null && configuration.RequestBody.Contains("{{", StringComparison.Ordinal)
+                        ? configuration.RequestBody
+                        : null,
+                    null,
+                    odataV2: fiveCreatePo);
             }
 
             BuyerPurchaseDocumentRequest request = new BuyerPurchaseDocumentRequest

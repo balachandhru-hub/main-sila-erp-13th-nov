@@ -109,14 +109,14 @@ namespace Buyer.Application.Features.Commands.ConfirmSilaVoicePoDraft
                         SupplierId = group.Key,
                         CompanyCode = draft.CompanyCode,
                         PlantCode = draft.PlantCode,
-                        Currency = draft.Currency,
+                        Currency = draft.Currency ?? "AED",
                         DeliveryDate = draft.DeliveryDate,
-                        PurchaseOrderType = null,
+                        PurchaseOrderType = "NB",
                         PurchasingOrganization = draft.PurchasingOrganization,
                         PurchasingGroup = draft.PurchasingGroup,
                         SupplierCode = first.SupplierCode,
                         StorageLocation = draft.StorageLocation,
-                        AccountAssignmentCategory = first.AccountAssignmentCategory ?? draft.AccountAssignmentCategory,
+                        AccountAssignmentCategory = first.AccountAssignmentCategory ?? draft.AccountAssignmentCategory ?? "K",
                         GlAccount = first.GlAccount ?? draft.GlAccount,
                         Lines = group.Select(l =>
                         {

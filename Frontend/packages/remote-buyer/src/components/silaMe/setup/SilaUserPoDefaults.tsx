@@ -24,11 +24,13 @@ const SILA_ADMIN_SEED_PARAMS: SilaUserPoFlexParam[] = [
   { paramKey: "CompanyCode", paramValue: "1060", sortOrder: 0 },
   { paramKey: "PlantCode", paramValue: "1060", sortOrder: 1 },
   { paramKey: "StorageLocation", paramValue: "FL01", sortOrder: 2 },
-  { paramKey: "PurchasingOrganization", paramValue: "1000", sortOrder: 3 },
+  { paramKey: "PurchasingOrganization", paramValue: "1060", sortOrder: 3 },
   { paramKey: "PurchasingGroup", paramValue: "001", sortOrder: 4 },
   { paramKey: "AccountAssignmentCategory", paramValue: "K", sortOrder: 5 },
   { paramKey: "MaterialGroup", paramValue: "0127", sortOrder: 6 },
   { paramKey: "DefaultPoDocumentType", paramValue: "NB", sortOrder: 7 },
+  { paramKey: "DefaultCurrency", paramValue: "AED", sortOrder: 8 },
+  { paramKey: "PreferredSupplierCode", paramValue: "1000142", sortOrder: 9 },
 ];
 
 const SILA_ADMIN_SEED_CONDITIONS: SilaUserPoFlexCondition[] = [
@@ -45,7 +47,7 @@ const SILA_ADMIN_SEED_CONDITIONS: SilaUserPoFlexCondition[] = [
     whenOperator: "EQ",
     whenValue: "K",
     thenParam: "GlAccount",
-    thenValue: "3250000109",
+    thenValue: "6000000007",
     sortOrder: 1,
   },
 ];

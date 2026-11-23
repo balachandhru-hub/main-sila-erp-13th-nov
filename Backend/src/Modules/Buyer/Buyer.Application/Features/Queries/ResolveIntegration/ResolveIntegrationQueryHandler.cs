@@ -35,11 +35,20 @@ namespace Buyer.Application.Features.Queries.ResolveIntegration
 
             // The API of the named entity (company code) when it has one of its own, otherwise the organization-wide one (ALL).
             // A document of one company code is never sent to the API of another company code.
+            // For POST_PO prefer FIVE Create PO when several ALL configs exist.
             string? entityCode = string.IsNullOrWhiteSpace(request.EntityCode) ? null : request.EntityCode.Trim();
+            ApiIntegrationConfiguration? PreferCreatePo(IEnumerable<ApiIntegrationConfiguration> rows) =>
+                rows.FirstOrDefault(x =>
+                    request.ProcessType == IntegrationProcessType.POST_PO
+                    && x.Name != null
+                    && x.Name.Contains("FIVE", StringComparison.OrdinalIgnoreCase)
+                    && x.Name.Contains("Create PO", StringComparison.OrdinalIgnoreCase))
+                ?? rows.FirstOrDefault();
+
             ApiIntegrationConfiguration? configuration =
-                active.FirstOrDefault(x => entityCode != null && x.EntityCode.Equals(entityCode, StringComparison.OrdinalIgnoreCase))
-                ?? active.FirstOrDefault(x => x.EntityCode.Equals(IntegrationConstants.ENTITY_CODE_ALL, StringComparison.OrdinalIgnoreCase))
-                ?? (entityCode == null ? active.OrderBy(x => x.DateCreated).FirstOrDefault() : null);
+                PreferCreatePo(active.Where(x => entityCode != null && x.EntityCode.Equals(entityCode, StringComparison.OrdinalIgnoreCase)))
+                ?? PreferCreatePo(active.Where(x => x.EntityCode.Equals(IntegrationConstants.ENTITY_CODE_ALL, StringComparison.OrdinalIgnoreCase)))
+                ?? (entityCode == null ? PreferCreatePo(active.OrderBy(x => x.DateCreated)) : null);
             if (configuration == null)
             {
                 _logger.LogInfo($"No active integration. OrganizationId: {request.OrganizationId}, ProcessType: {request.ProcessType}");
