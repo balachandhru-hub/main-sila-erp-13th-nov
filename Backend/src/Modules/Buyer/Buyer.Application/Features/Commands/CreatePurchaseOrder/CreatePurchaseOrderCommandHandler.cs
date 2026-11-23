@@ -222,7 +222,8 @@ namespace Buyer.Application.Features.Commands.CreatePurchaseOrder
                     OutletId = extra?.OutletId,
                     LineAmount = lineAmount,
                     Currency = currency,
-                    StorageLocation = Clean(line.StorageLocation)
+                    StorageLocation = Clean(line.StorageLocation),
+                    CostCenter = Clean(line.CostCenter)
                 });
                 order.TotalAmount += lineAmount;
             }

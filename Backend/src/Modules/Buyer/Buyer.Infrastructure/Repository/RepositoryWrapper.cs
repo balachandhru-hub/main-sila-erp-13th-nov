@@ -75,6 +75,9 @@ namespace Buyer.Infrastructure.Repository
         private IRecipeLegacyRecipeRepository? _recipeLegacyRecipe;
         private IRecipeLegacyMaterialMapRepository? _recipeLegacyMaterialMap;
         private IRecipeLegacyImageRepository? _recipeLegacyImage;
+        private ISilaUserPurchasingProfileRepository? _silaUserPurchasingProfile;
+        private ISilaVoicePoSessionRepository? _silaVoicePoSession;
+        private ISilaVoicePoTurnRepository? _silaVoicePoTurn;
         private IBuyerBusinessProfileRepository _buyerBusinessProfileRepository;
         private IBuyerCategoryRepository _buyerCategoryRepository;
         private IAssetRepository _assetRepository;
@@ -1474,6 +1477,33 @@ namespace Buyer.Infrastructure.Repository
             {
                 _recipeLegacyImage ??= new RecipeLegacyImageRepository(_context);
                 return _recipeLegacyImage;
+            }
+        }
+
+        public ISilaUserPurchasingProfileRepository SilaUserPurchasingProfile
+        {
+            get
+            {
+                _silaUserPurchasingProfile ??= new SilaUserPurchasingProfileRepository(_context);
+                return _silaUserPurchasingProfile;
+            }
+        }
+
+        public ISilaVoicePoSessionRepository SilaVoicePoSession
+        {
+            get
+            {
+                _silaVoicePoSession ??= new SilaVoicePoSessionRepository(_context);
+                return _silaVoicePoSession;
+            }
+        }
+
+        public ISilaVoicePoTurnRepository SilaVoicePoTurn
+        {
+            get
+            {
+                _silaVoicePoTurn ??= new SilaVoicePoTurnRepository(_context);
+                return _silaVoicePoTurn;
             }
         }
 

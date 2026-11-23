@@ -49,5 +49,6 @@ namespace Buyer.Domain.Dtos
         public string? UnitOfMeasure { get; set; }
         public decimal? UnitPrice { get; set; }
         public string? StorageLocation { get; set; }
+        public string? CostCenter { get; set; }
     }
 }
