@@ -51,10 +51,12 @@ const SilaLiveDecisionPanel: React.FC<SilaLiveDecisionPanelProps> = ({
   const required = Number(requiredQty) || 0;
   const shortage = detail.shortage ?? 0;
 
-  // Move what is missing (or what is required), at most what the source can give.
-  const transferQty = (): number => {
-    const wanted = shortage > 0 ? shortage : required > 0 ? required : 1;
-    return Math.min(wanted, detail.bestSourceTransferableQty ?? wanted);
+  // Quick ITO always 1; New Transfer uses shortage / required / transferable.
+  const transferQty = (quick: boolean): number => {
+    const cap = detail.bestSourceTransferableQty ?? 1;
+    if (quick) return Math.min(1, cap);
+    const wanted = shortage > 0 ? shortage : required > 0 ? required : cap;
+    return Math.min(wanted, cap);
   };
 
   const allowed = (action: string): boolean => {
@@ -96,18 +98,19 @@ const SilaLiveDecisionPanel: React.FC<SilaLiveDecisionPanelProps> = ({
         toastService.success(`Transfer of ${formatQty(quantity)} ${detail.baseUom} to ${detail.redistributeToName} raised.`);
       } else {
         const quick = action === "QUICK_TRANSFER" || action === "ONE_TIME_TRANSFER";
+        const quantity = transferQty(quick);
         const payload = {
           fromLocationId: detail.bestSourceLocationId as string,
           toLocationId: current.id,
           reason: quick ? "Guest service" : "Live inventory shortage",
           requiredBy: null,
-          items: [{ materialId: detail.materialId, quantity: transferQty(), uom: null }],
-          addToLocation: action === "ADD_TO_LOCATION",
+          items: [{ materialId: detail.materialId, quantity, uom: null }],
+          addToLocation: action === "ADD_TO_LOCATION" || !quick,
         };
         if (quick) await createQuickTransfer(payload);
         else await createTransfer(payload);
         toastService.success(
-          `${quick ? "Quick transfer" : "Transfer"} of ${formatQty(transferQty())} ${detail.baseUom} from ${detail.bestSourceName} raised.`,
+          `${quick ? "Quick ITO" : "New Transfer"} of ${formatQty(quantity)} ${detail.baseUom} from ${detail.bestSourceName} raised.`,
         );
       }
       onChanged();
