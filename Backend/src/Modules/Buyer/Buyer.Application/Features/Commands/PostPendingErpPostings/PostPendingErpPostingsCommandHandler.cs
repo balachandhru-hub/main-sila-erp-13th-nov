@@ -1320,15 +1320,6 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
             List<GoodsReceiptItem> items = await _repository.GoodsReceiptItem
                 .FindByCondition(x => x.GoodsReceiptId == receipt.Id && x.IsActive && x.AcceptedQty > 0)
                 .ToListAsync(cancellationToken);
-            // S4 gets inventory (stocked) lines only; non-stock / service lines stay internal to the PO.
-            List<Guid> materialIds = items.Where(x => x.MaterialId != null).Select(x => x.MaterialId!.Value).Distinct().ToList();
-            HashSet<Guid> stockedMaterialIds = (await _repository.ItemBuyerMaster
-                    .FindByCondition(x => materialIds.Contains(x.Id) && x.IsActive)
-                    .ToListAsync(cancellationToken))
-                .Where(SilaMaterialRules.HoldsStock)
-                .Select(x => x.Id)
-                .ToHashSet();
-            items = items.Where(x => x.MaterialId != null && stockedMaterialIds.Contains(x.MaterialId.Value)).ToList();
             if (items.Count == 0)
             {
                 return (null, null);
@@ -1342,7 +1333,7 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
                 .ToDictionary(group => group.Key, group => group.First());
             var poCodes = await _repository.PurchaseOrder
                 .FindByCondition(x => x.Id == receipt.PurchaseOrderId)
-                .Select(x => new { x.PlantCode, x.CompanyCode })
+                .Select(x => new { x.PlantCode, x.CompanyCode, x.ErpPurchaseOrderId, x.PoNumber })
                 .FirstOrDefaultAsync(cancellationToken);
 
             // Frozen FIVE plant: PO plant, else receiving property plant, else PO company code (FIVE plant = company).
@@ -1356,10 +1347,21 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
                 return (null, SilaGrnSap.FieldMissing(SilaGrnSap.POSTING_MISSING, "Plant"));
             }
 
+            // S/4 101 expects the ERP purchase order number (e.g. 4500005038), not the SILA PO000012 label.
+            string sapPurchaseOrder = !string.IsNullOrWhiteSpace(poCodes?.ErpPurchaseOrderId)
+                ? poCodes!.ErpPurchaseOrderId!.Trim()
+                : !string.IsNullOrWhiteSpace(receipt.PoNumber)
+                    ? receipt.PoNumber.Trim()
+                    : poCodes?.PoNumber?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(sapPurchaseOrder))
+            {
+                return (null, SilaGrnSap.FieldMissing(SilaGrnSap.POSTING_MISSING, "PurchaseOrder"));
+            }
+
             DateTime receiptDate = DateTime.SpecifyKind(receipt.DateCreated.Date, DateTimeKind.Utc);
             string odataDate = $"/Date({new DateTimeOffset(receiptDate).ToUnixTimeMilliseconds()})/";
             ErpDocument document = new ErpDocument();
-            document.Header.Add(("PoNumber", receipt.PoNumber.Trim()));
+            document.Header.Add(("PoNumber", sapPurchaseOrder));
             document.Header.Add(("GrnNumber", receipt.GrnNumber.Trim()));
             document.Header.Add(("PostingDate", receipt.DateCreated.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)));
             document.Header.Add(("DocumentDate", odataDate));
@@ -1376,10 +1378,10 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
                     return (null, SilaGrnSap.FieldMissing(SilaGrnSap.POSTING_MISSING, "PurchaseOrderItem"));
                 }
 
-                if (string.IsNullOrWhiteSpace(item.MaterialCode))
-                {
-                    return (null, SilaGrnSap.FieldMissing(SilaGrnSap.POSTING_MISSING, "Material"));
-                }
+                // Text / account-assigned PO lines omit Material (same as Create PO). Stocked lines keep Material.
+                string? materialCode = !string.IsNullOrWhiteSpace(item.MaterialCode)
+                    ? item.MaterialCode.Trim()
+                    : !string.IsNullOrWhiteSpace(poItem.MaterialCode) ? poItem.MaterialCode.Trim() : null;
 
                 if (string.IsNullOrWhiteSpace(item.Uom))
                 {
@@ -1396,14 +1398,14 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
                     : location?.StorageLocationCode?.Trim();
                 string purchaseOrderItem = SilaGrnSap.FormatPurchaseOrderItem(poItem.LineNumber);
                 // Only SAP Material Document fields — camelCase internal names must never reach S4.
-                // Blank SLoc is omitted by SapGrnBody (frozen 101 contract).
+                // Blank Material / SLoc omitted by SapGrnBody (frozen 101 contract for text POs).
                 document.Items.Add(new List<(string, object?)>
                 {
-                    ("Material", item.MaterialCode.Trim()),
+                    ("Material", materialCode),
                     ("Plant", plant),
                     ("StorageLocation", lineSloc),
                     ("GoodsMovementType", SilaGrnSap.GOODS_MOVEMENT_TYPE),
-                    ("PurchaseOrder", receipt.PoNumber.Trim()),
+                    ("PurchaseOrder", sapPurchaseOrder),
                     ("PurchaseOrderItem", purchaseOrderItem),
                     ("GoodsMovementRefDocType", SilaGrnSap.GOODS_MOVEMENT_REF_DOC_TYPE),
                     ("EntryUnit", item.Uom.Trim()),
@@ -2212,9 +2214,9 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
                 }
 
                 string? storage = Value("StorageLocation")?.ToString()?.Trim();
+                string? material = Value("Material")?.ToString()?.Trim();
                 Dictionary<string, object?> line = new Dictionary<string, object?>
                 {
-                    ["Material"] = Value("Material"),
                     ["Plant"] = Value("Plant"),
                     ["GoodsMovementType"] = Value("GoodsMovementType"),
                     ["PurchaseOrder"] = Value("PurchaseOrder"),
@@ -2223,6 +2225,12 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
                     ["EntryUnit"] = Value("EntryUnit"),
                     ["QuantityInEntryUnit"] = Value("QuantityInEntryUnit")
                 };
+                // Text / account-assigned PO lines omit Material (Create PO did the same).
+                if (!string.IsNullOrWhiteSpace(material))
+                {
+                    line["Material"] = material;
+                }
+
                 // Receiving store / outlet SAP storage location (omit when blank).
                 if (!string.IsNullOrWhiteSpace(storage))
                 {
@@ -2307,9 +2315,12 @@ namespace Buyer.Application.Features.Commands.PostPendingErpPostings
 
                 string? preparedSloc = Value("StorageLocation")?.Trim();
                 string? sentSloc = Read("StorageLocation")?.Trim();
+                string? preparedMaterial = Value("Material")?.Trim();
                 mismatch = SilaGrnSap.CompareField(SilaGrnSap.POSTING_MISMATCH, "PurchaseOrder", preparedPo, Read("PurchaseOrder"))
                     ?? SilaGrnSap.CompareField(SilaGrnSap.POSTING_MISMATCH, "PurchaseOrderItem", Value("PurchaseOrderItem"), Read("PurchaseOrderItem"))
-                    ?? SilaGrnSap.CompareField(SilaGrnSap.POSTING_MISMATCH, "Material", Value("Material"), Read("Material"))
+                    ?? (string.IsNullOrWhiteSpace(preparedMaterial)
+                        ? null
+                        : SilaGrnSap.CompareField(SilaGrnSap.POSTING_MISMATCH, "Material", preparedMaterial, Read("Material")))
                     ?? SilaGrnSap.CompareField(SilaGrnSap.POSTING_MISMATCH, "Plant", Value("Plant"), Read("Plant"))
                     ?? SilaGrnSap.CompareField(SilaGrnSap.POSTING_MISMATCH, "GoodsMovementType", SilaGrnSap.GOODS_MOVEMENT_TYPE, Read("GoodsMovementType"))
                     ?? SilaGrnSap.CompareField(SilaGrnSap.POSTING_MISMATCH, "EntryUnit", Value("EntryUnit"), Read("EntryUnit"), ignoreCase: true);

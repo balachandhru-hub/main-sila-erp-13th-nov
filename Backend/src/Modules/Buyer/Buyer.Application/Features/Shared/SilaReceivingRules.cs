@@ -118,10 +118,10 @@ namespace Buyer.Application.Features.Shared
             return items.GroupBy(x => x.PurchaseOrderItemId!.Value).ToDictionary(x => x.Key, x => x.Sum(y => y.Quantity!.Value));
         }
 
-        /// <summary>ERP-style item number of a line: the line number on 5 digits (10 = 00010).</summary>
+        /// <summary>ERP-style item number of a line (Create PO uses 10, 20, … → 00010).</summary>
         public static string ItemNumber(PurchaseOrderItem item)
         {
-            return item.LineNumber.ToString("D5", System.Globalization.CultureInfo.InvariantCulture);
+            return SilaGrnSap.FormatPurchaseOrderItem(item.LineNumber);
         }
 
         public static bool IsClosed(PurchaseOrder purchaseOrder)

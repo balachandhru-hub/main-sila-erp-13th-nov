@@ -175,5 +175,45 @@ namespace Buyer.Tests.Shared
             Assert.NotNull(found);
             Assert.Equal("1050", found!.Plant);
         }
+
+        [Fact]
+        public void ReversalBody_OmitsMaterial_ForTextPoLine()
+        {
+            SilaGrnReversalSapLine[] lines =
+            {
+                new SilaGrnReversalSapLine
+                {
+                    Material = "",
+                    Plant = "1060",
+                    StorageLocation = "FL01",
+                    Quantity = 10,
+                    EntryUnit = "KG",
+                    PurchaseOrder = "4500005038",
+                    PurchaseOrderItem = "00010"
+                }
+            };
+            string body = SilaGrnSap.ReversalBody(new DateTime(2026, 11, 24), new DateTime(2026, 11, 24), true, null, lines);
+            using JsonDocument json = JsonDocument.Parse(body);
+            JsonElement item = json.RootElement.GetProperty("to_MaterialDocumentItem")[0];
+            Assert.False(item.TryGetProperty("Material", out _));
+            Assert.Equal("4500005038", item.GetProperty("PurchaseOrder").GetString());
+            Assert.Equal("00010", item.GetProperty("PurchaseOrderItem").GetString());
+            Assert.Null(SilaGrnSap.ValidateReversalBody(body, lines, true));
+        }
+
+        [Fact]
+        public void ReadPostedGrnItems_AllowsBlankMaterial_TextPo101()
+        {
+            const string body = """
+                {"DocumentDate":"/Date(1)/","PostingDate":"/Date(1)/","GoodsMovementCode":"01","MaterialDocumentHeaderText":"GR000027","to_MaterialDocumentItem":[{"Plant":"1060","GoodsMovementType":"101","PurchaseOrder":"4500005038","PurchaseOrderItem":"00010","GoodsMovementRefDocType":"B","EntryUnit":"KG","QuantityInEntryUnit":"10.0000","StorageLocation":"FL01"}]}
+                """;
+            List<SilaGrnPostedSapLine> posted = SilaGrnSap.ReadPostedGrnItems(body);
+            Assert.Single(posted);
+            Assert.Equal("", posted[0].Material);
+            Assert.Equal("FL01", posted[0].StorageLocation);
+            SilaGrnPostedSapLine? found = SilaGrnSap.FindPostedLine(posted, "", "00010");
+            Assert.NotNull(found);
+            Assert.Equal("1060", found!.Plant);
+        }
     }
 }
