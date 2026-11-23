@@ -724,7 +724,21 @@ namespace Buyer.Application.Features.Shared
 
         public static string BuildSpokenReply(VoicePoIntent intent, SilaVoicePoDraftDto draft, SilaVoicePoDraftValidation validation, string? extra = null)
         {
-            if (!string.IsNullOrWhiteSpace(extra))
+            // Prefer asking for missing mandatory fields (price / UOM / headers) over a generic "added" reply.
+            string? ask = PreferMandatoryAsk(validation);
+            if (!string.IsNullOrWhiteSpace(ask)
+                && validation.Status != VALIDATION_OK
+                && intent is VoicePoIntent.AddLine or VoicePoIntent.GoWithDefault or VoicePoIntent.SetUnitPrice or VoicePoIntent.None or VoicePoIntent.Unknown)
+            {
+                return ask;
+            }
+
+            if (!string.IsNullOrWhiteSpace(extra) && validation.Status == VALIDATION_OK)
+            {
+                return extra.Trim();
+            }
+
+            if (!string.IsNullOrWhiteSpace(extra) && string.IsNullOrWhiteSpace(ask))
             {
                 return extra.Trim();
             }
@@ -733,20 +747,45 @@ namespace Buyer.Application.Features.Shared
             {
                 VoicePoIntent.AddLine when validation.Status == VALIDATION_OK =>
                     $"Added. Draft has {draft.Lines.Count} line{(draft.Lines.Count == 1 ? string.Empty : "s")}. Say 'confirm purchase order' when ready.",
-                VoicePoIntent.GoWithDefault => "Applied your purchasing defaults.",
+                VoicePoIntent.GoWithDefault when validation.Status == VALIDATION_OK => "Applied your purchasing defaults.",
+                VoicePoIntent.GoWithDefault => ask ?? "Applied your purchasing defaults. Some fields still need a value.",
                 VoicePoIntent.SetUnitPrice when validation.Status == VALIDATION_OK =>
                     $"Got it. {SummarizeDraft(draft)}",
-                VoicePoIntent.SetUnitPrice => validation.Clarifications.FirstOrDefault()?.Message
+                VoicePoIntent.SetUnitPrice => ask
+                    ?? validation.Clarifications.FirstOrDefault()?.Message
                     ?? "Unit price updated.",
                 VoicePoIntent.DoubleQuantity => "Doubled the quantities on the draft.",
                 VoicePoIntent.RemoveLine => draft.Lines.Count == 0 ? "Removed the line. The draft is empty." : "Removed the line.",
                 VoicePoIntent.Review => SummarizeDraft(draft),
                 VoicePoIntent.Confirm => "Confirmation received.",
                 VoicePoIntent.Cancel => "Session cancelled.",
-                _ => validation.Clarifications.FirstOrDefault()?.Message
+                _ => ask
+                    ?? validation.Clarifications.FirstOrDefault()?.Message
                     ?? validation.Errors.FirstOrDefault()
                     ?? "How can I help with this purchase order?"
             };
+        }
+
+        /// <summary>Surface UOM / unit price / account assignment asks before softer header prompts.</summary>
+        private static string? PreferMandatoryAsk(SilaVoicePoDraftValidation validation)
+        {
+            if (validation.Clarifications.Count == 0)
+            {
+                return null;
+            }
+
+            string[] priority = { "UOM", "UNIT_PRICE", "QUANTITY", "ACCOUNT_ASSIGNMENT", "SUPPLIER_UNRESOLVED", "MATERIAL_GROUP", "MATERIAL_UNRESOLVED" };
+            foreach (string code in priority)
+            {
+                SilaVoicePoClarificationDto? hit = validation.Clarifications
+                    .FirstOrDefault(c => string.Equals(c.Code, code, StringComparison.OrdinalIgnoreCase));
+                if (hit != null && !string.IsNullOrWhiteSpace(hit.Message))
+                {
+                    return hit.Message;
+                }
+            }
+
+            return validation.Clarifications.FirstOrDefault()?.Message;
         }
 
         private static bool TryParseUnitPriceAnswer(string normalized, string original, out decimal? unitPrice)

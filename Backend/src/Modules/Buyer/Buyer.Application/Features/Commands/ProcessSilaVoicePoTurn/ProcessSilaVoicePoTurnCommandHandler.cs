@@ -298,6 +298,16 @@ namespace Buyer.Application.Features.Commands.ProcessSilaVoicePoTurn
             }
             else
             {
+                // Do not invent UOM or price — ValidateDraft asks the user; confirm defaults price to 1 AED.
+                string? resolvedUom = parse.UnitOfMeasure
+                    ?? item?.OrderUnitOfMeasure
+                    ?? item?.BaseUnitOfMeasure;
+                decimal? resolvedPrice = parse.UnitPrice ?? item?.StandardPrice ?? item?.UnitCost;
+                if (resolvedPrice is <= 0)
+                {
+                    resolvedPrice = null;
+                }
+
                 SilaVoicePoDraftLineDto line = new()
                 {
                     LineNumber = draft.Lines.Count + 1,
@@ -305,11 +315,8 @@ namespace Buyer.Application.Features.Commands.ProcessSilaVoicePoTurn
                     MaterialCode = textPo ? null : item!.MaterialCode,
                     Description = description,
                     Quantity = parse.Quantity ?? 1,
-                    UnitOfMeasure = parse.UnitOfMeasure
-                        ?? item?.OrderUnitOfMeasure
-                        ?? item?.BaseUnitOfMeasure
-                        ?? "KG",
-                    UnitPrice = parse.UnitPrice ?? item?.StandardPrice ?? item?.UnitCost,
+                    UnitOfMeasure = resolvedUom,
+                    UnitPrice = resolvedPrice,
                     SupplierId = supplier.SupplierId,
                     SupplierCode = supplier.SupplierCode,
                     SupplierName = supplier.SupplierName,

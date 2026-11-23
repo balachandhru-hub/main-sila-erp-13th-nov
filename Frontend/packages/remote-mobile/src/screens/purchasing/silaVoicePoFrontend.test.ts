@@ -57,6 +57,11 @@ assert.match(naturalTts, /looksIncompleteUtterance/);
 assert.match(naturalTts, /unlockSpeechPlayback/);
 assert.match(naturalTts, /isConversationDonePhrase/);
 assert.match(naturalTts, /startKeepAlive|keepAlive/);
+assert.match(naturalTts, /synthesizeVoiceTts|fetchServerWav|probeBrowserSynth/);
+assert.match(naturalTts, /playWavBlob/);
+assert.match(engineApi, /synthesizeVoiceTts/);
+assert.match(screen, /isSafariLike|resumeListening/);
+assert.match(screen, /clarifications|validationStatus|NEEDS_CLARIFICATION/);
 
 assert.match(screen, /resolveDialogueIntent/);
 assert.match(screen, /isShortConversationalUtterance/);

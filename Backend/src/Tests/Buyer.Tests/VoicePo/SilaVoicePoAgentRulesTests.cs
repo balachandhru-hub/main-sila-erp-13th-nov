@@ -218,6 +218,8 @@ namespace Buyer.Tests.VoicePo
             Assert.Equal(SilaVoicePoAgentRules.VALIDATION_NEEDS_CLARIFICATION, validation.Status);
             Assert.Contains(validation.Clarifications, c => c.Code == "UOM");
             Assert.Contains(validation.Clarifications, c => c.Code == "UNIT_PRICE");
+            string spoken = SilaVoicePoAgentRules.BuildSpokenReply(VoicePoIntent.AddLine, draft, validation);
+            Assert.Contains("unit of measure", spoken, StringComparison.OrdinalIgnoreCase);
         }
 
         [Fact]

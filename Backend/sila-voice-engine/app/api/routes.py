@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, Header, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from app.engine import get_engine
@@ -29,6 +30,12 @@ class TurnRequest(BaseModel):
     bargeIn: bool = False
     confirm: bool = False
     idempotencyKey: str | None = None
+
+
+class TtsRequest(BaseModel):
+    text: str = Field(..., min_length=1, max_length=500)
+    language: str | None = "en"
+    voice: str | None = None
 
 
 def _require_auth(authorization: str | None, cookie: str | None, x_voice_key: str | None) -> str:
@@ -120,6 +127,32 @@ async def process_turn(
         barge_in=body.bargeIn,
         confirm=body.confirm,
         idempotency_key=body.idempotencyKey,
+    )
+
+
+@router.post("/tts")
+async def synthesize_speech(
+    body: TtsRequest,
+    authorization: str | None = Header(default=None),
+    cookie: str | None = Header(default=None),
+    x_voice_internal_key: str | None = Header(default=None, alias="X-Voice-Internal-Key"),
+) -> Response:
+    """Return audible WAV for SILA replies when browser speechSynthesis has no voices."""
+    _require_auth(authorization, cookie, x_voice_internal_key)
+    engine = get_engine()
+    result = await engine.tts.synthesize(body.text, body.language, body.voice)
+    if result.audio:
+        return Response(
+            content=result.audio,
+            media_type=result.content_type or "audio/wav",
+            headers={
+                "X-Sila-Tts-Provider": result.provider,
+                "Cache-Control": "no-store",
+            },
+        )
+    raise HTTPException(
+        status_code=503,
+        detail=f"Audible TTS unavailable (provider={result.provider}). Install espeak-ng or enable browser voices.",
     )
 
 

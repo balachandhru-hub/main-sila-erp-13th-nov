@@ -121,6 +121,25 @@ def test_health_and_agents_http():
     assert "INVENTORY_QUERY_AGENT" in agents.json()["reserved"]
 
 
+def test_tts_requires_auth_and_returns_wav_when_espeak_present():
+    import shutil
+
+    client = TestClient(app)
+    denied = client.post("/api/v1/sila-voice/tts", json={"text": "Hi! I'm here."})
+    assert denied.status_code == 401
+    if not shutil.which("espeak-ng"):
+        pytest.skip("espeak-ng not installed")
+    ok = client.post(
+        "/api/v1/sila-voice/tts",
+        json={"text": "Hi! I'm here. How can I help you today?"},
+        headers={"Authorization": "Bearer test"},
+    )
+    assert ok.status_code == 200
+    assert ok.headers.get("content-type", "").startswith("audio/")
+    assert len(ok.content) > 1000
+    assert ok.content[:4] == b"RIFF"
+
+
 def test_session_requires_auth():
     client = TestClient(app)
     denied = client.post("/api/v1/sila-voice/sessions", json={"language": "en"})

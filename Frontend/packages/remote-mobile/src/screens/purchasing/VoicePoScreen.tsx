@@ -57,6 +57,15 @@ const openSession = (status?: string | null) => {
   return value === 'OPEN' || value === 'REVIEW' || value === '';
 };
 
+/** Safari/WebKit SpeechRecognition is unreliable with continuous=true after TTS. */
+const isSafariLike = (): boolean => {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  const isSafari = /safari/i.test(ua) && !/chrome|chromium|crios|fxios|edg/i.test(ua);
+  const isIos = /iphone|ipad|ipod/i.test(ua);
+  return isSafari || isIos;
+};
+
 /**
  * SILA Voice 2.0 — continuous conversation on the existing Voice PO agent.
  * One activation → auto listen → end-of-speech → auto turn → natural TTS → resume listen.
@@ -226,18 +235,30 @@ const VoicePoScreen: React.FC = () => {
     ) {
       return;
     }
+    // Leave speaking/acknowledging — caller finished TTS and wants the mic open again.
     setUi('listening');
     speechStartedAtRef.current = null;
     finalChunkRef.current = '';
     setTranscript('');
     transcriptRef.current = '';
-    // Recognition often ends during SPEAKING/PROCESSING — re-arm so the loop continues.
-    if (!recognitionRef.current || !recognitionRunningRef.current) {
-      window.setTimeout(() => {
-        if (!sessionActiveRef.current) return;
-        beginRecognitionRef.current();
-      }, 80);
-    }
+    // Always hard-restart recognition after TTS — Safari ends the session and will not resume.
+    const delay = isSafariLike() ? 280 : 120;
+    window.setTimeout(() => {
+      if (!sessionActiveRef.current) return;
+      if (
+        uiStateRef.current === 'speaking' ||
+        uiStateRef.current === 'acknowledging' ||
+        uiStateRef.current === 'processing' ||
+        uiStateRef.current === 'transcribing' ||
+        uiStateRef.current === 'confirmTranscript' ||
+        uiStateRef.current === 'reviewPo' ||
+        uiStateRef.current === 'done' ||
+        uiStateRef.current === 'closing'
+      ) {
+        return;
+      }
+      beginRecognitionRef.current();
+    }, delay);
   }, [setUi]);
 
   const enterTranscriptConfirmation = useCallback(
@@ -282,6 +303,7 @@ const VoicePoScreen: React.FC = () => {
         return;
       }
       spokenRef.current = spoken;
+      stopRecognition();
       setUi(nextUi === 'closing' ? 'closing' : 'acknowledging');
       speakStartedAtRef.current = Date.now();
       const handle = speakNaturally(spoken, ttsMuted);
@@ -307,13 +329,23 @@ const VoicePoScreen: React.FC = () => {
   const submitTurn = useCallback(
     async (text: string, channel: 'VOICE' | 'TEXT' = 'VOICE') => {
       const cleaned = text.trim();
-      if (!cleaned || submittingRef.current || !sessionActiveRef.current) return;
+      if (!cleaned || submittingRef.current) return;
+      // Voice turns require an active listen loop; Type fallback may run without Voice activated.
+      if (channel === 'VOICE' && !sessionActiveRef.current) return;
+      if (channel === 'TEXT' && !sessionActiveRef.current) {
+        sessionActiveRef.current = true;
+        setSessionActive(true);
+      }
       submittingRef.current = true;
       clearSilenceTimer();
       const turnId = ++turnIdRef.current;
       setBusy(true);
       setNotice(null);
       interruptSpeech();
+      // Safari: stop recognition before TTS / network so mic can re-arm cleanly afterward.
+      if (channel === 'VOICE' || isSafariLike()) {
+        stopRecognition();
+      }
       try {
         // Local dialogue manager: wake / greeting / social / farewell before PO agent.
         const dialogue = resolveDialogueIntent(cleaned);
@@ -346,7 +378,7 @@ const VoicePoScreen: React.FC = () => {
           speakHandleRef.current = null;
         }
 
-        const lineCount = session?.draft?.lines?.length ?? 0;
+        const lineCount = sessionDataRef.current?.draft?.lines?.length ?? session?.draft?.lines?.length ?? 0;
         if (isConversationDonePhrase(businessText) && lineCount > 0) {
           await enterTranscriptConfirmation(businessText);
           return;
@@ -367,9 +399,15 @@ const VoicePoScreen: React.FC = () => {
         finalChunkRef.current = '';
 
         const reply = (next.spokenReply || '').trim();
+        const clarifications = next.clarifications ?? [];
+        const needsAsk =
+          (next.validationStatus || '').toUpperCase() === 'NEEDS_CLARIFICATION' || clarifications.length > 0;
+        if (needsAsk && reply) {
+          setNotice({ tone: 'warning', text: reply });
+        }
         const hasLines = (next.draft?.lines?.length ?? 0) > 0;
         if (isConversationDonePhrase(businessText) && hasLines) {
-          if (reply && reply !== spokenRef.current) {
+          if (reply) {
             await speakAndResume(reply, turnId, 'listening');
           }
           await enterTranscriptConfirmation(businessText);
@@ -377,7 +415,7 @@ const VoicePoScreen: React.FC = () => {
         }
 
         const awaiting = next.status === 'REVIEW' || hasLines;
-        if (reply && reply !== spokenRef.current) {
+        if (reply) {
           spokenRef.current = reply;
           setUi('speaking');
           speakStartedAtRef.current = Date.now();
@@ -386,7 +424,7 @@ const VoicePoScreen: React.FC = () => {
           await handle.done;
           if (turnId !== turnIdRef.current || !sessionActiveRef.current) return;
           speakHandleRef.current = null;
-          if (awaiting && /confirm/i.test(reply)) {
+          if (awaiting && /confirm/i.test(reply) && !needsAsk) {
             setUi('awaitingConfirmation');
           }
           resumeListening();
@@ -413,6 +451,7 @@ const VoicePoScreen: React.FC = () => {
       session?.draft?.lines?.length,
       setUi,
       speakAndResume,
+      stopRecognition,
       ttsMuted,
     ],
   );
@@ -462,8 +501,10 @@ const VoicePoScreen: React.FC = () => {
     }
     stopRecognition();
     recognitionRunningRef.current = false;
+    const safari = isSafariLike();
     const recognition = new SpeechRecognitionCtor();
-    recognition.continuous = true;
+    // Safari: continuous sessions die after TTS; use one-shot and restart on end.
+    recognition.continuous = !safari;
     recognition.interimResults = true;
     recognition.lang = 'en-US';
     recognition.onresult = (event) => {
@@ -530,6 +571,22 @@ const VoicePoScreen: React.FC = () => {
       ) {
         return;
       }
+      // Safari one-shot: recreate; Chrome continuous: restart same instance.
+      if (safari) {
+        window.setTimeout(() => {
+          if (!sessionActiveRef.current) return;
+          if (
+            uiStateRef.current === 'speaking' ||
+            uiStateRef.current === 'acknowledging' ||
+            uiStateRef.current === 'processing' ||
+            uiStateRef.current === 'transcribing'
+          ) {
+            return;
+          }
+          beginRecognitionRef.current();
+        }, 200);
+        return;
+      }
       try {
         recognition.start();
         recognitionRunningRef.current = true;
@@ -551,6 +608,15 @@ const VoicePoScreen: React.FC = () => {
       recognitionRunningRef.current = true;
     } catch {
       recognitionRunningRef.current = false;
+      window.setTimeout(() => {
+        if (!sessionActiveRef.current) return;
+        try {
+          recognition.start();
+          recognitionRunningRef.current = true;
+        } catch {
+          /* ignore */
+        }
+      }, 300);
     }
   }, [interruptSpeech, scheduleEndOfTurn, setUi, stopRecognition]);
 
@@ -616,6 +682,7 @@ const VoicePoScreen: React.FC = () => {
     setConfirmedTranscript('');
     setUi('activating');
     interruptSpeech();
+    stopRecognition();
     try {
       // Unlock audible TTS on the user gesture (required for Alexa-like talk-back).
       unlockSpeechPlayback();
@@ -623,7 +690,7 @@ const VoicePoScreen: React.FC = () => {
       sessionActiveRef.current = true;
       setSessionActive(true);
       await ensureSession();
-      beginRecognition();
+      // Speak greeting first, then open the mic — Safari cannot keep recognition alive under TTS.
       const greeting = "Hi! I'm here. How can I help you today?";
       spokenRef.current = greeting;
       setUi('acknowledging');
@@ -632,7 +699,10 @@ const VoicePoScreen: React.FC = () => {
       speakHandleRef.current = handle;
       await handle.done;
       speakHandleRef.current = null;
-      if (sessionActiveRef.current) resumeListening();
+      if (sessionActiveRef.current) {
+        setUi('listening');
+        resumeListening();
+      }
     } catch (err: unknown) {
       setNotice({ tone: 'error', text: errorText(err) });
       setUi('error');
@@ -642,7 +712,6 @@ const VoicePoScreen: React.FC = () => {
       stopMeter();
     }
   }, [
-    beginRecognition,
     ensureSession,
     interruptSpeech,
     resumeListening,
