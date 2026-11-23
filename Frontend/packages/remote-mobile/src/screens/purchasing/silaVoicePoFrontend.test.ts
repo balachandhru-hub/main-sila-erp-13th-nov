@@ -21,6 +21,12 @@ const more = readFileSync(join(dir, '../more/MoreScreen.tsx'), 'utf8');
 const screen = read('VoicePoScreen.tsx');
 
 assert.match(screen, /Create PO by Voice/);
+assert.match(screen, /VoiceAgentOverlay/);
+const overlay = readFileSync(join(dir, 'voiceAgent/VoiceAgentOverlay.tsx'), 'utf8');
+assert.match(overlay, /sila-voice-agent-overlay/);
+assert.match(overlay, /sva-waveform/);
+const engineApi = readFileSync(join(dir, '../../../../remote-buyer/src/api/silaMe/silaVoiceEngineApi.ts'), 'utf8');
+assert.match(engineApi, /\/api\/v1\/buyer\/sila\/voice-engine/);
 assert.match(screen, /data-testid="vpo-recording-controls"/);
 assert.match(screen, /data-testid="vpo-start-recording"/);
 assert.match(screen, /data-testid="vpo-pause-recording"/);

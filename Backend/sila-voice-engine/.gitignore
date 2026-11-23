@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+appsettings.Local.json
+models/*
+!models/.gitkeep
+*.wav
+*.log

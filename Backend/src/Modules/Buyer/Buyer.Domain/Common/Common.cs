@@ -389,6 +389,9 @@ namespace Buyer.Domain.Common
                 /// <summary>Create Invoice mode: expense / GL account assignment, no PO or GRN.</summary>
                 public const string SILA_INVOICE_CREATION_NON_PO = "NON_PO";
                 public static readonly string OCR_SERVICE_URL = "InterCallService:OcrUrl";
+                /// <summary>Isolated Python SILA Voice Engine (does not replace OcrUrl / Voice PO).</summary>
+                public static readonly string VOICE_ENGINE_URL = "InterCallService:VoiceEngineUrl";
+                public const string HTTP_CLIENT_VOICE_ENGINE = "sila-voice-engine";
                 public static readonly string SCHEDULER_ERP_POSTING_CRON = "Scheduler:InventoryErpPostingCron";
                 public static readonly string SCHEDULER_ALERT_CRON = "Scheduler:InventoryAlertCron";
                 public static readonly string SCHEDULER_POS_PULL_CRON = "Scheduler:PosSalesPullCron";

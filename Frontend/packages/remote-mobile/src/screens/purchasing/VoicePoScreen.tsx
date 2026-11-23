@@ -13,6 +13,7 @@ import { Empty, ErrorNotice, Loading, Notice, type NoticeMessage } from '../../c
 import { useAccess } from '../../access';
 import { useMyLocation } from '../../location';
 import { errorText } from '../../useLoad';
+import VoiceAgentOverlay from './voiceAgent/VoiceAgentOverlay';
 import './VoicePoScreen.css';
 
 type RecState = 'idle' | 'recording' | 'paused';
@@ -374,6 +375,8 @@ const VoicePoScreen: React.FC = () => {
   const ctx = session?.purchasingContext ?? defaults;
   const lines = session?.draft?.lines ?? [];
   const canConfirm = Boolean(session && openSession(session.status) && lines.length > 0);
+  const overlayState =
+    busy ? 'thinking' : recState === 'recording' ? 'listening' : session?.spokenReply && !ttsMuted ? 'speaking' : 'idle';
 
   return (
     <>
@@ -406,6 +409,15 @@ const VoicePoScreen: React.FC = () => {
               <h2 className="vpo-hero__title">Create PO by Voice</h2>
               <p className="vpo-hero__sub">Hands-free draft with your plant defaults. Confirm is always explicit.</p>
             </section>
+
+            <VoiceAgentOverlay
+              level={level}
+              state={overlayState}
+              transcript={transcript}
+              reply={session?.spokenReply || undefined}
+              intent={session?.status || undefined}
+              muted={ttsMuted}
+            />
 
             {bootError && <ErrorNotice message={bootError} onRetry={() => window.location.reload()} />}
             <Notice notice={notice} />
