@@ -178,6 +178,21 @@ namespace Buyer.Tests.VoicePo
         }
 
         [Theory]
+        [InlineData("20")]
+        [InlineData("20.")]
+        [InlineData("20 AED")]
+        [InlineData("20 dirhams")]
+        [InlineData("twenty")]
+        public void Parse_bare_price_answer_defaults_to_aed(string transcript)
+        {
+            VoicePoParseResult result = SilaVoicePoAgentRules.ParseOrderIntent(transcript);
+
+            Assert.Equal(VoicePoIntent.SetUnitPrice, result.Intent);
+            Assert.Equal(20m, result.UnitPrice);
+            Assert.Equal("AED", result.Currency);
+        }
+
+        [Theory]
         [InlineData("order 10 kilograms of onion")]
         [InlineData("order 10 kilos of onion")]
         [InlineData("order 10 kilo of onion")]

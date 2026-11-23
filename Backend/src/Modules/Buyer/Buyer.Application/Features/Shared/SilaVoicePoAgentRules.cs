@@ -263,6 +263,15 @@ namespace Buyer.Application.Features.Shared
                 return result;
             }
 
+            // Bare amount answers first ("20", "20.", "20 AED") so they never become a new line.
+            if (TryParseUnitPriceAnswer(normalized, text, out decimal? answeredPrice, out string? answeredCurrency))
+            {
+                result.Intent = VoicePoIntent.SetUnitPrice;
+                result.UnitPrice = answeredPrice;
+                result.Currency = answeredCurrency ?? "AED";
+                return result;
+            }
+
             Match order = OrderPattern.Match(text);
             if (!order.Success)
             {
@@ -307,14 +316,6 @@ namespace Buyer.Application.Features.Shared
                     result.ClarificationMessage = "Which material should I add? Please include the material name or code.";
                 }
 
-                return result;
-            }
-
-            // Price-only answers while a draft line awaits unit price (not part of an "order …" line).
-            if (TryParseUnitPriceAnswer(normalized, text, out decimal? answeredPrice))
-            {
-                result.Intent = VoicePoIntent.SetUnitPrice;
-                result.UnitPrice = answeredPrice;
                 return result;
             }
 
@@ -395,13 +396,14 @@ namespace Buyer.Application.Features.Shared
                 // Always require a positive unit price before create — never invent it.
                 if (line.UnitPrice == null || line.UnitPrice <= 0)
                 {
+                    string cur = draft.Currency ?? "AED";
                     validation.Errors.Add($"{where}: unit price is required.");
                     validation.Clarifications.Add(new SilaVoicePoClarificationDto
                     {
                         Code = "UNIT_PRICE",
                         Message = forConfirm
-                            ? $"{where}: unit price is required before submit. Reply with the amount in {(draft.Currency ?? "AED")}, or say 'use one {draft.Currency ?? "AED"}' to default to 1."
-                            : $"{where}: what is the unit price in {(draft.Currency ?? "AED")}? Reply with the amount, or say 'use one {draft.Currency ?? "AED"}' to default to 1.",
+                            ? $"{where}: unit price is required before submit. Say the amount (for example 20) — {cur} is added automatically — or say 'use one {cur}' to default to 1."
+                            : $"{where}: what is the unit price in {cur}? Say the amount (for example 20) — {cur} is added automatically — or say 'use one {cur}' to default to 1.",
                         Field = "UnitPrice"
                     });
                 }
@@ -762,7 +764,7 @@ namespace Buyer.Application.Features.Shared
                 VoicePoIntent.GoWithDefault when validation.Status == VALIDATION_OK => "Applied your purchasing defaults.",
                 VoicePoIntent.GoWithDefault => "Applied your purchasing defaults. Some fields still need a value.",
                 VoicePoIntent.SetUnitPrice when validation.Status == VALIDATION_OK =>
-                    $"Got it. {SummarizeDraft(draft)}",
+                    $"Got it. Unit price set in {draft.Currency ?? "AED"}. {SummarizeDraft(draft)}",
                 VoicePoIntent.SetUnitPrice => "Unit price updated.",
                 VoicePoIntent.DoubleQuantity => "Doubled the quantities on the draft.",
                 VoicePoIntent.RemoveLine => draft.Lines.Count == 0 ? "Removed the line. The draft is empty." : "Removed the line.",
@@ -806,7 +808,8 @@ namespace Buyer.Application.Features.Shared
                 string where = $"Line {(line.LineNumber > 0 ? line.LineNumber : i + 1)}";
                 if (line.UnitPrice == null || line.UnitPrice <= 0)
                 {
-                    return $"{where}: what is the unit price in {(draft.Currency ?? "AED")}? Reply with the amount, or say 'use one {draft.Currency ?? "AED"}' to default to 1.";
+                    string cur = draft.Currency ?? "AED";
+                    return $"{where}: what is the unit price in {cur}? Say the amount (for example 20) — {cur} is added automatically — or say 'use one {cur}' to default to 1.";
                 }
 
                 if (string.IsNullOrWhiteSpace(line.UnitOfMeasure))
@@ -819,33 +822,100 @@ namespace Buyer.Application.Features.Shared
         }
 
         private static bool TryParseUnitPriceAnswer(string normalized, string original, out decimal? unitPrice)
+            => TryParseUnitPriceAnswer(normalized, original, out unitPrice, out _);
+
+        private static bool TryParseUnitPriceAnswer(
+            string normalized,
+            string original,
+            out decimal? unitPrice,
+            out string? currency)
         {
             unitPrice = null;
-            if (Regex.IsMatch(normalized, @"\b(use|default|go with)\b.*\b(one|1)\b.*\b(aed|price|dirham)?\b")
-                || normalized is "use one aed" or "use 1 aed" or "default price" or "one aed")
+            currency = null;
+            string cleaned = Regex.Replace((original ?? string.Empty).Trim(), @"[.,;:!]+$", string.Empty).Trim();
+            string cleanedNorm = NormalizeTranscript(cleaned);
+
+            if (Regex.IsMatch(cleanedNorm, @"\b(use|default|go with)\b.*\b(one|1)\b.*\b(aed|price|dirham)?\b")
+                || cleanedNorm is "use one aed" or "use 1 aed" or "default price" or "one aed" or "use one")
             {
                 unitPrice = 1m;
+                currency = "AED";
                 return true;
             }
 
-            Match priced = Regex.Match(
-                original,
-                @"\b(?:price(?:\s+is)?|at|for)\s*(?<amount>\d+(?:[.,]\d+)?)\s*(?:aed|usd|eur)?\b",
-                RegexOptions.IgnoreCase);
-            if (!priced.Success)
+            if (TrySpokenAmountWord(cleanedNorm, out decimal spokenAmount))
             {
-                priced = Regex.Match(original, @"^\s*(?<amount>\d+(?:[.,]\d+)?)\s*(?:aed|usd|eur)?\s*$", RegexOptions.IgnoreCase);
+                unitPrice = spokenAmount;
+                currency = "AED";
+                return true;
             }
 
+            // Whole utterance only — never match "at 25" inside "order 10 kg X at 25 AED".
+            Match priced = Regex.Match(
+                cleaned,
+                @"^(?:(?:unit\s+)?price(?:\s+is)?|at|for(?:\s+the)?\s+price)\s+(?<amount>\d+(?:[.,]\d+)?)\s*(?<currency>aed|usd|eur|gbp|sar|dirhams?|dirham)?\s*$|^(?<amount2>\d+(?:[.,]\d+)?)\s*(?<currency2>aed|usd|eur|gbp|sar|dirhams?|dirham)?\s*$",
+                RegexOptions.IgnoreCase);
+
+            string? rawAmount = priced.Success
+                ? (priced.Groups["amount"].Success && !string.IsNullOrWhiteSpace(priced.Groups["amount"].Value)
+                    ? priced.Groups["amount"].Value
+                    : priced.Groups["amount2"].Value)
+                : null;
             if (priced.Success
+                && !string.IsNullOrWhiteSpace(rawAmount)
                 && decimal.TryParse(
-                    priced.Groups["amount"].Value.Replace(',', '.'),
+                    rawAmount.Replace(',', '.'),
                     NumberStyles.Number,
                     CultureInfo.InvariantCulture,
                     out decimal amount)
                 && amount > 0)
             {
                 unitPrice = amount;
+                string? rawCurrency = priced.Groups["currency"].Success && !string.IsNullOrWhiteSpace(priced.Groups["currency"].Value)
+                    ? priced.Groups["currency"].Value
+                    : priced.Groups["currency2"].Success && !string.IsNullOrWhiteSpace(priced.Groups["currency2"].Value)
+                        ? priced.Groups["currency2"].Value
+                        : null;
+                if (!string.IsNullOrWhiteSpace(rawCurrency))
+                {
+                    string raw = rawCurrency.Trim().ToUpperInvariant();
+                    currency = raw.StartsWith("DIRHAM", StringComparison.Ordinal) ? "AED" : raw;
+                }
+                else
+                {
+                    currency = "AED";
+                }
+
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool TrySpokenAmountWord(string normalized, out decimal amount)
+        {
+            amount = 0;
+            // Common Chrome STT words for a short price reply.
+            Dictionary<string, decimal> words = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["one"] = 1, ["two"] = 2, ["three"] = 3, ["four"] = 4, ["five"] = 5,
+                ["six"] = 6, ["seven"] = 7, ["eight"] = 8, ["nine"] = 9, ["ten"] = 10,
+                ["eleven"] = 11, ["twelve"] = 12, ["thirteen"] = 13, ["fourteen"] = 14, ["fifteen"] = 15,
+                ["sixteen"] = 16, ["seventeen"] = 17, ["eighteen"] = 18, ["nineteen"] = 19, ["twenty"] = 20,
+                ["thirty"] = 30, ["forty"] = 40, ["fifty"] = 50, ["sixty"] = 60, ["seventy"] = 70,
+                ["eighty"] = 80, ["ninety"] = 90, ["hundred"] = 100
+            };
+            if (words.TryGetValue(normalized, out amount))
+            {
+                return true;
+            }
+
+            Match compound = Regex.Match(normalized, @"^(?<tens>twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)[-\s]+(?<ones>one|two|three|four|five|six|seven|eight|nine)$", RegexOptions.IgnoreCase);
+            if (compound.Success
+                && words.TryGetValue(compound.Groups["tens"].Value, out decimal tens)
+                && words.TryGetValue(compound.Groups["ones"].Value, out decimal ones))
+            {
+                amount = tens + ones;
                 return true;
             }
 

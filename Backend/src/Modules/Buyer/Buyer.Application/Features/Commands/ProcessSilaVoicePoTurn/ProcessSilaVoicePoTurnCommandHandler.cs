@@ -167,10 +167,14 @@ namespace Buyer.Application.Features.Commands.ProcessSilaVoicePoTurn
                     }
 
                     decimal price = parse.UnitPrice is > 0 ? parse.UnitPrice.Value : 1m;
+                    string currency = !string.IsNullOrWhiteSpace(parse.Currency)
+                        ? parse.Currency.Trim().ToUpperInvariant()
+                        : (draft.Currency ?? "AED");
+                    draft.Currency = currency;
                     target.UnitPrice = price;
                     target.ResolutionNote = string.IsNullOrWhiteSpace(target.ResolutionNote)
-                        ? $"Unit price set to {price}."
-                        : $"{target.ResolutionNote} Unit price set to {price}.";
+                        ? $"Unit price set to {price} {currency}."
+                        : $"{target.ResolutionNote} Unit price set to {price} {currency}.";
                     return SilaVoicePoAgentRules.BuildSpokenReply(parse.Intent, draft, SilaVoicePoAgentRules.ValidateDraft(draft));
                 }
                 case VoicePoIntent.RemoveLine:
