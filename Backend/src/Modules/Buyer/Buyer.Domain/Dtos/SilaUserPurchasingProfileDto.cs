@@ -104,6 +104,10 @@ namespace Buyer.Domain.Dtos
         public string? InventoryType { get; set; }
         /// <summary>True when account assignment (category + CC + GL) must be present for consumables.</summary>
         public bool RequiresAccountAssignment { get; set; }
+        /// <summary>Resolved freeform parameter bag after conditions (flex PO defaults).</summary>
+        public Dictionary<string, string?> Parameters { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+        public string? ConfigType { get; set; }
+        public Guid? FlexConfigId { get; set; }
         public List<string> ValidationErrors { get; set; } = new();
     }
 
@@ -117,5 +121,7 @@ namespace Buyer.Domain.Dtos
         public string? PlantCode { get; set; }
         public string? MaterialCode { get; set; }
         public string? InventoryType { get; set; }
+        /// <summary>Defaults to PO_CREATE for Voice PO / CreatePurchaseOrder.</summary>
+        public string? ConfigType { get; set; }
     }
 }

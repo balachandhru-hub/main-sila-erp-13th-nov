@@ -232,6 +232,62 @@ namespace Buyer.Application.Features.Shared
             }
 
             inventoryType = NormalizeInventoryType(inventoryType);
+            string configType = SilaUserPoFlexRules.NormalizeType(request.ConfigType);
+            SilaUserPurchasingDefaultsDto defaults = new()
+            {
+                InventoryType = inventoryType,
+                ConfigType = configType,
+                RequiresAccountAssignment = RequiresAccountAssignment(inventoryType)
+            };
+
+            // Prefer flexible PO defaults (param + condition rows) when present.
+            SilaUserPoFlexConfig? flex = await SilaUserPoFlexRules.FindBestAsync(
+                repository, buyerId, userId, configType, request.ProfileId, cancellationToken);
+            if (flex != null)
+            {
+                List<SilaUserPoFlexParam> flexParams = await repository.SilaUserPoFlexParam
+                    .FindByCondition(x => x.ConfigId == flex.Id && x.IsActive)
+                    .ToListAsync(cancellationToken);
+                List<SilaUserPoFlexCondition> flexConditions = await repository.SilaUserPoFlexCondition
+                    .FindByCondition(x => x.ConfigId == flex.Id && x.IsActive)
+                    .ToListAsync(cancellationToken);
+                Dictionary<string, string?> bag = SilaUserPoFlexRules.BuildParameterBag(flexParams, flexConditions);
+                SilaUserPoFlexRules.MapBagToDefaults(bag, defaults);
+                defaults.ProfileFound = true;
+                defaults.FlexConfigId = flex.Id;
+                defaults.ProfileId = flex.Id;
+                defaults.ProfileVersion = flex.ConfigVersion;
+                defaults.IsDefault = flex.IsDefault;
+                defaults.PropertyId = request.PropertyId;
+                defaults.OutletId = request.OutletId;
+                defaults.LocationId = request.LocationId;
+                defaults.PlantCode ??= CleanUpper(request.PlantCode, MAX_CODE);
+                if (!string.IsNullOrWhiteSpace(defaults.AccountAssignmentCategory))
+                {
+                    defaults.RequiresAccountAssignment = true;
+                }
+
+                if (defaults.RequiresAccountAssignment)
+                {
+                    if (string.IsNullOrWhiteSpace(defaults.AccountAssignmentCategory))
+                    {
+                        defaults.ValidationErrors.Add("Account assignment category is required.");
+                    }
+
+                    if (string.IsNullOrWhiteSpace(defaults.CostCenter))
+                    {
+                        defaults.ValidationErrors.Add("Cost center is required when account assignment applies.");
+                    }
+
+                    if (string.IsNullOrWhiteSpace(defaults.GlAccount))
+                    {
+                        defaults.ValidationErrors.Add("GL account is required when account assignment applies.");
+                    }
+                }
+
+                return defaults;
+            }
+
             SilaUserPurchasingProfile? profile = await FindBestAsync(
                 repository,
                 buyerId,
@@ -245,16 +301,11 @@ namespace Buyer.Application.Features.Shared
 
             bool profileForcesAccountAssignment = profile != null
                 && !string.IsNullOrWhiteSpace(profile.AccountAssignmentCategory);
-            SilaUserPurchasingDefaultsDto defaults = new()
-            {
-                InventoryType = inventoryType,
-                // Profile with an account-assignment category (e.g. SILA Admin K) always applies CC/GL.
-                RequiresAccountAssignment = RequiresAccountAssignment(inventoryType) || profileForcesAccountAssignment
-            };
+            defaults.RequiresAccountAssignment = RequiresAccountAssignment(inventoryType) || profileForcesAccountAssignment;
 
             if (profile == null)
             {
-                logger.LogInfo($"No purchasing profile for user. BuyerId: {buyerId}, UserId: {userId}");
+                logger.LogInfo($"No purchasing profile or flex config for user. BuyerId: {buyerId}, UserId: {userId}");
                 defaults.ProfileFound = false;
                 if (defaults.RequiresAccountAssignment)
                 {

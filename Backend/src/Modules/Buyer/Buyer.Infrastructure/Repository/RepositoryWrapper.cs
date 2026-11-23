@@ -76,6 +76,9 @@ namespace Buyer.Infrastructure.Repository
         private IRecipeLegacyMaterialMapRepository? _recipeLegacyMaterialMap;
         private IRecipeLegacyImageRepository? _recipeLegacyImage;
         private ISilaUserPurchasingProfileRepository? _silaUserPurchasingProfile;
+        private ISilaUserPoFlexConfigRepository? _silaUserPoFlexConfig;
+        private ISilaUserPoFlexParamRepository? _silaUserPoFlexParam;
+        private ISilaUserPoFlexConditionRepository? _silaUserPoFlexCondition;
         private ISilaVoicePoSessionRepository? _silaVoicePoSession;
         private ISilaVoicePoTurnRepository? _silaVoicePoTurn;
         private IBuyerBusinessProfileRepository _buyerBusinessProfileRepository;
@@ -1486,6 +1489,33 @@ namespace Buyer.Infrastructure.Repository
             {
                 _silaUserPurchasingProfile ??= new SilaUserPurchasingProfileRepository(_context);
                 return _silaUserPurchasingProfile;
+            }
+        }
+
+        public ISilaUserPoFlexConfigRepository SilaUserPoFlexConfig
+        {
+            get
+            {
+                _silaUserPoFlexConfig ??= new SilaUserPoFlexConfigRepository(_context);
+                return _silaUserPoFlexConfig;
+            }
+        }
+
+        public ISilaUserPoFlexParamRepository SilaUserPoFlexParam
+        {
+            get
+            {
+                _silaUserPoFlexParam ??= new SilaUserPoFlexParamRepository(_context);
+                return _silaUserPoFlexParam;
+            }
+        }
+
+        public ISilaUserPoFlexConditionRepository SilaUserPoFlexCondition
+        {
+            get
+            {
+                _silaUserPoFlexCondition ??= new SilaUserPoFlexConditionRepository(_context);
+                return _silaUserPoFlexCondition;
             }
         }
 

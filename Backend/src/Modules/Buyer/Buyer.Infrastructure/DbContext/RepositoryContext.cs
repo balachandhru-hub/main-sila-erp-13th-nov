@@ -150,6 +150,9 @@ namespace Buyer.Infrastructure.DbContext
         public DbSet<RecipeLegacyMaterialMap> RecipeLegacyMaterialMap { get; set; }
         public DbSet<RecipeLegacyImage> RecipeLegacyImage { get; set; }
         public DbSet<SilaUserPurchasingProfile> SilaUserPurchasingProfile { get; set; }
+        public DbSet<SilaUserPoFlexConfig> SilaUserPoFlexConfig { get; set; }
+        public DbSet<SilaUserPoFlexParam> SilaUserPoFlexParam { get; set; }
+        public DbSet<SilaUserPoFlexCondition> SilaUserPoFlexCondition { get; set; }
         public DbSet<SilaVoicePoSession> SilaVoicePoSession { get; set; }
         public DbSet<SilaVoicePoTurn> SilaVoicePoTurn { get; set; }
 
@@ -370,6 +373,10 @@ namespace Buyer.Infrastructure.DbContext
             _ = modelBuilder.Entity<SilaUserPurchasingProfile>().HasIndex(a => a.IsActive);
             _ = modelBuilder.Entity<SilaUserPurchasingProfile>().HasIndex(a => new { a.BuyerId, a.UserId, a.Status });
             _ = modelBuilder.Entity<SilaUserPurchasingProfile>().HasIndex(a => new { a.BuyerId, a.UserId, a.IsDefault });
+            _ = modelBuilder.Entity<SilaUserPoFlexConfig>().HasIndex(a => a.IsActive);
+            _ = modelBuilder.Entity<SilaUserPoFlexConfig>().HasIndex(a => new { a.BuyerId, a.UserId, a.ConfigType, a.Status });
+            _ = modelBuilder.Entity<SilaUserPoFlexParam>().HasIndex(a => a.ConfigId);
+            _ = modelBuilder.Entity<SilaUserPoFlexCondition>().HasIndex(a => a.ConfigId);
             _ = modelBuilder.Entity<SilaVoicePoSession>().HasIndex(a => a.IsActive);
             _ = modelBuilder.Entity<SilaVoicePoSession>().HasIndex(a => new { a.BuyerId, a.SessionNumber }).IsUnique();
             _ = modelBuilder.Entity<SilaVoicePoSession>().HasIndex(a => new { a.BuyerId, a.UserId, a.Status });
