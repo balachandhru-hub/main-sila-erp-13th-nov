@@ -155,7 +155,11 @@ namespace Buyer.API.Extensions
             _ = services.AddScoped<IBuyerPurchaseDocumentGateway, BuyerPurchaseDocumentGateway>();
             _ = services.AddScoped<IAesEncryption, AesEncryption>();
             _ = services.AddScoped<IStockInHandProvider, ErpStockInHandProvider>();
-            _ = services.AddControllers();
+            _ = services.AddControllers().AddJsonOptions(options =>
+            {
+                // Empty JSON strings must not 400 Guid? model binding (PO flex write payloads).
+                options.JsonSerializerOptions.Converters.Add(new Buyer.Domain.Serialization.EmptyStringNullableGuidConverter());
+            });
 
         }
 

@@ -60,25 +60,43 @@ const asGuidOrNull = (value?: string | null): string | null => {
   return GUID_RE.test(trimmed) ? trimmed : null;
 };
 
-const sanitizeWrite = (request: SilaUserPoFlexConfigWrite): SilaUserPoFlexConfigWrite => ({
-  ...request,
-  userId: asGuidOrNull(request.userId),
-  parameters: list(request.parameters).map((row) => ({
-    paramKey: row.paramKey,
-    paramValue: row.paramValue ?? null,
-    sortOrder: row.sortOrder ?? 0,
-    ...(asGuidOrNull(row.id) ? { id: asGuidOrNull(row.id) } : {}),
-  })),
-  conditions: list(request.conditions).map((row) => ({
-    whenParam: row.whenParam,
-    whenOperator: row.whenOperator || "EQ",
-    whenValue: row.whenValue ?? null,
-    thenParam: row.thenParam,
-    thenValue: row.thenValue ?? null,
-    sortOrder: row.sortOrder ?? 0,
-    ...(asGuidOrNull(row.id) ? { id: asGuidOrNull(row.id) } : {}),
-  })),
-});
+/** Build a body with no empty-string Guid fields (ASP.NET Guid? rejects ""). */
+const sanitizeWrite = (request: SilaUserPoFlexConfigWrite): SilaUserPoFlexConfigWrite => {
+  const userId = asGuidOrNull(request.userId);
+  const body: SilaUserPoFlexConfigWrite = {
+    username: request.username ?? null,
+    displayName: request.displayName ?? null,
+    configType: request.configType || "PO_CREATE",
+    name: request.name ?? null,
+    isDefault: Boolean(request.isDefault),
+    notes: request.notes ?? null,
+    parameters: list(request.parameters).map((row) => {
+      const id = asGuidOrNull(row.id);
+      return {
+        paramKey: row.paramKey,
+        paramValue: row.paramValue ?? null,
+        sortOrder: row.sortOrder ?? 0,
+        ...(id ? { id } : {}),
+      };
+    }),
+    conditions: list(request.conditions).map((row) => {
+      const id = asGuidOrNull(row.id);
+      return {
+        whenParam: row.whenParam,
+        whenOperator: row.whenOperator || "EQ",
+        whenValue: row.whenValue ?? null,
+        thenParam: row.thenParam,
+        thenValue: row.thenValue ?? null,
+        sortOrder: row.sortOrder ?? 0,
+        ...(id ? { id } : {}),
+      };
+    }),
+  };
+  if (userId) {
+    body.userId = userId;
+  }
+  return body;
+};
 
 export const listPoFlexConfigs = async (
   userId: string,

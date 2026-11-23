@@ -1,7 +1,11 @@
+using System.Text.Json.Serialization;
+using Buyer.Domain.Serialization;
+
 namespace Buyer.Domain.Dtos
 {
     public class SilaUserPoFlexParamDto
     {
+        [JsonConverter(typeof(EmptyStringNullableGuidConverter))]
         public Guid? Id { get; set; }
         public string ParamKey { get; set; } = string.Empty;
         public string? ParamValue { get; set; }
@@ -10,6 +14,7 @@ namespace Buyer.Domain.Dtos
 
     public class SilaUserPoFlexConditionDto
     {
+        [JsonConverter(typeof(EmptyStringNullableGuidConverter))]
         public Guid? Id { get; set; }
         public string WhenParam { get; set; } = string.Empty;
         /// <summary>EQ | NE | CONTAINS</summary>
@@ -40,6 +45,7 @@ namespace Buyer.Domain.Dtos
 
     public class SilaUserPoFlexConfigWriteDto
     {
+        [JsonConverter(typeof(EmptyStringNullableGuidConverter))]
         public Guid? UserId { get; set; }
         public string? Username { get; set; }
         public string? DisplayName { get; set; }
