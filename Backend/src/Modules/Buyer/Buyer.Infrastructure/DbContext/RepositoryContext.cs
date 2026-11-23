@@ -149,6 +149,9 @@ namespace Buyer.Infrastructure.DbContext
         public DbSet<RecipeLegacyRecipe> RecipeLegacyRecipe { get; set; }
         public DbSet<RecipeLegacyMaterialMap> RecipeLegacyMaterialMap { get; set; }
         public DbSet<RecipeLegacyImage> RecipeLegacyImage { get; set; }
+        public DbSet<SilaUserPurchasingProfile> SilaUserPurchasingProfile { get; set; }
+        public DbSet<SilaVoicePoSession> SilaVoicePoSession { get; set; }
+        public DbSet<SilaVoicePoTurn> SilaVoicePoTurn { get; set; }
 
 
         protected override void OnModelCreating(Microsoft.EntityFrameworkCore.ModelBuilder modelBuilder)
@@ -364,6 +367,15 @@ namespace Buyer.Infrastructure.DbContext
             _ = modelBuilder.Entity<RecipeLegacyMaterialMap>().HasIndex(a => new { a.BatchId, a.LegacyRecipeId, a.IngredientLine });
             _ = modelBuilder.Entity<RecipeLegacyImage>().HasIndex(a => a.IsActive);
             _ = modelBuilder.Entity<RecipeLegacyImage>().HasIndex(a => new { a.BatchId, a.Status });
+            _ = modelBuilder.Entity<SilaUserPurchasingProfile>().HasIndex(a => a.IsActive);
+            _ = modelBuilder.Entity<SilaUserPurchasingProfile>().HasIndex(a => new { a.BuyerId, a.UserId, a.Status });
+            _ = modelBuilder.Entity<SilaUserPurchasingProfile>().HasIndex(a => new { a.BuyerId, a.UserId, a.IsDefault });
+            _ = modelBuilder.Entity<SilaVoicePoSession>().HasIndex(a => a.IsActive);
+            _ = modelBuilder.Entity<SilaVoicePoSession>().HasIndex(a => new { a.BuyerId, a.SessionNumber }).IsUnique();
+            _ = modelBuilder.Entity<SilaVoicePoSession>().HasIndex(a => new { a.BuyerId, a.UserId, a.Status });
+            _ = modelBuilder.Entity<SilaVoicePoSession>().HasIndex(a => new { a.BuyerId, a.IdempotencyKey });
+            _ = modelBuilder.Entity<SilaVoicePoTurn>().HasIndex(a => a.IsActive);
+            _ = modelBuilder.Entity<SilaVoicePoTurn>().HasIndex(a => new { a.SessionId, a.TurnNumber }).IsUnique();
             _ = modelBuilder.Entity<GoodsReceipt>().HasIndex(a => new { a.BuyerId, a.GrnNumber }).IsUnique();
             _ = modelBuilder.Entity<InventoryTransaction>().HasIndex(a => new { a.BuyerId, a.TransactionNumber }).IsUnique();
             // SILA ME hardening: indexes for the location-scoped lists and the job lookups.

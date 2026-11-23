@@ -50,6 +50,7 @@ export const SILA_ME_NAV_PATHS = {
   silaCompanyCodes: "sila-company-codes",
   silaPoImport: "sila-po-import",
   silaQuickTransferPolicy: "sila-quick-transfer-policy",
+  silaUserPoDefaults: "sila-user-po-defaults",
   silaOcrSettings: "sila-ocr-settings",
   silaApprovalFlows: "sila-approval-flows",
   silaMenuDashboard: "sila-menu-dashboard",
@@ -169,6 +170,7 @@ export const buildSilaMeNavItem = (role: SilaMeRole, access?: SilaHomeCapabiliti
               { key: "silaCompanyCodes" as const, label: "Company Codes" },
               ...leaf(can.manageMasterData, "silaPoImport", "Purchase Order Import"),
               ...leaf(can.manageMasterData, "silaQuickTransferPolicy", "Quick Transfer Policy"),
+              ...leaf(can.manageMasterData, "silaUserPoDefaults", "PO Defaults & Account Assignment"),
               ...leaf(can.manageMasterData, "silaOcrSettings", "Invoice OCR Settings"),
               { key: "silaApprovalFlows" as const, label: "Approval flow" },
             ]

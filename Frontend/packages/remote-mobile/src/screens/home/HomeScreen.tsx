@@ -82,6 +82,7 @@ const HomeScreen: React.FC = () => {
     { label: 'Invoices', icon: 'scan', to: 'receive/posted-invoices', show: caps.viewInvoices },
     { label: 'Credit memos', icon: 'scan', to: 'receive/credit-memos', show: caps.viewCreditMemos },
     { label: 'Recommendations', icon: 'purchaseOrders', to: 'inventory/recommendations', show: caps.recommendation },
+    { label: 'Create PO by Voice', icon: 'purchaseOrders', to: 'purchasing/voice-po', show: can.requestPurchase },
     { label: 'Menu Engineering', icon: 'recipes', to: 'menu', show: can.viewMenuEngineering },
     { label: 'Recipe Studio', icon: 'recipes', to: 'recipes', show: can.manageRecipe || can.approveRecipe },
     { label: 'Scan material', icon: 'scan', to: 'inventory/scan', show: caps.viewInventory },

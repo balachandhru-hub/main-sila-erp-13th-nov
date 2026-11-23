@@ -138,6 +138,9 @@ namespace Buyer.Infrastructure.Contracts.IRepository
         IRecipeLegacyRecipeRepository RecipeLegacyRecipe { get; }
         IRecipeLegacyMaterialMapRepository RecipeLegacyMaterialMap { get; }
         IRecipeLegacyImageRepository RecipeLegacyImage { get; }
+        ISilaUserPurchasingProfileRepository SilaUserPurchasingProfile { get; }
+        ISilaVoicePoSessionRepository SilaVoicePoSession { get; }
+        ISilaVoicePoTurnRepository SilaVoicePoTurn { get; }
         bool Save();
         Task<bool> SaveAsync();
     }
