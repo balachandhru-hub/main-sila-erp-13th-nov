@@ -74,11 +74,22 @@ namespace Buyer.API.Controllers
             return await ProxyAsync(HttpMethod.Post, $"/api/v1/sila-voice/sessions/{sessionId}/cancel", null, cancellationToken);
         }
 
+        /// <summary>Proxies audible WAV TTS for Voice Agent talk-back when browser speechSynthesis has no voices.</summary>
+        [HttpPost]
+        [Route("api/v1/buyer/sila/voice-engine/tts")]
+        [ApiAuthorization(AnyOf = "CREATE_PURCHASE_ORDER|REQUEST_SILA_PURCHASE")]
+        [SwaggerOperation("SilaVoiceEngineTts")]
+        public async Task<IActionResult> Tts([FromBody] object? body, CancellationToken cancellationToken)
+        {
+            return await ProxyAsync(HttpMethod.Post, "/api/v1/sila-voice/tts", body, cancellationToken, binary: true);
+        }
+
         private async Task<IActionResult> ProxyAsync(
             HttpMethod method,
             string path,
             object? body,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            bool binary = false)
         {
             string? baseUrl = _configuration[Common.VOICE_ENGINE_URL];
             if (string.IsNullOrWhiteSpace(baseUrl))
@@ -113,8 +124,19 @@ namespace Buyer.API.Controllers
             try
             {
                 using HttpResponseMessage response = await client.SendAsync(request, cancellationToken);
-                string content = await response.Content.ReadAsStringAsync(cancellationToken);
                 string? contentType = response.Content.Headers.ContentType?.ToString() ?? "application/json";
+                if (binary || (contentType.StartsWith("audio/", StringComparison.OrdinalIgnoreCase)))
+                {
+                    byte[] bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        return StatusCode((int)response.StatusCode, Encoding.UTF8.GetString(bytes));
+                    }
+
+                    return File(bytes, contentType.StartsWith("audio/", StringComparison.OrdinalIgnoreCase) ? contentType : "audio/wav");
+                }
+
+                string content = await response.Content.ReadAsStringAsync(cancellationToken);
                 return new ContentResult
                 {
                     StatusCode = (int)response.StatusCode,

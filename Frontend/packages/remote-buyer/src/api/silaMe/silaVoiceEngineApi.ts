@@ -88,3 +88,17 @@ export const cancelVoiceEngineSession = async (sessionId: string): Promise<SilaV
     throw new Error(readError(error, "Could not cancel the Voice Engine session."));
   }
 };
+
+/** Audible WAV for talk-back when browser speechSynthesis has no voices. */
+export const synthesizeVoiceTts = async (text: string, language = "en"): Promise<Blob> => {
+  try {
+    const response = await axiosInstance.post(
+      `${BASE}/tts`,
+      { text, language },
+      { responseType: "blob", headers: { Accept: "audio/wav,application/octet-stream" } },
+    );
+    return response.data as Blob;
+  } catch (error: unknown) {
+    throw new Error(readError(error, "Could not synthesize Voice Agent speech."));
+  }
+};

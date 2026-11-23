@@ -1283,3 +1283,32 @@
   margin: 0 0 0.5rem;
   font-size: 1rem;
 }
+
+.sm-facts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.55rem 0.75rem;
+  margin: 0;
+}
+
+.sm-fact {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.sm-fact dt {
+  margin: 0;
+  font-size: 0.7rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.sm-fact dd {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #0f172a;
+  word-break: break-word;
+}

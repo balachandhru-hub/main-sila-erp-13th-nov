@@ -14,9 +14,17 @@ const ios = (): boolean => /iphone|ipad|ipod/i.test(navigator.userAgent);
 /** Registers the SILA Store service worker for this origin. */
 export const registerMobilePwa = (): void => {
   if (!('serviceWorker' in navigator)) return;
-  navigator.serviceWorker.register('/mobile/sw.js', { scope: '/mobile/' }).catch(() => {
-    // The browser install menu remains available when registration is blocked.
-  });
+  // Force activate the latest SW so Voice PO / mobile screens are not stuck on a stale cache.
+  navigator.serviceWorker.register('/mobile/sw.js', { scope: '/mobile/' })
+    .then((reg) => {
+      void reg.update();
+      if (reg.waiting) {
+        reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+      }
+    })
+    .catch(() => {
+      // The browser install menu remains available when registration is blocked.
+    });
 };
 
 /** Install prompt for SILA Store, plus the installed and iOS states. */

@@ -107,6 +107,11 @@ namespace Buyer.Tests.VoicePo
         {
             SilaVoicePoDraftDto draft = new()
             {
+                CompanyCode = "1000",
+                PlantCode = "1060",
+                PurchasingOrganization = "1000",
+                PurchasingGroup = "001",
+                Currency = "AED",
                 Lines =
                 {
                     new SilaVoicePoDraftLineDto
@@ -148,10 +153,107 @@ namespace Buyer.Tests.VoicePo
         }
 
         [Fact]
+        public void Parse_order_glued_kgs_and_for_the_price()
+        {
+            VoicePoParseResult result = SilaVoicePoAgentRules.ParseOrderIntent("order 10kgs of onion for the price 20");
+
+            Assert.Equal(VoicePoIntent.AddLine, result.Intent);
+            Assert.Equal(10m, result.Quantity);
+            Assert.Equal("KG", result.UnitOfMeasure);
+            Assert.Equal(20m, result.UnitPrice);
+            Assert.Equal("AED", result.Currency);
+            Assert.Equal("onion", result.MaterialHint?.Trim().ToLowerInvariant());
+        }
+
+        [Fact]
+        public void Parse_order_without_price_leaves_unit_price_null()
+        {
+            VoicePoParseResult result = SilaVoicePoAgentRules.ParseOrderIntent("order 10kgs of onion");
+
+            Assert.Equal(VoicePoIntent.AddLine, result.Intent);
+            Assert.Equal(10m, result.Quantity);
+            Assert.Equal("KG", result.UnitOfMeasure);
+            Assert.Null(result.UnitPrice);
+            Assert.Equal("onion", result.MaterialHint?.Trim().ToLowerInvariant());
+        }
+
+        [Theory]
+        [InlineData("20")]
+        [InlineData("20.")]
+        [InlineData("20 AED")]
+        [InlineData("20 dirhams")]
+        [InlineData("twenty")]
+        public void Parse_bare_price_answer_defaults_to_aed(string transcript)
+        {
+            VoicePoParseResult result = SilaVoicePoAgentRules.ParseOrderIntent(transcript);
+
+            Assert.Equal(VoicePoIntent.SetUnitPrice, result.Intent);
+            Assert.Equal(20m, result.UnitPrice);
+            Assert.Equal("AED", result.Currency);
+        }
+
+        [Theory]
+        [InlineData("order 10 kilograms of onion")]
+        [InlineData("order 10 kilos of onion")]
+        [InlineData("order 10 kilo of onion")]
+        [InlineData("order 10 kgs of onion")]
+        public void Parse_order_chrome_stt_kilogram_variants_set_kg_and_ask_price_only(string transcript)
+        {
+            VoicePoParseResult result = SilaVoicePoAgentRules.ParseOrderIntent(transcript);
+
+            Assert.Equal(VoicePoIntent.AddLine, result.Intent);
+            Assert.Equal(10m, result.Quantity);
+            Assert.Equal("KG", result.UnitOfMeasure);
+            Assert.Null(result.UnitPrice);
+            Assert.Equal("onion", result.MaterialHint?.Trim().ToLowerInvariant());
+
+            SilaVoicePoDraftDto draft = new()
+            {
+                CompanyCode = "1000",
+                PlantCode = "1060",
+                PurchasingOrganization = "1000",
+                PurchasingGroup = "001",
+                Currency = "AED",
+                Lines =
+                {
+                    new SilaVoicePoDraftLineDto
+                    {
+                        LineNumber = 1,
+                        Description = result.MaterialHint,
+                        Quantity = result.Quantity ?? 0,
+                        UnitOfMeasure = result.UnitOfMeasure,
+                        UnitPrice = result.UnitPrice,
+                        MaterialGroup = "0127",
+                        AccountAssignmentCategory = "K",
+                        CostCenter = "1060010108",
+                        GlAccount = "6000000007",
+                        InventoryType = SilaUserPurchasingProfileRules.INVENTORY_NON_STOCK,
+                        SupplierId = Guid.NewGuid(),
+                        Resolved = true
+                    }
+                }
+            };
+
+            SilaVoicePoDraftValidation validation = SilaVoicePoAgentRules.ValidateDraft(draft);
+            string? ask = SilaVoicePoAgentRules.PreferMandatoryAsk(validation);
+
+            Assert.Equal(SilaVoicePoAgentRules.VALIDATION_NEEDS_CLARIFICATION, validation.Status);
+            Assert.DoesNotContain(validation.Clarifications, c => c.Code == "UOM");
+            Assert.Contains(validation.Clarifications, c => c.Code == "UNIT_PRICE");
+            Assert.Contains("unit price", ask!, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("unit of measure", ask!, StringComparison.OrdinalIgnoreCase);
+        }
+
+        [Fact]
         public void Draft_validation_passes_for_resolved_stock_line_without_cost_center()
         {
             SilaVoicePoDraftDto draft = new()
             {
+                CompanyCode = "1000",
+                PlantCode = "1060",
+                PurchasingOrganization = "1000",
+                PurchasingGroup = "001",
+                Currency = "AED",
                 Lines =
                 {
                     new SilaVoicePoDraftLineDto
@@ -161,6 +263,7 @@ namespace Buyer.Tests.VoicePo
                         Description = "Rice",
                         Quantity = 5,
                         UnitOfMeasure = "KG",
+                        UnitPrice = 12,
                         SupplierId = Guid.NewGuid(),
                         InventoryType = SilaUserPurchasingProfileRules.INVENTORY_STOCK,
                         Resolved = true
@@ -172,6 +275,143 @@ namespace Buyer.Tests.VoicePo
 
             Assert.Equal(SilaVoicePoAgentRules.VALIDATION_OK, validation.Status);
             Assert.Empty(validation.Errors);
+        }
+
+        [Fact]
+        public void Conversation_validation_asks_for_missing_unit_price_and_uom()
+        {
+            SilaVoicePoDraftDto draft = new()
+            {
+                CompanyCode = "1000",
+                PlantCode = "1060",
+                PurchasingOrganization = "1000",
+                PurchasingGroup = "001",
+                Currency = "AED",
+                Lines =
+                {
+                    new SilaVoicePoDraftLineDto
+                    {
+                        LineNumber = 1,
+                        Description = "specialty spice blend",
+                        Quantity = 25,
+                        MaterialGroup = "0127",
+                        AccountAssignmentCategory = "K",
+                        CostCenter = "1060010108",
+                        GlAccount = "6000000007",
+                        InventoryType = SilaUserPurchasingProfileRules.INVENTORY_NON_STOCK,
+                        SupplierId = Guid.NewGuid(),
+                        Resolved = true
+                    }
+                }
+            };
+
+            SilaVoicePoDraftValidation validation = SilaVoicePoAgentRules.ValidateDraft(draft);
+
+            Assert.Equal(SilaVoicePoAgentRules.VALIDATION_NEEDS_CLARIFICATION, validation.Status);
+            Assert.Contains(validation.Clarifications, c => c.Code == "UOM");
+            Assert.Contains(validation.Clarifications, c => c.Code == "UNIT_PRICE");
+            string spoken = SilaVoicePoAgentRules.BuildSpokenReply(VoicePoIntent.AddLine, draft, validation);
+            // Price is asked first when both are missing.
+            Assert.Contains("unit price", spoken, StringComparison.OrdinalIgnoreCase);
+        }
+
+        [Fact]
+        public void Confirm_validation_requires_unit_price_without_inventing_default()
+        {
+            SilaVoicePoDraftDto draft = new()
+            {
+                CompanyCode = "1000",
+                PlantCode = "1060",
+                PurchasingOrganization = "1000",
+                PurchasingGroup = "001",
+                Currency = "AED",
+                Lines =
+                {
+                    new SilaVoicePoDraftLineDto
+                    {
+                        LineNumber = 1,
+                        Description = "specialty spice blend",
+                        Quantity = 25,
+                        UnitOfMeasure = "KG",
+                        MaterialGroup = "0127",
+                        AccountAssignmentCategory = "K",
+                        CostCenter = "1060010108",
+                        GlAccount = "6000000007",
+                        InventoryType = SilaUserPurchasingProfileRules.INVENTORY_NON_STOCK,
+                        SupplierId = Guid.NewGuid(),
+                        Resolved = true
+                    }
+                }
+            };
+
+            SilaVoicePoDraftValidation validation = SilaVoicePoAgentRules.ValidateDraft(draft, forConfirm: true);
+
+            Assert.Equal(SilaVoicePoAgentRules.VALIDATION_NEEDS_CLARIFICATION, validation.Status);
+            Assert.Null(draft.Lines[0].UnitPrice);
+            Assert.Contains(validation.Clarifications, c => c.Code == "UNIT_PRICE");
+            string spoken = SilaVoicePoAgentRules.BuildSpokenReply(VoicePoIntent.Confirm, draft, validation);
+            Assert.Contains("unit price", spoken, StringComparison.OrdinalIgnoreCase);
+        }
+
+        [Fact]
+        public void Add_line_without_price_asks_instead_of_added_success()
+        {
+            SilaVoicePoDraftDto draft = new()
+            {
+                CompanyCode = "1000",
+                PlantCode = "1060",
+                PurchasingOrganization = "1000",
+                PurchasingGroup = "001",
+                Currency = "AED",
+                Lines =
+                {
+                    new SilaVoicePoDraftLineDto
+                    {
+                        LineNumber = 1,
+                        Description = "s of Apple",
+                        Quantity = 10,
+                        UnitOfMeasure = "KG",
+                        MaterialGroup = "0127",
+                        AccountAssignmentCategory = "K",
+                        CostCenter = "1060010108",
+                        GlAccount = "6000000007",
+                        InventoryType = SilaUserPurchasingProfileRules.INVENTORY_NON_STOCK,
+                        SupplierId = Guid.NewGuid(),
+                        Resolved = true
+                    }
+                }
+            };
+
+            SilaVoicePoDraftValidation validation = SilaVoicePoAgentRules.ValidateDraft(draft);
+            string spoken = SilaVoicePoAgentRules.BuildSpokenReply(
+                VoicePoIntent.AddLine,
+                draft,
+                validation,
+                "No item-master match — added text line 's of Apple' with your defaults.");
+
+            Assert.Equal(SilaVoicePoAgentRules.VALIDATION_NEEDS_CLARIFICATION, validation.Status);
+            Assert.DoesNotContain("added text line", spoken, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("unit price", spoken, StringComparison.OrdinalIgnoreCase);
+        }
+
+        [Fact]
+        public void Quantity_alone_is_not_parsed_as_unit_price()
+        {
+            VoicePoParseResult result = SilaVoicePoAgentRules.ParseOrderIntent("order 10 kg of Apple");
+
+            Assert.Equal(VoicePoIntent.AddLine, result.Intent);
+            Assert.Equal(10m, result.Quantity);
+            Assert.Equal("KG", result.UnitOfMeasure);
+            Assert.Null(result.UnitPrice);
+        }
+
+        [Fact]
+        public void Use_one_aed_phrase_sets_unit_price_intent()
+        {
+            VoicePoParseResult result = SilaVoicePoAgentRules.ParseOrderIntent("use one AED");
+
+            Assert.Equal(VoicePoIntent.SetUnitPrice, result.Intent);
+            Assert.Equal(1m, result.UnitPrice);
         }
 
         [Fact]

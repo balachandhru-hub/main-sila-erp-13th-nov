@@ -57,6 +57,20 @@ assert.match(naturalTts, /looksIncompleteUtterance/);
 assert.match(naturalTts, /unlockSpeechPlayback/);
 assert.match(naturalTts, /isConversationDonePhrase/);
 assert.match(naturalTts, /startKeepAlive|keepAlive/);
+assert.match(naturalTts, /synthesizeVoiceTts|fetchServerWav|probeBrowserSynth/);
+assert.match(naturalTts, /playWavBlob/);
+assert.match(screen, /isSafariLike|resumeListening/);
+assert.match(screen, /clarifications|validationStatus|NEEDS_CLARIFICATION/);
+assert.match(screen, /chromeTextPrimary|Type fallback|Voice is on in Chrome/);
+assert.match(screen, /vpo-agent-reply|vpo-mandatory-asks/);
+assert.match(screen, /speakSafe/);
+assert.match(screen, /Unit price is required before submit|unpriced|UNIT_PRICE/);
+assert.match(screen, /chromeTextPrimary[\s\S]*false/);
+assert.match(screen, /isSafariLike/);
+assert.match(screen, /vpo-open-created-po|receive\/pos/);
+assert.match(readFileSync(join(dir, '../../pwa.ts'), 'utf8'), /reg\.update|SKIP_WAITING/);
+assert.match(readFileSync(join(dir, '../../../public/mobile/sw.js'), 'utf8'), /sila-store-v4-voice-po/);
+assert.match(readFileSync(join(dir, '../receive/PoDetailScreen.tsx'), 'utf8'), /po-change|SAP PO number|purchasingOrganization/);
 
 assert.match(screen, /resolveDialogueIntent/);
 assert.match(screen, /isShortConversationalUtterance/);
@@ -73,6 +87,7 @@ assert.match(dialogue, /isShortConversationalUtterance/);
 
 const engineApi = readFileSync(join(dir, '../../../../remote-buyer/src/api/silaMe/silaVoiceEngineApi.ts'), 'utf8');
 assert.match(engineApi, /\/api\/v1\/buyer\/sila\/voice-engine/);
+assert.match(engineApi, /synthesizeVoiceTts/);
 
 assert.match(api, /export const resolveMyPurchasingDefaults/);
 assert.match(api, /export const startVoicePoSession/);
@@ -104,5 +119,26 @@ const home = readFileSync(join(dir, '../home/HomeScreen.tsx'), 'utf8');
 const inventory = readFileSync(join(dir, '../inventory/InventoryScreen.tsx'), 'utf8');
 assert.match(home, /Create PO by Voice/);
 assert.match(inventory, /Create PO by Voice/);
+assert.match(screen, /submitted for approval/);
+assert.match(screen, /posts to SAP after approval/);
+
+const tasks = readFileSync(join(dir, '../tasks/TaskTabs.tsx'), 'utf8');
+assert.match(tasks, /decidePurchaseOrder/);
+assert.match(tasks, /Purchase order approvals/);
+assert.match(tasks, /Approve to post Create PO to SAP/);
+
+const poDetail = readFileSync(join(dir, '../receive/PoDetailScreen.tsx'), 'utf8');
+assert.match(poDetail, /decidePurchaseOrder/);
+assert.match(poDetail, /po-approval-actions|po-approve/);
+assert.match(poDetail, /awaitingApproval|PENDING_APPROVAL/);
+assert.match(poDetail, /data-testid="po-header"/);
+assert.match(poDetail, /data-testid="po-lines"/);
+assert.match(poDetail, /Already decided/);
+assert.match(home, /receive\/pos\/\$\{.*purchaseOrderId/);
+assert.match(home, /tasks\?tab=approvals/);
+
+const receivingApi = readFileSync(join(dir, '../../../../remote-buyer/src/api/silaMe/silaReceivingApi.ts'), 'utf8');
+assert.match(receivingApi, /export const decidePurchaseOrder/);
+assert.match(receivingApi, /purchase-orders\/\$\{purchaseOrderId\}\/approval/);
 
 console.log('silaVoicePoFrontend.test.ts: ok');

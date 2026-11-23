@@ -323,6 +323,7 @@ namespace Buyer.Domain.Common
                 public const string SILA_APPROVAL_TYPE_MATERIAL_PRICE = "MATERIAL_PRICE";
                 public const string SILA_APPROVAL_TYPE_ITO = "ITO";
                 public const string SILA_APPROVAL_TYPE_INVENTORY = "INVENTORY";
+                public const string SILA_APPROVAL_TYPE_PURCHASE_ORDER = "PURCHASE_ORDER";
                 public const string SILA_SCOPE_ALL = "ALL";
                 public const string SILA_SCOPE_PROPERTY = "PROPERTY";
                 public const string SILA_SCOPE_OUTLET = "OUTLET";
@@ -444,6 +445,9 @@ namespace Buyer.Domain.Common
 
                 public const string ERP_OPERATION_PO_CREATE = "PO_CREATE";
                 public const string PURCHASE_ORDER_CREATED = "CREATED";
+                public const string PURCHASE_ORDER_PENDING_APPROVAL = "PENDING_APPROVAL";
+                public const string PURCHASE_ORDER_APPROVED = "APPROVED";
+                public const string PURCHASE_ORDER_REJECTED = "REJECTED";
                 public const string PURCHASE_ORDER_SOURCE_WEEKLY_BUCKET = "WEEKLY_BUCKET";
                 public const string PURCHASE_ORDER_SOURCE_CONTRACT = "CONTRACT";
                 /// <summary>An order created by a user of this system with the create purchase order request.</summary>
