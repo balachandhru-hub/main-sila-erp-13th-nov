@@ -169,6 +169,10 @@ namespace Buyer.API.Extensions
             _ = services.AddScoped<IIntegrationCredentialProtector, IntegrationCredentialProtector>();
             _ = services.AddScoped<IIntegrationHttpExecutor, IntegrationHttpExecutor>();
             _ = services.AddHttpClient(IntegrationConstants.HTTP_CLIENT_INTEGRATIONS);
+            _ = services.AddHttpClient(Common.HTTP_CLIENT_VOICE_ENGINE, client =>
+            {
+                client.Timeout = TimeSpan.FromSeconds(60);
+            });
             _ = services.AddHttpClient(Common.HTTP_CLIENT_OCR, client =>
             {
                 client.BaseAddress = new Uri(config[Common.OCR_SERVICE_URL]!.TrimEnd('/') + "/");

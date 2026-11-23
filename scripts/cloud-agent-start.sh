@@ -30,6 +30,16 @@ start_api() {
 start_api identity-api 8001 Backend/src/Platform/Identity/Identity.API/Identity.API.csproj
 start_api buyer-api 8004 Backend/src/Modules/Buyer/Buyer.API/Buyer.API.csproj
 
+# Isolated SILA Voice Engine (Python) — does not replace OCR on :8010
+if curl -fsS "http://127.0.0.1:8012/health" >/dev/null 2>&1; then
+  echo "sila-voice-engine already up on :8012"
+elif [[ -f Backend/sila-voice-engine/app/main.py ]]; then
+  tmux has-session -t sila-voice-engine 2>/dev/null || \
+    tmux new-session -d -s sila-voice-engine \
+      "cd '$ROOT/Backend/sila-voice-engine' && (test -d .venv || python3 -m venv .venv) && . .venv/bin/activate && pip -q install -r requirements.txt && InterCallService__BuyerUrl=http://127.0.0.1:8004 uvicorn app.main:app --host 127.0.0.1 --port 8012 2>&1 | tee /tmp/sila-voice-engine.log"
+  echo "started sila-voice-engine on :8012"
+fi
+
 # Frontend host + remotes (including mobile on :6005)
 if curl -k -fsS https://localhost:6001/ >/dev/null 2>&1 || curl -fsS http://localhost:6001/ >/dev/null 2>&1; then
   echo "Frontend already up on :6001"
