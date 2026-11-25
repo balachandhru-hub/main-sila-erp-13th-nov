@@ -419,6 +419,19 @@ export const deleteRecipeDraft = async (recipeId: string): Promise<void> => {
   }
 };
 
+/**
+ * Permanently deletes an INACTIVE recipe (and its ingredient / outlet-price rows).
+ * Server refuses any status other than INACTIVE.
+ * Uses POST (same as draft/delete) so gateways that block HTTP DELETE do not return 405.
+ */
+export const deleteInactiveRecipe = async (recipeId: string): Promise<void> => {
+  try {
+    await axiosInstance.post(`${BASE}/recipes/${recipeId}/inactive/delete`);
+  } catch (error: unknown) {
+    throw new Error(readError(error, "Could not permanently delete the inactive recipe."));
+  }
+};
+
 /** Uploads or replaces the recipe picture (JPEG/PNG/WebP ≤ 5 MB) via managed file storage. */
 export const setRecipePicture = async (recipeId: string, file: File | Blob): Promise<SilaRecipePictureInfo> => {
   const form = new FormData();

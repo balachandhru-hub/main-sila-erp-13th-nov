@@ -139,6 +139,17 @@ const SilaRecipeTable: React.FC<SilaRecipeTableProps> = ({ rows, onOpen, openLab
                     Delete Draft
                   </button>
                 )}
+                {onDelete && row.status === "INACTIVE" && (
+                  <button
+                    type="button"
+                    className="sila-btn sila-btn--danger sila-btn--sm"
+                    aria-label={`Delete permanently ${row.recipeCode}`}
+                    onClick={() => onDelete(row)}
+                    data-testid="recipe-table-delete-inactive"
+                  >
+                    Delete permanently
+                  </button>
+                )}
               </div>
             </td>
           </tr>

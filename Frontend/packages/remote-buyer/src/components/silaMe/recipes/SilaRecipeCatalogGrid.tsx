@@ -19,7 +19,8 @@ const SilaRecipeCatalogGrid: React.FC<SilaRecipeCatalogGridProps> = ({ rows, can
       const portionCost = row.costComplete || row.activeVersion > 0
         ? (row.costPerServing ?? costPerServing(row.totalCost, row.servingQty))
         : null;
-      const canDelete = canManage && row.status === "DRAFT" && Boolean(onDelete);
+      const canDeleteDraft = canManage && row.status === "DRAFT" && Boolean(onDelete);
+      const canDeleteInactive = canManage && row.status === "INACTIVE" && Boolean(onDelete);
       return (
         <article key={row.id} className="rstudio-card" role="listitem">
           <button type="button" className="rstudio-card__media" onClick={() => onOpen(row.id)} aria-label={`View ${row.name}`}>
@@ -63,11 +64,21 @@ const SilaRecipeCatalogGrid: React.FC<SilaRecipeCatalogGridProps> = ({ rows, can
             </div>
             <div className="rstudio-card__actions">
               <button type="button" className="sila-btn sila-btn--secondary sila-btn--sm" onClick={() => onOpen(row.id)}>View</button>
-              {canManage && onEdit && (
+              {canManage && onEdit && row.status !== "INACTIVE" && row.status !== "PENDING_APPROVAL" && (
                 <button type="button" className="sila-btn sila-btn--primary sila-btn--sm" onClick={() => onEdit(row.id)}>Edit</button>
               )}
-              {canDelete && (
+              {canDeleteDraft && (
                 <button type="button" className="sila-btn sila-btn--danger sila-btn--sm" onClick={() => onDelete?.(row)}>Delete Draft</button>
+              )}
+              {canDeleteInactive && (
+                <button
+                  type="button"
+                  className="sila-btn sila-btn--danger sila-btn--sm"
+                  onClick={() => onDelete?.(row)}
+                  data-testid="recipe-catalog-delete-inactive"
+                >
+                  Delete permanently
+                </button>
               )}
             </div>
           </div>

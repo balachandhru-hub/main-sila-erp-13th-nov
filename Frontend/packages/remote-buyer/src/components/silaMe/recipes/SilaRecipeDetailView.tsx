@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { EmptyState, Loader, Modal, PageHeader, toastService } from "@vosox/shared-ui";
 import {
   approveRecipe,
+  deleteInactiveRecipe,
   deleteRecipeDraft,
   getRecipe,
   rejectRecipe,
@@ -23,6 +24,13 @@ import {
   DELETE_DRAFT_SUCCESS,
   DELETE_DRAFT_TITLE,
 } from "./recipeStudioDraftDelete";
+import {
+  canDeleteInactiveRecipe,
+  DELETE_INACTIVE_BODY,
+  DELETE_INACTIVE_CONFIRM_LABEL,
+  DELETE_INACTIVE_SUCCESS,
+  DELETE_INACTIVE_TITLE,
+} from "./recipeInactiveDelete";
 import { resolveRecipePos } from "./recipeStudioEditAccess";
 import { resolveStudioKind, StudioCover } from "./recipeStudioVisuals";
 import "./SilaRecipeStudio.css";
@@ -37,7 +45,7 @@ interface SilaRecipeDetailViewProps {
   onChanged: () => void;
 }
 
-type Busy = "submit" | "approve" | "reject" | "delete-draft" | null;
+type Busy = "submit" | "approve" | "reject" | "delete-draft" | "delete-inactive" | null;
 
 /**
  * One recipe at a version (latest by default): header, readiness, costing per outlet, approval trail; switch versions,
@@ -50,6 +58,7 @@ const SilaRecipeDetailView: React.FC<SilaRecipeDetailViewProps> = ({ recipeId, c
   const [busy, setBusy] = useState<Busy>(null);
   const [comment, setComment] = useState("");
   const [confirmDeleteDraft, setConfirmDeleteDraft] = useState(false);
+  const [confirmDeleteInactive, setConfirmDeleteInactive] = useState(false);
   /** The version to show; the latest when undefined. */
   const [version, setVersion] = useState<number | undefined>(undefined);
 
@@ -76,8 +85,9 @@ const SilaRecipeDetailView: React.FC<SilaRecipeDetailViewProps> = ({ recipeId, c
       toastService.success(success);
       setComment("");
       setConfirmDeleteDraft(false);
+      setConfirmDeleteInactive(false);
       onChanged();
-      if (kind === "delete-draft") {
+      if (kind === "delete-draft" || kind === "delete-inactive") {
         onBack();
         return;
       }
@@ -115,6 +125,7 @@ const SilaRecipeDetailView: React.FC<SilaRecipeDetailViewProps> = ({ recipeId, c
   const editable = canManage && latest && recipe.status !== "PENDING_APPROVAL" && recipe.status !== "INACTIVE";
   const submittable = canManage && latest && recipe.status === "DRAFT";
   const draftDeletable = canManage && latest && canDeleteDraftRecipe(recipe.status);
+  const inactiveDeletable = canManage && latest && canDeleteInactiveRecipe(recipe.status);
   const showReadiness = latest && (recipe.status === "DRAFT" || recipe.status === "REJECTED");
   // Step 1: Edit / Create revision only navigates to the temporary workspace shell (no API mutate).
   const needsRevision = canStartRevision(recipe.status);
@@ -199,6 +210,17 @@ const SilaRecipeDetailView: React.FC<SilaRecipeDetailViewProps> = ({ recipeId, c
                 data-testid="recipe-detail-delete-draft"
               >
                 Delete Draft
+              </button>
+            )}
+            {inactiveDeletable && (
+              <button
+                type="button"
+                className="sila-btn sila-btn--danger"
+                onClick={() => setConfirmDeleteInactive(true)}
+                disabled={busy !== null}
+                data-testid="recipe-detail-delete-inactive"
+              >
+                Delete permanently
               </button>
             )}
           </div>
@@ -349,6 +371,29 @@ const SilaRecipeDetailView: React.FC<SilaRecipeDetailViewProps> = ({ recipeId, c
         }}
       >
         <p className="sila-modal-text">{DELETE_DRAFT_BODY}</p>
+        <p className="sila-modal-text">
+          <strong>{recipe.name}</strong>
+          {" · "}
+          {recipe.recipeCode}
+        </p>
+      </Modal>
+
+      <Modal
+        isOpen={confirmDeleteInactive}
+        onClose={() => { if (busy === null) setConfirmDeleteInactive(false); }}
+        variant="danger"
+        headerProps={{ heading: DELETE_INACTIVE_TITLE }}
+        footerProps={{
+          secondaryButton: { text: "Cancel", onClick: () => setConfirmDeleteInactive(false), disabled: busy !== null },
+          primaryButton: {
+            text: DELETE_INACTIVE_CONFIRM_LABEL,
+            loading: busy === "delete-inactive",
+            disabled: busy !== null,
+            onClick: () => run("delete-inactive", () => deleteInactiveRecipe(recipe.id), DELETE_INACTIVE_SUCCESS),
+          },
+        }}
+      >
+        <p className="sila-modal-text">{DELETE_INACTIVE_BODY}</p>
         <p className="sila-modal-text">
           <strong>{recipe.name}</strong>
           {" · "}

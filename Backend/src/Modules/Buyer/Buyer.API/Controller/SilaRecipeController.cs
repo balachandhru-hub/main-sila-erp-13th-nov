@@ -1,5 +1,6 @@
 using Buyer.Application.Features.Commands.CreateSilaRecipe;
 using Buyer.Application.Features.Commands.DeactivateSilaRecipe;
+using Buyer.Application.Features.Commands.DeleteSilaInactiveRecipe;
 using Buyer.Application.Features.Commands.DeleteSilaRecipeDraft;
 using Buyer.Application.Features.Commands.DecideSilaRecipe;
 using Buyer.Application.Features.Commands.RemoveSilaRecipePicture;
@@ -234,6 +235,29 @@ namespace Buyer.API.Controllers
             });
             _logger.LogDebug($"Recipe draft deleted. RecipeId: {recipeId}");
             return Ok(new SuccessResponseDto { Id = recipeId.ToString(), StatusCode = 200, Message = "Success", Description = "Draft recipe deleted." });
+        }
+
+        /// <summary>
+        /// Permanently deletes an inactive recipe (and its ingredient / outlet-price rows). Active recipes must be deactivated first.
+        /// Uses POST (same pattern as draft/delete) so reverse proxies that block HTTP DELETE do not return 405.
+        /// </summary>
+        [HttpPost]
+        [Route("api/v1/buyer/sila/recipes/{recipeId}/inactive/delete")]
+        [ApiAuthorization(Name = "MANAGE_SILA_RECIPE")]
+        [SwaggerOperation("DeleteSilaInactiveRecipe")]
+        [SwaggerResponse(200, type: typeof(SuccessResponseDto))]
+        public async Task<IActionResult> DeleteInactiveRecipe([FromRoute] Guid recipeId)
+        {
+            _logger.LogDebug($"Permanently deleting inactive recipe. RecipeId: {recipeId}");
+            await _mediator.Send(new DeleteSilaInactiveRecipeCommand
+            {
+                OrganizationId = GetOrganizationId(),
+                UserId = GetUserId(),
+                RoleId = GetRoleId(),
+                RecipeId = recipeId
+            });
+            _logger.LogDebug($"Inactive recipe permanently deleted. RecipeId: {recipeId}");
+            return Ok(new SuccessResponseDto { Id = recipeId.ToString(), StatusCode = 200, Message = "Success", Description = "Inactive recipe permanently deleted." });
         }
 
         [HttpPost]

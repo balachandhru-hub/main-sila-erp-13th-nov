@@ -1,13 +1,20 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { EmptyState, Loader, Modal, Pagination, toastService } from "@vosox/shared-ui";
-import { deleteRecipeDraft, getRecipes, type SilaRecipeListItem } from "../../../api/silaMe/silaRecipeApi";
+import { deleteInactiveRecipe, deleteRecipeDraft, getRecipes, type SilaRecipeListItem } from "../../../api/silaMe/silaRecipeApi";
 import {
   DELETE_DRAFT_BODY,
   DELETE_DRAFT_CONFIRM_LABEL,
   DELETE_DRAFT_SUCCESS,
   DELETE_DRAFT_TITLE,
 } from "./recipeStudioDraftDelete";
+import {
+  canDeleteInactiveRecipe,
+  DELETE_INACTIVE_BODY,
+  DELETE_INACTIVE_CONFIRM_LABEL,
+  DELETE_INACTIVE_SUCCESS,
+  DELETE_INACTIVE_TITLE,
+} from "./recipeInactiveDelete";
 import {
   confirmRecipeImport,
   downloadRecipeTemplate,
@@ -169,17 +176,29 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({
     saveStudioViewMode(mode);
   };
 
+  const deletingInactive = canDeleteInactiveRecipe(deleteTarget?.status);
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      await deleteRecipeDraft(deleteTarget.id);
-      toastService.success(DELETE_DRAFT_SUCCESS);
+      if (canDeleteInactiveRecipe(deleteTarget.status)) {
+        await deleteInactiveRecipe(deleteTarget.id);
+        toastService.success(DELETE_INACTIVE_SUCCESS);
+      } else {
+        await deleteRecipeDraft(deleteTarget.id);
+        toastService.success(DELETE_DRAFT_SUCCESS);
+      }
       setDeleteTarget(null);
       await load();
       if (route.kind !== "list") goCatalog();
     } catch (err: unknown) {
-      toastService.error(err instanceof Error ? err.message : "Could not delete the draft recipe.");
+      toastService.error(
+        err instanceof Error
+          ? err.message
+          : deletingInactive
+            ? "Could not permanently delete the inactive recipe."
+            : "Could not delete the draft recipe.",
+      );
     } finally {
       setDeleting(false);
     }
@@ -482,18 +501,18 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({
         isOpen={Boolean(deleteTarget)}
         onClose={() => { if (!deleting) setDeleteTarget(null); }}
         variant="danger"
-        headerProps={{ heading: DELETE_DRAFT_TITLE }}
+        headerProps={{ heading: deletingInactive ? DELETE_INACTIVE_TITLE : DELETE_DRAFT_TITLE }}
         footerProps={{
           secondaryButton: { text: "Cancel", onClick: () => setDeleteTarget(null), disabled: deleting },
           primaryButton: {
-            text: DELETE_DRAFT_CONFIRM_LABEL,
+            text: deletingInactive ? DELETE_INACTIVE_CONFIRM_LABEL : DELETE_DRAFT_CONFIRM_LABEL,
             loading: deleting,
             disabled: deleting,
             onClick: confirmDelete,
           },
         }}
       >
-        <p className="sila-modal-text">{DELETE_DRAFT_BODY}</p>
+        <p className="sila-modal-text">{deletingInactive ? DELETE_INACTIVE_BODY : DELETE_DRAFT_BODY}</p>
         <p className="sila-modal-text">
           <strong>{deleteTarget?.name || "—"}</strong>
           {" · "}
