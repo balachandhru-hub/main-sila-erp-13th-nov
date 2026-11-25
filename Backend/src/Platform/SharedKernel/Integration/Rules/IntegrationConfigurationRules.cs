@@ -15,7 +15,8 @@ namespace SharedKernel.Integration.Rules
     /// </summary>
     public static class IntegrationConfigurationRules
     {
-        private static readonly Regex SafePath = new Regex(@"^[A-Za-z0-9_./$-]+$", RegexOptions.Compiled);
+        // OData resource paths may include $select / $expand / $format query strings (? = & ,).
+        private static readonly Regex SafePath = new Regex(@"^[A-Za-z0-9_./$?=&,-]+$", RegexOptions.Compiled);
         private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web);
         private static readonly string[] HttpMethods = { "GET", "POST", "PUT", "PATCH" };
         private static readonly string[] PayloadFormats = { IntegrationConstants.PAYLOAD_JSON, IntegrationConstants.PAYLOAD_SOAP, IntegrationConstants.PAYLOAD_CXML };
