@@ -1,3 +1,4 @@
+using Buyer.Application.Features.Commands.CreateSilaLiveStockCount;
 using Buyer.Application.Features.Commands.CreateSilaLocation;
 using Buyer.Application.Features.Commands.DeactivateSilaLocation;
 using Buyer.Application.Features.Commands.DeleteSilaMaterialConversion;
@@ -16,6 +17,7 @@ using Buyer.Application.Features.Queries.GetSilaLocationMaterials;
 using Buyer.Application.Features.Queries.GetSilaLocations;
 using Buyer.Application.Features.Queries.GetSilaLocationUsers;
 using Buyer.Application.Features.Queries.GetSilaMaterials;
+using Buyer.Application.Features.Queries.GetSilaPendingOutletRequirements;
 using Buyer.Domain.Dtos;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
@@ -308,9 +310,13 @@ namespace Buyer.API.Controllers
         [SwaggerOperation("GetSilaLiveInventory")]
         [SwaggerResponse(200, type: typeof(List<SilaLiveInventoryRowDto>))]
         public async Task<IActionResult> LiveInventory(
-            [FromQuery] string? search, [FromQuery] Guid? locationId, [FromQuery] int index = 0, [FromQuery] int limit = 20)
+            [FromQuery] string? search,
+            [FromQuery] Guid? locationId,
+            [FromQuery] string? health = null,
+            [FromQuery] int index = 0,
+            [FromQuery] int limit = 20)
         {
-            _logger.LogDebug($"Searching live inventory. Search: {search}, LocationId: {locationId}, Index: {index}");
+            _logger.LogDebug($"Searching live inventory. Search: {search}, LocationId: {locationId}, Health: {health}, Index: {index}");
             List<SilaLiveInventoryRowDto> result = await _mediator.Send(new GetSilaLiveInventoryQuery
             {
                 OrganizationId = GetOrganizationId(),
@@ -318,6 +324,7 @@ namespace Buyer.API.Controllers
                 RoleId = GetRoleId(),
                 Search = search,
                 LocationId = locationId,
+                Health = health,
                 Index = index,
                 Limit = limit
             });
@@ -344,6 +351,28 @@ namespace Buyer.API.Controllers
                 CurrentLocationId = currentLocationId
             });
             _logger.LogDebug($"Live inventory of a material fetched. Locations: {result.Locations.Count}");
+            return Ok(result);
+        }
+
+        /// <summary>
+        /// Live Inventory stock count: adjust book stock to physical qty and queue SAP 701 (surplus) or 702 (shortage).
+        /// </summary>
+        [HttpPost]
+        [Route("api/v1/buyer/sila/inventory/live-stock-count")]
+        [ApiAuthorization(Name = "MANAGE_SILA_STOCK_COUNT")]
+        [SwaggerOperation("CreateSilaLiveStockCount")]
+        [SwaggerResponse(200, type: typeof(SilaLiveStockCountResultDto))]
+        public async Task<IActionResult> LiveStockCount([FromBody] SilaLiveStockCountWriteDto request)
+        {
+            _logger.LogDebug($"Live stock count. LocationId: {request.LocationId}, MaterialId: {request.MaterialId}, Physical: {request.PhysicalQty}");
+            SilaLiveStockCountResultDto result = await _mediator.Send(new CreateSilaLiveStockCountCommand
+            {
+                OrganizationId = GetOrganizationId(),
+                UserId = GetUserId(),
+                RoleId = GetRoleId(),
+                Request = request
+            });
+            _logger.LogDebug($"Live stock count saved. AdjustmentId: {result.AdjustmentId}, Movement: {result.MovementType}");
             return Ok(result);
         }
 
@@ -395,6 +424,37 @@ namespace Buyer.API.Controllers
                 LocationId = locationId
             });
             _logger.LogDebug($"Inventory home fetched. LocationId: {result.LocationId}");
+            return Ok(result);
+        }
+
+        /// <summary>Pending Weekly Bucket / Wishlist outlet requirements for demand-based ITO from Live Inventory.</summary>
+        [HttpGet]
+        [Route("api/v1/buyer/sila/inventory/pending-requirements")]
+        [ApiAuthorization(Name = "VIEW_SILA_INVENTORY")]
+        [SwaggerOperation("GetSilaPendingOutletRequirements")]
+        [SwaggerResponse(200, type: typeof(SilaPendingOutletRequirementsDto))]
+        public async Task<IActionResult> PendingRequirements(
+            [FromQuery] Guid? destinationOutletId,
+            [FromQuery] Guid? weeklyBucketId,
+            [FromQuery] Guid? wishlistId,
+            [FromQuery] Guid? materialId,
+            [FromQuery] Guid? sourceLocationId,
+            [FromQuery] bool countOnly = false)
+        {
+            _logger.LogDebug("Fetching pending outlet requirements for ITO.");
+            SilaPendingOutletRequirementsDto result = await _mediator.Send(new GetSilaPendingOutletRequirementsQuery
+            {
+                OrganizationId = GetOrganizationId(),
+                UserId = GetUserId(),
+                RoleId = GetRoleId(),
+                DestinationOutletId = destinationOutletId,
+                WeeklyBucketId = weeklyBucketId,
+                WishlistId = wishlistId,
+                MaterialId = materialId,
+                SourceLocationId = sourceLocationId?.ToString(),
+                CountOnly = countOnly
+            });
+            _logger.LogDebug($"Pending outlet requirements fetched. Count: {result.Count}");
             return Ok(result);
         }
 

@@ -16,7 +16,7 @@ namespace Buyer.Domain.Dtos
         /// <summary>Stock kept back from transfers. Transferable quantity is available minus this.</summary>
         public decimal? SafetyStock { get; set; }
         public bool TransferEnabled { get; set; }
-        /// <summary>Stock this location can give to the current location: on hand when transfers are enabled and it is in the same property.</summary>
+        /// <summary>Stock this location can give to the current location when transfers are enabled (same plant 311 or plant-to-plant 301).</summary>
         public decimal TransferableQty { get; set; }
         /// <summary>The caller works at this location.</summary>
         public bool IsMine { get; set; }

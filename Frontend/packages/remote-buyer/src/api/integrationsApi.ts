@@ -94,53 +94,85 @@ export const INVENTORY_INTEGRATION_DEFINITIONS: InventoryIntegrationDefinition[]
   },
   {
     id: "pos-update",
-    title: "POS / stock-count update",
+    title: "POS Sales Consumption (Z02)",
     kind: "erp",
-    configurationName: "FIVE_POS_UPDATE",
-    processType: "UPDATE_STOCK",
-    suggestedSystem: "SAP S/4",
-    mapping: "GoodsMovementCode 03. Surplus/return Z01, shortage/consumption Z02. Quantity always positive. Plant and storage from the store or outlet.",
-    usedFor: "Approved stock-count variance and POS recipe consumption when this named UPDATE_STOCK API is active.",
+    configurationName: "S4 - Goods Issue",
+    processType: "POST_STOCK_ISSUE",
+    suggestedSystem: "FIVE_S4_INVENTORY_MOVEMENTS",
+    mapping: "Profile POS_SALES_CONSUMPTION. GoodsMovementCode 03, GoodsMovementType Z02 via S4 - Goods Issue only.",
+    usedFor: "POS recipe consumption posts Z02 through the existing S4 - Goods Issue Integration Setup API.",
   },
   {
     id: "transfer-stock",
-    title: "Stock transfer (same plant)",
+    title: "Storage Location Transfer (311)",
     kind: "erp",
     configurationName: "FIVE S4 - Transfer Stock",
-    processType: "POST_GOODS_MOVEMENT",
-    suggestedSystem: "SAP S/4",
-    mapping: "GoodsMovementCode 04, GoodsMovementType 311. Source plant/storage and receiving storage from the ITO locations.",
-    usedFor: "Standard and quick internal transfers in the same plant. SILA ledger TRANSFER_OUT then TRANSFER_IN.",
+    aliases: ["S4 - Transfer Stock"],
+    processType: "POST_TRANSFER_311",
+    suggestedSystem: "FIVE_S4_INVENTORY_MOVEMENTS",
+    mapping: "Profile STORAGE_LOCATION_TRANSFER. GoodsMovementCode 04, GoodsMovementType 311.",
+    usedFor: "Standard and quick internal transfers in the same plant. POS consumption does not use this API.",
   },
   {
     id: "plant-transfer",
-    title: "Stock transfer (plant to plant)",
+    title: "Plant Transfer (301)",
     kind: "erp",
     configurationName: "FIVE S4 - Plant Transfer Stock",
-    processType: "POST_GOODS_MOVEMENT",
-    suggestedSystem: "SAP S/4",
-    mapping: "GoodsMovementCode 04, GoodsMovementType 301. Receiving plant is named on the item.",
-    usedFor: "ITO when source and destination plants differ in the same company code.",
+    aliases: ["S4 - Plant Transfer Stock"],
+    processType: "POST_TRANSFER_301",
+    suggestedSystem: "FIVE_S4_INVENTORY_MOVEMENTS",
+    mapping: "Profile PLANT_TRANSFER. GoodsMovementCode 04, GoodsMovementType 301.",
+    usedFor: "ITO when source and destination plants differ in the same company code. POS consumption does not use this API.",
   },
   {
     id: "goods-issue",
-    title: "Goods Issue",
+    title: "Stock Issue / Shortage (Z02)",
     kind: "erp",
-    configurationName: "FIVE S4 - Goods Issue",
-    processType: "POST_GOODS_MOVEMENT",
-    suggestedSystem: "SAP S/4",
-    mapping: "GoodsMovementCode 03, GoodsMovementType Z02. Plant and storage from the issuing location.",
-    usedFor: "SILA GOODS_ISSUE_OUT, waste/damage/spoilage, and outbound adjustments.",
+    configurationName: "S4 - Goods Issue",
+    processType: "POST_STOCK_ISSUE",
+    suggestedSystem: "FIVE_S4_INVENTORY_MOVEMENTS",
+    mapping: "Profile STOCK_ISSUE. GoodsMovementCode 03, GoodsMovementType Z02.",
+    usedFor: "SILA GOODS_ISSUE_OUT, waste/damage/spoilage, outbound adjustments, and POS sales consumption.",
   },
   {
     id: "positive-adjustment",
-    title: "Positive stock adjustment",
+    title: "Positive Stock Adjustment (Z01)",
     kind: "erp",
     configurationName: "FIVE S4 - Positive Stock Adjustment",
-    processType: "POST_GOODS_MOVEMENT",
-    suggestedSystem: "SAP S/4",
-    mapping: "GoodsMovementCode 03, GoodsMovementType Z01. Plant and storage from the location.",
-    usedFor: "SILA inbound adjustments and POS returns of stock.",
+    processType: "POST_POSITIVE_ADJ",
+    suggestedSystem: "FIVE_S4_INVENTORY_MOVEMENTS",
+    mapping: "Profile POSITIVE_STOCK_ADJUSTMENT. GoodsMovementType Z01. Confirm GoodsMovementCode against SAP customizing.",
+    usedFor: "SILA inbound adjustments. POS return candidate pending SAP verification.",
+  },
+  {
+    id: "pos-reversal",
+    title: "POS Return / Reversal (Z01)",
+    kind: "erp",
+    configurationName: "POS_CONSUMPTION_REVERSAL",
+    processType: "POST_POS_REVERSAL",
+    suggestedSystem: "FIVE_S4_INVENTORY_MOVEMENTS",
+    mapping: "Profile POS_CONSUMPTION_REVERSAL. GoodsMovementCode 03, GoodsMovementType Z01.",
+    usedFor: "Reverse POS ingredient consumption with Z01. Z03 remains unconfigured.",
+  },
+  {
+    id: "material-document-read",
+    title: "SAP Material Document Read",
+    kind: "erp",
+    configurationName: "FIVE_S4_MATERIAL_DOCUMENT_READ",
+    processType: "GET_MATERIAL_DOCUMENT",
+    suggestedSystem: "FIVE_S4_INVENTORY_MOVEMENTS",
+    mapping: "Profile MATERIAL_DOCUMENT_READ. GET /A_MaterialDocumentHeader.",
+    usedFor: "Read-only reconcile of SAP material documents.",
+  },
+  {
+    id: "material-document-cancel",
+    title: "SAP Material Document Cancellation",
+    kind: "erp",
+    configurationName: "FIVE_S4_MATERIAL_DOCUMENT_CANCEL",
+    processType: "POST_MATERIAL_DOCUMENT_CANCEL",
+    suggestedSystem: "FIVE_S4_INVENTORY_MOVEMENTS",
+    mapping: "Profile MATERIAL_DOCUMENT_CANCEL. POST /Cancel with MaterialDocumentYear + MaterialDocument.",
+    usedFor: "Document cancel. GRN 102 reversal stays on FIVE S4-GRN REVERSAL.",
   },
   {
     id: "get-stock",
@@ -183,7 +215,7 @@ export const INVENTORY_INTEGRATION_DEFINITIONS: InventoryIntegrationDefinition[]
     id: "recipe-pos",
     title: "Recipe / POS consumption",
     kind: "internal",
-    mapping: "SILA RECIPE_CONSUMPTION / GOODS_ISSUE_OUT. ERP via FIVE_POS_UPDATE or FIVE S4 - Goods Issue (Z02).",
+    mapping: "SILA RECIPE_CONSUMPTION / GOODS_ISSUE_OUT. ERP via S4 - Goods Issue (Z02) only.",
     usedFor: "POS batch processing explodes recipes. Does not deduct on import unless the approved POS process posts consumption.",
   },
   {
@@ -197,7 +229,7 @@ export const INVENTORY_INTEGRATION_DEFINITIONS: InventoryIntegrationDefinition[]
     id: "waste",
     title: "Waste / damage / spoilage",
     kind: "internal",
-    mapping: "SILA WASTE, DAMAGE, BREAKAGE, SPOILAGE, EXPIRED. ERP Z02 through FIVE S4 - Goods Issue.",
+    mapping: "SILA WASTE, DAMAGE, BREAKAGE, SPOILAGE, EXPIRED. ERP Z02 through S4 - Goods Issue.",
     usedFor: "Waste & Adjustments. No direct balance write.",
   },
   {
@@ -220,13 +252,6 @@ export const INVENTORY_INTEGRATION_DEFINITIONS: InventoryIntegrationDefinition[]
     kind: "internal",
     mapping: "SILA /sila/erp-postings/{id}/reconcile.",
     usedFor: "Manual posting reconcile. Local ERP schedulers stay PARKED. Not a live SAP stock sync.",
-  },
-  {
-    id: "stock-return-api",
-    title: "Stock return (separate SAP API)",
-    kind: "unimplemented",
-    mapping: "Not found as a named Integration type. POS returns use Z01 via FIVE_POS_UPDATE or Positive Stock Adjustment.",
-    usedFor: "No STOCK_RETURN process type in repository history.",
   },
 ];
 
@@ -326,7 +351,174 @@ export const INTEGRATION_PAYLOAD_FORMATS: { value: IntegrationPayloadFormat; lab
 ];
 
 /** Suggestions for the external system name; any other name can be typed. */
-export const INTEGRATION_SYSTEMS: string[] = ["SAP S/4", "Ariba"];
+export const INTEGRATION_SYSTEMS: string[] = ["SAP S/4", "Ariba", "FIVE_S4_INVENTORY_MOVEMENTS"];
+
+/** Shared SAP Material Document service defaults for inventory movement profiles. */
+export const SAP_INVENTORY_CONNECTION = {
+  connectionName: "FIVE_S4_INVENTORY_MOVEMENTS",
+  systemType: "SAP S/4HANA Cloud",
+  baseUrl: "https://my419951-api.s4hana.cloud.sap",
+  serviceRoot: "sap/opu/odata/sap/API_MATERIAL_DOCUMENT_SRV",
+  protocol: "ODATA_V2",
+  contentType: "application/json",
+  accept: "application/json",
+} as const;
+
+export type SapMovementDirection = "OUT" | "IN" | "TRANSFER" | "READ" | "CANCEL";
+export type SapProfileActivationPolicy = "active_allowed" | "validation_required" | "blocked_unverified" | "unconfigured";
+
+/**
+ * SILA Integration Studio SAP posting profiles.
+ * Names match the inventory poster lookups (SilaInventorySap / SilaStockCountSap / SilaGrnSap).
+ * Profile 4 (POS return) uses Z01 positive adjustment.
+ * Z03 is intentionally absent until its SAP purpose is confirmed.
+ */
+export interface SapMovementProfile {
+  id: string;
+  profileCode: string;
+  title: string;
+  configurationName: string;
+  aliases?: string[];
+  processType: string;
+  method: "GET" | "POST";
+  resourcePath: string;
+  goodsMovementCode?: string;
+  goodsMovementType?: string;
+  direction: SapMovementDirection;
+  purpose: string;
+  activationPolicy: SapProfileActivationPolicy;
+  statusNote: string;
+}
+
+export const SAP_MOVEMENT_PROFILES: SapMovementProfile[] = [
+  {
+    id: "pos-sales-consumption",
+    profileCode: "POS_SALES_CONSUMPTION",
+    title: "POS Sales Consumption",
+    configurationName: "S4 - Goods Issue",
+    processType: "POST_STOCK_ISSUE",
+    method: "POST",
+    resourcePath: "sap/opu/odata/sap/API_MATERIAL_DOCUMENT_SRV/A_MaterialDocumentHeader",
+    goodsMovementCode: "03",
+    goodsMovementType: "Z02",
+    direction: "OUT",
+    purpose: "POS ingredient consumption after recipe explosion",
+    activationPolicy: "active_allowed",
+    statusNote: "Uses only the existing S4 - Goods Issue Integration Setup API. Never FIVE_POS_UPDATE.",
+  },
+  {
+    id: "stock-issue",
+    profileCode: "STOCK_ISSUE",
+    title: "Stock Issue / Shortage",
+    configurationName: "S4 - Goods Issue",
+    processType: "POST_STOCK_ISSUE",
+    method: "POST",
+    resourcePath: "sap/opu/odata/sap/API_MATERIAL_DOCUMENT_SRV/A_MaterialDocumentHeader",
+    goodsMovementCode: "03",
+    goodsMovementType: "Z02",
+    direction: "OUT",
+    purpose: "Inventory shortage / direct consumption / waste / POS sales consumption",
+    activationPolicy: "active_allowed",
+    statusNote: "Canonical name S4 - Goods Issue (legacy FIVE S4 - Goods Issue still resolves). POS never uses FIVE_POS_UPDATE.",
+  },
+  {
+    id: "positive-stock-adjustment",
+    profileCode: "POSITIVE_STOCK_ADJUSTMENT",
+    title: "Positive Stock Adjustment",
+    configurationName: "FIVE S4 - Positive Stock Adjustment",
+    processType: "POST_POSITIVE_ADJ",
+    method: "POST",
+    resourcePath: "sap/opu/odata/sap/API_MATERIAL_DOCUMENT_SRV/A_MaterialDocumentHeader",
+    goodsMovementCode: "03",
+    goodsMovementType: "Z01",
+    direction: "IN",
+    purpose: "Positive inventory adjustment",
+    activationPolicy: "validation_required",
+    statusNote: "GoodsMovementCode 03 matches the current poster; confirm against SAP customizing before production activation.",
+  },
+  {
+    id: "pos-consumption-reversal",
+    profileCode: "POS_CONSUMPTION_REVERSAL",
+    title: "POS Return / Reversal",
+    configurationName: "POS_CONSUMPTION_REVERSAL",
+    processType: "POST_POS_REVERSAL",
+    method: "POST",
+    resourcePath: "sap/opu/odata/sap/API_MATERIAL_DOCUMENT_SRV/A_MaterialDocumentHeader",
+    goodsMovementCode: "03",
+    goodsMovementType: "Z01",
+    direction: "IN",
+    purpose: "Reverse POS ingredient consumption with Z01 positive adjustment",
+    activationPolicy: "active_allowed",
+    statusNote: "Uses GoodsMovementType Z01 (same family as positive stock adjustment). Cancel is not used for POS reversal.",
+  },
+  {
+    id: "storage-location-transfer",
+    profileCode: "STORAGE_LOCATION_TRANSFER",
+    title: "Storage Location Transfer",
+    configurationName: "FIVE S4 - Transfer Stock",
+    aliases: ["S4 - Transfer Stock"],
+    processType: "POST_TRANSFER_311",
+    method: "POST",
+    resourcePath: "sap/opu/odata/sap/API_MATERIAL_DOCUMENT_SRV/A_MaterialDocumentHeader",
+    goodsMovementCode: "04",
+    goodsMovementType: "311",
+    direction: "TRANSFER",
+    purpose: "Same-plant storage location transfer",
+    activationPolicy: "active_allowed",
+    statusNote: "Looked up by FIVE S4 - Transfer Stock (S4 alias accepted). POS consumption uses FIVE_POS_UPDATE only.",
+  },
+  {
+    id: "plant-transfer",
+    profileCode: "PLANT_TRANSFER",
+    title: "Plant Transfer",
+    configurationName: "FIVE S4 - Plant Transfer Stock",
+    aliases: ["S4 - Plant Transfer Stock"],
+    processType: "POST_TRANSFER_301",
+    method: "POST",
+    resourcePath: "sap/opu/odata/sap/API_MATERIAL_DOCUMENT_SRV/A_MaterialDocumentHeader",
+    goodsMovementCode: "04",
+    goodsMovementType: "301",
+    direction: "TRANSFER",
+    purpose: "Plant-to-plant stock transfer in the same company",
+    activationPolicy: "active_allowed",
+    statusNote: "Looked up by FIVE S4 - Plant Transfer Stock (S4 alias accepted). POS consumption uses FIVE_POS_UPDATE only.",
+  },
+  {
+    id: "material-document-read",
+    profileCode: "MATERIAL_DOCUMENT_READ",
+    title: "SAP Material Document Read",
+    configurationName: "FIVE_S4_MATERIAL_DOCUMENT_READ",
+    processType: "GET_MATERIAL_DOCUMENT",
+    method: "GET",
+    resourcePath: "sap/opu/odata/sap/API_MATERIAL_DOCUMENT_SRV/A_MaterialDocumentHeader",
+    direction: "READ",
+    purpose: "Read / reconcile SAP material documents",
+    activationPolicy: "validation_required",
+    statusNote: "Safe read-only profile. Custom GET_MATERIAL_DOCUMENT process type.",
+  },
+  {
+    id: "material-document-cancel",
+    profileCode: "MATERIAL_DOCUMENT_CANCEL",
+    title: "SAP Material Document Cancellation",
+    configurationName: "FIVE_S4_MATERIAL_DOCUMENT_CANCEL",
+    processType: "POST_MATERIAL_DOCUMENT_CANCEL",
+    method: "POST",
+    resourcePath: "sap/opu/odata/sap/API_MATERIAL_DOCUMENT_SRV/Cancel",
+    direction: "CANCEL",
+    purpose: "Cancel an original SAP material document (MaterialDocumentYear + MaterialDocument)",
+    activationPolicy: "validation_required",
+    statusNote: "GRN reversal continues to use movement 102 via FIVE S4-GRN REVERSAL, not Cancel. CancelItem is not wired as a separate SILA poster.",
+  },
+];
+
+export const matchSapMovementProfile = (
+  profile: SapMovementProfile,
+  rows: IntegrationConfiguration[],
+): IntegrationConfiguration | undefined => {
+  const names = [profile.configurationName, ...(profile.aliases ?? [])]
+    .map((name) => name.trim().toLowerCase());
+  return rows.find((row) => names.includes(row.name.trim().toLowerCase()));
+};
 
 /** Header name used for an API key when none is entered. */
 export const INTEGRATION_DEFAULT_API_KEY_HEADER = "X-API-KEY";
@@ -570,6 +762,26 @@ export const testIntegration = async (side: IntegrationSide, configurationId: st
     return response.data;
   } catch (error: unknown) {
     throw new Error(readError(error, "The connection test could not be completed."));
+  }
+};
+
+/**
+ * Copies base URL, auth, protected credentials and OData headers from a working connection onto
+ * another API of the same organization. Keeps the target process type, name and request body.
+ * Buyer APIs only.
+ */
+export const alignIntegrationConnection = async (
+  configurationId: string,
+  sourceConfigurationId: string,
+): Promise<IntegrationConfiguration> => {
+  try {
+    const response = await axiosInstance.post<IntegrationConfiguration>(
+      `${BASE.buyer}/${configurationId}/align-connection`,
+      { sourceConfigurationId },
+    );
+    return response.data;
+  } catch (error: unknown) {
+    throw new Error(readError(error, "Could not copy the connection settings."));
   }
 };
 

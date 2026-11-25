@@ -6,16 +6,19 @@ import {
   cancelStockCount,
   getStockCount,
   identifyBarcode,
+  reverseStockCount,
   submitStockCount,
   type SilaStockCountDetail,
   type SilaStockCountItem,
 } from "../../../api/silaMe/silaStockCountApi";
 import { formatDate, formatDateTime } from "../../cart/lineFormat";
+import SilaTxnErpHistory from "../movements/SilaTxnErpHistory";
 import CountEntryDialog, { type CountTarget } from "./CountEntryDialog";
 import CountLinePhotos from "./CountLinePhotos";
 import CountLineReviewDialog from "./CountLineReviewDialog";
 import "../silaMeTheme.css";
 import "../control/SilaControl.css";
+import "../movements/SilaMovements.css";
 import { formatMoney, formatQty, formatVariance, scBadgeClass, scLabel } from "./stockCountFormat";
 
 interface SilaStockCountSheetProps {
@@ -72,6 +75,7 @@ const SilaStockCountSheet: React.FC<SilaStockCountSheetProps> = ({ stockCountId,
   const [confirming, setConfirming] = useState<Confirming>(null);
   const [countMissingAsZero, setCountMissingAsZero] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [reversing, setReversing] = useState(false);
   const [reviewing, setReviewing] = useState<SilaStockCountItem | null>(null);
 
   const load = useCallback(async () => {
@@ -116,6 +120,9 @@ const SilaStockCountSheet: React.FC<SilaStockCountSheetProps> = ({ stockCountId,
   const reopened = inProgress && Boolean(count.submittedOn);
   const canUploadPhotos = count.status !== "POSTED" && count.status !== "CANCELLED";
   const showActions = inProgress || canApproveNow;
+  const events = count.events ?? [];
+  const alreadyReversed = events.some((event) => (event.action ?? "").toUpperCase() === "REVERSE");
+  const canReverse = count.status === "POSTED" && !alreadyReversed;
 
   const scan = async () => {
     if (!scanText.trim()) return;
@@ -187,6 +194,21 @@ const SilaStockCountSheet: React.FC<SilaStockCountSheetProps> = ({ stockCountId,
 
   const confirmTitle = confirming === "submit" ? "Submit count" : confirming === "approve" ? "Approve count" : "Cancel count";
 
+  const onReverse = async () => {
+    if (!canReverse || reversing) return;
+    setReversing(true);
+    try {
+      await reverseStockCount(count.id, { reason: `Reverse ${count.countNumber}` });
+      toastService.success("Stock count reverse posted.");
+      await load();
+      onChanged();
+    } catch (err: unknown) {
+      toastService.error(err instanceof Error ? err.message : "Could not reverse the stock count.");
+    } finally {
+      setReversing(false);
+    }
+  };
+
   return (
     <div className="sc-stack">
       <section className="sila-card">
@@ -203,6 +225,16 @@ const SilaStockCountSheet: React.FC<SilaStockCountSheetProps> = ({ stockCountId,
             )}
             {canApproveNow && (
               <button type="button" className="sila-btn sila-btn--primary" onClick={() => setConfirming("approve")}>Approve and post</button>
+            )}
+            {canReverse && (
+              <button
+                type="button"
+                className="sila-btn sila-btn--danger"
+                disabled={reversing}
+                onClick={() => void onReverse()}
+              >
+                {reversing ? "Reversing..." : "Reverse"}
+              </button>
             )}
           </div>
         </div>
@@ -260,7 +292,31 @@ const SilaStockCountSheet: React.FC<SilaStockCountSheetProps> = ({ stockCountId,
                 <dd className="sila-meta-value">{count.notes}</dd>
               </div>
             )}
+            {count.erpReference && (
+              <div className="sila-meta-item">
+                <dt className="sila-meta-label">ERP ID</dt>
+                <dd className="sila-meta-value">{count.erpReference}</dd>
+              </div>
+            )}
+            {count.erpStatus && (
+              <div className="sila-meta-item">
+                <dt className="sila-meta-label">ERP status</dt>
+                <dd className="sila-meta-value">{scLabel(count.erpStatus)}</dd>
+              </div>
+            )}
           </dl>
+
+          <SilaTxnErpHistory
+            erpStatus={count.erpStatus}
+            erpReference={count.erpReference}
+            events={events.map((event) => ({
+              action: event.action,
+              comment: event.comment,
+              actorUserId: event.actorUserId ?? "",
+              actorName: event.actorName || "System",
+              on: event.on,
+            }))}
+          />
 
           <div className="sc-counters" aria-label="Count progress">
             {[

@@ -140,6 +140,9 @@ namespace Buyer.Application.Features.Shared
                 transaction.Amount = row.Amount;
                 transaction.Uom = row.Uom;
                 transaction.Currency = row.Currency;
+                transaction.TransactionType = SilaPosReversal.NormalizeType(row.TransactionType);
+                transaction.OriginalTransactionId = string.IsNullOrWhiteSpace(row.OriginalTransactionId) ? null : row.OriginalTransactionId.Trim();
+                transaction.OriginalLineId = row.OriginalLineId;
                 transaction.Status = Common.SILA_POS_RECEIVED;
                 transaction.OutletLocationId = null;
                 transaction.RecipeId = null;
@@ -160,12 +163,23 @@ namespace Buyer.Application.Features.Shared
         /// queued ERP posting. A line failed at MATCH or DEDUCT starts again at MATCH (no stock was moved for it). The lines must be
         /// tracked. Returns the number that failed.
         /// </summary>
+        public static Task<int> ProcessAsync(
+            IRepositoryWrapper repository,
+            ILoggerManager logger,
+            Guid buyerId,
+            Guid userId,
+            List<PosSalesTransaction> transactions,
+            CancellationToken cancellationToken)
+            // Default: do not queue ERP unless the caller opts in / config says so (live SAP stays disabled until authorized).
+            => ProcessAsync(repository, logger, buyerId, userId, transactions, queueErpPosting: false, cancellationToken);
+
         public static async Task<int> ProcessAsync(
             IRepositoryWrapper repository,
             ILoggerManager logger,
             Guid buyerId,
             Guid userId,
             List<PosSalesTransaction> transactions,
+            bool queueErpPosting,
             CancellationToken cancellationToken)
         {
             if (transactions.Count == 0)
@@ -206,11 +220,22 @@ namespace Buyer.Application.Features.Shared
                         continue;
                     }
 
+                    string? reversalProblem = await ValidateReversalAsync(repository, buyerId, transaction, cancellationToken);
+                    if (reversalProblem != null)
+                    {
+                        Fail(ledger, transaction, Common.SILA_POS_STEP_MATCH, EVENT_MATCH_FAILED, reversalProblem);
+                        failed++;
+                        continue;
+                    }
+
                     ledger.AddEvent(
                         Common.SILA_REF_POS_SALE,
                         transaction.Id,
                         EVENT_MATCHED,
-                        $"Outlet {match.Outlet!.LocationCode}, recipe {match.Recipe!.RecipeCode} version {match.Recipe.ActiveVersion}.");
+                        $"Outlet {match.Outlet!.LocationCode}, recipe {match.Recipe!.RecipeCode} version {match.Recipe.ActiveVersion}"
+                            + (SilaPosReversal.IsReversal(transaction.TransactionType)
+                                ? $", {transaction.TransactionType} of {transaction.OriginalTransactionId}."
+                                : "."));
 
                     string? problem = await DeductAsync(context, ledger, transaction, cancellationToken);
                     if (problem != null)
@@ -221,23 +246,169 @@ namespace Buyer.Application.Features.Shared
                     }
                 }
 
-                // The ledger lines are the recipe explosion (or the single DIRECT material). Z02 consumes, Z01 returns stock.
-                InventoryErpPosting posting = ledger.QueueErpPosting(
-                    Common.SILA_REF_POS_SALE,
-                    transaction.Id,
-                    transaction.SourceTransactionId,
-                    transaction.OutletLocationId,
-                    SilaInventorySap.MovementForSale(null, transaction.QuantitySold));
-                transaction.ErpPostingId = posting.Id;
                 transaction.Status = Common.SILA_POS_INVENTORY_DEDUCTED;
                 transaction.FailedStep = null;
                 transaction.FailureMessage = null;
-                ledger.AddEvent(Common.SILA_REF_POS_SALE, transaction.Id, EVENT_POSTING_QUEUED, "Consumption queued for the ERP posting.");
+
+                if (queueErpPosting)
+                {
+                    // Recipe explosion ledger lines. POS consumption posts as Z01 via S4 - Goods Issue (user-confirmed).
+                    InventoryErpPosting posting = ledger.QueueErpPosting(
+                        Common.SILA_REF_POS_SALE,
+                        transaction.Id,
+                        transaction.SourceTransactionId,
+                        transaction.OutletLocationId,
+                        SilaPosReversal.MovementForSale(null, transaction));
+                    transaction.ErpPostingId = posting.Id;
+                    ledger.AddEvent(Common.SILA_REF_POS_SALE, transaction.Id, EVENT_POSTING_QUEUED, "Consumption queued for the ERP posting.");
+                }
+                else
+                {
+                    // Live SAP remains disabled: local SILA ledger is updated; ERP queue is skipped until authorized.
+                    ledger.AddEvent(
+                        Common.SILA_REF_POS_SALE,
+                        transaction.Id,
+                        "ERP_POSTING_SKIPPED",
+                        "ERP posting not queued (SilaPos:QueueErpPosting is false). Reprocess later to queue when authorized.");
+                }
             }
 
             await UpdateLastSaleDatesAsync(repository, buyerId, transactions, cancellationToken);
-            logger.LogInfo($"POS transactions processed. BuyerId: {buyerId}, Count: {transactions.Count}, Failed: {failed}");
+            logger.LogInfo($"POS transactions processed. BuyerId: {buyerId}, Count: {transactions.Count}, Failed: {failed}, QueueErp: {queueErpPosting}");
             return failed;
+        }
+
+        /// <summary>
+        /// Read-only recipe explosion and theoretical cost for selected RECEIVED preview lines. Does not change inventory or queue ERP.
+        /// </summary>
+        public static async Task<SilaPosConsumptionPreviewDto> PreviewConsumptionAsync(
+            IRepositoryWrapper repository,
+            Guid buyerId,
+            Guid batchId,
+            List<Guid>? transactionIds,
+            CancellationToken cancellationToken)
+        {
+            PosSalesBatch? batch = await repository.PosSalesBatch.FindFirstByConditionAsync(
+                x => x.Id == batchId && x.BuyerId == buyerId && x.IsActive);
+            if (batch == null)
+            {
+                return new SilaPosConsumptionPreviewDto();
+            }
+
+            IQueryable<PosSalesTransaction> query = repository.PosSalesTransaction
+                .FindByCondition(x => x.BatchId == batchId && x.BuyerId == buyerId && x.IsActive && x.Status == Common.SILA_POS_RECEIVED);
+            List<PosSalesTransaction> lines = await query
+                .OrderBy(x => x.BusinessDate).ThenBy(x => x.SourceTransactionId).ThenBy(x => x.LineNumber)
+                .ToListAsync(cancellationToken);
+            if (transactionIds != null && transactionIds.Count > 0)
+            {
+                HashSet<Guid> selected = transactionIds.ToHashSet();
+                lines = lines.Where(x => selected.Contains(x.Id)).ToList();
+            }
+
+            SilaPosMatching context = await SilaPosMatching.LoadAsync(
+                repository, buyerId, batch.PosSourceId == null ? new List<Guid>() : new List<Guid> { batch.PosSourceId.Value }, cancellationToken);
+
+            Dictionary<Guid, string?> plantByProperty = await repository.BuyerProperty
+                .FindByCondition(x => x.BuyerId == buyerId && x.IsActive)
+                .ToDictionaryAsync(x => x.Id, x => x.PlantCode, cancellationToken);
+
+            SilaPosConsumptionPreviewDto preview = new SilaPosConsumptionPreviewDto
+            {
+                BatchId = batch.Id,
+                BatchNumber = batch.BatchNumber
+            };
+
+            foreach (PosSalesTransaction transaction in lines)
+            {
+                SilaPosMatch match = context.Match(batch.PosSourceId, transaction.OutletCode, transaction.PosCode, transaction.Uom);
+                string? plantCode = match.Outlet != null && plantByProperty.TryGetValue(match.Outlet.PropertyId, out string? plant)
+                    ? plant
+                    : null;
+                SilaPosConsumptionPreviewLineDto line = new SilaPosConsumptionPreviewLineDto
+                {
+                    SaleTransactionId = transaction.Id,
+                    BusinessDate = transaction.BusinessDate.ToString("yyyy-MM-dd"),
+                    TransactionId = transaction.SourceTransactionId,
+                    LineId = transaction.LineNumber,
+                    PosCode = transaction.PosCode,
+                    QuantitySold = transaction.QuantitySold,
+                    Uom = transaction.Uom,
+                    OutletCode = transaction.OutletCode,
+                    OutletLocationName = match.Outlet?.LocationName,
+                    PlantCode = plantCode,
+                    StorageLocationCode = match.Outlet?.StorageLocationCode,
+                    SalesAmount = transaction.Amount,
+                    Currency = transaction.Currency,
+                    RecipeCode = match.Recipe?.RecipeCode,
+                    RecipeVersion = match.Recipe?.ActiveVersion,
+                    MatchStatus = match.Status,
+                    Message = match.Message
+                };
+
+                if (match.Status == SilaPosMatching.ROW_READY && match.Recipe != null)
+                {
+                    Dictionary<string, ExplosionLine> quantities = new Dictionary<string, ExplosionLine>(StringComparer.OrdinalIgnoreCase);
+                    string? problem = Expand(context, match.Recipe.Id, transaction.QuantitySold, quantities, 0);
+                    if (problem != null)
+                    {
+                        line.MatchStatus = SilaPosMatching.ROW_RECIPE_NOT_READY;
+                        line.Message = problem;
+                    }
+                    else
+                    {
+                        decimal consumptionCost = 0;
+                        bool costPending = false;
+                        foreach (ExplosionLine entry in quantities.Values.Where(x => x.BaseQuantity > 0 && x.EnteredQuantity > 0))
+                        {
+                            if (!context.Materials.TryGetValue(entry.MaterialId, out ItemBuyerMaster? material) || !SilaMaterialRules.HoldsStock(material))
+                            {
+                                continue;
+                            }
+
+                            decimal? unitCost = material.UnitCost;
+                            if (unitCost == null)
+                            {
+                                costPending = true;
+                            }
+                            else
+                            {
+                                consumptionCost += Math.Round(unitCost.Value * entry.BaseQuantity, 4);
+                            }
+
+                            line.Ingredients.Add(new SilaPosConsumptionPreviewIngredientDto
+                            {
+                                MaterialId = material.Id,
+                                MaterialCode = material.MaterialCode,
+                                MaterialDescription = material.Description,
+                                Quantity = Math.Round(entry.EnteredQuantity, 4),
+                                EntryUom = entry.EnteredUom,
+                                BaseQuantity = Math.Round(entry.BaseQuantity, 4),
+                                BaseUom = UomConverter.BaseUomOf(material),
+                                UnitCost = unitCost,
+                                EstimatedCost = unitCost == null ? null : Math.Round(unitCost.Value * entry.BaseQuantity, 4),
+                                CostPending = unitCost == null
+                            });
+                        }
+
+                        line.IngredientCount = line.Ingredients.Count;
+                        line.ConsumptionCost = costPending && consumptionCost == 0 ? null : consumptionCost;
+                        line.CostPending = costPending;
+                        if (transaction.Amount != null && transaction.Amount != 0 && line.ConsumptionCost != null)
+                        {
+                            line.GrossContribution = Math.Round(transaction.Amount.Value - line.ConsumptionCost.Value, 4);
+                            line.FoodCostPercent = Math.Round(line.ConsumptionCost.Value / transaction.Amount.Value * 100, 2);
+                            line.GrossMarginPercent = Math.Round(line.GrossContribution.Value / transaction.Amount.Value * 100, 2);
+                        }
+                    }
+                }
+
+                preview.Lines.Add(line);
+            }
+
+            preview.TotalSalesAmount = preview.Lines.Where(x => x.SalesAmount != null).Sum(x => x.SalesAmount!.Value);
+            preview.TotalConsumptionCost = preview.Lines.Where(x => x.ConsumptionCost != null).Sum(x => x.ConsumptionCost!.Value);
+            return preview;
         }
 
         /// <summary>
@@ -306,47 +477,51 @@ namespace Buyer.Application.Features.Shared
                 return null;
             }
 
-            Dictionary<Guid, decimal> quantities = new Dictionary<Guid, decimal>();
-            string? problem = Expand(context, transaction.RecipeId.Value, transaction.QuantitySold, quantities, 0);
+            Dictionary<string, ExplosionLine> quantities = new Dictionary<string, ExplosionLine>(StringComparer.OrdinalIgnoreCase);
+            string? problem = Expand(context, transaction.RecipeId.Value, SilaPosReversal.ExplosionQuantity(transaction), quantities, 0);
             if (problem != null)
             {
                 return problem;
             }
 
-            foreach (Guid materialId in quantities.Keys.ToList())
+            foreach (string key in quantities.Keys.ToList())
             {
-                if (!context.Materials.TryGetValue(materialId, out ItemBuyerMaster? material) || !material.IsActive)
+                ExplosionLine line = quantities[key];
+                if (!context.Materials.TryGetValue(line.MaterialId, out ItemBuyerMaster? material) || !material.IsActive)
                 {
                     return "An ingredient material is no longer active in the Item Master. Correct the recipe.";
                 }
 
                 if (!SilaMaterialRules.HoldsStock(material))
                 {
-                    quantities.Remove(materialId);
+                    quantities.Remove(key);
                 }
             }
 
-            if (quantities.Count == 0 || quantities.Values.All(x => x <= 0))
+            if (quantities.Count == 0 || quantities.Values.All(x => x.BaseQuantity <= 0))
             {
                 return "NO_CONSUMPTION_LINES";
             }
 
-            string direction = transaction.QuantitySold < 0 ? Common.SILA_DIRECTION_IN : Common.SILA_DIRECTION_OUT;
+            string direction = SilaPosReversal.LedgerDirection(transaction);
+            string reasonPrefix = SilaPosReversal.IsReversal(transaction.TransactionType) ? "POS reversal" : "POS";
             int lines = 0;
-            foreach (KeyValuePair<Guid, decimal> entry in quantities.Where(x => x.Value > 0))
+            foreach (ExplosionLine entry in quantities.Values.Where(x => x.BaseQuantity > 0 && x.EnteredQuantity > 0))
             {
                 await ledger.PostAsync(new InventoryMovement
                 {
                     LocationId = transaction.OutletLocationId.Value,
-                    Material = context.Materials[entry.Key],
+                    Material = context.Materials[entry.MaterialId],
                     Direction = direction,
                     TransactionType = Common.SILA_TXN_RECIPE_CONSUMPTION,
-                    BaseQuantity = entry.Value,
-                    EnteredQuantity = entry.Value,
+                    BaseQuantity = entry.BaseQuantity,
+                    // Recipe ingredient UOM/qty (e.g. 30 ML per EA) — SAP consumption uses these, not material base.
+                    EnteredQuantity = entry.EnteredQuantity,
+                    EnteredUom = entry.EnteredUom,
                     ReferenceType = Common.SILA_REF_POS_SALE,
                     ReferenceId = transaction.Id,
                     ReferenceNumber = transaction.SourceTransactionId,
-                    Reason = $"POS {transaction.PosCode} x {transaction.QuantitySold:0.####}",
+                    Reason = $"{reasonPrefix} {transaction.PosCode} x {SilaPosReversal.ExplosionQuantity(transaction):0.####}",
                     BusinessDate = transaction.BusinessDate
                 }, cancellationToken);
                 lines++;
@@ -356,8 +531,73 @@ namespace Buyer.Application.Features.Shared
             return null;
         }
 
-        /// <summary>Adds the base quantity of every material of the recipe's approved version × factor; a batch is expanded per serving.</summary>
-        private static string? Expand(SilaPosMatching context, Guid recipeId, decimal factor, Dictionary<Guid, decimal> quantities, int depth)
+        private static async Task<string?> ValidateReversalAsync(
+            IRepositoryWrapper repository,
+            Guid buyerId,
+            PosSalesTransaction transaction,
+            CancellationToken cancellationToken)
+        {
+            if (!SilaPosReversal.IsReversal(transaction.TransactionType))
+            {
+                return null;
+            }
+
+            IQueryable<PosSalesTransaction> originals = repository.PosSalesTransaction.FindByCondition(x =>
+                x.BuyerId == buyerId
+                && x.IsActive
+                && x.SourceTransactionId == transaction.OriginalTransactionId);
+            if (transaction.OriginalLineId != null)
+            {
+                originals = originals.Where(x => x.LineNumber == transaction.OriginalLineId.Value);
+            }
+
+            PosSalesTransaction? original = await originals
+                .OrderByDescending(x => x.Status == Common.SILA_POS_POSTED)
+                .ThenByDescending(x => x.Status == Common.SILA_POS_INVENTORY_DEDUCTED)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            List<PosSalesTransaction> priorReversals = await repository.PosSalesTransaction
+                .FindByCondition(x =>
+                    x.BuyerId == buyerId
+                    && x.IsActive
+                    && x.Id != transaction.Id
+                    && x.OriginalTransactionId == transaction.OriginalTransactionId
+                    && (transaction.OriginalLineId == null || x.OriginalLineId == transaction.OriginalLineId)
+                    && (x.Status == Common.SILA_POS_INVENTORY_DEDUCTED || x.Status == Common.SILA_POS_POSTED))
+                .ToListAsync(cancellationToken);
+            decimal alreadyReversed = priorReversals
+                .Where(x => SilaPosReversal.IsReversal(x.TransactionType))
+                .Sum(x => Math.Abs(x.QuantitySold));
+
+            return SilaPosReversal.ValidateAgainstOriginal(transaction, original, alreadyReversed);
+        }
+
+        /// <summary>
+        /// Scales one recipe ingredient for sold qty: entry stays in recipe UOM (30 ML × 2 EA = 60 ML);
+        /// base is for ME stock (converted when the recipe was saved).
+        /// </summary>
+        public static (decimal EnteredQuantity, string EnteredUom, decimal BaseQuantity) ScaleIngredient(
+            decimal ingredientQuantity,
+            string ingredientUom,
+            decimal ingredientBaseQuantity,
+            decimal saleFactor,
+            decimal lossMultiplier = 1m)
+        {
+            decimal scale = saleFactor * lossMultiplier;
+            string uom = string.IsNullOrWhiteSpace(ingredientUom) ? string.Empty : ingredientUom.Trim().ToUpperInvariant();
+            return (ingredientQuantity * scale, uom, ingredientBaseQuantity * scale);
+        }
+
+        /// <summary>
+        /// Explodes every material of the recipe's approved version × sold factor.
+        /// Entry qty/UOM come from the recipe ingredient (what SAP posts); base qty updates ME stock.
+        /// </summary>
+        private static string? Expand(
+            SilaPosMatching context,
+            Guid recipeId,
+            decimal factor,
+            Dictionary<string, ExplosionLine> quantities,
+            int depth)
         {
             if (depth > MAX_RECIPE_DEPTH)
             {
@@ -377,11 +617,39 @@ namespace Buyer.Application.Features.Shared
             }
 
             decimal scale = SaleFactor(recipe.ServingQty, factor);
+            // Apply trim/cooking/waste once at this recipe level for leaf materials only (sub-recipes apply their own).
+            decimal loss = SilaHospitalityRules.LossMultiplier(recipe);
             foreach (RecipeIngredient ingredient in ingredients)
             {
                 if (ingredient.MaterialId != null)
                 {
-                    quantities[ingredient.MaterialId.Value] = quantities.GetValueOrDefault(ingredient.MaterialId.Value) + ingredient.BaseQuantity * scale;
+                    (decimal enteredQty, string enteredUom, decimal baseQty) = ScaleIngredient(
+                        ingredient.Quantity,
+                        ingredient.Uom,
+                        ingredient.BaseQuantity,
+                        scale,
+                        loss);
+                    if (string.IsNullOrWhiteSpace(enteredUom))
+                    {
+                        enteredUom = string.IsNullOrWhiteSpace(ingredient.BaseUom)
+                            ? string.Empty
+                            : ingredient.BaseUom.Trim().ToUpperInvariant();
+                    }
+
+                    string key = $"{ingredient.MaterialId.Value:N}|{enteredUom}";
+                    if (quantities.TryGetValue(key, out ExplosionLine existing))
+                    {
+                        quantities[key] = existing with
+                        {
+                            BaseQuantity = existing.BaseQuantity + baseQty,
+                            EnteredQuantity = existing.EnteredQuantity + enteredQty
+                        };
+                    }
+                    else
+                    {
+                        quantities[key] = new ExplosionLine(ingredient.MaterialId.Value, baseQty, enteredQty, enteredUom);
+                    }
+
                     continue;
                 }
 
@@ -400,6 +668,9 @@ namespace Buyer.Application.Features.Shared
 
             return null;
         }
+
+        /// <summary>One exploded ingredient line: ME stock in base UOM, SAP consumption in recipe entry UOM.</summary>
+        public readonly record struct ExplosionLine(Guid MaterialId, decimal BaseQuantity, decimal EnteredQuantity, string EnteredUom);
 
         private static void Fail(InventoryLedger ledger, PosSalesTransaction transaction, string step, string eventAction, string message)
         {

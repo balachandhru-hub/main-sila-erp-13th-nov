@@ -37,7 +37,27 @@ namespace Buyer.Domain.Entities
         [Precision(18, 4)]
         public decimal ReceivedQty { get; set; }
 
+        /// <summary>Quantity already reversed via movement 312 (base UOM).</summary>
+        [Precision(18, 4)]
+        public decimal ReversedQty { get; set; }
+
+        /// <summary>Quantity reserved by an in-flight 312 reversal request (cleared on success/failure).</summary>
+        [Precision(18, 4)]
+        public decimal PendingReverseQty { get; set; }
+
         [Required]
         public string Uom { get; set; } = string.Empty;
+
+        /// <summary>Optional demand link: weekly bucket line this ITO allocates.</summary>
+        public Guid? WeeklyBucketId { get; set; }
+
+        public Guid? WeeklyBucketItemId { get; set; }
+
+        /// <summary>Optional demand link: personal/outlet wishlist line this ITO allocates.</summary>
+        public Guid? WishlistItemId { get; set; }
+
+        /// <summary>Requested quantity on the source requirement (base UOM), when demand-linked.</summary>
+        [Precision(18, 4)]
+        public decimal? RequirementRequestedQty { get; set; }
     }
 }

@@ -155,7 +155,11 @@ namespace Buyer.API.Extensions
             _ = services.AddScoped<IBuyerPurchaseDocumentGateway, BuyerPurchaseDocumentGateway>();
             _ = services.AddScoped<IAesEncryption, AesEncryption>();
             _ = services.AddScoped<IStockInHandProvider, ErpStockInHandProvider>();
-            _ = services.AddControllers();
+            _ = services.AddControllers().AddJsonOptions(options =>
+            {
+                // Empty JSON strings must not 400 Guid? model binding (PO flex write payloads).
+                options.JsonSerializerOptions.Converters.Add(new Buyer.Domain.Serialization.EmptyStringNullableGuidConverter());
+            });
 
         }
 
@@ -169,6 +173,10 @@ namespace Buyer.API.Extensions
             _ = services.AddScoped<IIntegrationCredentialProtector, IntegrationCredentialProtector>();
             _ = services.AddScoped<IIntegrationHttpExecutor, IntegrationHttpExecutor>();
             _ = services.AddHttpClient(IntegrationConstants.HTTP_CLIENT_INTEGRATIONS);
+            _ = services.AddHttpClient(Common.HTTP_CLIENT_VOICE_ENGINE, client =>
+            {
+                client.Timeout = TimeSpan.FromSeconds(60);
+            });
             _ = services.AddHttpClient(Common.HTTP_CLIENT_OCR, client =>
             {
                 client.BaseAddress = new Uri(config[Common.OCR_SERVICE_URL]!.TrimEnd('/') + "/");

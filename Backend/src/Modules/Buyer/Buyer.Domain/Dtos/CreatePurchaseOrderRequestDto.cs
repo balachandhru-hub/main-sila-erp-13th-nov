@@ -44,10 +44,13 @@ namespace Buyer.Domain.Dtos
     {
         public string? MaterialCode { get; set; }
         public string? Sku { get; set; }
+        /// <summary>PO item text (PurchaseOrderItemText). Prefer the system material description as-is.</summary>
         public string? Description { get; set; }
         public decimal Quantity { get; set; }
         public string? UnitOfMeasure { get; set; }
         public decimal? UnitPrice { get; set; }
         public string? StorageLocation { get; set; }
+        public string? CostCenter { get; set; }
+        public string? MaterialGroup { get; set; }
     }
 }

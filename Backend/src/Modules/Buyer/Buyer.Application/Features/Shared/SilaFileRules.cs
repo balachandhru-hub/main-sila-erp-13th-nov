@@ -12,6 +12,7 @@ namespace Buyer.Application.Features.Shared
         public const string KIND_PDF = "PDF";
         public const string KIND_PNG = "PNG";
         public const string KIND_JPEG = "JPEG";
+        public const string KIND_WEBP = "WEBP";
         public const string KIND_XLSX = "XLSX";
         public const string KIND_CSV = "CSV";
 
@@ -25,6 +26,8 @@ namespace Buyer.Application.Features.Shared
         private static readonly byte[] PngSignature = { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A };
         private static readonly byte[] JpegSignature = { 0xFF, 0xD8, 0xFF };
         private static readonly byte[] ZipSignature = { 0x50, 0x4B, 0x03, 0x04 };
+        private static readonly byte[] RiffSignature = { 0x52, 0x49, 0x46, 0x46 };
+        private static readonly byte[] WebpSignature = { 0x57, 0x45, 0x42, 0x50 };
 
         private static readonly Dictionary<string, string> KindByExtension = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -32,6 +35,7 @@ namespace Buyer.Application.Features.Shared
             [".png"] = KIND_PNG,
             [".jpg"] = KIND_JPEG,
             [".jpeg"] = KIND_JPEG,
+            [".webp"] = KIND_WEBP,
             [".xlsx"] = KIND_XLSX,
             [".csv"] = KIND_CSV
         };
@@ -41,6 +45,7 @@ namespace Buyer.Application.Features.Shared
             [KIND_PDF] = ".pdf",
             [KIND_PNG] = ".png",
             [KIND_JPEG] = ".jpg",
+            [KIND_WEBP] = ".webp",
             [KIND_XLSX] = ".xlsx",
             [KIND_CSV] = ".csv"
         };
@@ -50,6 +55,7 @@ namespace Buyer.Application.Features.Shared
             [KIND_PDF] = "application/pdf",
             [KIND_PNG] = "image/png",
             [KIND_JPEG] = "image/jpeg",
+            [KIND_WEBP] = "image/webp",
             [KIND_XLSX] = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             [KIND_CSV] = "text/csv"
         };
@@ -97,10 +103,10 @@ namespace Buyer.Application.Features.Shared
             return KindByExtension.TryGetValue(Path.GetExtension(fileName ?? string.Empty), out string? kind) ? kind : null;
         }
 
-        /// <summary>The kind of a binary file (PDF, PNG, JPEG, XLSX) from its first bytes; null when unknown.</summary>
+        /// <summary>The kind of a binary file (PDF, PNG, JPEG, WEBP, XLSX) from its first bytes; null when unknown.</summary>
         public static string? DetectBinaryKind(byte[] content)
         {
-            foreach (string kind in new[] { KIND_PDF, KIND_PNG, KIND_JPEG, KIND_XLSX })
+            foreach (string kind in new[] { KIND_PDF, KIND_PNG, KIND_JPEG, KIND_WEBP, KIND_XLSX })
             {
                 if (HasSignature(kind, content))
                 {
@@ -119,6 +125,7 @@ namespace Buyer.Application.Features.Shared
                 KIND_PDF => StartsWith(content, PdfSignature),
                 KIND_PNG => StartsWith(content, PngSignature),
                 KIND_JPEG => StartsWith(content, JpegSignature),
+                KIND_WEBP => StartsWith(content, RiffSignature) && content.Length >= 12 && content.Skip(8).Take(4).SequenceEqual(WebpSignature),
                 KIND_XLSX => StartsWith(content, ZipSignature),
                 KIND_CSV => content.Length > 0 && !content.Take(CSV_SNIFF_BYTES).Any(x => x == 0),
                 _ => false

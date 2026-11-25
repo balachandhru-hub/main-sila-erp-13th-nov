@@ -73,9 +73,14 @@ namespace Buyer.Application.Features.Shared
                 .ToString("yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture);
         }
 
+        /// <summary>
+        /// S/4 item number for a SILA line. Create PO sends (index+1)*10 (10, 20, …);
+        /// GRN 101 must use the same EKPO item or M7/001 is returned.
+        /// </summary>
         public static string FormatPurchaseOrderItem(int lineNumber)
         {
-            return lineNumber.ToString("00000", CultureInfo.InvariantCulture);
+            int sapItem = lineNumber <= 0 ? 10 : lineNumber * 10;
+            return sapItem.ToString("00000", CultureInfo.InvariantCulture);
         }
 
         public const string POSTING_MISMATCH = "GRN_REQUEST_MAPPING_MISMATCH";
@@ -148,7 +153,9 @@ namespace Buyer.Application.Features.Shared
             {
                 SilaGrnReversalSapLine prepared = expected[index];
                 string? Read(string name) => line.TryGetProperty(name, out JsonElement value) ? value.ToString() : null;
-                mismatch = CompareField(REVERSAL_MISMATCH, "Material", prepared.Material, Read("Material"))
+                mismatch = (string.IsNullOrWhiteSpace(prepared.Material)
+                        ? null
+                        : CompareField(REVERSAL_MISMATCH, "Material", prepared.Material, Read("Material")))
                     ?? CompareField(REVERSAL_MISMATCH, "Plant", prepared.Plant, Read("Plant"))
                     ?? (string.IsNullOrWhiteSpace(prepared.StorageLocation)
                         ? null
@@ -197,7 +204,6 @@ namespace Buyer.Application.Features.Shared
             {
                 Dictionary<string, object?> item = new Dictionary<string, object?>
                 {
-                    ["Material"] = line.Material.Trim(),
                     ["Plant"] = line.Plant.Trim(),
                     ["GoodsMovementType"] = REVERSAL_GOODS_MOVEMENT_TYPE,
                     ["GoodsMovementRefDocType"] = GOODS_MOVEMENT_REF_DOC_TYPE,
@@ -206,6 +212,12 @@ namespace Buyer.Application.Features.Shared
                     ["PurchaseOrder"] = line.PurchaseOrder.Trim(),
                     ["PurchaseOrderItem"] = line.PurchaseOrderItem.Trim()
                 };
+                // Text / account-assigned lines omit Material (same as 101 post).
+                if (!string.IsNullOrWhiteSpace(line.Material))
+                {
+                    item["Material"] = line.Material.Trim();
+                }
+
                 if (!string.IsNullOrWhiteSpace(line.StorageLocation))
                 {
                     item["StorageLocation"] = line.StorageLocation.Trim();
@@ -288,7 +300,8 @@ namespace Buyer.Application.Features.Shared
                     string material = Read("Material");
                     string plant = Read("Plant");
                     string poItem = Read("PurchaseOrderItem");
-                    if (string.IsNullOrWhiteSpace(material) || string.IsNullOrWhiteSpace(plant) || string.IsNullOrWhiteSpace(poItem))
+                    // Text PO 101 lines omit Material; still need plant + PO item for 102.
+                    if (string.IsNullOrWhiteSpace(plant) || string.IsNullOrWhiteSpace(poItem))
                     {
                         continue;
                     }
@@ -314,6 +327,15 @@ namespace Buyer.Application.Features.Shared
 
         public static SilaGrnPostedSapLine? FindPostedLine(IReadOnlyList<SilaGrnPostedSapLine> posted, string material, string purchaseOrderItem)
         {
+            if (string.IsNullOrWhiteSpace(material))
+            {
+                return posted.FirstOrDefault(x =>
+                    string.IsNullOrWhiteSpace(x.Material)
+                    && string.Equals(x.PurchaseOrderItem, purchaseOrderItem, StringComparison.Ordinal))
+                    ?? posted.FirstOrDefault(x =>
+                        string.Equals(x.PurchaseOrderItem, purchaseOrderItem, StringComparison.Ordinal));
+            }
+
             return posted.FirstOrDefault(x =>
                 string.Equals(x.Material, material, StringComparison.Ordinal)
                 && string.Equals(x.PurchaseOrderItem, purchaseOrderItem, StringComparison.Ordinal));
@@ -342,8 +364,7 @@ namespace Buyer.Application.Features.Shared
                     string material = item.TryGetProperty("Material", out JsonElement m) ? m.GetString()?.Trim() ?? string.Empty : string.Empty;
                     string poItem = item.TryGetProperty("PurchaseOrderItem", out JsonElement p) ? p.GetString()?.Trim() ?? string.Empty : string.Empty;
                     string? qtyText = item.TryGetProperty("QuantityInEntryUnit", out JsonElement q) ? q.GetString() : null;
-                    if (string.IsNullOrWhiteSpace(material)
-                        || string.IsNullOrWhiteSpace(poItem)
+                    if (string.IsNullOrWhiteSpace(poItem)
                         || !decimal.TryParse(qtyText, NumberStyles.Number, CultureInfo.InvariantCulture, out decimal qty)
                         || qty <= 0)
                     {

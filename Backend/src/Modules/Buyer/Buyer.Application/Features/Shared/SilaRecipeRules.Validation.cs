@@ -172,10 +172,24 @@ namespace Buyer.Application.Features.Shared
 
             recipe.CategoryId = request.CategoryId;
             recipe.Category = categoryName;
+
+            // When the write omits ProductClass, inherit from the category master if set.
+            if (string.IsNullOrWhiteSpace(request.ProductClass))
+            {
+                string? categoryClass = await repository.RecipeCategory
+                    .FindByCondition(x => x.Id == request.CategoryId && x.BuyerId == buyerId)
+                    .Select(x => x.ProductClass)
+                    .FirstOrDefaultAsync(cancellationToken);
+                if (!string.IsNullOrWhiteSpace(categoryClass) && string.IsNullOrWhiteSpace(recipe.ProductClass))
+                {
+                    recipe.ProductClass = categoryClass.Trim().ToUpperInvariant();
+                }
+            }
         }
 
         /// <summary>Retires (IsActive = false) the ingredient and price rows of one version before it is rewritten.</summary>
-        private static async Task RetireVersionRowsAsync(IRepositoryWrapper repository, Guid recipeId, int version, CancellationToken cancellationToken)
+        /// <summary>Soft-retires ingredient and outlet-price rows of one version (IsActive = false). Other versions are untouched.</summary>
+        public static async Task RetireVersionRowsAsync(IRepositoryWrapper repository, Guid recipeId, int version, CancellationToken cancellationToken)
         {
             List<RecipeIngredient> oldIngredients = await repository.RecipeIngredient
                 .FindByCondition(x => x.RecipeId == recipeId && x.Version == version && x.IsActive)

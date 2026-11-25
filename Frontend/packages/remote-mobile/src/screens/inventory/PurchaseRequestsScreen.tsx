@@ -10,6 +10,7 @@ import StatusBadge from '../../components/StatusBadge';
 import { Empty, ErrorNotice, Loading, Notice, type NoticeMessage } from '../../components/StateViews';
 import { useAccess } from '../../access';
 import { formatDate } from '../../format';
+import { useGo } from '../../navigation';
 import { errorText, useLoad } from '../../useLoad';
 
 const PAGE = 50;
@@ -24,6 +25,7 @@ const TABS: { key: string; label: string }[] = [
 /** Purchase requests raised at my locations (mine by default); a submitted request can be cancelled. */
 const PurchaseRequestsScreen: React.FC = () => {
   const { person, can, loading: accessLoading } = useAccess();
+  const go = useGo();
   const [status, setStatus] = useState<string>('SUBMITTED');
   const [onlyMine, setOnlyMine] = useState<boolean>(true);
   const [confirmId, setConfirmId] = useState<string | null>(null);
@@ -57,6 +59,7 @@ const PurchaseRequestsScreen: React.FC = () => {
         {!accessLoading && !can.requestPurchase && <Empty text="Purchase requests are not available for your role." />}
         {can.requestPurchase && (
           <>
+            <button type="button" className="sm-btn sm-btn--block" onClick={() => go('purchasing/voice-po')}>Create PO by Voice</button>
             <div className="sm-tabs sm-tabs--wrap" role="group" aria-label="Status">
               {TABS.map((tab) => (
                 <button key={tab.label} type="button" className="sm-tab" aria-pressed={tab.key === status} onClick={() => setStatus(tab.key)}>

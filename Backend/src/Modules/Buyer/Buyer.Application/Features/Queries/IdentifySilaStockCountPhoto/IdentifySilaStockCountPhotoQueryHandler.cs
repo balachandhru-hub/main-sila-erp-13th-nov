@@ -9,7 +9,7 @@ using SharedKernel.LoggerServices;
 namespace Buyer.Application.Features.Queries.IdentifySilaStockCountPhoto
 {
     /// <summary>
-    /// Asks the photo identifier for material candidates. The user must confirm a candidate before counting.
+    /// Runs SILA Material Recognition Engine for a stock-count photo. User must confirm before counting.
     /// Inventory is not changed.
     /// </summary>
     public class IdentifySilaStockCountPhotoQueryHandler : IRequestHandler<IdentifySilaStockCountPhotoQuery, SilaStockCountPhotoIdentifyDto>
@@ -31,13 +31,20 @@ namespace Buyer.Application.Features.Queries.IdentifySilaStockCountPhoto
             StockCount count = await SilaStockCountRules.GetCountAsync(
                 _repository, _logger, buyer.Id, request.UserId, request.RoleId, request.StockCountId, cancellationToken);
 
-            SilaStockCountPhotoIdentifyDto result = SilaMaterialPhotoIdentifier.Identify();
+            string? hint = string.IsNullOrWhiteSpace(request.HintText) ? request.FileName : $"{request.HintText} {request.FileName}";
+            SilaStockCountPhotoIdentifyDto result = await SilaMaterialPhotoIdentifier.IdentifyAsync(
+                _repository,
+                buyer.Id,
+                hint,
+                request.ImageBytes,
+                request.ContentType,
+                cancellationToken);
+
             InventoryLedger ledger = new InventoryLedger(_repository, buyer.Id, request.UserId);
-            ledger.AddEvent(
-                Common.SILA_REF_STOCK_COUNT,
-                count.Id,
-                "PHOTO_IDENTIFY",
-                result.Configured ? $"Candidates={result.Candidates.Count}" : "Provider not configured. No material selected.");
+            string detail = result.Configured
+                ? $"Candidates={result.Candidates.Count}; PreferBarcode={result.PreferBarcodeFallback}; HasImage={(request.ImageBytes?.Length ?? 0) > 0}"
+                : "Provider not configured. No material selected.";
+            ledger.AddEvent(Common.SILA_REF_STOCK_COUNT, count.Id, "STOCK_COUNT_AI_IDENTIFICATION", detail);
             await _repository.SaveAsync();
 
             _logger.LogInfo($"Photo identification finished. StockCountId: {count.Id}, Configured: {result.Configured}, Candidates: {result.Candidates.Count}");

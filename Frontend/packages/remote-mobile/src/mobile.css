@@ -1229,3 +1229,86 @@
   border: 0.0625rem solid var(--sm-border);
   background: var(--sm-subtle);
 }
+
+/* Camera barcode scanner overlay */
+.sm-scanner {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.55);
+  padding: 1rem;
+}
+
+.sm-scanner__panel {
+  width: min(100%, 28rem);
+  max-height: 92dvh;
+  overflow: auto;
+  background: #fff;
+  border-radius: 1rem 1rem 0.75rem 0.75rem;
+  padding: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  box-shadow: 0 -0.25rem 1.25rem rgba(15, 23, 42, 0.2);
+}
+
+.sm-scanner__frame {
+  position: relative;
+  border-radius: 0.85rem;
+  overflow: hidden;
+  background: #0f172a;
+  min-height: 12rem;
+}
+
+.sm-scanner__video {
+  display: block;
+  width: 100%;
+  max-height: 18rem;
+  object-fit: cover;
+}
+
+.sm-scanner__reticle {
+  position: absolute;
+  inset: 18% 12%;
+  border: 0.125rem solid rgba(56, 189, 248, 0.95);
+  border-radius: 0.75rem;
+  box-shadow: 0 0 0 999px rgba(15, 23, 42, 0.35);
+  pointer-events: none;
+}
+
+.sm-section__title {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+.sm-facts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.55rem 0.75rem;
+  margin: 0;
+}
+
+.sm-fact {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.sm-fact dt {
+  margin: 0;
+  font-size: 0.7rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.sm-fact dd {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #0f172a;
+  word-break: break-word;
+}

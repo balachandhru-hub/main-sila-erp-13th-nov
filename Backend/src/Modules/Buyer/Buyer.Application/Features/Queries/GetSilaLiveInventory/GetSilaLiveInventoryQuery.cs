@@ -10,6 +10,8 @@ namespace Buyer.Application.Features.Queries.GetSilaLiveInventory
         public Guid RoleId { get; set; }
         public string? Search { get; set; }
         public Guid? LocationId { get; set; }
+        /// <summary>Optional health filter when LocationId is set: LOW | OUT | EXCESS | NEGATIVE | HEALTHY | IN_STOCK.</summary>
+        public string? Health { get; set; }
         public int Index { get; set; }
         public int Limit { get; set; }
     }

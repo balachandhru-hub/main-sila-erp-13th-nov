@@ -123,6 +123,16 @@ export interface SilaStockCountDetail {
   createdByName?: string | null;
   submittedByName?: string | null;
   approvedByName?: string | null;
+  events?: Array<{
+    action: string;
+    comment?: string | null;
+    actorUserId?: string;
+    actorName?: string | null;
+    on: string;
+  }>;
+  erpStatus?: string | null;
+  erpReference?: string | null;
+  erpPostingId?: string | null;
 }
 
 export interface SilaStockCountWrite {
@@ -254,6 +264,7 @@ const normalizeItem = (item: SilaStockCountItem): SilaStockCountItem => ({
 const normalizeDetail = (detail: SilaStockCountDetail): SilaStockCountDetail => ({
   ...detail,
   items: list(detail.items).map(normalizeItem),
+  events: list(detail.events),
 });
 
 const optionalParams = (values: Record<string, string | number | undefined>): Record<string, string | number> | undefined => {
@@ -350,19 +361,39 @@ export interface SilaStockCountPhotoCandidate {
   materialCode: string;
   materialName: string;
   baseUom: string;
+  /** Calibrated 0–1 confidence from recognition ranking. */
+  confidence?: number;
+  brand?: string | null;
+  category?: string | null;
+  packSize?: string | null;
 }
 
 export interface SilaStockCountPhotoIdentify {
   configured: boolean;
   message: string;
   candidates: SilaStockCountPhotoCandidate[];
+  preferBarcodeFallback?: boolean;
 }
 
-/** Asks for photo candidates. Does not select a material and does not change inventory. */
-export const identifyStockCountPhoto = async (stockCountId: string): Promise<SilaStockCountPhotoIdentify> => {
+/** SILA Material Recognition Engine. Does not select a material and does not change inventory. */
+export const identifyStockCountPhoto = async (
+  stockCountId: string,
+  options: { photo?: File | Blob | null; hintText?: string } = {},
+): Promise<SilaStockCountPhotoIdentify> => {
   try {
-    const response = await axiosInstance.post<SilaStockCountPhotoIdentify>(`${BASE}/stock-counts/${stockCountId}/identify-photo`);
-    return { ...response.data, candidates: list(response.data.candidates) };
+    const body = new FormData();
+    if (options.photo) body.append("photo", options.photo);
+    if (options.hintText?.trim()) body.append("hintText", options.hintText.trim());
+    const response = await axiosInstance.post<SilaStockCountPhotoIdentify>(
+      `${BASE}/stock-counts/${stockCountId}/identify-photo`,
+      body,
+      { headers: { "Content-Type": "multipart/form-data" } },
+    );
+    return {
+      ...response.data,
+      candidates: list(response.data.candidates),
+      preferBarcodeFallback: Boolean(response.data.preferBarcodeFallback),
+    };
   } catch (error: unknown) {
     throw new Error(readError(error, "Photo identification is not available. Search the material."));
   }
@@ -389,6 +420,22 @@ export const cancelStockCount = async (stockCountId: string): Promise<void> => {
     await axiosInstance.post(`${BASE}/stock-counts/${stockCountId}/cancel`);
   } catch (error: unknown) {
     throw new Error(readError(error, "Could not cancel the stock count."));
+  }
+};
+
+/** Reverse a posted stock count (opposite stock + ERP queue). Returns the reverse adjustment id. */
+export const reverseStockCount = async (
+  stockCountId: string,
+  payload?: { reason?: string | null },
+): Promise<string> => {
+  try {
+    const response = await axiosInstance.post<SuccessResponse>(
+      `${BASE}/stock-counts/${stockCountId}/reverse`,
+      payload ?? {},
+    );
+    return response.data.id;
+  } catch (error: unknown) {
+    throw new Error(readError(error, "Could not reverse the stock count."));
   }
 };
 

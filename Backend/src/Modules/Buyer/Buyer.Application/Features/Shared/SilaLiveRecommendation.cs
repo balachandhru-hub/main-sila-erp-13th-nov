@@ -37,7 +37,8 @@ namespace Buyer.Application.Features.Shared
                     LocationType = chosen.LocationType,
                     PropertyId = chosen.PropertyId,
                     TransferEnabled = chosen.TransferEnabled,
-                    IsMine = true
+                    IsMine = true,
+                    PropertyCode = result.Locations.FirstOrDefault(x => x.LocationId == chosen.Id)?.PropertyCode
                 };
             }
 
@@ -54,18 +55,22 @@ namespace Buyer.Application.Features.Shared
 
             foreach (SilaLiveInventoryLocationDto row in result.Locations)
             {
+                // Any accessible store/outlet with stock can feed the destination (same plant = 311, plant-to-plant = 301).
                 bool candidate = row.LocationId != current.LocationId
-                    && row.PropertyId == current.PropertyId
                     && row.LocationType != Common.SILA_LOCATION_VENUE
                     && byId.ContainsKey(row.LocationId);
                 row.TransferableQty = candidate ? SilaStockLevels.Transferable(byId[row.LocationId], row.AvailableQty, row.SafetyStock ?? 0) : 0;
             }
 
+            // Prefer same-plant sources; plant-to-plant (301) remains available for New Transfer + approval.
             SilaLiveInventoryLocationDto? best = result.Locations
                 .Where(x => x.TransferableQty > 0)
-                .OrderByDescending(x => x.TransferableQty)
+                .OrderByDescending(x => SamePlant(x.PropertyCode, current.PropertyCode))
+                .ThenByDescending(x => x.TransferableQty)
                 .FirstOrDefault();
-            decimal internalStock = result.Locations.Sum(x => x.TransferableQty);
+            decimal samePlantStock = result.Locations
+                .Where(x => SamePlant(x.PropertyCode, current.PropertyCode))
+                .Sum(x => x.TransferableQty);
             bool canReceive = current.TransferEnabled && current.LocationType != Common.SILA_LOCATION_VENUE;
             if (best != null)
             {
@@ -78,13 +83,14 @@ namespace Buyer.Application.Features.Shared
             if (best != null && canReceive)
             {
                 actions.Add(ACTION_REQUEST_TRANSFER);
-                if (quickTransferEnabled)
+                // Quick ITO is same-plant store-to-store only; plant-to-plant needs New Transfer approval (301).
+                if (quickTransferEnabled && SamePlant(best.PropertyCode, current.PropertyCode))
                 {
                     actions.Add(ACTION_QUICK_TRANSFER);
                 }
             }
 
-            bool propertyCovers = canReceive && internalStock > 0 && internalStock >= result.Shortage;
+            bool propertyCovers = canReceive && samePlantStock > 0 && samePlantStock >= result.Shortage;
             if (!propertyCovers)
             {
                 actions.Add(ACTION_CREATE_PR);
@@ -111,6 +117,13 @@ namespace Buyer.Application.Features.Shared
                 result.Recommendation = ACTION_CREATE_PR;
                 result.RecommendationReason = "No location of the property can cover the shortage. Raise a purchase request.";
             }
+        }
+
+        private static bool SamePlant(string? leftPlant, string? rightPlant)
+        {
+            return !string.IsNullOrWhiteSpace(leftPlant)
+                && !string.IsNullOrWhiteSpace(rightPlant)
+                && string.Equals(leftPlant.Trim(), rightPlant.Trim(), StringComparison.OrdinalIgnoreCase);
         }
     }
 }

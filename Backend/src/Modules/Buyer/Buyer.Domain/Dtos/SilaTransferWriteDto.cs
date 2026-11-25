@@ -17,6 +17,12 @@ namespace Buyer.Domain.Dtos
         /// REGULAR) when it is not stocked there yet.
         /// </summary>
         public bool AddToLocation { get; set; }
+
+        /// <summary>
+        /// When true, reject create if source and destination SAP plants differ (311 Storage Location Transfer only).
+        /// </summary>
+        public bool RequireSamePlant { get; set; }
+
         public List<SilaTransferLineWriteDto> Items { get; set; } = new();
     }
 }

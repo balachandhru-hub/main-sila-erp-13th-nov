@@ -12,5 +12,10 @@ namespace Buyer.Domain.Dtos
         public string? PostedByName { get; set; }
         public DateTime PostedOn { get; set; }
         public List<SilaAdjustmentItemDto> Items { get; set; } = new();
+        /// <summary>Workflow / ERP tracker history for mobile and cloud detail.</summary>
+        public List<SilaTransferEventDto> Events { get; set; } = new();
+        public string? ErpStatus { get; set; }
+        public string? ErpReference { get; set; }
+        public Guid? ErpPostingId { get; set; }
     }
 }

@@ -7,6 +7,8 @@ interface DocumentTrackCardProps {
   track?: SilaDocumentTrack | null;
   /** Invoice of the current GRN/invoice screen, when known. */
   linkedInvoiceId?: string | null;
+  /** Open the track + history by default (PO detail after create). */
+  defaultExpanded?: boolean;
 }
 
 const nodeKey = (node: SilaDocumentTrackNode, index: number): string =>
@@ -15,9 +17,9 @@ const nodeKey = (node: SilaDocumentTrackNode, index: number): string =>
 const nodeId = (node: SilaDocumentTrackNode): string => `${node.kind}:${node.id ?? node.number ?? ''}`;
 
 /** PO → GRN → Invoice → Attachment → Payment → SOA on mobile detail screens. */
-const DocumentTrackCard: React.FC<DocumentTrackCardProps> = ({ track, linkedInvoiceId }) => {
+const DocumentTrackCard: React.FC<DocumentTrackCardProps> = ({ track, linkedInvoiceId, defaultExpanded = false }) => {
   const go = useGo();
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(defaultExpanded);
   const [attachmentsOpen, setAttachmentsOpen] = useState(false);
 
   if (!track || track.nodes.length === 0) return null;

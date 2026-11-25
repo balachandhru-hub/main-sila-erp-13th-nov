@@ -2,6 +2,7 @@
 -- Recipe: Cost Controller, then F&B Director.
 -- ITO: Outlet Manager, then Store Manager.
 -- Inventory (stock count): Cost Controller, then Finance Manager.
+-- Purchase order (Voice/text): sila.test.buyer.admin, then posts to SAP on approve.
 -- F&B Director and Finance Manager are new roles. Their sign-in secret matches the other sila.test users.
 
 DECLARE @actor UNIQUEIDENTIFIER = '5c4474fc-5eac-410b-bff4-c04f51195ff6';
@@ -76,7 +77,8 @@ FROM (VALUES
     ('RECIPE', 'Recipe approval'),
     ('ITO', 'Internal transfer approval'),
     ('INVENTORY', 'Inventory count approval'),
-    ('MATERIAL_PRICE', 'Material price approval')
+    ('MATERIAL_PRICE', 'Material price approval'),
+    ('PURCHASE_ORDER', 'Purchase order approval')
 ) v([key], description)
 WHERE NOT EXISTS (SELECT 1 FROM MasterDataDb.masterdata.metadata m WHERE m.type = 'APPROVAL_TYPE' AND m.[key] = v.[key] AND m.is_active = 1);
 
@@ -90,7 +92,8 @@ INSERT INTO @flows VALUES
     ('SILA-RECIPE', 'Recipe approval', 'RECIPE'),
     ('SILA-ITO', 'Internal transfer approval', 'ITO'),
     ('SILA-INVENTORY', 'Inventory count approval', 'INVENTORY'),
-    ('SILA-MATERIAL-PRICE', 'Material price approval', 'MATERIAL_PRICE');
+    ('SILA-MATERIAL-PRICE', 'Material price approval', 'MATERIAL_PRICE'),
+    ('SILA-PURCHASE-ORDER', 'Purchase order approval', 'PURCHASE_ORDER');
 
 INSERT INTO BuyerSystemDB.buyersystem.master_approval_flow
     (id, approval_code, approval_name, buyer_id, date_created, date_updated, created_by, updated_by, is_active, currency, total_amount, type, scope_kind)
@@ -113,7 +116,8 @@ INSERT INTO @levels VALUES
     ('SILA-INVENTORY', @costUser, 2),
     ('SILA-INVENTORY', @financeUser, 3),
     ('SILA-MATERIAL-PRICE', @adminUser, 1),
-    ('SILA-MATERIAL-PRICE', @costUser, 2);
+    ('SILA-MATERIAL-PRICE', @costUser, 2),
+    ('SILA-PURCHASE-ORDER', @adminUser, 1);
 
 INSERT INTO BuyerSystemDB.buyersystem.approval_flow_user_mapping
     (id, approval_flow_id, user_id, [order], date_created, date_updated, created_by, updated_by, is_active)

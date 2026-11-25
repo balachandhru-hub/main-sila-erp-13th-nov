@@ -8,6 +8,7 @@ using Buyer.Application.Features.Queries.GetSilaStockCountPhoto;
 using Buyer.Application.Features.Commands.CancelSilaStockCount;
 using Buyer.Application.Features.Commands.CountSilaStockCountItem;
 using Buyer.Application.Features.Commands.CreateSilaStockCount;
+using Buyer.Application.Features.Commands.ReverseSilaStockCount;
 using Buyer.Application.Features.Commands.RespondSilaEnquiry;
 using Buyer.Application.Features.Commands.ReviewSilaEnquiry;
 using Buyer.Application.Features.Commands.SubmitSilaStockCount;
@@ -20,6 +21,7 @@ using Buyer.Application.Features.Queries.IdentifySilaStockCountBarcode;
 using Buyer.Application.Features.Queries.IdentifySilaStockCountPhoto;
 using Buyer.Domain.Dtos;
 using MediatR;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using SharedKernel.Attributes;
 using SharedKernel.Controllers;
@@ -200,15 +202,35 @@ namespace Buyer.API.Controllers
         [ApiAuthorization(Name = "MANAGE_SILA_STOCK_COUNT")]
         [SwaggerOperation("IdentifySilaStockCountPhoto")]
         [SwaggerResponse(200, type: typeof(SilaStockCountPhotoIdentifyDto))]
-        public async Task<IActionResult> IdentifyPhoto([FromRoute] Guid stockCountId)
+        [RequestSizeLimit(8_000_000)]
+        public async Task<IActionResult> IdentifyPhoto(
+            [FromRoute] Guid stockCountId,
+            [FromForm] IFormFile? photo,
+            [FromForm] string? hintText)
         {
             _logger.LogDebug($"Identifying material from a photo. StockCountId: {stockCountId}");
+            byte[]? bytes = null;
+            string? contentType = null;
+            string? fileName = null;
+            if (photo != null && photo.Length > 0)
+            {
+                await using MemoryStream stream = new MemoryStream();
+                await photo.CopyToAsync(stream);
+                bytes = stream.ToArray();
+                contentType = photo.ContentType;
+                fileName = photo.FileName;
+            }
+
             SilaStockCountPhotoIdentifyDto result = await _mediator.Send(new IdentifySilaStockCountPhotoQuery
             {
                 OrganizationId = GetOrganizationId(),
                 UserId = GetUserId(),
                 RoleId = GetRoleId(),
-                StockCountId = stockCountId
+                StockCountId = stockCountId,
+                HintText = hintText,
+                ImageBytes = bytes,
+                ContentType = contentType,
+                FileName = fileName
             });
             _logger.LogDebug($"Photo identification finished. StockCountId: {stockCountId}, Candidates: {result.Candidates.Count}");
             return Ok(result);
@@ -287,6 +309,32 @@ namespace Buyer.API.Controllers
                 StatusCode = 200,
                 Message = "Success",
                 Description = "Stock count cancelled."
+            });
+        }
+
+        [HttpPost]
+        [Route("api/v1/buyer/sila/stock-counts/{stockCountId:guid}/reverse")]
+        [ApiAuthorization(Name = "APPROVE_SILA_STOCK_COUNT")]
+        [SwaggerOperation("ReverseSilaStockCount")]
+        [SwaggerResponse(200, type: typeof(SuccessResponseDto))]
+        public async Task<IActionResult> Reverse([FromRoute] Guid stockCountId, [FromBody] SilaStockCountReverseDto? request)
+        {
+            _logger.LogDebug($"Reversing stock count. StockCountId: {stockCountId}");
+            Guid id = await _mediator.Send(new ReverseSilaStockCountCommand
+            {
+                OrganizationId = GetOrganizationId(),
+                UserId = GetUserId(),
+                RoleId = GetRoleId(),
+                StockCountId = stockCountId,
+                Reason = request?.Reason
+            });
+            _logger.LogDebug($"Stock count reverse posted. AdjustmentId: {id}");
+            return Ok(new SuccessResponseDto
+            {
+                Id = id.ToString(),
+                StatusCode = 200,
+                Message = "Success",
+                Description = "Stock count reverse posted."
             });
         }
 

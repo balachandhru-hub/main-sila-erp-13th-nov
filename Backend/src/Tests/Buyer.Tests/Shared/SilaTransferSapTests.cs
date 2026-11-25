@@ -78,7 +78,7 @@ namespace Buyer.Tests.Shared
             Assert.Equal("04", root.GetProperty("GoodsMovementCode").GetString());
             Assert.Equal("2026-10-16T00:00:00", root.GetProperty("PostingDate").GetString());
             Assert.Equal("2026-10-16T00:00:00", root.GetProperty("DocumentDate").GetString());
-            JsonElement lines = root.GetProperty("to_MaterialDocumentItem");
+            JsonElement lines = root.GetProperty("to_MaterialDocumentItem").GetProperty("results");
             Assert.Equal(2, lines.GetArrayLength());
             Assert.Equal("MAT-A", lines[0].GetProperty("Material").GetString());
             Assert.Equal("PL-9", lines[0].GetProperty("Plant").GetString());
@@ -94,6 +94,8 @@ namespace Buyer.Tests.Shared
             Assert.Equal(SilaTransferSap.API_CONFIG_NAME, "FIVE S4 - Transfer Stock");
             Assert.Equal("311", SilaTransferSap.GOODS_MOVEMENT_TYPE);
             Assert.DoesNotContain("-", lines[0].GetProperty("QuantityInEntryUnit").GetString());
+            Assert.Equal("ITO-1", root.GetProperty("MaterialDocumentHeaderText").GetString());
+            Assert.Equal("ITO-1", root.GetProperty("ReferenceDocument").GetString());
         }
 
         [Fact]
@@ -122,8 +124,8 @@ namespace Buyer.Tests.Shared
             Assert.Null(problem);
             Assert.NotNull(body);
             using JsonDocument json = JsonDocument.Parse(body);
-            Assert.Equal("0.400", json.RootElement.GetProperty("to_MaterialDocumentItem")[0].GetProperty("QuantityInEntryUnit").GetString());
-            Assert.Equal("KG", json.RootElement.GetProperty("to_MaterialDocumentItem")[0].GetProperty("EntryUnit").GetString());
+            Assert.Equal("0.400", json.RootElement.GetProperty("to_MaterialDocumentItem").GetProperty("results")[0].GetProperty("QuantityInEntryUnit").GetString());
+            Assert.Equal("KG", json.RootElement.GetProperty("to_MaterialDocumentItem").GetProperty("results")[0].GetProperty("EntryUnit").GetString());
         }
 
         [Fact]
@@ -147,7 +149,7 @@ namespace Buyer.Tests.Shared
             Assert.NotNull(plantBody);
             using (JsonDocument plantJson = JsonDocument.Parse(plantBody))
             {
-                JsonElement plantLine = plantJson.RootElement.GetProperty("to_MaterialDocumentItem")[0];
+                JsonElement plantLine = plantJson.RootElement.GetProperty("to_MaterialDocumentItem").GetProperty("results")[0];
                 Assert.Equal("04", plantJson.RootElement.GetProperty("GoodsMovementCode").GetString());
                 Assert.Equal("301", plantLine.GetProperty("GoodsMovementType").GetString());
                 Assert.Equal("PL-9", plantLine.GetProperty("Plant").GetString());

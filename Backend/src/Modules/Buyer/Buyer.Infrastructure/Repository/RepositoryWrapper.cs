@@ -16,6 +16,7 @@ namespace Buyer.Infrastructure.Repository
         private readonly string _dbConnectionString;
         private IRecipeFamilyRepository? _recipeFamily;
         private IRecipeCategoryRepository? _recipeCategory;
+        private IGoodsIssueCostCenterRepository? _goodsIssueCostCenter;
         private ISilaApprovalStepRepository? _silaApprovalStep;
         private IPosSourceRepository? _posSource;
         private IPosOutletMappingRepository? _posOutletMapping;
@@ -70,6 +71,16 @@ namespace Buyer.Infrastructure.Repository
         private IMenuPosMappingRepository? _menuPosMapping;
         private IPmsDemandSnapshotRepository? _pmsDemandSnapshot;
         private IMenuEngineeringSettingsRepository? _menuEngineeringSettings;
+        private IRecipeLegacyBatchRepository? _recipeLegacyBatch;
+        private IRecipeLegacyRecipeRepository? _recipeLegacyRecipe;
+        private IRecipeLegacyMaterialMapRepository? _recipeLegacyMaterialMap;
+        private IRecipeLegacyImageRepository? _recipeLegacyImage;
+        private ISilaUserPurchasingProfileRepository? _silaUserPurchasingProfile;
+        private ISilaUserPoFlexConfigRepository? _silaUserPoFlexConfig;
+        private ISilaUserPoFlexParamRepository? _silaUserPoFlexParam;
+        private ISilaUserPoFlexConditionRepository? _silaUserPoFlexCondition;
+        private ISilaVoicePoSessionRepository? _silaVoicePoSession;
+        private ISilaVoicePoTurnRepository? _silaVoicePoTurn;
         private IBuyerBusinessProfileRepository _buyerBusinessProfileRepository;
         private IBuyerCategoryRepository _buyerCategoryRepository;
         private IAssetRepository _assetRepository;
@@ -1229,6 +1240,15 @@ namespace Buyer.Infrastructure.Repository
             }
         }
 
+        public IGoodsIssueCostCenterRepository GoodsIssueCostCenter
+        {
+            get
+            {
+                _goodsIssueCostCenter ??= new GoodsIssueCostCenterRepository(_context);
+                return _goodsIssueCostCenter;
+            }
+        }
+
         public ISilaApprovalStepRepository SilaApprovalStep
         {
             get
@@ -1424,6 +1444,96 @@ namespace Buyer.Infrastructure.Repository
             {
                 _menuEngineeringSettings ??= new MenuEngineeringSettingsRepository(_context);
                 return _menuEngineeringSettings;
+            }
+        }
+
+        public IRecipeLegacyBatchRepository RecipeLegacyBatch
+        {
+            get
+            {
+                _recipeLegacyBatch ??= new RecipeLegacyBatchRepository(_context);
+                return _recipeLegacyBatch;
+            }
+        }
+
+        public IRecipeLegacyRecipeRepository RecipeLegacyRecipe
+        {
+            get
+            {
+                _recipeLegacyRecipe ??= new RecipeLegacyRecipeRepository(_context);
+                return _recipeLegacyRecipe;
+            }
+        }
+
+        public IRecipeLegacyMaterialMapRepository RecipeLegacyMaterialMap
+        {
+            get
+            {
+                _recipeLegacyMaterialMap ??= new RecipeLegacyMaterialMapRepository(_context);
+                return _recipeLegacyMaterialMap;
+            }
+        }
+
+        public IRecipeLegacyImageRepository RecipeLegacyImage
+        {
+            get
+            {
+                _recipeLegacyImage ??= new RecipeLegacyImageRepository(_context);
+                return _recipeLegacyImage;
+            }
+        }
+
+        public ISilaUserPurchasingProfileRepository SilaUserPurchasingProfile
+        {
+            get
+            {
+                _silaUserPurchasingProfile ??= new SilaUserPurchasingProfileRepository(_context);
+                return _silaUserPurchasingProfile;
+            }
+        }
+
+        public ISilaUserPoFlexConfigRepository SilaUserPoFlexConfig
+        {
+            get
+            {
+                _silaUserPoFlexConfig ??= new SilaUserPoFlexConfigRepository(_context);
+                return _silaUserPoFlexConfig;
+            }
+        }
+
+        public ISilaUserPoFlexParamRepository SilaUserPoFlexParam
+        {
+            get
+            {
+                _silaUserPoFlexParam ??= new SilaUserPoFlexParamRepository(_context);
+                return _silaUserPoFlexParam;
+            }
+        }
+
+        public ISilaUserPoFlexConditionRepository SilaUserPoFlexCondition
+        {
+            get
+            {
+                _silaUserPoFlexCondition ??= new SilaUserPoFlexConditionRepository(_context);
+                return _silaUserPoFlexCondition;
+            }
+        }
+
+        public ISilaVoicePoSessionRepository SilaVoicePoSession
+        {
+            get
+            {
+                _silaVoicePoSession ??= new SilaVoicePoSessionRepository(_context);
+                return _silaVoicePoSession;
+            }
+        }
+
+        public ISilaVoicePoTurnRepository SilaVoicePoTurn
+        {
+            get
+            {
+                _silaVoicePoTurn ??= new SilaVoicePoTurnRepository(_context);
+                return _silaVoicePoTurn;
             }
         }
 

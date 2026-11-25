@@ -22,6 +22,8 @@ namespace Buyer.Application.Features.Shared
         public const string POS_BATCH = "PS";
         public const string GOODS_RECEIPT = "GR";
         public const string RECIPE = "RI";
+        /// <summary>Legacy recipe migration batch numbers (RL########).</summary>
+        public const string RECIPE_LEGACY_BATCH = "RL";
         public const string PRICE_CHANGE = "MP";
         public const string PURCHASE_REQUEST = "PR";
         public const string PHYSICAL_INVENTORY = "PI";
@@ -30,6 +32,7 @@ namespace Buyer.Application.Features.Shared
         public const string CREDIT_MEMO = "CM";
         public const string MENU_ITEM = "ME";
         public const string MENU_PLAN = "MN";
+        public const string VOICE_PO = "VPO";
 
         private const int SEED_CANDIDATES = 50;
 
@@ -108,12 +111,14 @@ namespace Buyer.Application.Features.Shared
                 POS_BATCH => repository.PosSalesBatch.FindByCondition(x => x.BuyerId == buyerId).Select(x => x.BatchNumber),
                 GOODS_RECEIPT => repository.GoodsReceipt.FindByCondition(x => x.BuyerId == buyerId).Select(x => x.GrnNumber),
                 RECIPE => repository.Recipe.FindByCondition(x => x.BuyerId == buyerId).Select(x => x.RecipeCode),
+                RECIPE_LEGACY_BATCH => repository.RecipeLegacyBatch.FindByCondition(x => x.BuyerId == buyerId).Select(x => x.BatchNumber),
                 PRICE_CHANGE => repository.MaterialPriceChange.FindByCondition(x => x.BuyerId == buyerId).Select(x => x.RequestNumber),
                 PURCHASE_REQUEST => repository.InternalPurchaseRequest.FindByCondition(x => x.BuyerId == buyerId).Select(x => x.RequestNumber),
                 PHYSICAL_INVENTORY => repository.PhysicalInventoryRequest.FindByCondition(x => x.BuyerId == buyerId).Select(x => x.RequestNumber),
                 SUBSTITUTION => repository.RecipeSubstitutionProposal.FindByCondition(x => x.BuyerId == buyerId).Select(x => x.ProposalNumber),
                 PURCHASE_ORDER => repository.PurchaseOrder.FindByCondition(x => x.BuyerId == buyerId && x.ContractId != null).Select(x => x.PoNumber),
                 CREDIT_MEMO => repository.CreditMemo.FindByCondition(x => x.BuyerId == buyerId && x.CreditMemoNumber != null).Select(x => x.CreditMemoNumber!),
+                VOICE_PO => repository.SilaVoicePoSession.FindByCondition(x => x.BuyerId == buyerId).Select(x => x.SessionNumber),
                 _ => throw new ArgumentOutOfRangeException(nameof(prefix), prefix, "Unknown SILA document number prefix.")
             };
 

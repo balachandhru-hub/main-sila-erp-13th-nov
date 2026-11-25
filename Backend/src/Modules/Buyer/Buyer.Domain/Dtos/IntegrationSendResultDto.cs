@@ -16,6 +16,8 @@ namespace Buyer.Domain.Dtos
         /// can no longer be read from the part that is kept.
         /// </summary>
         public string? DocumentNumber { get; set; }
+        /// <summary>OData ETag from the response (used for PATCH If-Match on physical inventory count).</summary>
+        public string? ETag { get; set; }
         public string? ErrorCode { get; set; }
         public string? ErrorMessage { get; set; }
         public long DurationMs { get; set; }

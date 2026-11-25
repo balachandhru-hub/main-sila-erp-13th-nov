@@ -169,7 +169,7 @@ namespace Buyer.Application.Features.Queries.ValidateSilaGoodsReceipt
         {
             if (request.Request.LocationId == Guid.Empty)
             {
-                result.Errors.Add("Select the store that receives the goods.");
+                result.Errors.Add("Select the location that receives the goods.");
                 return;
             }
 
@@ -178,17 +178,11 @@ namespace Buyer.Application.Features.Queries.ValidateSilaGoodsReceipt
                 .FirstOrDefaultAsync(cancellationToken);
             if (location == null)
             {
-                result.Errors.Add("Select a store of this organization.");
+                result.Errors.Add("Select a location of this organization.");
                 return;
             }
 
-            if (location.LocationType != Common.SILA_LOCATION_STORE)
-            {
-                result.Errors.Add("Goods are received at a store location, not at an outlet.");
-                return;
-            }
-
-            // Access is enforced like the post itself (403 for a store the user does not work at).
+            // Do not validate store vs outlet / storage location — post GRN at the chosen location.
             await SilaAccess.EnsureLocationAccessAsync(_repository, _logger, buyerId, request.UserId, request.RoleId, location.Id, cancellationToken);
         }
 

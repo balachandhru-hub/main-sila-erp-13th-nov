@@ -18,6 +18,12 @@ namespace Buyer.Application.Features.Commands.CreatePurchaseOrder
 
         /// <summary>What a weekly bucket line holds beyond the request line, in the same order as the request lines.</summary>
         public List<CreatePurchaseOrderLineExtra>? LineExtras { get; set; }
+
+        /// <summary>
+        /// When true, save the local PO as PENDING_APPROVAL and do not call the buyer ERP yet.
+        /// Used by Voice / text PO after mandatory-field validation — ERP runs after approval.
+        /// </summary>
+        public bool DeferErpUntilApproved { get; set; }
     }
 
     public class CreatePurchaseOrderLineExtra

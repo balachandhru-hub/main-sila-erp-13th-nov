@@ -7,13 +7,14 @@ import {
   disputeTransfer,
   receiveTransfer,
   rejectTransfer,
+  reverseTransfer,
   type SilaTransferDetail,
 } from '../../../../remote-buyer/src/api/silaMe/silaMovementsApi';
 import QtyInput, { parseQty } from '../../components/QtyInput';
 import { Notice, type NoticeMessage } from '../../components/StateViews';
 import { errorText } from '../../useLoad';
 
-type ActionKey = 'APPROVE' | 'REJECT' | 'DISPATCH' | 'RECEIVE' | 'CANCEL' | 'CONFIRM_HANDOVER' | 'DISPUTE';
+type ActionKey = 'APPROVE' | 'REJECT' | 'DISPATCH' | 'RECEIVE' | 'CANCEL' | 'CONFIRM_HANDOVER' | 'DISPUTE' | 'REVERSE';
 
 const LABELS: Record<ActionKey, string> = {
   APPROVE: 'Approve',
@@ -23,13 +24,14 @@ const LABELS: Record<ActionKey, string> = {
   CANCEL: 'Cancel transfer',
   CONFIRM_HANDOVER: 'Confirm collected',
   DISPUTE: 'Dispute collected',
+  REVERSE: 'Reverse Transfer',
 };
 
-const ORDER: ActionKey[] = ['APPROVE', 'DISPATCH', 'RECEIVE', 'CONFIRM_HANDOVER', 'REJECT', 'DISPUTE', 'CANCEL'];
+const ORDER: ActionKey[] = ['APPROVE', 'DISPATCH', 'RECEIVE', 'CONFIRM_HANDOVER', 'REVERSE', 'REJECT', 'DISPUTE', 'CANCEL'];
 
 /** Actions that undo or refuse: red, and they need a reason. */
-const NEGATIVE: ActionKey[] = ['REJECT', 'CANCEL', 'DISPUTE'];
-const NEEDS_REASON: ActionKey[] = ['REJECT', 'DISPUTE'];
+const NEGATIVE: ActionKey[] = ['REJECT', 'CANCEL', 'DISPUTE', 'REVERSE'];
+const NEEDS_REASON: ActionKey[] = ['REJECT', 'DISPUTE', 'REVERSE'];
 
 interface TransferActionsProps {
   transfer: SilaTransferDetail;
@@ -53,7 +55,10 @@ const TransferActions: React.FC<TransferActionsProps> = ({ transfer, onDone }) =
     setNotice(null);
     const defaults: Record<string, string> = {};
     transfer.items.forEach((item) => {
-      defaults[item.id] = String(action === 'RECEIVE' ? item.dispatchedQty : item.requestedQty);
+      const reverseQty = item.remainingReversibleQty ?? Math.max(0, (item.receivedQty || item.dispatchedQty) - (item.reversedQty ?? 0));
+      defaults[item.id] = String(
+        action === 'RECEIVE' ? item.dispatchedQty : action === 'REVERSE' ? reverseQty : item.requestedQty,
+      );
     });
     setQty(defaults);
   };
@@ -61,22 +66,34 @@ const TransferActions: React.FC<TransferActionsProps> = ({ transfer, onDone }) =
   const lineLimit = (itemId: string): number => {
     const item = transfer.items.find((line) => line.id === itemId);
     if (!item) return 0;
-    return active === 'RECEIVE' ? item.dispatchedQty : item.requestedQty;
+    if (active === 'RECEIVE') return item.dispatchedQty;
+    if (active === 'REVERSE') {
+      return item.remainingReversibleQty ?? Math.max(0, (item.receivedQty || item.dispatchedQty) - (item.reversedQty ?? 0));
+    }
+    return item.requestedQty;
   };
 
   const confirm = async () => {
     if (!active) return;
     const text = comment.trim() || null;
     const lines = transfer.items.map((item) => ({ itemId: item.id, quantity: parseQty(qty[item.id] ?? '') }));
-    if (active === 'APPROVE' || active === 'RECEIVE') {
+    if (active === 'APPROVE' || active === 'RECEIVE' || active === 'REVERSE') {
       const invalid = lines.find((line) => line.quantity === null || line.quantity > lineLimit(line.itemId));
       if (invalid) {
-        setNotice({ tone: 'error', text: `Each quantity must be between 0 and the ${active === 'RECEIVE' ? 'dispatched' : 'requested'} quantity.` });
+        setNotice({ tone: 'error', text: `Each quantity must be between 0 and the allowed maximum.` });
         return;
       }
     }
     if (NEEDS_REASON.includes(active) && !text) {
-      setNotice({ tone: 'error', text: active === 'DISPUTE' ? 'Explain why the stock was not handed over.' : 'Enter the reason for rejecting.' });
+      setNotice({
+        tone: 'error',
+        text:
+          active === 'DISPUTE'
+            ? 'Explain why the stock was not handed over.'
+            : active === 'REVERSE'
+              ? 'Enter the reversal reason.'
+              : 'Enter the reason for rejecting.',
+      });
       return;
     }
     const items = lines.map((line) => ({ itemId: line.itemId, quantity: line.quantity ?? 0 }));
@@ -90,6 +107,12 @@ const TransferActions: React.FC<TransferActionsProps> = ({ transfer, onDone }) =
       if (active === 'CANCEL') await cancelTransfer(transfer.id, text);
       if (active === 'CONFIRM_HANDOVER') await confirmTransferHandover(transfer.id, text);
       if (active === 'DISPUTE') await disputeTransfer(transfer.id, text ?? '');
+      if (active === 'REVERSE') {
+        await reverseTransfer(transfer.id, {
+          reason: text ?? '',
+          items: items.filter((line) => line.quantity > 0),
+        });
+      }
       setNotice({ tone: 'success', text: `${LABELS[active]}: done.` });
       setActive(null);
       onDone();
@@ -127,7 +150,7 @@ const TransferActions: React.FC<TransferActionsProps> = ({ transfer, onDone }) =
           {active === 'DISPUTE' && (
             <p className="sm-meta">No stock moves; the transfer becomes a discrepancy for the managers to resolve.</p>
           )}
-          {(active === 'APPROVE' || active === 'RECEIVE') &&
+          {(active === 'APPROVE' || active === 'RECEIVE' || active === 'REVERSE') &&
             transfer.items.map((item) => (
               <QtyInput
                 key={item.id}

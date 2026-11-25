@@ -1,111 +1,218 @@
-import React from 'react';
-import { getInventoryHome } from '../../../../remote-buyer/src/api/silaMe/silaInventoryApi';
+import React, { useState } from 'react';
+import { getInventoryHome, getPendingOutletRequirements } from '../../../../remote-buyer/src/api/silaMe/silaInventoryApi';
+import BarcodeScanner from '../../components/BarcodeScanner';
 import ScreenHeader from '../../components/ScreenHeader';
 import { Empty, ErrorNotice, OfflineBanner } from '../../components/StateViews';
 import { useAccess } from '../../access';
 import { useMyLocation } from '../../location';
 import { useGo } from '../../navigation';
 import { useLoad } from '../../useLoad';
+import './liveInventoryMobile.css';
 
-interface MenuEntry {
+interface QuickAction {
   label: string;
   detail: string;
   to: string;
-  /** Hidden when the role cannot use it. */
   visible?: (can: ReturnType<typeof useAccess>['can']) => boolean;
 }
 
-const ENTRIES: MenuEntry[] = [
-  { label: 'Scan invoice', detail: 'Photograph the supplier invoice and read it', to: 'receive/scan', visible: (can) => can.processInvoice },
-  { label: 'Receive goods', detail: 'Select the supplier purchase order and post the receipt', to: 'receive/pos?mode=receive', visible: (can) => can.postGrn },
-  { label: 'Purchase orders', detail: 'Open POs you can receive against', to: 'receive/pos', visible: (can) => can.viewReceiving },
-  { label: 'Suppliers', detail: 'Supplier master: code, name, tax number', to: 'more/suppliers' },
-  { label: 'Live Inventory', detail: 'Search stock, see it per location and decide what to do', to: 'inventory/stock' },
-  { label: 'Quick Transfer', detail: 'Send stock now; the receiver confirms', to: 'inventory/transfers/new?mode=quick' },
-  { label: 'Record Quick Transfer', detail: 'Stock you already collected; the source confirms the handover', to: 'inventory/transfers/new?mode=quick&collected=1' },
-  { label: 'Transfers', detail: 'My requests, approvals, in transit, completed', to: 'inventory/transfers' },
-  { label: 'Goods Issue', detail: 'Issue store stock to an outlet', to: 'inventory/goods-issues', visible: (can) => can.postGoodsIssue },
-  { label: 'Waste and Adjustments', detail: 'Waste, damage, spoilage, opening stock', to: 'inventory/adjustments', visible: (can) => can.postAdjustment },
-  { label: 'Stock Count', detail: 'Start a count for a location, or count and review an open one', to: 'inventory/counts', visible: (can) => can.manageCount || can.approveCount || can.initiateCount },
-  { label: 'Recipes', detail: 'Menu recipes and whether the ingredients are in stock', to: 'recipes', visible: (can) => can.manageRecipe || can.approveRecipe },
-  { label: 'Purchase Requests', detail: 'My requests and their weekly bucket', to: 'inventory/purchase-requests', visible: (can) => can.requestPurchase },
-  { label: 'Alerts / Actions', detail: 'Stockout, discrepancy and manager-review tasks', to: 'tasks/alerts' },
+const QUICK: QuickAction[] = [
+  { label: 'Scan material', detail: 'Barcode / photo → action', to: 'inventory/scan' },
+  { label: 'Stock Count', detail: 'Scan, photo, or search', to: 'inventory/counts', visible: (can) => can.manageCount || can.approveCount || can.initiateCount },
+  { label: 'Quick Transfer', detail: 'Scan · check stock · move', to: 'inventory/transfers/new?mode=quick', visible: (can) => can.manageTransfer },
+  { label: 'ITO', detail: 'Open transfer orders', to: 'inventory/transfers', visible: (can) => can.manageTransfer || can.approveTransfer },
+  { label: 'Goods Issue', detail: 'Issue to cost center', to: 'inventory/goods-issues', visible: (can) => can.postGoodsIssue },
+  { label: 'Find Stock', detail: 'Search materials', to: 'inventory/stock' },
+  { label: 'Request Stock', detail: 'Purchase request', to: 'inventory/purchase-requests', visible: (can) => can.requestPurchase },
+  { label: 'Create PO by Voice', detail: 'Speak or type a PO draft', to: 'purchasing/voice-po', visible: (can) => can.requestPurchase },
+  { label: 'Adjustments', detail: 'Waste & corrections', to: 'inventory/adjustments', visible: (can) => can.postAdjustment },
+  { label: 'Receive', detail: 'Incoming transfers & GRN', to: 'receive/pos?mode=receive', visible: (can) => can.postGrn },
 ];
 
+/**
+ * Premium Mobile Live Inventory hub — reuses getInventoryHome KPIs and existing routes only.
+ * Camera scan opens Find Stock with the decoded barcode. Cloud Live Inventory GUI is unchanged.
+ */
 const InventoryScreen: React.FC = () => {
   const go = useGo();
   const { can } = useAccess();
-  const { location, loading } = useMyLocation();
+  const { location, locations, loading, reload: reloadLocation, setLocationId } = useMyLocation();
+  const [query, setQuery] = useState('');
+  const [floorMode, setFloorMode] = useState(false);
+  const [scannerOpen, setScannerOpen] = useState(false);
   const home = useLoad(() => getInventoryHome(location?.id), location ? `inv-home-${location.id}` : null);
+  const pending = useLoad(
+    () => getPendingOutletRequirements({ sourceLocationId: location?.id, countOnly: true }),
+    location ? `inv-pending-${location.id}` : null,
+  );
   const value = (count: number | undefined): string => (home.loading ? '…' : count === undefined ? '—' : String(count));
-  const summary: { label: string; value: string; to: string }[] = [
-    { label: 'Low Stock', value: value(home.data?.lowStockItems), to: 'tasks/alerts' },
-    { label: 'Incoming', value: value(home.data?.inTransitToReceive), to: 'inventory/transfers?tab=in-transit' },
-    { label: 'Open Counts', value: value(home.data?.openStockCounts), to: 'inventory/counts' },
-  ];
-  const tasks: { label: string; value: string; to: string }[] = [
-    { label: 'Approval', value: value(home.data?.pendingTransferApprovals), to: 'inventory/transfers?tab=to-approve' },
-    { label: 'Enquiries', value: value(home.data?.openEnquiries), to: 'tasks' },
-    { label: 'Alerts', value: value(home.data?.openAlerts), to: 'tasks/alerts' },
-  ];
+
+  const openSearch = (term?: string) => {
+    const text = (term ?? query).trim();
+    go(text.length >= 1 ? `inventory/stock?q=${encodeURIComponent(text)}` : 'inventory/stock');
+  };
+
+  const refresh = () => {
+    home.reload();
+    pending.reload();
+    reloadLocation();
+  };
 
   return (
     <>
-      <ScreenHeader
-        title="Inventory"
-        eyebrow="Store stock"
-        intro="Search or scan a material, then move stock from nearby locations. Company code, plant and GL come from the Location Master."
-      />
-      <div className="sm-screen">
+      <ScreenHeader title="Live Inventory" eyebrow="SILA Store" />
+      <div className={`sm-screen liv-m liv-m--premium${floorMode ? ' liv-m--floor' : ''}`} data-testid="mobile-live-inventory">
         <OfflineBanner />
-        <section className="sm-section" aria-labelledby="sm-my-location">
-          <h2 id="sm-my-location">My location</h2>
-          {location ? (
-            <strong className="sm-title">
-              {location.locationName} <span className="sm-muted">· {location.propertyName}</span>
-            </strong>
-          ) : (
-            !loading && <Empty text="No operational location assigned." />
-          )}
-          {home.error && <ErrorNotice message={home.error} onRetry={home.reload} />}
-          {location && (
-            <div className="sm-grid-3">
-              {summary.map((card) => (
-                <button key={card.label} type="button" className="sm-stat" onClick={() => go(card.to)}>
-                  <strong>{card.value}</strong>
-                  <span className="sm-muted">{card.label}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </section>
+
+        <header className="liv-m-header" aria-label="Location">
+          <div className="liv-m-header__copy">
+            {location ? (
+              <>
+                <p className="liv-m-kicker">{location.propertyName || 'Property'}</p>
+                <strong className="liv-m-outlet__name">{location.locationName}</strong>
+                <span className="sm-meta">
+                  {[location.plantCode, location.storageLocationCode || location.locationCode].filter(Boolean).join(' · ')}
+                </span>
+              </>
+            ) : (
+              !loading && <Empty text="No operational location assigned." />
+            )}
+          </div>
+          <div className="liv-m-header__actions">
+            {locations.length > 1 && (
+              <label className="liv-m-switcher">
+                <span className="sm-meta">Location</span>
+                <select
+                  className="sm-input"
+                  value={location?.id ?? ''}
+                  onChange={(event) => setLocationId(event.target.value)}
+                  aria-label="Switch outlet"
+                >
+                  {locations.map((row) => (
+                    <option key={row.id} value={row.id}>
+                      {row.locationName}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <button type="button" className="sm-btn sm-btn--secondary" onClick={refresh} aria-label="Refresh">
+              Refresh
+            </button>
+            <button type="button" className="sm-btn" onClick={() => go('tasks/alerts')} aria-label="Notifications">
+              Alerts
+            </button>
+          </div>
+        </header>
+
+        {home.error && <ErrorNotice message={home.error} onRetry={home.reload} />}
+
         {location && (
-          <section className="sm-section" aria-labelledby="sm-inv-tasks">
-            <h2 id="sm-inv-tasks">Tasks</h2>
-            <div className="sm-grid-3">
-              {tasks.map((card) => (
-                <button key={card.label} type="button" className="sm-stat" onClick={() => go(card.to)}>
-                  <strong>{card.value}</strong>
-                  <span className="sm-muted">{card.label}</span>
-                </button>
-              ))}
-            </div>
+          <section className="liv-m-kpis" aria-label="Inventory KPIs">
+            <button type="button" className="liv-m-kpi" onClick={() => go('inventory/stock')}>
+              <strong>{value(home.data?.stockItems)}</strong>
+              <span>Total materials</span>
+            </button>
+            <button type="button" className="liv-m-kpi liv-m-kpi--ok" onClick={() => go('inventory/stock')}>
+              <strong>{value(home.data?.stockItems)}</strong>
+              <span>Available stock</span>
+            </button>
+            <button type="button" className="liv-m-kpi liv-m-kpi--warn" onClick={() => go('inventory/stock?health=LOW')}>
+              <strong>{value(home.data?.lowStockItems)}</strong>
+              <span>Low stock</span>
+            </button>
+            <button type="button" className="liv-m-kpi liv-m-kpi--danger" onClick={() => go('inventory/stock?health=OUT')}>
+              <strong>{value(home.data?.lowStockItems)}</strong>
+              <span>Out / critical</span>
+            </button>
+            <button type="button" className="liv-m-kpi" onClick={() => go('inventory/transfers/new')}>
+              <strong>{pending.loading ? '…' : pending.value?.count ?? 0}</strong>
+              <span>Pending requirements</span>
+            </button>
+            <button type="button" className="liv-m-kpi" onClick={() => go('inventory/transfers?tab=in-transit')}>
+              <strong>{value((home.data?.inTransitToReceive ?? 0) + (home.data?.pendingTransferApprovals ?? 0))}</strong>
+              <span>Pending transfers</span>
+            </button>
+            <button type="button" className="liv-m-kpi" onClick={() => go('inventory/counts')}>
+              <strong>{value(home.data?.openStockCounts)}</strong>
+              <span>Stock count pending</span>
+            </button>
+            <button type="button" className="liv-m-kpi" onClick={() => go('tasks/alerts')}>
+              <strong>{value(home.data?.openAlerts ?? home.data?.pendingActions)}</strong>
+              <span>Inventory variances</span>
+            </button>
           </section>
         )}
-        <ul className="sm-list">
-          {ENTRIES.filter((entry) => !entry.visible || entry.visible(can)).map((entry) => (
-            <li key={entry.label}>
-              <button type="button" className="sm-list-btn" onClick={() => go(entry.to)}>
-                <span className="sm-row">
-                  <strong>{entry.label}</strong>
-                  <span aria-hidden="true">›</span>
-                </span>
-                <span className="sm-meta">{entry.detail}</span>
+
+        <section className="liv-m-search" aria-label="Material search">
+          <input
+            className="sm-input liv-m-search__input"
+            type="search"
+            enterKeyHint="search"
+            placeholder="Material, description, or barcode"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') openSearch();
+            }}
+          />
+          <button type="button" className="sm-btn sm-btn--secondary" onClick={() => setScannerOpen(true)} data-testid="liv-scan-barcode">
+            Scan
+          </button>
+          <button type="button" className="sm-btn sm-btn--primary liv-m-search__btn" onClick={() => openSearch()}>
+            Find
+          </button>
+        </section>
+
+        <section className="liv-m-quick" aria-labelledby="liv-m-quick-title">
+          <div className="liv-m-section-head">
+            <h2 id="liv-m-quick-title">Primary actions</h2>
+            <button type="button" className="sm-btn" onClick={() => setFloorMode((value) => !value)}>
+              {floorMode ? 'Standard' : 'Floor mode'}
+            </button>
+          </div>
+          <div className="liv-m-quick__grid">
+            {QUICK.filter((action) => !action.visible || action.visible(can)).map((action) => (
+              <button key={action.label} type="button" className="liv-m-action" onClick={() => go(action.to)}>
+                <strong>{action.label}</strong>
+                <span>{action.detail}</span>
               </button>
-            </li>
-          ))}
-        </ul>
+            ))}
+          </div>
+        </section>
+
+        <section className="sm-section liv-m-ops" aria-labelledby="liv-m-ops-title">
+          <h2 id="liv-m-ops-title">Operational</h2>
+          <ul className="sm-list">
+            {[
+              { label: 'Weekly bucket / wishlist requirements', to: 'inventory/transfers/new', show: can.manageTransfer },
+              { label: 'Pending ITO & transfers', to: 'inventory/transfers' },
+              { label: 'Stock count history', to: 'inventory/counts', show: can.manageCount || can.approveCount || can.initiateCount },
+              { label: 'Stock health', to: 'inventory/stock?health=LOW' },
+              { label: 'Transaction history', to: 'inventory/transactions' },
+              { label: 'Recommendations', to: 'inventory/recommendations', show: can.requestPurchase },
+            ]
+              .filter((entry) => entry.show !== false)
+              .map((entry) => (
+                <li key={entry.label}>
+                  <button type="button" className="sm-list-btn" onClick={() => go(entry.to)}>
+                    <span className="sm-row">
+                      <strong>{entry.label}</strong>
+                      <span aria-hidden="true">›</span>
+                    </span>
+                  </button>
+                </li>
+              ))}
+          </ul>
+        </section>
       </div>
+
+      <BarcodeScanner
+        open={scannerOpen}
+        title="Scan material barcode"
+        onClose={() => setScannerOpen(false)}
+        onDetected={(scanned) => openSearch(scanned.rawValue)}
+      />
     </>
   );
 };
