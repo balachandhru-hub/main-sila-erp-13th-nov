@@ -33,5 +33,10 @@ namespace Buyer.Domain.Dtos
         public string? SubmittedByName { get; set; }
         public string? ApprovedByName { get; set; }
         public List<SilaStockCountItemDto> Items { get; set; } = new List<SilaStockCountItemDto>();
+        /// <summary>Workflow / ERP tracker history for the count document.</summary>
+        public List<SilaTransferEventDto> Events { get; set; } = new();
+        public string? ErpStatus { get; set; }
+        public string? ErpReference { get; set; }
+        public Guid? ErpPostingId { get; set; }
     }
 }

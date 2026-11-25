@@ -1,25 +1,30 @@
 import React, { useState } from 'react';
 import { identifyBarcode, type SilaStockCountBarcode } from '../../../../remote-buyer/src/api/silaMe/silaStockCountApi';
+import BarcodeScanner from '../../components/BarcodeScanner';
 import { errorText } from '../../useLoad';
 
 interface BarcodeEntryProps {
   stockCountId: string;
   onFound: (found: SilaStockCountBarcode) => void;
+  /** When true, open the camera scanner immediately (e.g. from AI fallback). */
+  forceOpenScanner?: boolean;
+  onScannerClosed?: () => void;
 }
 
-/** Barcode or material code field; keyboard-wedge scanners type the code and press Enter. */
-const BarcodeEntry: React.FC<BarcodeEntryProps> = ({ stockCountId, onFound }) => {
-  const [code, setCode] = useState<string>('');
-  const [busy, setBusy] = useState<boolean>(false);
+/** Camera barcode scan + keyboard-wedge / typed entry. Resolves via Material Master only. */
+const BarcodeEntry: React.FC<BarcodeEntryProps> = ({ stockCountId, onFound, forceOpenScanner = false, onScannerClosed }) => {
+  const [code, setCode] = useState('');
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [scannerOpen, setScannerOpen] = useState(forceOpenScanner);
 
-  const submit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!code.trim()) return;
+  const resolve = async (raw: string) => {
+    const value = raw.trim();
+    if (!value) return;
     setBusy(true);
     setError(null);
     try {
-      const found = await identifyBarcode(stockCountId, code);
+      const found = await identifyBarcode(stockCountId, value);
       setCode('');
       onFound(found);
     } catch (caught: unknown) {
@@ -29,30 +34,57 @@ const BarcodeEntry: React.FC<BarcodeEntryProps> = ({ stockCountId, onFound }) =>
     }
   };
 
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    await resolve(code);
+  };
+
   return (
-    <form className="sm-section" onSubmit={submit}>
-      <div className="sm-field">
-        <label htmlFor="sm-barcode">Scan or type barcode</label>
-        <div className="sm-row">
-          <input
-            id="sm-barcode"
-            className="sm-input"
-            inputMode="text"
-            autoComplete="off"
-            value={code}
-            onChange={(event) => setCode(event.target.value)}
-          />
-          <button type="submit" className="sm-btn sm-btn--primary" disabled={busy || !code.trim()}>
-            {busy ? '…' : 'Find'}
-          </button>
+    <section className="sm-section" aria-label="Scan barcode" data-testid="count-barcode-entry">
+      <h2 className="sm-section__title">Scan Barcode</h2>
+      <button
+        type="button"
+        className="sm-btn sm-btn--primary sm-btn--block"
+        onClick={() => setScannerOpen(true)}
+        disabled={busy}
+      >
+        Open camera scanner
+      </button>
+      <form onSubmit={submit}>
+        <div className="sm-field">
+          <label htmlFor="sm-barcode">Or type / wedge barcode</label>
+          <div className="sm-row">
+            <input
+              id="sm-barcode"
+              className="sm-input"
+              inputMode="text"
+              autoComplete="off"
+              value={code}
+              onChange={(event) => setCode(event.target.value)}
+            />
+            <button type="submit" className="sm-btn sm-btn--primary" disabled={busy || !code.trim()}>
+              {busy ? '…' : 'Find'}
+            </button>
+          </div>
         </div>
-      </div>
+      </form>
       {error && (
         <p className="sm-notice sm-notice--error" role="alert">
           {error}
         </p>
       )}
-    </form>
+      <BarcodeScanner
+        open={scannerOpen}
+        title="Scan material barcode"
+        onClose={() => {
+          setScannerOpen(false);
+          onScannerClosed?.();
+        }}
+        onDetected={(scanned) => {
+          void resolve(scanned.rawValue);
+        }}
+      />
+    </section>
   );
 };
 

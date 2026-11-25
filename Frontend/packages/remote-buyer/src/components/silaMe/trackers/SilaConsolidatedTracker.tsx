@@ -16,9 +16,65 @@ import { getErpPostingPayload, reconcileErpPosting } from "../../../api/silaMe/s
 import { formatDateTime } from "../../cart/lineFormat";
 import "../silaMeTheme.css";
 import "../receiving/SilaReceiving.css";
+import "../recipes/SilaRecipes.css";
+import "../pos/SilaPosStudio.css";
 import "./SilaTracker.css";
 
 const PAGE_SIZE = 25;
+const EXPORT_LIMIT = 5000;
+
+const ExcelDownloadIcon: React.FC = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" stroke="currentColor" strokeWidth="1.75" strokeLinejoin="round" />
+    <path d="M14 2v6h6" stroke="currentColor" strokeWidth="1.75" strokeLinejoin="round" />
+    <path d="M9.2 17.2 12 12l2.8 5.2M10.1 15h3.8" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+const csvEscape = (value: string): string => {
+  if (/[",\n\r]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
+  return value;
+};
+
+const trackerRowsToCsv = (rows: SilaTrackerRow[]): string => {
+  const headers = [
+    "Date / time", "Transaction ID", "Type", "Data", "Direction", "Company", "Plant", "Storage location",
+    "Reference", "ERP REF ID", "Receive", "ERP", "Local", "Overall", "Retries", "Integration", "Result",
+  ];
+  const lines = rows.map((row) => [
+    formatDateTime(row.occurredOn),
+    row.id,
+    labelOf(row.transactionType),
+    labelOf(row.dataClass),
+    labelOf(row.direction),
+    row.companyCode || "",
+    row.plant || "",
+    row.storageLocation || "",
+    row.businessReference || "",
+    row.erpReference || "",
+    labelOf(row.receiveStatus),
+    labelOf(row.erpStatus),
+    labelOf(row.localStatus),
+    labelOf(row.overallStatus),
+    String(row.retryCount ?? 0),
+    row.integrationName || "",
+    row.lastError || "",
+  ].map((cell) => csvEscape(String(cell ?? ""))).join(","));
+  return [`\uFEFF${headers.join(",")}`, ...lines].join("\r\n");
+};
+
+const downloadTrackerExcel = (rows: SilaTrackerRow[], tracker: SilaTrackerName) => {
+  const blob = new Blob([trackerRowsToCsv(rows)], { type: "application/vnd.ms-excel;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  const stamp = new Date().toISOString().slice(0, 10);
+  link.href = url;
+  link.download = `${tracker === "SILA_ME" ? "transaction-tracker" : "purchasing-transactions"}-${stamp}.xls`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+};
 
 const TYPES = [
   "POS_SALE", "POS_POSITIVE_CORRECTION", "INTERNAL_TRANSFER_311", "PLANT_TRANSFER_301",
@@ -69,9 +125,43 @@ const prettyPayload = (value?: string | null): string => {
   }
 };
 
+/** Pull JSON/XML out of "The ERP returned HTTP 400. {...}" when ErpResponsePayload was not stored. */
+const httpBodyFromError = (error?: string | null): string => {
+  const text = error?.trim();
+  if (!text) return "";
+  const json = text.indexOf("{");
+  const xml = text.indexOf("<");
+  const start = json < 0 ? xml : xml < 0 ? json : Math.min(json, xml);
+  if (start < 0) return "";
+  return prettyPayload(text.slice(start));
+};
+
+/** True when technicalDetail is a real SAP material-document body (not a fabricated SILA note). */
+const isCapturedSapRequest = (value?: string | null): boolean => {
+  const text = value?.trim() ?? "";
+  if (!text) return false;
+  if (/Actual SAP request was not captured/i.test(text)) return false;
+  if (/SILA (UI )?built this request|SILA rebuilt this request|SILA recorded a diagnostic/i.test(text)) return false;
+  return text.includes("to_MaterialDocumentItem") && text.includes("GoodsMovementCode");
+};
+
+const NOT_CAPTURED_REQUEST = "Actual SAP request was not captured for this attempt.";
+
+/** Request panel text: real SAP JSON only; never invent sale metadata. */
+const resolveRequestPayload = (detail: SilaTrackerDetail): string => {
+  if (isCapturedSapRequest(detail.technicalDetail)) return prettyPayload(detail.technicalDetail);
+  const raw = detail.technicalDetail?.trim() ?? "";
+  if (raw && /Actual SAP request was not captured/i.test(raw)) return raw;
+  const isPos = detail.source === "POS"
+    || detail.transactionType === "POS_SALE"
+    || detail.transactionType === "POS_POSITIVE_CORRECTION"
+    || !!detail.posCode;
+  return isPos ? NOT_CAPTURED_REQUEST : prettyPayload(detail.technicalDetail);
+};
+
 const downloadPayload = (detail: SilaTrackerDetail) => {
-  const text = prettyPayload(detail.technicalDetail);
-  if (!text) return;
+  const text = resolveRequestPayload(detail);
+  if (!text || text === NOT_CAPTURED_REQUEST) return;
   const blob = new Blob([text], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -106,8 +196,8 @@ const resultSummary = (row: SilaTrackerRow): { label: "SUCCESS" | "FAILURE" | "�
   return { label: ok ? "SUCCESS" : "FAILURE", detail, ok };
 };
 
-const erpInvoiceId = (row: SilaTrackerRow): string =>
-  isInvoiceTxn(row.transactionType) ? (row.erpReference || "—") : "—";
+/** Any ERP success reference (material document, invoice, GRN, etc.). */
+const erpRefId = (row: SilaTrackerRow): string => row.erpReference?.trim() || "—";
 
 const badgeClass = (status?: string | null): string => {
   switch (status) {
@@ -169,6 +259,8 @@ const SilaConsolidatedTracker: React.FC<SilaConsolidatedTrackerProps> = ({ track
   const [detailError, setDetailError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<SilaTrackerRow[] | null>(null);
   const [busy, setBusy] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -222,16 +314,40 @@ const SilaConsolidatedTracker: React.FC<SilaConsolidatedTrackerProps> = ({ track
     setDetailError(null);
     setFlow(null);
     const withPayload = async (detail: SilaTrackerDetail): Promise<SilaTrackerDetail> => {
-      if (!row.erpPostingId) return detail;
-      if (detail.technicalDetail?.trim() && detail.erpMessage?.trim()) return detail;
-      const payload = await getErpPostingPayload(row.erpPostingId);
-      if (!payload) return detail;
-      return {
+      const fromError = httpBodyFromError(detail.lastError || row.lastError);
+      let next: SilaTrackerDetail = {
         ...detail,
-        technicalDetail: detail.technicalDetail?.trim() ? detail.technicalDetail : payload.technicalDetail,
-        erpMessage: detail.erpMessage?.trim() ? detail.erpMessage : payload.erpMessage,
-        erpHttpStatus: detail.erpHttpStatus != null ? detail.erpHttpStatus : payload.erpHttpStatus,
+        source: detail.source || row.source,
+        transactionType: detail.transactionType || row.transactionType,
+        posCode: detail.posCode ?? row.posCode,
+        outletCode: detail.outletCode ?? row.outletCode,
+        quantity: detail.quantity ?? row.quantity,
+        uom: detail.uom ?? row.uom,
+        movementType: detail.movementType ?? row.movementType,
+        erpPostingId: detail.erpPostingId ?? row.erpPostingId,
+        businessDate: detail.businessDate ?? row.businessDate,
+        plant: detail.plant ?? row.plant,
+        storageLocation: detail.storageLocation ?? row.storageLocation,
+        businessReference: detail.businessReference ?? row.businessReference,
+        lastError: detail.lastError ?? row.lastError,
+        erpMessage: detail.erpMessage?.trim() ? detail.erpMessage : fromError || detail.erpMessage,
       };
+      if (row.erpPostingId && (!next.technicalDetail?.trim() || !next.erpMessage?.trim())) {
+        const payload = await getErpPostingPayload(row.erpPostingId);
+        if (payload) {
+          next = {
+            ...next,
+            technicalDetail: next.technicalDetail?.trim() ? next.technicalDetail : payload.technicalDetail,
+            erpMessage: next.erpMessage?.trim() ? next.erpMessage : payload.erpMessage,
+            erpHttpStatus: next.erpHttpStatus != null ? next.erpHttpStatus : payload.erpHttpStatus,
+          };
+        }
+      }
+      // Do not invent SILA sale-metadata JSON. Keep API result (SAP body, not-captured, or rebuilt OData).
+      if (!next.erpMessage?.trim() && fromError) {
+        next = { ...next, erpMessage: fromError };
+      }
+      return next;
     };
     try {
       const loaded = await getTrackerDetail(tracker, row.id);
@@ -272,27 +388,103 @@ const SilaConsolidatedTracker: React.FC<SilaConsolidatedTrackerProps> = ({ track
     }
   };
 
+  const exportExcel = async () => {
+    setExporting(true);
+    try {
+      const result = await getTracker(tracker, {
+        search: appliedSearch,
+        transactionType,
+        direction,
+        from,
+        to,
+        companyCode,
+        status,
+        userId: /^[0-9a-fA-F-]{36}$/.test(userId.trim()) ? userId.trim() : undefined,
+        dataClass,
+        stage,
+        plant,
+        storageLocation,
+        material,
+        integration,
+        index: 0,
+        limit: EXPORT_LIMIT,
+      });
+      const exportRows = result.rows ?? [];
+      if (exportRows.length === 0) {
+        toastService.error("No transactions match the current filters to download.");
+        return;
+      }
+      downloadTrackerExcel(exportRows, tracker);
+      toastService.success(`Downloaded ${exportRows.length} transaction${exportRows.length === 1 ? "" : "s"}.`);
+    } catch (err: unknown) {
+      toastService.error(err instanceof Error ? err.message : "Could not download the Excel file.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const fromLabel = confirming?.[0]?.reprocessFrom;
+  const studio = tracker === "SILA_ME";
 
   return (
-    <div className="sila-me srcv-page">
-      <PageHeader
-        className="pud-page-header"
-        title="Transaction Tracker"
-        description={title}
-      />
-      <section className="strk-kpis" aria-label="Tracker summary">
-        <Kpi label="Total" value={summary.total} />
-        <Kpi label="Processing" value={summary.processing} />
-        <Kpi label="Successful" value={summary.successful} />
-        <Kpi label="Failed" value={summary.failed} />
-        <Kpi label="Reprocessing" value={summary.reprocessing} />
-        <Kpi label="Needs attention" value={summary.needsAttention} />
+    <div className={studio ? "sila-me srec-page rstudio-page pstudio-page strk-me-page" : "sila-me srcv-page"}>
+      {studio ? (
+        <header className="strk-me-hero strk-me-hero--compact" data-testid="sila-me-transactions-studio">
+          <h1 className="strk-me-hero__title strk-me-hero__title--tracker">TRANSACTION TRACKER</h1>
+          <div className="strk-me-toolbar">
+            <button
+              type="button"
+              className={`sila-btn sila-btn--secondary${filtersOpen ? " strk-filters-btn--open" : ""}`}
+              aria-expanded={filtersOpen}
+              aria-controls="strk-me-filters"
+              onClick={() => setFiltersOpen((open) => !open)}
+            >
+              Filters
+            </button>
+            <button type="button" className="sila-btn sila-btn--secondary" onClick={load} disabled={loading}>
+              Refresh
+            </button>
+            <button
+              type="button"
+              className="sila-btn sila-btn--secondary strk-excel-btn"
+              aria-label="Download Excel"
+              title="Download Excel"
+              disabled={exporting || loading}
+              onClick={exportExcel}
+            >
+              <ExcelDownloadIcon />
+            </button>
+            {canReprocess && (
+              <button
+                type="button"
+                className="sila-btn sila-btn--primary"
+                disabled={eligibleSelected.length === 0 || busy}
+                onClick={() => setConfirming(eligibleSelected)}
+              >
+                Reprocess selected ({eligibleSelected.length})
+              </button>
+            )}
+          </div>
+        </header>
+      ) : (
+        <PageHeader className="pud-page-header" title="Transaction Tracker" description={title} />
+      )}
+      <section className={studio ? "strk-me-kpis" : "strk-kpis"} aria-label="Tracker summary">
+        <Kpi label="Total" value={summary.total} tone={studio ? "sky" : undefined} />
+        <Kpi label="Processing" value={summary.processing} tone={studio ? "blue" : undefined} />
+        <Kpi label="Successful" value={summary.successful} tone={studio ? "mint" : undefined} />
+        <Kpi label="Failed" value={summary.failed} tone={studio ? "rose" : undefined} />
+        <Kpi label="Reprocessing" value={summary.reprocessing} tone={studio ? "lavender" : undefined} />
+        <Kpi label="Needs attention" value={summary.needsAttention} tone={studio ? "amber" : undefined} />
       </section>
-      <section className="sila-card">
-        <div className="srcv-filters">
-          <Field id="strk-search" label="Search">
+      <section className={studio ? "strk-me-panel strk-studio-panel" : "sila-card"}>
+        {(!studio || filtersOpen) && (
+        <div
+          id={studio ? "strk-me-filters" : undefined}
+          className={studio ? "srec-filters srec-filters--flush strk-studio-filters strk-studio-filters--grid" : "srcv-filters"}
+        >
+          <Field id="strk-search" label="Search" grow={studio}>
             <input id="strk-search" className="sila-input" type="search" placeholder="Invoice, reference, PO, GRN, transfer, POS" value={search} onChange={(event) => setSearch(event.target.value)} />
           </Field>
           <Field id="strk-type" label="Transaction type">
@@ -354,7 +546,8 @@ const SilaConsolidatedTracker: React.FC<SilaConsolidatedTrackerProps> = ({ track
             <input id="strk-api" className="sila-input" value={integration} onChange={(event) => { setIntegration(event.target.value); setPage(1); }} />
           </Field>
         </div>
-        {canReprocess && (
+        )}
+        {canReprocess && !studio && (
           <div className="strk-actions" style={{ padding: "0 1rem 0.75rem" }}>
             <button type="button" className="sila-btn sila-btn--primary" disabled={eligibleSelected.length === 0 || busy} onClick={() => setConfirming(eligibleSelected)}>
               Reprocess selected ({eligibleSelected.length})
@@ -362,15 +555,24 @@ const SilaConsolidatedTracker: React.FC<SilaConsolidatedTrackerProps> = ({ track
             <span className="srcv-sub">{selected.length - eligibleSelected.length} selected row{selected.length - eligibleSelected.length === 1 ? "" : "s"} cannot be retried, including unknown ERP results.</span>
           </div>
         )}
+        {canReprocess && studio && selected.length > 0 && (
+          <p className="strk-me-panel__hint strk-studio-hint">
+            {eligibleSelected.length} eligible · {selected.length - eligibleSelected.length} selected row{selected.length - eligibleSelected.length === 1 ? "" : "s"} cannot be retried (including unknown ERP results).
+          </p>
+        )}
         {loading && rows.length === 0 ? (
           <Loader size={24} message="Loading transactions..." />
         ) : error ? (
           <EmptyState variant="error" title="Couldn't load transactions" description={error} action={<button type="button" className="sila-btn sila-btn--secondary" onClick={load}>Try again</button>} />
         ) : rows.length === 0 ? (
-          <EmptyState title="No transactions match" description="Adjust the filters. The default view is the last 30 days." />
+          studio ? (
+            <div className="strk-me-empty">No transactions match these filters. Try widening the date range or clearing status.</div>
+          ) : (
+            <EmptyState title="No transactions match" description="Adjust the filters. The default view is the last 30 days." />
+          )
         ) : (
           <>
-            <div className="sila-table-wrap">
+            <div className={`sila-table-wrap${studio ? " strk-studio-table" : ""}`}>
               <table className="sila-table">
                 <thead>
                   <tr>
@@ -381,7 +583,7 @@ const SilaConsolidatedTracker: React.FC<SilaConsolidatedTrackerProps> = ({ track
                     <th scope="col">Direction</th>
                     <th scope="col">Company / plant</th>
                     <th scope="col">Reference</th>
-                    <th scope="col">ERP invoice ID</th>
+                    <th scope="col">ERP REF ID</th>
                     <th scope="col">Receive</th>
                     <th scope="col">ERP</th>
                     <th scope="col">Local</th>
@@ -418,7 +620,7 @@ const SilaConsolidatedTracker: React.FC<SilaConsolidatedTrackerProps> = ({ track
                         {row.businessReference || "—"}
                         {row.integrationName && <span className="srcv-sub">{row.integrationName}{row.movementType ? ` · ${row.movementType}` : ""}</span>}
                       </td>
-                      <td>{erpInvoiceId(row)}</td>
+                      <td>{erpRefId(row)}</td>
                       <td><span className={badgeClass(row.receiveStatus)}>{labelOf(row.receiveStatus)}</span></td>
                       <td><span className={badgeClass(row.erpStatus)}>{labelOf(row.erpStatus)}</span></td>
                       <td><span className={badgeClass(row.localStatus)}>{labelOf(row.localStatus)}</span></td>
@@ -453,18 +655,36 @@ const SilaConsolidatedTracker: React.FC<SilaConsolidatedTrackerProps> = ({ track
         )}
       </section>
       {detail && (
-        <section className="sila-card strk-detail">
+        <section className={studio ? "strk-me-panel strk-me-panel--detail strk-detail strk-studio-detail" : "sila-card strk-detail"}>
           <div className="strk-actions">
             <button type="button" className="sila-btn sila-btn--secondary" onClick={() => { setDetail(null); setFlow(null); }}>Back to list</button>
-            <h2 className="sila-section-title">{labelOf(detail.transactionType)}</h2>
+            {studio ? (
+              <div className="strk-studio-detail__title">
+                <p className="strk-me-hero__eyebrow">Transaction detail</p>
+                <h2 className="strk-me-panel__title">{labelOf(detail.transactionType)}</h2>
+              </div>
+            ) : (
+              <h2 className="sila-section-title">{labelOf(detail.transactionType)}</h2>
+            )}
             {canReprocess && detail.action === "REPROCESS" && (
               <button type="button" className="sila-btn sila-btn--primary sila-btn--sm" disabled={busy} onClick={() => setConfirming([detail])}>
                 Reprocess
               </button>
             )}
           </div>
+          {studio && (
+            <div className="strk-me-lifecycle" aria-label="Lifecycle">
+              <span className="strk-me-lifecycle__node" data-state={lifecycleState(detail.receiveStatus)}>Receive · {labelOf(detail.receiveStatus)}</span>
+              <span className="strk-me-lifecycle__sep" aria-hidden>→</span>
+              <span className="strk-me-lifecycle__node" data-state={lifecycleState(detail.erpStatus)}>ERP · {labelOf(detail.erpStatus)}</span>
+              <span className="strk-me-lifecycle__sep" aria-hidden>→</span>
+              <span className="strk-me-lifecycle__node" data-state={lifecycleState(detail.localStatus)}>Local · {labelOf(detail.localStatus)}</span>
+              <span className="strk-me-lifecycle__sep" aria-hidden>→</span>
+              <span className="strk-me-lifecycle__node" data-state={lifecycleState(detail.overallStatus)}>Overall · {labelOf(detail.overallStatus)}</span>
+            </div>
+          )}
           {detailError && <p className="srcv-error">{detailError}</p>}
-          <dl className="srcv-facts">
+          <dl className={studio ? "srcv-facts strk-studio-facts" : "srcv-facts"}>
             <Fact label="Transaction ID" value={detail.id} />
             <Fact label="Type" value={labelOf(detail.transactionType)} />
             <Fact label="Created" value={formatDateTime(detail.occurredOn)} />
@@ -476,7 +696,7 @@ const SilaConsolidatedTracker: React.FC<SilaConsolidatedTrackerProps> = ({ track
             <Fact label="API" value={detail.integrationName} />
             <Fact label="Status" value={labelOf(detail.overallStatus)} />
             <Fact label="ERP" value={labelOf(detail.erpStatus)} />
-            {isInvoiceTxn(detail.transactionType) ? <Fact label="ERP invoice ID" value={detail.erpReference} /> : detail.erpReference ? <Fact label="ERP reference" value={detail.erpReference} /> : null}
+            {detail.erpReference ? <Fact label="ERP REF ID" value={detail.erpReference} /> : null}
             {detail.erpHttpStatus != null ? <Fact label="HTTP status" value={String(detail.erpHttpStatus)} /> : null}
             {detail.retryCount > 0 ? <Fact label="Retries" value={String(detail.retryCount)} /> : null}
             {(detail.localReference ?? "").includes("PO ") ? <Fact label="Supplier, PO, GRN" value={detail.localReference} /> : null}
@@ -501,9 +721,13 @@ const SilaConsolidatedTracker: React.FC<SilaConsolidatedTrackerProps> = ({ track
             <FlowChain steps={flow.steps} />
           ) : (
             <PayloadIcons
-              request={detail.technicalDetail}
-              response={detail.erpMessage}
-              onDownloadRequest={detail.technicalDetail?.trim() ? () => downloadPayload(detail) : undefined}
+              request={resolveRequestPayload(detail)}
+              response={detail.erpMessage || httpBodyFromError(detail.lastError)}
+              onDownloadRequest={
+                isCapturedSapRequest(detail.technicalDetail)
+                  ? () => downloadPayload(detail)
+                  : undefined
+              }
             />
           )}
         </section>
@@ -577,19 +801,41 @@ const ResultCell: React.FC<{ row: SilaTrackerRow }> = ({ row }) => {
   );
 };
 
-const Kpi: React.FC<{ label: string; value: number }> = ({ label, value }) => (
-  <div className="strk-kpi">
+type KpiTone = "sky" | "mint" | "lavender" | "amber" | "blue" | "rose";
+
+const Kpi: React.FC<{ label: string; value: number; tone?: KpiTone }> = ({ label, value, tone }) => (
+  <div className={tone ? `strk-me-kpi strk-me-kpi--${tone}` : "strk-kpi"}>
     <span>{label}</span>
     <strong>{value}</strong>
   </div>
 );
 
-const Field: React.FC<{ id: string; label: string; children: React.ReactNode }> = ({ id, label, children }) => (
-  <div className="sila-field">
+const Field: React.FC<{ id: string; label: string; children: React.ReactNode; grow?: boolean }> = ({ id, label, children, grow }) => (
+  <div className={`sila-field${grow ? " srec-grow" : ""}`}>
     <label className="sila-label" htmlFor={id}>{label}</label>
     {children}
   </div>
 );
+
+const lifecycleState = (status?: string | null): "done" | "failed" | "pending" | undefined => {
+  switch (status) {
+    case "SUCCESS":
+    case "RECEIVED":
+      return "done";
+    case "FAILED":
+    case "FAILED_LOCAL":
+      return "failed";
+    case "PROCESSING":
+    case "REPROCESSING":
+    case "POSTING_UNKNOWN":
+    case "PARTIAL":
+    case "UNKNOWN":
+    case "NOT_STARTED":
+      return "pending";
+    default:
+      return undefined;
+  }
+};
 
 const flowTone = (status?: string | null): string => {
   switch (status) {

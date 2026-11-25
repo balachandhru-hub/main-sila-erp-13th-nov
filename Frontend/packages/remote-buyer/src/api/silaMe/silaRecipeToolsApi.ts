@@ -21,6 +21,12 @@ export interface SilaIngredientOption {
   conversions: SilaUomConversion[];
   /** Suppliers that delivered it on purchase orders. */
   suppliers: string[];
+  /** Ledger stock at outletLocationId context; null when no outlet selected. */
+  stockOnHand?: number | null;
+  stockInTransit?: number | null;
+  stockAvailable?: number | null;
+  stockFreshness?: string;
+  stockLocationName?: string | null;
 }
 
 export interface SilaIngredientPage {
@@ -55,6 +61,8 @@ export interface SilaIngredientFilters {
   materialType?: string;
   /** Supplier master id (takes the supplier's aliases into account). */
   supplierId?: string;
+  /** Authorized outlet/store location for location-specific stock. */
+  outletLocationId?: string;
   index?: number;
   limit?: number;
 }
@@ -89,6 +97,8 @@ export interface SilaRecipeMaster {
   code: string;
   name: string;
   description?: string | null;
+  /** FOOD | BEVERAGE | MINIBAR | TOBACCO when this is a category. */
+  productClass?: string | null;
   recipeCount: number;
   /** ACTIVE | INACTIVE */
   status?: string;
@@ -182,6 +192,7 @@ export const searchIngredients = async (filters: SilaIngredientFilters): Promise
   if (filters.supplier) params.supplier = filters.supplier;
   if (filters.materialType) params.materialType = filters.materialType;
   if (filters.supplierId) params.supplierId = filters.supplierId;
+  if (filters.outletLocationId) params.outletLocationId = filters.outletLocationId;
   const result = await call(
     () => axiosInstance.get<SilaIngredientPage>(`${BASE}/recipes/ingredient-search`, { params }),
     "Could not search the materials.",

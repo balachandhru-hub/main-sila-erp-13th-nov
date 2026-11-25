@@ -55,13 +55,8 @@ namespace Buyer.Application.Features.Commands.PostSilaGoodsReceipt
                 throw new BadRequestCustomException("Purchase order is closed.", $"Purchase order {purchaseOrder.PoNumber} is {purchaseOrder.Status} and cannot be received.");
             }
 
+            // Accept store or outlet — do not block Finalize GRN on location type / storage location.
             InventoryLocation location = await SilaAccess.GetLocationAsync(_repository, _logger, buyer.Id, input.LocationId);
-            if (location.LocationType != Common.SILA_LOCATION_STORE)
-            {
-                _logger.LogError($"Goods can be received only at a store. LocationId: {location.Id}, Type: {location.LocationType}");
-                throw new BadRequestCustomException("Select a store.", "Goods are received at a store location, not at an outlet.");
-            }
-
             await SilaAccess.EnsureLocationAccessAsync(_repository, _logger, buyer.Id, request.UserId, request.RoleId, location.Id, cancellationToken);
 
             List<PurchaseOrderItem> poItems = await _repository.PurchaseOrderItem
@@ -190,7 +185,9 @@ namespace Buyer.Application.Features.Commands.PostSilaGoodsReceipt
 
             string? companyCode = string.IsNullOrWhiteSpace(purchaseOrder.CompanyCode) ? null : purchaseOrder.CompanyCode.Trim();
             Guid? grnPostingId = null;
-            if (inventoryAccepted)
+            // Queue SAP GRN when stock moved, or when the PO already exists in S/4 (text / non-stock lines still need 101).
+            bool postToSap = inventoryAccepted || !string.IsNullOrWhiteSpace(purchaseOrder.ErpPurchaseOrderId);
+            if (postToSap)
             {
                 InventoryErpPosting posting = ledger.QueueErpPosting(Common.SILA_REF_GRN, receipt.Id, receipt.GrnNumber, location.Id, Common.SILA_MOVEMENT_GRN);
                 posting.CompanyCode = companyCode;

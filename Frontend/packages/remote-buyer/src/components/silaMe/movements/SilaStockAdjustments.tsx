@@ -1,19 +1,26 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { EmptyState, Loader, Modal, PageHeader } from "@vosox/shared-ui";
+import { EmptyState, Loader, Modal, PageHeader, toastService } from "@vosox/shared-ui";
 import { formatQty, getMyLocations, type SilaLocation } from "../../../api/silaMe/silaInventoryApi";
 import SilaSearchableSelect from "../SilaSearchableSelect";
 import {
   SILA_ADJUSTMENT_TYPES,
   getAdjustment,
   getAdjustments,
+  reverseAdjustment,
   type SilaAdjustmentDetail,
   type SilaAdjustmentListItem,
 } from "../../../api/silaMe/silaMovementsApi";
 import { formatDateTime } from "../../cart/lineFormat";
 import SilaAdjustmentForm from "./SilaAdjustmentForm";
+import SilaTxnErpHistory from "./SilaTxnErpHistory";
 import { movementLabel } from "./movementFormat";
 import "../silaMeTheme.css";
 import "./SilaMovements.css";
+
+interface SilaStockAdjustmentsProps {
+  /** Opens this adjustment when Inventory Transactions deep-links an ADJ / IT ledger row. */
+  initialAdjustmentId?: string | null;
+}
 
 interface AdjustmentDialogProps {
   adjustmentId: string;
@@ -24,6 +31,7 @@ const AdjustmentDialog: React.FC<AdjustmentDialogProps> = ({ adjustmentId, onClo
   const [adjustment, setAdjustment] = useState<SilaAdjustmentDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [reversing, setReversing] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -41,6 +49,24 @@ const AdjustmentDialog: React.FC<AdjustmentDialogProps> = ({ adjustmentId, onClo
     load();
   }, [load]);
 
+  const events = adjustment?.events ?? [];
+  const alreadyReversed = events.some((event) => (event.action ?? "").toUpperCase() === "REVERSE");
+  const canReverse = Boolean(adjustment) && !alreadyReversed;
+
+  const onReverse = async () => {
+    if (!adjustment || reversing) return;
+    setReversing(true);
+    try {
+      await reverseAdjustment(adjustment.id, { reason: `Reverse ${adjustment.adjustmentNumber}` });
+      toastService.success("Adjustment reverse posted.");
+      await load();
+    } catch (err: unknown) {
+      toastService.error(err instanceof Error ? err.message : "Could not reverse the adjustment.");
+    } finally {
+      setReversing(false);
+    }
+  };
+
   return (
     <Modal
       isOpen
@@ -50,7 +76,18 @@ const AdjustmentDialog: React.FC<AdjustmentDialogProps> = ({ adjustmentId, onClo
         heading: adjustment ? `Adjustment ${adjustment.adjustmentNumber}` : "Stock adjustment",
         subHeading: adjustment ? `${movementLabel(adjustment.adjustmentType)} · ${adjustment.locationName ?? "—"}` : undefined,
       }}
-      footerProps={{ secondaryButton: { text: "Close", onClick: onClose } }}
+      footerProps={{
+        secondaryButton: { text: "Close", onClick: onClose },
+        ...(canReverse
+          ? {
+              primaryButton: {
+                text: reversing ? "Reversing..." : "Reverse",
+                onClick: onReverse,
+                disabled: reversing,
+              },
+            }
+          : {}),
+      }}
     >
       <div className="sila-root sila-me smov-dialog">
         {loading ? (
@@ -77,7 +114,24 @@ const AdjustmentDialog: React.FC<AdjustmentDialogProps> = ({ adjustmentId, onClo
                 <dt className="sila-meta-label">Reason</dt>
                 <dd className="sila-meta-value">{adjustment.reason || "—"}</dd>
               </div>
+              {adjustment.erpReference && (
+                <div className="sila-meta-item">
+                  <dt className="sila-meta-label">ERP ID</dt>
+                  <dd className="sila-meta-value">{adjustment.erpReference}</dd>
+                </div>
+              )}
+              {adjustment.erpStatus && (
+                <div className="sila-meta-item">
+                  <dt className="sila-meta-label">ERP status</dt>
+                  <dd className="sila-meta-value">{movementLabel(adjustment.erpStatus)}</dd>
+                </div>
+              )}
             </dl>
+            <SilaTxnErpHistory
+              erpStatus={adjustment.erpStatus}
+              erpReference={adjustment.erpReference}
+              events={events}
+            />
             <div className="sila-table-wrap">
               <table className="sila-table">
                 <thead>
@@ -105,6 +159,18 @@ const AdjustmentDialog: React.FC<AdjustmentDialogProps> = ({ adjustmentId, onClo
                 </tbody>
               </table>
             </div>
+            {canReverse && (
+              <div className="sila-btn-group smov-actions">
+                <button
+                  type="button"
+                  className="sila-btn sila-btn--danger"
+                  disabled={reversing}
+                  onClick={() => void onReverse()}
+                >
+                  {reversing ? "Reversing..." : "Reverse"}
+                </button>
+              </div>
+            )}
           </>
         )}
       </div>
@@ -113,7 +179,7 @@ const AdjustmentDialog: React.FC<AdjustmentDialogProps> = ({ adjustmentId, onClo
 };
 
 /** Opening stock, waste / damage / breakage / spoilage / expired and manual stock adjustments. */
-const SilaStockAdjustments: React.FC = () => {
+const SilaStockAdjustments: React.FC<SilaStockAdjustmentsProps> = ({ initialAdjustmentId = null }) => {
   const [rows, setRows] = useState<SilaAdjustmentListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -122,7 +188,7 @@ const SilaStockAdjustments: React.FC = () => {
   const [locationFilter, setLocationFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [formOpen, setFormOpen] = useState(false);
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(initialAdjustmentId);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -139,6 +205,10 @@ const SilaStockAdjustments: React.FC = () => {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (initialAdjustmentId) setOpenId(initialAdjustmentId);
+  }, [initialAdjustmentId]);
 
   useEffect(() => {
     let active = true;

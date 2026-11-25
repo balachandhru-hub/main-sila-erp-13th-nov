@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useState } from "react";
 import { EmptyState, Loader, Modal, PageHeader, toastService } from "@vosox/shared-ui";
 import {
   approveRecipe,
-  deactivateRecipe,
+  deleteInactiveRecipe,
+  deleteRecipeDraft,
   getRecipe,
   rejectRecipe,
   submitRecipe,
@@ -12,8 +13,27 @@ import { formatDateTime } from "../../cart/lineFormat";
 import SilaRecipeApprovalTrail from "./SilaRecipeApprovalTrail";
 import SilaRecipeCosting from "./SilaRecipeCosting";
 import SilaRecipeReadinessPanel from "./SilaRecipeReadinessPanel";
-import { formatQty, readinessStatusBadgeClass, readinessText, recipeBadgeClass, recipeLabel, versionsSummary } from "./recipeFormat";
+import { formatCost, formatQty, readinessStatusBadgeClass, readinessText, recipeBadgeClass, recipeLabel, versionsSummary } from "./recipeFormat";
 import SilaRecipeCostSummary from "./SilaRecipeCostSummary";
+import { canStartRevision } from "./recipeWriteModel";
+import SilaRecipePicture from "./SilaRecipePicture";
+import {
+  canDeleteDraftRecipe,
+  DELETE_DRAFT_BODY,
+  DELETE_DRAFT_CONFIRM_LABEL,
+  DELETE_DRAFT_SUCCESS,
+  DELETE_DRAFT_TITLE,
+} from "./recipeStudioDraftDelete";
+import {
+  canDeleteInactiveRecipe,
+  DELETE_INACTIVE_BODY,
+  DELETE_INACTIVE_CONFIRM_LABEL,
+  DELETE_INACTIVE_SUCCESS,
+  DELETE_INACTIVE_TITLE,
+} from "./recipeInactiveDelete";
+import { resolveRecipePos } from "./recipeStudioEditAccess";
+import { resolveStudioKind, StudioCover } from "./recipeStudioVisuals";
+import "./SilaRecipeStudio.css";
 
 interface SilaRecipeDetailViewProps {
   recipeId: string;
@@ -25,7 +45,7 @@ interface SilaRecipeDetailViewProps {
   onChanged: () => void;
 }
 
-type Busy = "submit" | "approve" | "reject" | "deactivate" | null;
+type Busy = "submit" | "approve" | "reject" | "delete-draft" | "delete-inactive" | null;
 
 /**
  * One recipe at a version (latest by default): header, readiness, costing per outlet, approval trail; switch versions,
@@ -37,7 +57,8 @@ const SilaRecipeDetailView: React.FC<SilaRecipeDetailViewProps> = ({ recipeId, c
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<Busy>(null);
   const [comment, setComment] = useState("");
-  const [confirmDeactivate, setConfirmDeactivate] = useState(false);
+  const [confirmDeleteDraft, setConfirmDeleteDraft] = useState(false);
+  const [confirmDeleteInactive, setConfirmDeleteInactive] = useState(false);
   /** The version to show; the latest when undefined. */
   const [version, setVersion] = useState<number | undefined>(undefined);
 
@@ -63,8 +84,13 @@ const SilaRecipeDetailView: React.FC<SilaRecipeDetailViewProps> = ({ recipeId, c
       await action();
       toastService.success(success);
       setComment("");
-      setConfirmDeactivate(false);
+      setConfirmDeleteDraft(false);
+      setConfirmDeleteInactive(false);
       onChanged();
+      if (kind === "delete-draft" || kind === "delete-inactive") {
+        onBack();
+        return;
+      }
       if (version !== undefined) {
         setVersion(undefined);
       } else {
@@ -98,18 +124,39 @@ const SilaRecipeDetailView: React.FC<SilaRecipeDetailViewProps> = ({ recipeId, c
   const latest = recipe.viewVersion === recipe.version;
   const editable = canManage && latest && recipe.status !== "PENDING_APPROVAL" && recipe.status !== "INACTIVE";
   const submittable = canManage && latest && recipe.status === "DRAFT";
-  const deactivatable = canManage && recipe.status !== "INACTIVE";
+  const draftDeletable = canManage && latest && canDeleteDraftRecipe(recipe.status);
+  const inactiveDeletable = canManage && latest && canDeleteInactiveRecipe(recipe.status);
   const showReadiness = latest && (recipe.status === "DRAFT" || recipe.status === "REJECTED");
+  // Step 1: Edit / Create revision only navigates to the temporary workspace shell (no API mutate).
+  const needsRevision = canStartRevision(recipe.status);
+
+  const menuPrice = recipe.outletPrices.length === 0
+    ? null
+    : Math.min(...recipe.outletPrices.map((price) => price.menuPrice));
+  const portionCost = recipe.readiness.costComplete ? (recipe.costPerServing ?? (recipe.servingQty > 0 ? recipe.totalCost / recipe.servingQty : recipe.totalCost)) : null;
+  const pos = resolveRecipePos(recipe);
 
   return (
-    <div className="sila-me srec-page">
-      <PageHeader
-        className="pud-page-header"
-        title={`${recipe.recipeCode} ${recipe.name}`}
-        onBack={onBack}
-        backLabel="Back"
-        meta={
-          <span className="srec-badges">
+    <div className="sila-me srec-page rstudio-page">
+      <button type="button" className="sila-btn sila-btn--ghost sila-btn--sm rstudio-back" onClick={onBack}>← Back to catalog</button>
+
+      <header className="rstudio-detail-hero">
+        <div className="rstudio-detail-hero__cover">
+          <SilaRecipePicture
+            recipeId={recipe.id}
+            preferDraft={recipe.viewVersion === recipe.version && recipe.activeVersion > 0 && recipe.status !== "APPROVED"}
+            hasPicture={Boolean(recipe.hasPicture)}
+            placeholderTitle={recipe.name}
+            placeholderCategory={recipe.categoryName || recipe.category}
+            placeholderFamily={recipe.familyName}
+            variant="detail"
+            locked
+          />
+        </div>
+        <div className="rstudio-detail-hero__copy">
+          <p className="rstudio-kicker">{recipe.recipeCode}</p>
+          <h1>{recipe.name}</h1>
+          <div className="srec-badges">
             <span className={recipeBadgeClass(recipe.viewStatus)}>{recipeLabel(recipe.viewStatus)}</span>
             {latest && recipe.status !== "INACTIVE" && (
               <span className={readinessStatusBadgeClass(recipe.readiness.status, recipe.readiness.issues.length)}>
@@ -132,19 +179,21 @@ const SilaRecipeDetailView: React.FC<SilaRecipeDetailViewProps> = ({ recipeId, c
             ) : (
               <span className="sila-badge sila-badge--neutral">V{recipe.viewVersion}</span>
             )}
-          </span>
-        }
-        actions={
+          </div>
+          <p className="rstudio-detail-hero__meta">
+            {recipe.familyName || "—"} · {recipe.categoryName || recipe.category || "—"} · {recipeLabel(recipe.itemMode)} · Yield {formatQty(recipe.servingQty)} {recipe.servingUom}
+          </p>
+          {recipe.description && <p className="rstudio-detail-hero__desc">{recipe.description}</p>}
           <div className="srec-actions">
             {editable && (
-              <button type="button" className="sila-btn sila-btn--secondary" onClick={() => onEdit(recipe)} disabled={busy !== null}>
-                {recipe.status === "DRAFT" ? "Edit" : `Edit as version ${recipe.version + 1}`}
+              <button type="button" className="sila-btn sila-btn--primary" onClick={() => onEdit(recipe)} disabled={busy !== null}>
+                {needsRevision ? `Open workspace (revision v${recipe.version + 1})` : "Open workspace"}
               </button>
             )}
             {submittable && (
               <button
                 type="button"
-                className="sila-btn sila-btn--primary"
+                className="sila-btn sila-btn--secondary"
                 disabled={busy !== null || !recipe.readiness.ready}
                 title={recipe.readiness.ready ? undefined : "Fix the readiness issues first."}
                 onClick={() => run("submit", () => submitRecipe(recipe.id), "Recipe sent for approval.")}
@@ -152,14 +201,65 @@ const SilaRecipeDetailView: React.FC<SilaRecipeDetailViewProps> = ({ recipeId, c
                 {busy === "submit" ? "Sending..." : "Submit for approval"}
               </button>
             )}
-            {deactivatable && (
-              <button type="button" className="sila-btn sila-btn--danger" onClick={() => setConfirmDeactivate(true)} disabled={busy !== null}>
-                Deactivate
+            {draftDeletable && (
+              <button
+                type="button"
+                className="sila-btn sila-btn--danger"
+                onClick={() => setConfirmDeleteDraft(true)}
+                disabled={busy !== null}
+                data-testid="recipe-detail-delete-draft"
+              >
+                Delete Draft
+              </button>
+            )}
+            {inactiveDeletable && (
+              <button
+                type="button"
+                className="sila-btn sila-btn--danger"
+                onClick={() => setConfirmDeleteInactive(true)}
+                disabled={busy !== null}
+                data-testid="recipe-detail-delete-inactive"
+              >
+                Delete permanently
               </button>
             )}
           </div>
-        }
-      />
+        </div>
+      </header>
+
+      <div className="rstudio-kpis">
+        <div className="rstudio-kpi rstudio-kpi--blue"><span>Total recipe cost</span><strong>{recipe.readiness.costComplete ? formatCost(recipe.totalCost, recipe.currency) : "COST PENDING"}</strong></div>
+        <div className="rstudio-kpi rstudio-kpi--mint"><span>Cost / portion</span><strong>{portionCost == null ? "COST PENDING" : formatCost(portionCost, recipe.currency)}</strong></div>
+        <div className="rstudio-kpi rstudio-kpi--lavender"><span>Ingredients</span><strong>{recipe.ingredients.length}</strong></div>
+        <div className="rstudio-kpi rstudio-kpi--amber"><span>Yield</span><strong>{formatQty(recipe.servingQty)} {recipe.servingUom}</strong></div>
+        <div className="rstudio-kpi rstudio-kpi--sky"><span>Food cost %</span><strong>{portionCost != null && menuPrice ? `${((portionCost / menuPrice) * 100).toFixed(1)}%` : "—"}</strong></div>
+        <div className="rstudio-kpi rstudio-kpi--blue"><span>Margin</span><strong>{portionCost != null && menuPrice ? formatCost(menuPrice - portionCost, recipe.currency) : "—"}</strong></div>
+      </div>
+
+      <section className="rstudio-cookbook-section">
+        <h2>Ingredients</h2>
+        <div className="rstudio-ingredient-grid">
+          {recipe.ingredients.map((ingredient) => (
+            <article key={ingredient.id} className="rstudio-ingredient-card">
+              <StudioCover
+                compact
+                kind={resolveStudioKind(ingredient.itemName, ingredient.itemCode, ingredient.uom)}
+                title={ingredient.itemName}
+              />
+              <div>
+                <strong>{ingredient.itemName}</strong>
+                <p className="srec-sub">{ingredient.itemCode} · {ingredient.ingredientCode}</p>
+                <p>{formatQty(ingredient.quantity)} {ingredient.uom}</p>
+                <p className="rstudio-ingredient-card__cost">
+                  {ingredient.priceStatus === "MISSING" || ingredient.cost == null
+                    ? "COST PENDING"
+                    : formatCost(ingredient.cost, ingredient.currency || recipe.currency)}
+                </p>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
 
       <section className="sila-card">
         <div className="sila-card-body">
@@ -169,8 +269,8 @@ const SilaRecipeDetailView: React.FC<SilaRecipeDetailViewProps> = ({ recipeId, c
               ["Mode", recipeLabel(recipe.itemMode)],
               ["Family", recipe.familyName || "—"],
               ["Category", recipe.categoryName || recipe.category || "—"],
-              ["POS code", recipe.posCode || "—"],
-              ["POS item", recipe.posItem || "—"],
+              ["POS code", pos.posCode || "—"],
+              ["POS item", pos.posItem || "—"],
               ["Last sale date", recipe.lastSaleDate ? recipe.lastSaleDate.slice(0, 10) : "—"],
               ["Serving", `${formatQty(recipe.servingQty)} ${recipe.servingUom}`],
               ["Selling unit", recipe.sellingUom],
@@ -183,7 +283,6 @@ const SilaRecipeDetailView: React.FC<SilaRecipeDetailViewProps> = ({ recipeId, c
               </div>
             ))}
           </div>
-          {recipe.description && <p className="sila-modal-text">{recipe.description}</p>}
         </div>
       </section>
 
@@ -257,20 +356,49 @@ const SilaRecipeDetailView: React.FC<SilaRecipeDetailViewProps> = ({ recipeId, c
       <SilaRecipeApprovalTrail recipe={recipe} />
 
       <Modal
-        isOpen={confirmDeactivate}
-        onClose={() => setConfirmDeactivate(false)}
+        isOpen={confirmDeleteDraft}
+        onClose={() => { if (busy === null) setConfirmDeleteDraft(false); }}
         variant="danger"
-        headerProps={{ heading: `Deactivate ${recipe.recipeCode}` }}
+        headerProps={{ heading: DELETE_DRAFT_TITLE }}
         footerProps={{
-          secondaryButton: { text: "Cancel", onClick: () => setConfirmDeactivate(false), disabled: busy !== null },
+          secondaryButton: { text: "Cancel", onClick: () => setConfirmDeleteDraft(false), disabled: busy !== null },
           primaryButton: {
-            text: "Deactivate",
-            loading: busy === "deactivate",
-            onClick: () => run("deactivate", () => deactivateRecipe(recipe.id), "Recipe deactivated."),
+            text: DELETE_DRAFT_CONFIRM_LABEL,
+            loading: busy === "delete-draft",
+            disabled: busy !== null,
+            onClick: () => run("delete-draft", () => deleteRecipeDraft(recipe.id), DELETE_DRAFT_SUCCESS),
           },
         }}
       >
-        <p className="sila-modal-text">POS sales with POS code {recipe.posCode || "—"} will no longer be matched to this recipe.</p>
+        <p className="sila-modal-text">{DELETE_DRAFT_BODY}</p>
+        <p className="sila-modal-text">
+          <strong>{recipe.name}</strong>
+          {" · "}
+          {recipe.recipeCode}
+        </p>
+      </Modal>
+
+      <Modal
+        isOpen={confirmDeleteInactive}
+        onClose={() => { if (busy === null) setConfirmDeleteInactive(false); }}
+        variant="danger"
+        headerProps={{ heading: DELETE_INACTIVE_TITLE }}
+        footerProps={{
+          secondaryButton: { text: "Cancel", onClick: () => setConfirmDeleteInactive(false), disabled: busy !== null },
+          primaryButton: {
+            text: DELETE_INACTIVE_CONFIRM_LABEL,
+            loading: busy === "delete-inactive",
+            disabled: busy !== null,
+            onClick: () => run("delete-inactive", () => deleteInactiveRecipe(recipe.id), DELETE_INACTIVE_SUCCESS),
+          },
+        }}
+      >
+        <p className="sila-modal-text">{DELETE_INACTIVE_BODY}</p>
+        <p className="sila-modal-text">
+          <strong>{recipe.name}</strong>
+          {" · "}
+          {recipe.recipeCode}
+        </p>
       </Modal>
     </div>
   );

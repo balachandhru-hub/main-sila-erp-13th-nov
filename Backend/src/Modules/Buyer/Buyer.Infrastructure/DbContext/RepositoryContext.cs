@@ -116,6 +116,7 @@ namespace Buyer.Infrastructure.DbContext
         public DbSet<Invoice> Invoice { get; set; }
         public DbSet<RecipeFamily> RecipeFamily { get; set; }
         public DbSet<RecipeCategory> RecipeCategory { get; set; }
+        public DbSet<GoodsIssueCostCenter> GoodsIssueCostCenter { get; set; }
         public DbSet<SilaApprovalStep> SilaApprovalStep { get; set; }
         public DbSet<PosSource> PosSource { get; set; }
         public DbSet<PosOutletMapping> PosOutletMapping { get; set; }
@@ -144,6 +145,16 @@ namespace Buyer.Infrastructure.DbContext
         public DbSet<MenuPosMapping> MenuPosMapping { get; set; }
         public DbSet<PmsDemandSnapshot> PmsDemandSnapshot { get; set; }
         public DbSet<MenuEngineeringSettings> MenuEngineeringSettings { get; set; }
+        public DbSet<RecipeLegacyBatch> RecipeLegacyBatch { get; set; }
+        public DbSet<RecipeLegacyRecipe> RecipeLegacyRecipe { get; set; }
+        public DbSet<RecipeLegacyMaterialMap> RecipeLegacyMaterialMap { get; set; }
+        public DbSet<RecipeLegacyImage> RecipeLegacyImage { get; set; }
+        public DbSet<SilaUserPurchasingProfile> SilaUserPurchasingProfile { get; set; }
+        public DbSet<SilaUserPoFlexConfig> SilaUserPoFlexConfig { get; set; }
+        public DbSet<SilaUserPoFlexParam> SilaUserPoFlexParam { get; set; }
+        public DbSet<SilaUserPoFlexCondition> SilaUserPoFlexCondition { get; set; }
+        public DbSet<SilaVoicePoSession> SilaVoicePoSession { get; set; }
+        public DbSet<SilaVoicePoTurn> SilaVoicePoTurn { get; set; }
 
 
         protected override void OnModelCreating(Microsoft.EntityFrameworkCore.ModelBuilder modelBuilder)
@@ -305,6 +316,8 @@ namespace Buyer.Infrastructure.DbContext
             _ = modelBuilder.Entity<RecipeFamily>().HasIndex(a => new { a.BuyerId, a.Code }).IsUnique();
             _ = modelBuilder.Entity<RecipeCategory>().HasIndex(a => a.IsActive);
             _ = modelBuilder.Entity<RecipeCategory>().HasIndex(a => new { a.BuyerId, a.Code }).IsUnique();
+            _ = modelBuilder.Entity<GoodsIssueCostCenter>().HasIndex(a => a.IsActive);
+            _ = modelBuilder.Entity<GoodsIssueCostCenter>().HasIndex(a => new { a.BuyerId, a.PropertyId, a.Scope, a.StorageLocationCode }).IsUnique();
             _ = modelBuilder.Entity<SilaApprovalStep>().HasIndex(a => a.IsActive);
             _ = modelBuilder.Entity<SilaApprovalStep>().HasIndex(a => new { a.ReferenceType, a.ReferenceId, a.Version });
             _ = modelBuilder.Entity<SilaApprovalStep>().HasIndex(a => new { a.UserId, a.Status });
@@ -348,6 +361,28 @@ namespace Buyer.Infrastructure.DbContext
             _ = modelBuilder.Entity<StockCount>().HasIndex(a => new { a.BuyerId, a.CountNumber }).IsUnique();
             _ = modelBuilder.Entity<StockShortageEnquiry>().HasIndex(a => new { a.BuyerId, a.EnquiryNumber }).IsUnique();
             _ = modelBuilder.Entity<PosSalesBatch>().HasIndex(a => new { a.BuyerId, a.BatchNumber }).IsUnique();
+            _ = modelBuilder.Entity<RecipeLegacyBatch>().HasIndex(a => a.IsActive);
+            _ = modelBuilder.Entity<RecipeLegacyBatch>().HasIndex(a => new { a.BuyerId, a.BatchNumber }).IsUnique();
+            _ = modelBuilder.Entity<RecipeLegacyRecipe>().HasIndex(a => a.IsActive);
+            _ = modelBuilder.Entity<RecipeLegacyRecipe>().HasIndex(a => new { a.BuyerId, a.BatchId, a.LegacyRecipeId }).IsUnique();
+            _ = modelBuilder.Entity<RecipeLegacyRecipe>().HasIndex(a => new { a.BatchId, a.ValidationStatus });
+            _ = modelBuilder.Entity<RecipeLegacyMaterialMap>().HasIndex(a => a.IsActive);
+            _ = modelBuilder.Entity<RecipeLegacyMaterialMap>().HasIndex(a => new { a.BatchId, a.LegacyRecipeId, a.IngredientLine });
+            _ = modelBuilder.Entity<RecipeLegacyImage>().HasIndex(a => a.IsActive);
+            _ = modelBuilder.Entity<RecipeLegacyImage>().HasIndex(a => new { a.BatchId, a.Status });
+            _ = modelBuilder.Entity<SilaUserPurchasingProfile>().HasIndex(a => a.IsActive);
+            _ = modelBuilder.Entity<SilaUserPurchasingProfile>().HasIndex(a => new { a.BuyerId, a.UserId, a.Status });
+            _ = modelBuilder.Entity<SilaUserPurchasingProfile>().HasIndex(a => new { a.BuyerId, a.UserId, a.IsDefault });
+            _ = modelBuilder.Entity<SilaUserPoFlexConfig>().HasIndex(a => a.IsActive);
+            _ = modelBuilder.Entity<SilaUserPoFlexConfig>().HasIndex(a => new { a.BuyerId, a.UserId, a.ConfigType, a.Status });
+            _ = modelBuilder.Entity<SilaUserPoFlexParam>().HasIndex(a => a.ConfigId);
+            _ = modelBuilder.Entity<SilaUserPoFlexCondition>().HasIndex(a => a.ConfigId);
+            _ = modelBuilder.Entity<SilaVoicePoSession>().HasIndex(a => a.IsActive);
+            _ = modelBuilder.Entity<SilaVoicePoSession>().HasIndex(a => new { a.BuyerId, a.SessionNumber }).IsUnique();
+            _ = modelBuilder.Entity<SilaVoicePoSession>().HasIndex(a => new { a.BuyerId, a.UserId, a.Status });
+            _ = modelBuilder.Entity<SilaVoicePoSession>().HasIndex(a => new { a.BuyerId, a.IdempotencyKey });
+            _ = modelBuilder.Entity<SilaVoicePoTurn>().HasIndex(a => a.IsActive);
+            _ = modelBuilder.Entity<SilaVoicePoTurn>().HasIndex(a => new { a.SessionId, a.TurnNumber }).IsUnique();
             _ = modelBuilder.Entity<GoodsReceipt>().HasIndex(a => new { a.BuyerId, a.GrnNumber }).IsUnique();
             _ = modelBuilder.Entity<InventoryTransaction>().HasIndex(a => new { a.BuyerId, a.TransactionNumber }).IsUnique();
             // SILA ME hardening: indexes for the location-scoped lists and the job lookups.
@@ -363,6 +398,7 @@ namespace Buyer.Infrastructure.DbContext
             _ = modelBuilder.Entity<PosSalesTransaction>().HasIndex(a => new { a.BuyerId, a.BusinessDate });
             _ = modelBuilder.Entity<PosSalesTransaction>().HasIndex(a => a.BatchId);
             _ = modelBuilder.Entity<PosSalesTransaction>().HasIndex(a => a.ErpPostingId);
+            _ = modelBuilder.Entity<PosSalesTransaction>().HasIndex(a => new { a.BuyerId, a.OriginalTransactionId });
             _ = modelBuilder.Entity<SilaApprovalStep>().HasIndex(a => new { a.BuyerId, a.ReferenceType, a.Status });
             _ = modelBuilder.Entity<Invoice>().HasIndex(a => new { a.BuyerId, a.Status });
             _ = modelBuilder.Entity<Invoice>().HasIndex(a => new { a.BuyerId, a.ContentHash });

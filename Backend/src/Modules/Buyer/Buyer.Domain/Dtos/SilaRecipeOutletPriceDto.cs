@@ -8,6 +8,10 @@ namespace Buyer.Domain.Dtos
         public string? LocationName { get; set; }
         public decimal MenuPrice { get; set; }
         public string? Currency { get; set; }
+        /// <summary>POS code for this outlet assignment.</summary>
+        public string? PosCode { get; set; }
+        /// <summary>POS item for this outlet assignment.</summary>
+        public string? PosItem { get; set; }
         /// <summary>Cost of one serving (TotalCost / ServingQty).</summary>
         public decimal CostPerServing { get; set; }
         /// <summary>CostPerServing / MenuPrice x 100; null when the price is zero.</summary>

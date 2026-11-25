@@ -58,5 +58,16 @@ namespace Buyer.Domain.Entities
 
         // SILA ME parity: the recipe version (the active version at matching) whose ingredients were consumed.
         public int? RecipeVersion { get; set; }
+
+        /// <summary>SALE (default), RETURN or VOID. RETURN/VOID restore stock with Z01 and must reference the original sale.</summary>
+        [MaxLength(20)]
+        public string TransactionType { get; set; } = "SALE";
+
+        /// <summary>Original POS transaction id for RETURN/VOID. Required for controlled reversal.</summary>
+        [MaxLength(100)]
+        public string? OriginalTransactionId { get; set; }
+
+        /// <summary>Original POS line number for RETURN/VOID when the file supplies one.</summary>
+        public int? OriginalLineId { get; set; }
     }
 }

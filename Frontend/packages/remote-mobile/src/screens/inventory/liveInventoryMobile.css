@@ -1,0 +1,362 @@
+/* Mobile Live Inventory — Alabaster touch hub */
+
+.liv-m {
+  --liv-primary: #0284c7;
+  --liv-secondary: #0f766e;
+  --liv-premium: #b45309;
+  --liv-border: #e5e7eb;
+}
+
+.liv-m-outlet {
+  padding: 0.9rem 1rem;
+  border-radius: 0.9rem;
+  border: 0.0625rem solid var(--liv-border);
+  background: #fff;
+  margin-bottom: 0.75rem;
+}
+
+.liv-m-kicker {
+  margin: 0 0 0.2rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--liv-primary);
+}
+
+.liv-m-outlet__name {
+  display: block;
+  font-size: 1.1rem;
+  color: #0f172a;
+}
+
+.liv-m-search {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.85rem;
+}
+
+.liv-m-search__input {
+  flex: 1 1 auto;
+  min-height: 2.85rem;
+}
+
+.liv-m-search__btn {
+  min-height: 2.85rem;
+  min-width: 4.5rem;
+}
+
+.liv-m-alerts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 0.85rem;
+}
+
+.liv-m-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  align-items: flex-start;
+  text-align: left;
+  border: 0.0625rem solid var(--liv-border);
+  border-radius: 0.85rem;
+  padding: 0.75rem;
+  background: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+
+.liv-m-stat strong {
+  font-size: 1.25rem;
+  font-variant-numeric: tabular-nums;
+  color: #0f172a;
+}
+
+.liv-m-stat span {
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.liv-m-stat--warn {
+  border-color: #fed7aa;
+  background: #fff7ed;
+}
+
+.liv-m-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.liv-m-section-head h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.liv-m-quick__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.liv-m-action {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  align-items: flex-start;
+  text-align: left;
+  min-height: 4.25rem;
+  padding: 0.85rem;
+  border: 0.0625rem solid var(--liv-border);
+  border-radius: 0.9rem;
+  background: #fff;
+  font: inherit;
+  cursor: pointer;
+  box-shadow: 0 0.0625rem 0.25rem rgba(15, 23, 42, 0.04);
+}
+
+.liv-m-action strong {
+  color: #0f172a;
+}
+
+.liv-m-action span {
+  font-size: 0.78rem;
+  color: #64748b;
+}
+
+.liv-m--floor .liv-m-action {
+  min-height: 5rem;
+  padding: 1rem;
+}
+
+.liv-m--floor .liv-m-search__input,
+.liv-m--floor .liv-m-search__btn {
+  min-height: 3.25rem;
+  font-size: 1.05rem;
+}
+
+.liv-m-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  width: 100%;
+  text-align: left;
+  border: 0.0625rem solid var(--liv-border);
+  border-radius: 0.9rem;
+  padding: 0.9rem;
+  background: #fff;
+  box-shadow: 0 0.0625rem 0.3rem rgba(15, 23, 42, 0.05);
+  font: inherit;
+  cursor: pointer;
+}
+
+.liv-m-card__qty {
+  font-variant-numeric: tabular-nums;
+  font-size: 1.05rem;
+  color: #0f172a;
+}
+
+/* Premium Mobile Live Inventory */
+.liv-m--premium {
+  --liv-primary: #0369a1;
+  --liv-ok: #0f766e;
+  --liv-warn: #b45309;
+  --liv-danger: #b91c1c;
+}
+
+.liv-m-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: flex-start;
+  margin-bottom: 0.85rem;
+  padding: 0.85rem 1rem;
+  border-radius: 1rem;
+  border: 0.0625rem solid var(--liv-border);
+  background: linear-gradient(180deg, #f8fbff 0%, #fff 100%);
+  box-shadow: 0 0.125rem 0.5rem rgba(15, 23, 42, 0.04);
+}
+
+.liv-m-header__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  justify-content: flex-end;
+  max-width: 48%;
+}
+
+.liv-m-switcher {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 7rem;
+}
+
+.liv-m-kpis {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 0.85rem;
+}
+
+.liv-m-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  align-items: flex-start;
+  text-align: left;
+  border: 0.0625rem solid var(--liv-border);
+  border-radius: 0.9rem;
+  padding: 0.75rem 0.85rem;
+  background: #fff;
+  font: inherit;
+  cursor: pointer;
+  box-shadow: 0 0.0625rem 0.25rem rgba(15, 23, 42, 0.04);
+}
+
+.liv-m-kpi strong {
+  font-size: 1.2rem;
+  font-variant-numeric: tabular-nums;
+  color: #0f172a;
+}
+
+.liv-m-kpi span {
+  font-size: 0.72rem;
+  color: #64748b;
+}
+
+.liv-m-kpi--ok { border-color: #99f6e4; background: #f0fdfa; }
+.liv-m-kpi--warn { border-color: #fed7aa; background: #fff7ed; }
+.liv-m-kpi--danger { border-color: #fecaca; background: #fef2f2; }
+
+.liv-m-ops h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+/* Scan material quick action */
+.liv-m-scan__capture {
+  margin-bottom: 0.85rem;
+}
+
+.liv-m-scan__modes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+  margin-bottom: 0.55rem;
+}
+
+.liv-m-scan__mode {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  align-items: flex-start;
+  text-align: left;
+  min-height: 4.5rem;
+  padding: 0.9rem 1rem;
+  border: 0.0625rem solid var(--liv-border);
+  border-radius: 1rem;
+  background: linear-gradient(165deg, #f8fbff 0%, #fff 55%, #f0fdfa 100%);
+  font: inherit;
+  cursor: pointer;
+  box-shadow: 0 0.125rem 0.45rem rgba(15, 23, 42, 0.05);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.liv-m-scan__mode:active {
+  transform: scale(0.98);
+}
+
+.liv-m-scan__mode--primary {
+  border-color: #7dd3fc;
+  background: linear-gradient(165deg, #e0f2fe 0%, #fff 60%);
+}
+
+.liv-m-scan__mode strong {
+  color: #0f172a;
+  font-size: 1.05rem;
+}
+
+.liv-m-scan__mode span {
+  font-size: 0.78rem;
+  color: #64748b;
+}
+
+.liv-m-scan__manual {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.liv-m-scan__manual .sm-input {
+  flex: 1 1 auto;
+  min-height: 2.85rem;
+}
+
+.liv-m-scan__hero {
+  padding: 1rem 1.1rem;
+  border-radius: 1.1rem;
+  border: 0.0625rem solid var(--liv-border);
+  background: linear-gradient(180deg, #fff7ed 0%, #fff 70%);
+  box-shadow: 0 0.15rem 0.55rem rgba(180, 83, 9, 0.08);
+  margin-bottom: 0.85rem;
+  animation: liv-m-scan-in 0.28s ease;
+}
+
+.liv-m-scan__hero .liv-m-outlet__name {
+  font-size: 1.25rem;
+}
+
+.liv-m-scan__hero .liv-m-card__qty {
+  margin: 0.45rem 0 0.65rem;
+  font-size: 1.15rem;
+  color: var(--liv-ok, #0f766e);
+}
+
+.liv-m-scan__actions h2,
+.liv-m-scan__candidates h2,
+.liv-m-scan__form h2 {
+  margin: 0 0 0.55rem;
+  font-size: 1rem;
+}
+
+.liv-m-scan__candidates,
+.liv-m-scan__actions,
+.liv-m-scan__form {
+  margin-bottom: 0.9rem;
+}
+
+.liv-m-scan__candidates .liv-m-card {
+  margin-bottom: 0.45rem;
+}
+
+.liv-m-action--on {
+  border-color: #7dd3fc;
+  background: linear-gradient(180deg, #e0f2fe 0%, #fff 100%);
+  box-shadow: 0 0 0 0.125rem rgba(3, 105, 161, 0.15);
+}
+
+.liv-m-scan__submit {
+  margin-top: 0.35rem;
+  min-height: 3rem;
+  font-weight: 600;
+}
+
+@keyframes liv-m-scan-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.35rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (min-width: 40rem) {
+  .liv-m-scan__modes {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

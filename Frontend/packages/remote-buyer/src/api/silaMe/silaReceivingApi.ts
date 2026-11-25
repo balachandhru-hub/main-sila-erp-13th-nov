@@ -111,6 +111,12 @@ export interface SilaPurchaseOrderDetail extends Omit<SilaOpenPurchaseOrder, "li
   erpPurchaseOrderId?: string | null;
   supplierErpSalesOrderNumber?: string | null;
   bucketCode?: string | null;
+  purchasingOrganization?: string | null;
+  purchasingGroup?: string | null;
+  purchaseOrderType?: string | null;
+  storageLocation?: string | null;
+  accountAssignmentCategory?: string | null;
+  glAccount?: string | null;
   totalReceivedQuantity?: number;
   totalOpenQuantity?: number;
   lineCount?: number;
@@ -1145,6 +1151,21 @@ export const refreshInvoicePosting = async (invoiceId: string): Promise<SilaInvo
 
 export const decideInvoice = async (invoiceId: string, approve: boolean, comment: string): Promise<SilaInvoiceDetail> =>
   normalizeInvoice(await call(() => axiosInstance.post<SilaInvoiceDetail>(`${BASE}/invoices/${invoiceId}/approval`, { approve, comment: comment.trim() || null }), "Could not record the approval."));
+
+/** Approves or rejects a Voice/text PO waiting for approval. On approve, the API posts Create PO to SAP. */
+export const decidePurchaseOrder = async (
+  purchaseOrderId: string,
+  approve: boolean,
+  comment: string,
+): Promise<{ id: string; poNumber?: string | null; status?: string | null; erpPurchaseOrderId?: string | null }> =>
+  call(
+    () =>
+      axiosInstance.post(`${BASE}/purchase-orders/${purchaseOrderId}/approval`, {
+        approve,
+        comment: comment.trim() || null,
+      }),
+    "Could not record the purchase order approval.",
+  );
 
 export const getErpPostings = async (status: string, search: string, page: SilaPage): Promise<SilaErpPosting[]> =>
   list(await call(() => axiosInstance.get<SilaErpPosting[]>(`${BASE}/erp-postings`, {

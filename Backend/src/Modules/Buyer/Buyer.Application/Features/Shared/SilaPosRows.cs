@@ -16,6 +16,10 @@ namespace Buyer.Application.Features.Shared
         public string? OutletCode { get; set; }
         public string? Currency { get; set; }
         public string? Amount { get; set; }
+        public string? SourceSystem { get; set; }
+        public string? TransactionType { get; set; }
+        public string? OriginalTransactionId { get; set; }
+        public string? OriginalLineId { get; set; }
     }
 
     /// <summary>Validation of one sold line read from a sales file or the POS sales API.</summary>
@@ -101,6 +105,45 @@ namespace Buyer.Application.Features.Shared
                 problems.Add("Currency must be a 3-letter code such as AED");
             }
 
+            string transactionType = string.IsNullOrWhiteSpace(raw.TransactionType)
+                ? "SALE"
+                : raw.TransactionType.Trim().ToUpperInvariant();
+            if (transactionType is not ("SALE" or "RETURN" or "VOID"))
+            {
+                problems.Add("TransactionType must be SALE, RETURN or VOID when present");
+            }
+
+            // Never infer a return from negative quantity without an explicit type.
+            if (sold < 0 && transactionType == "SALE")
+            {
+                problems.Add("Negative Qty requires TransactionType RETURN or VOID; SALE cannot use negative quantity");
+            }
+
+            string? originalTxn = string.IsNullOrWhiteSpace(raw.OriginalTransactionId) ? null : raw.OriginalTransactionId.Trim();
+            int? originalLine = null;
+            if (!string.IsNullOrWhiteSpace(raw.OriginalLineId))
+            {
+                if (!int.TryParse(raw.OriginalLineId.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out int parsedOriginal) || parsedOriginal < 1)
+                {
+                    problems.Add("OriginalLineId must be a whole number from 1");
+                }
+                else
+                {
+                    originalLine = parsedOriginal;
+                }
+            }
+
+            if ((transactionType == "RETURN" || transactionType == "VOID") && string.IsNullOrWhiteSpace(originalTxn))
+            {
+                problems.Add("OriginalTransactionId is required for RETURN or VOID");
+            }
+
+            string? sourceSystem = string.IsNullOrWhiteSpace(raw.SourceSystem) ? null : raw.SourceSystem.Trim();
+            if (sourceSystem != null && sourceSystem.Length > MAX_CODE_LENGTH)
+            {
+                problems.Add($"SourceSystem is longer than {MAX_CODE_LENGTH} characters");
+            }
+
             if (problems.Count > 0)
             {
                 message = string.Join("; ", problems) + ".";
@@ -124,7 +167,11 @@ namespace Buyer.Application.Features.Shared
                 OutletCode = raw.OutletCode!.Trim(),
                 Amount = value,
                 Uom = uom,
-                Currency = currency
+                Currency = currency,
+                SourceSystem = sourceSystem,
+                TransactionType = transactionType,
+                OriginalTransactionId = originalTxn,
+                OriginalLineId = originalLine
             };
         }
 

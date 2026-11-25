@@ -171,6 +171,34 @@ namespace Buyer.Domain.Common
                 public const string SILA_REF_GRN = "GRN";
                 public const string SILA_REF_GRN_REVERSAL = "GRN_REVERSAL";
                 public const string SILA_REF_RECIPE = "RECIPE";
+                // ---- Recipe Studio legacy migration (additive staging)
+                public const string SILA_REF_RECIPE_LEGACY = "RECIPE_LEGACY";
+                public const string SILA_RECIPE_LEGACY_UPLOADED = "UPLOADED";
+                public const string SILA_RECIPE_LEGACY_VALIDATED = "VALIDATED";
+                public const string SILA_RECIPE_LEGACY_PENDING_APPROVAL = "PENDING_APPROVAL";
+                public const string SILA_RECIPE_LEGACY_APPROVED = "APPROVED";
+                public const string SILA_RECIPE_LEGACY_REJECTED = "REJECTED";
+                public const string SILA_RECIPE_LEGACY_RETURNED = "RETURNED";
+                public const string SILA_RECIPE_LEGACY_POSTING = "POSTING";
+                public const string SILA_RECIPE_LEGACY_POSTED = "POSTED";
+                public const string SILA_RECIPE_LEGACY_PARTIAL_POST = "PARTIAL_POST";
+                public const string SILA_RECIPE_LEGACY_IMAGES_ASSIGNED = "IMAGES_ASSIGNED";
+                public const string SILA_RECIPE_LEGACY_PUBLISHED = "PUBLISHED";
+                public const string SILA_RECIPE_LEGACY_PARTIAL_PUBLISH = "PARTIAL_PUBLISH";
+                public const string SILA_RECIPE_LEGACY_VALID = "VALID";
+                public const string SILA_RECIPE_LEGACY_WARNING = "WARNING";
+                public const string SILA_RECIPE_LEGACY_INVALID = "INVALID";
+                public const string SILA_RECIPE_LEGACY_DUPLICATE = "DUPLICATE";
+                public const string SILA_RECIPE_LEGACY_UNMAPPED = "UNMAPPED";
+                public const string SILA_RECIPE_LEGACY_MAPPED = "MAPPED";
+                public const string SILA_RECIPE_LEGACY_IGNORED = "IGNORED";
+                public const string SILA_RECIPE_LEGACY_EVENT_UPLOAD = "RECIPE_LEGACY_UPLOAD";
+                public const string SILA_RECIPE_LEGACY_EVENT_VALIDATION = "RECIPE_LEGACY_VALIDATION";
+                public const string SILA_RECIPE_LEGACY_EVENT_APPROVAL = "RECIPE_LEGACY_APPROVAL";
+                public const string SILA_RECIPE_LEGACY_EVENT_POST = "RECIPE_LEGACY_POST";
+                public const string SILA_RECIPE_LEGACY_EVENT_IMAGE_UPLOAD = "RECIPE_IMAGE_UPLOAD";
+                public const string SILA_RECIPE_LEGACY_EVENT_IMAGE_ASSIGN = "RECIPE_IMAGE_ASSIGNMENT";
+                public const string SILA_RECIPE_LEGACY_EVENT_PUBLISH = "RECIPE_LEGACY_PUBLISH";
                 public const string SILA_POSTING_PENDING = "PENDING";
                 public const string SILA_POSTING_POSTED = "POSTED";
                 public const string SILA_POSTING_FAILED = "FAILED";
@@ -191,6 +219,19 @@ namespace Buyer.Domain.Common
                 public const string SILA_ITO_DISCREPANCY = "DISCREPANCY";
                 public const string SILA_ITO_REJECTED = "REJECTED";
                 public const string SILA_ITO_CANCELLED = "CANCELLED";
+                public const string SILA_ITO_PARTIALLY_REVERSED = "PARTIALLY_REVERSED";
+                public const string SILA_ITO_FULLY_REVERSED = "FULLY_REVERSED";
+                public const string SILA_ITO_REVERSAL_PENDING = "REVERSAL_PENDING";
+                public const string SILA_ITO_REVERSAL_FAILED = "REVERSAL_FAILED";
+                public const string SILA_ITO_REVERSAL_UNKNOWN = "REVERSAL_UNKNOWN";
+                public const string SILA_REF_ITO_REVERSAL = "ITO_REV";
+                public const string SILA_PRODUCT_FOOD = "FOOD";
+                public const string SILA_PRODUCT_BEVERAGE = "BEVERAGE";
+                public const string SILA_PRODUCT_MINIBAR = "MINIBAR";
+                public const string SILA_PRODUCT_TOBACCO = "TOBACCO";
+
+                public const string SILA_REQ_SOURCE_WEEKLY_BUCKET = "WEEKLY_BUCKET";
+                public const string SILA_REQ_SOURCE_WISHLIST = "WISHLIST";
                 public const string SILA_COUNT_IN_PROGRESS = "IN_PROGRESS";
                 public const string SILA_COUNT_SUBMITTED = "SUBMITTED";
                 public const string SILA_COUNT_ENQUIRY_PENDING = "ENQUIRY_PENDING";
@@ -282,6 +323,7 @@ namespace Buyer.Domain.Common
                 public const string SILA_APPROVAL_TYPE_MATERIAL_PRICE = "MATERIAL_PRICE";
                 public const string SILA_APPROVAL_TYPE_ITO = "ITO";
                 public const string SILA_APPROVAL_TYPE_INVENTORY = "INVENTORY";
+                public const string SILA_APPROVAL_TYPE_PURCHASE_ORDER = "PURCHASE_ORDER";
                 public const string SILA_SCOPE_ALL = "ALL";
                 public const string SILA_SCOPE_PROPERTY = "PROPERTY";
                 public const string SILA_SCOPE_OUTLET = "OUTLET";
@@ -330,6 +372,8 @@ namespace Buyer.Domain.Common
                 public const string SILA_REF_PHYSICAL_INVENTORY = "PHYSICAL_INVENTORY";
                 public const string SILA_REF_SUBSTITUTION = "SUBSTITUTION";
                 public const string SILA_REF_MASTER_DATA = "MASTER_DATA";
+                public const string SILA_REF_VOICE_PO = "VOICE_PO";
+                public const string SILA_REF_USER_PO_PROFILE = "USER_PO_PROFILE";
                 public const string SILA_MOVEMENT_INVOICE = "INVOICE";
                 public const string SILA_MOVEMENT_INVOICE_ATTACHMENT = "SUPPLIER_INVOICE_ATTACHMENT";
                 public const string INTEGRATION_PROCESS_POST_INVOICE = "POST_INVOICE";
@@ -346,6 +390,9 @@ namespace Buyer.Domain.Common
                 /// <summary>Create Invoice mode: expense / GL account assignment, no PO or GRN.</summary>
                 public const string SILA_INVOICE_CREATION_NON_PO = "NON_PO";
                 public static readonly string OCR_SERVICE_URL = "InterCallService:OcrUrl";
+                /// <summary>Isolated Python SILA Voice Engine (does not replace OcrUrl / Voice PO).</summary>
+                public static readonly string VOICE_ENGINE_URL = "InterCallService:VoiceEngineUrl";
+                public const string HTTP_CLIENT_VOICE_ENGINE = "sila-voice-engine";
                 public static readonly string SCHEDULER_ERP_POSTING_CRON = "Scheduler:InventoryErpPostingCron";
                 public static readonly string SCHEDULER_ALERT_CRON = "Scheduler:InventoryAlertCron";
                 public static readonly string SCHEDULER_POS_PULL_CRON = "Scheduler:PosSalesPullCron";
@@ -398,6 +445,9 @@ namespace Buyer.Domain.Common
 
                 public const string ERP_OPERATION_PO_CREATE = "PO_CREATE";
                 public const string PURCHASE_ORDER_CREATED = "CREATED";
+                public const string PURCHASE_ORDER_PENDING_APPROVAL = "PENDING_APPROVAL";
+                public const string PURCHASE_ORDER_APPROVED = "APPROVED";
+                public const string PURCHASE_ORDER_REJECTED = "REJECTED";
                 public const string PURCHASE_ORDER_SOURCE_WEEKLY_BUCKET = "WEEKLY_BUCKET";
                 public const string PURCHASE_ORDER_SOURCE_CONTRACT = "CONTRACT";
                 /// <summary>An order created by a user of this system with the create purchase order request.</summary>

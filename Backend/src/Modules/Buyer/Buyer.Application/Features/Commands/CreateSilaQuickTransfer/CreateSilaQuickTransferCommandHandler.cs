@@ -43,6 +43,19 @@ namespace Buyer.Application.Features.Commands.CreateSilaQuickTransfer
             BuyerBusinessProfile buyer = await SilaAccess.GetBuyerAsync(_repository, _logger, request.OrganizationId);
             (InventoryLocation from, InventoryLocation to) = await SilaTransferRules.ValidateLocationsAsync(
                 _repository, _logger, buyer.Id, request.Request.FromLocationId, request.Request.ToLocationId);
+            BuyerProperty? fromProperty = await _repository.BuyerProperty.FindFirstByConditionAsync(x => x.Id == from.PropertyId);
+            BuyerProperty? toProperty = await _repository.BuyerProperty.FindFirstByConditionAsync(x => x.Id == to.PropertyId);
+            string? fromPlant = fromProperty?.PlantCode?.Trim();
+            string? toPlant = toProperty?.PlantCode?.Trim();
+            if (string.IsNullOrWhiteSpace(fromPlant) || string.IsNullOrWhiteSpace(toPlant)
+                || !string.Equals(fromPlant, toPlant, StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.LogError($"Quick ITO refused for plant-to-plant. FromPlant: {fromPlant}, ToPlant: {toPlant}");
+                throw new BadRequestCustomException(
+                    "Quick ITO is same-plant only.",
+                    "Use New Transfer for plant-to-plant movements (301). Those require source approval.");
+            }
+
             List<Guid> locationIds = await SilaAccess.GetLocationIdsAsync(_repository, buyer.Id, request.UserId, request.RoleId, cancellationToken);
             bool atSource = locationIds.Contains(from.Id);
             bool atDestination = locationIds.Contains(to.Id);

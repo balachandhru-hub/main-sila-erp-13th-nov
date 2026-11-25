@@ -55,5 +55,17 @@ namespace Buyer.Domain.Entities
         public bool AlreadyCollected { get; set; }
 
         public string? DisputeReason { get; set; }
+
+        /// <summary>Last successful SAP material document for the original 311 posting (number or number/year).</summary>
+        public string? SapMaterialDocument { get; set; }
+
+        /// <summary>Aggregate reversal status when a 312 has been requested or posted.</summary>
+        public string? ReversalStatus { get; set; }
+
+        public string? ReversalReason { get; set; }
+
+        public Guid? ReversedBy { get; set; }
+
+        public DateTime? ReversedOn { get; set; }
     }
 }

@@ -13,5 +13,11 @@ namespace Buyer.Domain.Dtos
         public decimal? Amount { get; set; }
         public string? Uom { get; set; }
         public string? Currency { get; set; }
+        /// <summary>Optional SourceSystem from enhanced template (display / audit).</summary>
+        public string? SourceSystem { get; set; }
+        /// <summary>SALE (default), RETURN or VOID.</summary>
+        public string TransactionType { get; set; } = "SALE";
+        public string? OriginalTransactionId { get; set; }
+        public int? OriginalLineId { get; set; }
     }
 }

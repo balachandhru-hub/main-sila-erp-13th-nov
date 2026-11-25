@@ -173,6 +173,7 @@ namespace Buyer.Application.Features.Shared
                     Label = "Purchase order",
                     Number = order.PoNumber,
                     Status = order.Status,
+                    ErpReference = order.ErpPurchaseOrderId,
                     Current = rootKind == KIND_PO
                 });
             }
@@ -319,19 +320,60 @@ namespace Buyer.Application.Features.Shared
                 }
             }
 
+            List<SilaDocumentTrackEventDto> history = events.Select(x => new SilaDocumentTrackEventDto
+            {
+                Action = x.Action,
+                Comment = x.Comment,
+                OccurredOn = x.DateCreated,
+                ReferenceType = x.ReferenceType,
+                ReferenceId = x.ReferenceId
+            }).ToList();
+
+            // Older POs may have no workflow rows — still surface create + SAP PO number in history.
+            if (order != null)
+            {
+                bool hasCreate = history.Any(x =>
+                    string.Equals(x.Action, Common.AUDIT_CREATED, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(x.Action, Common.AUDIT_SUBMITTED, StringComparison.OrdinalIgnoreCase));
+                if (!hasCreate)
+                {
+                    history.Add(new SilaDocumentTrackEventDto
+                    {
+                        Action = Common.AUDIT_CREATED,
+                        Comment = $"Purchase order {order.PoNumber} created.",
+                        OccurredOn = order.DateCreated != default ? order.DateCreated : order.OrderDate,
+                        ReferenceType = Common.SILA_REF_PO,
+                        ReferenceId = order.Id
+                    });
+                }
+
+                if (!string.IsNullOrWhiteSpace(order.ErpPurchaseOrderId)
+                    && !history.Any(x =>
+                        !string.IsNullOrWhiteSpace(x.Comment)
+                        && x.Comment.Contains(order.ErpPurchaseOrderId, StringComparison.OrdinalIgnoreCase)))
+                {
+                    history.Insert(0, new SilaDocumentTrackEventDto
+                    {
+                        Action = "SAP_PO",
+                        Comment = $"SAP purchase order {order.ErpPurchaseOrderId}",
+                        OccurredOn = order.DateUpdated != default ? order.DateUpdated : order.OrderDate,
+                        ReferenceType = Common.SILA_REF_PO,
+                        ReferenceId = order.Id
+                    });
+                }
+
+                history = history
+                    .OrderByDescending(x => x.OccurredOn)
+                    .Take(40)
+                    .ToList();
+            }
+
             return new SilaDocumentTrackDto
             {
                 RootKind = rootKind,
                 RootId = rootId,
                 Nodes = nodes,
-                History = events.Select(x => new SilaDocumentTrackEventDto
-                {
-                    Action = x.Action,
-                    Comment = x.Comment,
-                    OccurredOn = x.DateCreated,
-                    ReferenceType = x.ReferenceType,
-                    ReferenceId = x.ReferenceId
-                }).ToList(),
+                History = history,
                 Attachments = files
             };
         }

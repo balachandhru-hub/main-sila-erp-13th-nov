@@ -37,6 +37,11 @@ namespace Buyer.Application.Features.Queries.GetSilaRecipeMasters
             }
 
             BuyerBusinessProfile buyer = await SilaAccess.GetBuyerAsync(_repository, _logger, request.OrganizationId);
+            if (kind == SilaRecipeMasterRules.KIND_CATEGORIES)
+            {
+                await SilaHospitalityRules.EnsureStarterCategoriesAsync(_repository, buyer.Id, cancellationToken);
+            }
+
             List<(SilaRecipeMasterDto Record, bool IsActive)> all = await SilaRecipeMasterRules.LoadAllAsync(_repository, buyer.Id, kind, cancellationToken);
             Dictionary<Guid, int> counts = await SilaRecipeMasterRules.RecipeCountsAsync(_repository, buyer.Id, kind, cancellationToken);
             string search = (request.Search ?? string.Empty).Trim();

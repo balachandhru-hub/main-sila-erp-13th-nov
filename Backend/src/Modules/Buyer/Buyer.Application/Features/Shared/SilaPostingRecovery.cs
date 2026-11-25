@@ -46,7 +46,8 @@ namespace Buyer.Application.Features.Shared
                 posting.ErrorMessage = null;
                 posting.PostedOn ??= DateTime.UtcNow;
                 await ApplyAcceptedDocumentsAsync(repository, logger, posting, posting.Status, cancellationToken, basePath, mediator, publicDocumentBase, userId);
-                Record(repository, posting, userId, SilaTrackerRules.FROM_LOCAL, previousError, false, true, "Local finalization completed. SAP was not called.");
+                string erpId = string.IsNullOrWhiteSpace(posting.ErpReference) ? "unknown" : posting.ErpReference.Trim();
+                Record(repository, posting, userId, SilaTrackerRules.FROM_LOCAL, previousError, false, true, $"Successful. SAP material document {erpId}.");
                 await repository.SaveAsync();
                 logger.LogInfo($"ERP posting finalized locally. PostingId: {posting.Id}, Reference: {posting.ErpReference}");
                 return posting.Status;

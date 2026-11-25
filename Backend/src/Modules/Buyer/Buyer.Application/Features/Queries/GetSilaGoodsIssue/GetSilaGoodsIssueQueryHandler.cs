@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Buyer.Application.Contracts;
 using Buyer.Application.Features.Shared;
+using Buyer.Domain.Common;
 using Buyer.Domain.Dtos;
 using Buyer.Domain.Entities;
 using Buyer.Infrastructure.Contracts.IRepository;
@@ -54,12 +55,25 @@ namespace Buyer.Application.Features.Queries.GetSilaGoodsIssue
                     .FindByCondition(x => x.Id == issue.WeeklyBucketId.Value && x.BuyerId == buyer.Id)
                     .Select(x => x.BucketCode)
                     .FirstOrDefaultAsync(cancellationToken);
+            List<InventoryWorkflowEvent> events = await _repository.InventoryWorkflowEvent
+                .FindByCondition(x => x.BuyerId == buyer.Id && x.IsActive
+                    && x.ReferenceType == Common.SILA_REF_GOODS_ISSUE && x.ReferenceId == issue.Id)
+                .OrderBy(x => x.DateCreated)
+                .ToListAsync(cancellationToken);
+            InventoryErpPosting? posting = await _repository.InventoryErpPosting
+                .FindByCondition(x => x.BuyerId == buyer.Id && x.IsActive
+                    && x.ReferenceType == Common.SILA_REF_GOODS_ISSUE && x.ReferenceId == issue.Id)
+                .OrderByDescending(x => x.DateCreated)
+                .FirstOrDefaultAsync(cancellationToken);
+
             Dictionary<Guid, string> locations = await SilaMovementLookup.GetLocationNamesAsync(
                 _repository, buyer.Id, new[] { issue.FromLocationId, issue.ToLocationId }, cancellationToken);
             Dictionary<Guid, string> users = await SilaMovementLookup.GetUserNamesAsync(
-                _identityApiClient, _logger, new[] { issue.IssuedBy }, cancellationToken);
+                _identityApiClient, _logger,
+                events.Select(x => x.ActorUserId).Append(issue.IssuedBy),
+                cancellationToken);
 
-            _logger.LogInfo($"Goods issue fetched. GoodsIssueId: {issue.Id}, Lines: {items.Count}");
+            _logger.LogInfo($"Goods issue fetched. GoodsIssueId: {issue.Id}, Lines: {items.Count}, Events: {events.Count}");
             return new SilaGoodsIssueDetailDto
             {
                 Id = issue.Id,
@@ -83,7 +97,18 @@ namespace Buyer.Application.Features.Queries.GetSilaGoodsIssue
                     Quantity = x.Quantity,
                     Uom = x.Uom,
                     BaseQuantity = x.BaseQuantity
-                }).ToList()
+                }).ToList(),
+                Events = events.Select(x => new SilaTransferEventDto
+                {
+                    Action = x.Action,
+                    Comment = x.Comment,
+                    ActorUserId = x.ActorUserId,
+                    ActorName = SilaMovementLookup.NameOf(users, x.ActorUserId),
+                    On = x.DateCreated
+                }).ToList(),
+                ErpStatus = posting?.Status,
+                ErpReference = posting?.ErpReference,
+                ErpPostingId = posting?.Id
             };
         }
     }

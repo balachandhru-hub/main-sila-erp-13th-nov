@@ -1,0 +1,7 @@
+# Optional ML providers — install only when Voice:AsrProvider / TtsProvider / VadProvider require them.
+# Licenses: check each model package before production enablement.
+faster-whisper==1.1.1
+onnxruntime==1.20.1
+openwakeword==0.6.0
+# torch / torchaudio — install platform-specific wheels separately for Silero VAD
+# piper-tts — when Voice:TtsProvider=piper

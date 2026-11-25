@@ -18,6 +18,9 @@ export interface SilaMovementLineWrite {
   quantity: number;
   /** Empty means the base unit of the material. */
   uom: string | null;
+  weeklyBucketId?: string | null;
+  weeklyBucketItemId?: string | null;
+  wishlistItemId?: string | null;
 }
 
 export interface SilaTransferWrite {
@@ -31,6 +34,8 @@ export interface SilaTransferWrite {
   alreadyCollected?: boolean;
   /** Standard transfers: assign the line materials to the destination when it does not stock them yet. */
   addToLocation?: boolean;
+  /** When true, reject cross-plant create (311 Storage Location Transfer only). */
+  requireSamePlant?: boolean;
 }
 
 /** Approved or received quantity (base unit) of a transfer line. */
@@ -100,6 +105,10 @@ export interface SilaTransferItem {
   approvedQty: number;
   dispatchedQty: number;
   receivedQty: number;
+  reversedQty?: number;
+  remainingReversibleQty?: number;
+  weeklyBucketItemId?: string | null;
+  wishlistItemId?: string | null;
   uom: string;
   unitCost?: number | null;
   transferValue?: number | null;
@@ -142,6 +151,10 @@ export interface SilaTransferDetail {
   alreadyCollected?: boolean;
   /** Why the source disputed the handover. */
   disputeReason?: string | null;
+  sapMaterialDocument?: string | null;
+  reversalStatus?: string | null;
+  reversalReason?: string | null;
+  reversedOn?: string | null;
   items: SilaTransferItem[];
   events: SilaTransferEvent[];
   fromLocationType?: string | null;
@@ -194,6 +207,10 @@ export interface SilaGoodsIssueItem {
 export interface SilaGoodsIssueDetail extends Omit<SilaGoodsIssueListItem, "lineCount"> {
   comment?: string | null;
   items: SilaGoodsIssueItem[];
+  events?: SilaTransferEvent[];
+  erpStatus?: string | null;
+  erpReference?: string | null;
+  erpPostingId?: string | null;
 }
 
 /** Approved weekly bucket quantity of a material not yet issued (base unit). */
@@ -269,6 +286,10 @@ export interface SilaAdjustmentItem {
 
 export interface SilaAdjustmentDetail extends Omit<SilaAdjustmentListItem, "lineCount"> {
   items: SilaAdjustmentItem[];
+  events?: SilaTransferEvent[];
+  erpStatus?: string | null;
+  erpReference?: string | null;
+  erpPostingId?: string | null;
 }
 
 interface CreatedResponse {
@@ -398,6 +419,32 @@ export const disputeTransfer = async (transferId: string, reason: string): Promi
   }
 };
 
+export interface SilaTransferReverseLine {
+  itemId: string;
+  quantity: number;
+}
+
+export interface SilaTransferReverseResult {
+  transferId: string;
+  itoNumber: string;
+  reversalStatus?: string | null;
+  postingId?: string | null;
+  message: string;
+}
+
+/** Queues movement type 312 via FIVE S4 - Transfer Stock. Does not call SAP from the browser. */
+export const reverseTransfer = async (
+  transferId: string,
+  payload: { reason: string; comment?: string | null; postingDate?: string | null; items?: SilaTransferReverseLine[] },
+): Promise<SilaTransferReverseResult> => {
+  try {
+    const response = await axiosInstance.post<SilaTransferReverseResult>(`${BASE}/transfers/${transferId}/reverse`, payload);
+    return response.data;
+  } catch (error: unknown) {
+    throw new Error(readError(error, "Could not reverse the transfer."));
+  }
+};
+
 /* ---------- Goods issue calls ---------- */
 
 export const getGoodsIssues = async (locationId?: string): Promise<SilaGoodsIssueListItem[]> => {
@@ -414,9 +461,26 @@ export const getGoodsIssues = async (locationId?: string): Promise<SilaGoodsIssu
 export const getGoodsIssue = async (goodsIssueId: string): Promise<SilaGoodsIssueDetail> => {
   try {
     const response = await axiosInstance.get<SilaGoodsIssueDetail>(`${BASE}/goods-issues/${goodsIssueId}`);
-    return { ...response.data, items: list(response.data?.items) };
+    return {
+      ...response.data,
+      items: list(response.data?.items),
+      events: list(response.data?.events),
+    };
   } catch (error: unknown) {
     throw new Error(readError(error, "Could not load the goods issue."));
+  }
+};
+
+/** Reverse a posted goods issue (stock returns to the store). */
+export const reverseGoodsIssue = async (
+  goodsIssueId: string,
+  payload?: { reason?: string | null },
+): Promise<string> => {
+  try {
+    const response = await axiosInstance.post<CreatedResponse>(`${BASE}/goods-issues/${goodsIssueId}/reverse`, payload ?? {});
+    return response.data?.id;
+  } catch (error: unknown) {
+    throw new Error(readError(error, "Could not reverse the goods issue."));
   }
 };
 
@@ -457,7 +521,11 @@ export const getAdjustments = async (filter: { locationId?: string; type?: strin
 export const getAdjustment = async (adjustmentId: string): Promise<SilaAdjustmentDetail> => {
   try {
     const response = await axiosInstance.get<SilaAdjustmentDetail>(`${BASE}/adjustments/${adjustmentId}`);
-    return { ...response.data, items: list(response.data?.items) };
+    return {
+      ...response.data,
+      items: list(response.data?.items),
+      events: list(response.data?.events),
+    };
   } catch (error: unknown) {
     throw new Error(readError(error, "Could not load the stock adjustment."));
   }
@@ -469,5 +537,18 @@ export const createAdjustment = async (payload: SilaAdjustmentWrite): Promise<st
     return response.data?.id;
   } catch (error: unknown) {
     throw new Error(readError(error, "Could not post the stock adjustment."));
+  }
+};
+
+/** Partial/full reverse of a waste/damage adjustment (SAP Z02 on FIVE_STOCK_WASTE_UPDATE). */
+export const reverseAdjustment = async (
+  adjustmentId: string,
+  payload?: { quantity?: number; uom?: string | null; materialId?: string | null; reason?: string | null },
+): Promise<string> => {
+  try {
+    const response = await axiosInstance.post<CreatedResponse>(`${BASE}/adjustments/${adjustmentId}/reverse`, payload ?? {});
+    return response.data?.id;
+  } catch (error: unknown) {
+    throw new Error(readError(error, "Could not reverse the stock adjustment."));
   }
 };

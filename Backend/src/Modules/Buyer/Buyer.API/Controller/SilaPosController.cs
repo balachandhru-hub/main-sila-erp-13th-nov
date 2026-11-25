@@ -7,6 +7,7 @@ using Buyer.Application.Features.Queries.GetSilaPosBatch;
 using Buyer.Application.Features.Queries.GetSilaPosBatches;
 using Buyer.Application.Features.Queries.GetSilaPosTransaction;
 using Buyer.Application.Features.Queries.GetSilaPosTransactions;
+using Buyer.Application.Features.Queries.PreviewSilaPosConsumption;
 using Buyer.Domain.Dtos;
 using MediatR;
 using Microsoft.AspNetCore.Http;
@@ -108,14 +109,42 @@ namespace Buyer.API.Controllers
         }
 
         [HttpPost]
+        [Route("api/v1/buyer/sila/pos/batches/{batchId}/consumption-preview")]
+        [ApiAuthorization(Name = "MANAGE_SILA_POS")]
+        [SwaggerOperation("PreviewSilaPosConsumption")]
+        [SwaggerResponse(200, type: typeof(SilaPosConsumptionPreviewDto))]
+        public async Task<IActionResult> ConsumptionPreview([FromRoute] Guid batchId, [FromBody] SilaPosProcessRequestDto? body)
+        {
+            _logger.LogDebug($"Previewing POS consumption. BatchId: {batchId}, Selected: {body?.TransactionIds?.Count}");
+            SilaPosConsumptionPreviewDto result = await _mediator.Send(new PreviewSilaPosConsumptionQuery
+            {
+                OrganizationId = GetOrganizationId(),
+                UserId = GetUserId(),
+                RoleId = GetRoleId(),
+                BatchId = batchId,
+                TransactionIds = body?.TransactionIds
+            });
+            _logger.LogDebug($"POS consumption previewed. BatchNumber: {result.BatchNumber}, Lines: {result.Lines.Count}");
+            return Ok(result);
+        }
+
+        [HttpPost]
         [Route("api/v1/buyer/sila/pos/batches/{batchId}/process")]
         [ApiAuthorization(Name = "MANAGE_SILA_POS")]
         [SwaggerOperation("ProcessSilaPosBatch")]
         [SwaggerResponse(200, type: typeof(SilaPosImportResultDto))]
-        public async Task<IActionResult> Process([FromRoute] Guid batchId)
+        public async Task<IActionResult> Process([FromRoute] Guid batchId, [FromBody] SilaPosProcessRequestDto? body)
         {
-            _logger.LogDebug($"Processing POS batch. BatchId: {batchId}");
-            SilaPosImportResultDto result = await _mediator.Send(new ProcessSilaPosBatchCommand { OrganizationId = GetOrganizationId(), UserId = GetUserId(), RoleId = GetRoleId(), BatchId = batchId });
+            _logger.LogDebug($"Processing POS batch. BatchId: {batchId}, Selected: {body?.TransactionIds?.Count}, QueueErp: {body?.QueueErpPosting}");
+            SilaPosImportResultDto result = await _mediator.Send(new ProcessSilaPosBatchCommand
+            {
+                OrganizationId = GetOrganizationId(),
+                UserId = GetUserId(),
+                RoleId = GetRoleId(),
+                BatchId = batchId,
+                TransactionIds = body?.TransactionIds,
+                QueueErpPosting = body?.QueueErpPosting
+            });
             _logger.LogDebug($"POS batch processed. BatchNumber: {result.BatchNumber}, Processed: {result.Processed}, Failed: {result.Failed}");
             return Ok(result);
         }

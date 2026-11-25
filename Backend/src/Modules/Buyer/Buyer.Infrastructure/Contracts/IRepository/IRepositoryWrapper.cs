@@ -106,6 +106,7 @@ namespace Buyer.Infrastructure.Contracts.IRepository
         IInvoiceRepository Invoice { get; }
         IRecipeFamilyRepository RecipeFamily { get; }
         IRecipeCategoryRepository RecipeCategory { get; }
+        IGoodsIssueCostCenterRepository GoodsIssueCostCenter { get; }
         ISilaApprovalStepRepository SilaApprovalStep { get; }
         IPosSourceRepository PosSource { get; }
         IPosOutletMappingRepository PosOutletMapping { get; }
@@ -133,6 +134,16 @@ namespace Buyer.Infrastructure.Contracts.IRepository
         IMenuPosMappingRepository MenuPosMapping { get; }
         IPmsDemandSnapshotRepository PmsDemandSnapshot { get; }
         IMenuEngineeringSettingsRepository MenuEngineeringSettings { get; }
+        IRecipeLegacyBatchRepository RecipeLegacyBatch { get; }
+        IRecipeLegacyRecipeRepository RecipeLegacyRecipe { get; }
+        IRecipeLegacyMaterialMapRepository RecipeLegacyMaterialMap { get; }
+        IRecipeLegacyImageRepository RecipeLegacyImage { get; }
+        ISilaUserPurchasingProfileRepository SilaUserPurchasingProfile { get; }
+        ISilaUserPoFlexConfigRepository SilaUserPoFlexConfig { get; }
+        ISilaUserPoFlexParamRepository SilaUserPoFlexParam { get; }
+        ISilaUserPoFlexConditionRepository SilaUserPoFlexCondition { get; }
+        ISilaVoicePoSessionRepository SilaVoicePoSession { get; }
+        ISilaVoicePoTurnRepository SilaVoicePoTurn { get; }
         bool Save();
         Task<bool> SaveAsync();
     }

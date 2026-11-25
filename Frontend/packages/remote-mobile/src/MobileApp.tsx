@@ -21,6 +21,7 @@ import PoDetailScreen from './screens/receive/PoDetailScreen';
 import HistoryScreen from './screens/receive/HistoryScreen';
 import PendingGrnScreen from './screens/receive/PendingGrnScreen';
 import PurchaseRequestsScreen from './screens/inventory/PurchaseRequestsScreen';
+import VoicePoScreen from './screens/purchasing/VoicePoScreen';
 import RecommendationsScreen from './screens/inventory/RecommendationsScreen';
 import GoodsIssuesScreen from './screens/inventory/GoodsIssuesScreen';
 import GoodsIssueFormScreen from './screens/inventory/GoodsIssueFormScreen';
@@ -36,12 +37,18 @@ import AboutScreen from './screens/more/AboutScreen';
 import InventoryScreen from './screens/inventory/InventoryScreen';
 import LiveStockScreen from './screens/inventory/LiveStockScreen';
 import MaterialStockScreen from './screens/inventory/MaterialStockScreen';
+import ScanMaterialScreen from './screens/inventory/ScanMaterialScreen';
+import InventoryTransactionsScreen from './screens/inventory/InventoryTransactionsScreen';
 import TransfersScreen from './screens/inventory/TransfersScreen';
 import TransferFormScreen from './screens/inventory/TransferFormScreen';
 import TransferDetailScreen from './screens/inventory/TransferDetailScreen';
 import CountListScreen from './screens/count/CountListScreen';
 import RecipesScreen from './screens/recipes/RecipesScreen';
 import RecipeDetailScreen from './screens/recipes/RecipeDetailScreen';
+import RecipeStudioHomeScreen from './screens/recipes/RecipeStudioHomeScreen';
+import RecipeDraftWizardScreen from './screens/recipes/RecipeDraftWizardScreen';
+import RecipeDraftsScreen from './screens/recipes/RecipeDraftsScreen';
+import RecipeApprovalsScreen from './screens/recipes/RecipeApprovalsScreen';
 import MenuDashboardScreen from './screens/menu/MenuDashboardScreen';
 import MenuItemsScreen from './screens/menu/MenuItemsScreen';
 import MenuItemEditorScreen from './screens/menu/MenuItemEditorScreen';
@@ -137,12 +144,19 @@ const MobileSurface: React.FC<{ base: string }> = ({ base }) => {
                 <Route path="receive/pending" element={<PendingGrnScreen />} />
 
                 <Route path="inventory" element={<InventoryScreen />} />
+                <Route path="inventory/scan" element={<ScanMaterialScreen />} />
+                <Route path="inventory/transactions" element={<InventoryTransactionsScreen />} />
                 <Route path="inventory/stock" element={<LiveStockScreen />} />
                 <Route path="inventory/stock/:materialId" element={<MaterialStockScreen />} />
                 <Route path="inventory/transfers" element={<TransfersScreen />} />
                 <Route path="inventory/transfers/new" element={<TransferFormScreen />} />
                 <Route path="inventory/transfers/:transferId" element={<TransferDetailScreen />} />
-                <Route path="recipes" element={<RecipesScreen />} />
+                <Route path="recipes" element={<RecipeStudioHomeScreen />} />
+                <Route path="recipes/catalog" element={<RecipesScreen />} />
+                <Route path="recipes/draft/new" element={<RecipeDraftWizardScreen />} />
+                <Route path="recipes/drafts" element={<RecipeDraftsScreen />} />
+                <Route path="recipes/approvals" element={<RecipeApprovalsScreen />} />
+                <Route path="recipes/approvals/:recipeId" element={<RecipeDetailScreen approvalMode />} />
                 <Route path="recipes/:recipeId" element={<RecipeDetailScreen />} />
                 <Route path="menu" element={<MenuDashboardScreen />} />
                 <Route path="menu/items" element={<MenuItemsScreen />} />
@@ -161,6 +175,7 @@ const MobileSurface: React.FC<{ base: string }> = ({ base }) => {
                 <Route path="inventory/counts" element={<CountListScreen />} />
                 <Route path="inventory/counts/:stockCountId" element={<CountSessionScreen />} />
                 <Route path="inventory/purchase-requests" element={<PurchaseRequestsScreen />} />
+                <Route path="purchasing/voice-po" element={<VoicePoScreen />} />
                 <Route path="inventory/recommendations" element={<RecommendationsScreen />} />
                 <Route path="inventory/goods-issues" element={<GoodsIssuesScreen />} />
                 <Route path="inventory/goods-issues/new" element={<GoodsIssueFormScreen />} />

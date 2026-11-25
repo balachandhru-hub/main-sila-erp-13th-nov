@@ -1,4 +1,5 @@
 using Buyer.Application.Features.Commands.CreateSilaGoodsIssue;
+using Buyer.Application.Features.Commands.ReverseSilaGoodsIssue;
 using Buyer.Application.Features.Queries.GetSilaGoodsIssue;
 using Buyer.Application.Features.Queries.GetSilaGoodsIssueFromBucket;
 using Buyer.Application.Features.Queries.GetSilaGoodsIssues;
@@ -107,6 +108,32 @@ namespace Buyer.API.Controllers
                 StatusCode = 200,
                 Message = "Success",
                 Description = "Goods issue posted."
+            });
+        }
+
+        [HttpPost]
+        [Route("api/v1/buyer/sila/goods-issues/{goodsIssueId}/reverse")]
+        [ApiAuthorization(Name = "POST_SILA_GOODS_ISSUE")]
+        [SwaggerOperation("ReverseSilaGoodsIssue")]
+        [SwaggerResponse(200, type: typeof(SuccessResponseDto))]
+        public async Task<IActionResult> Reverse([FromRoute] Guid goodsIssueId, [FromBody] SilaGoodsIssueReverseDto? request)
+        {
+            _logger.LogDebug($"Reversing goods issue. GoodsIssueId: {goodsIssueId}");
+            Guid id = await _mediator.Send(new ReverseSilaGoodsIssueCommand
+            {
+                OrganizationId = GetOrganizationId(),
+                UserId = GetUserId(),
+                RoleId = GetRoleId(),
+                GoodsIssueId = goodsIssueId,
+                Request = request ?? new SilaGoodsIssueReverseDto()
+            });
+            _logger.LogDebug($"Goods issue reverse posted. GoodsIssueId: {id}");
+            return Ok(new SuccessResponseDto
+            {
+                Id = id.ToString(),
+                StatusCode = 200,
+                Message = "Success",
+                Description = "Goods issue reverse posted."
             });
         }
     }

@@ -61,6 +61,7 @@ const HomeScreen: React.FC = () => {
     if (task.type === 'APPROVE_INVOICE') return caps.approveInvoices;
     if (task.type === 'INVOICE') return caps.viewInvoices;
     if (task.type === 'CREDIT_MEMO') return caps.viewCreditMemos || caps.processCreditMemos;
+    if (task.type === 'PURCHASE_ORDER') return can.requestPurchase || caps.viewReceiving;
     return caps.viewReceiving;
   });
   const exceptions = (data?.exceptions ?? []).filter((row) => {
@@ -82,10 +83,25 @@ const HomeScreen: React.FC = () => {
     { label: 'Invoices', icon: 'scan', to: 'receive/posted-invoices', show: caps.viewInvoices },
     { label: 'Credit memos', icon: 'scan', to: 'receive/credit-memos', show: caps.viewCreditMemos },
     { label: 'Recommendations', icon: 'purchaseOrders', to: 'inventory/recommendations', show: caps.recommendation },
+    { label: 'Create PO by Voice', icon: 'purchaseOrders', to: 'purchasing/voice-po', show: can.requestPurchase },
     { label: 'Menu Engineering', icon: 'recipes', to: 'menu', show: can.viewMenuEngineering },
+    { label: 'Recipe Studio', icon: 'recipes', to: 'recipes', show: can.manageRecipe || can.approveRecipe },
+    { label: 'Scan material', icon: 'scan', to: 'inventory/scan', show: caps.viewInventory },
     { label: 'Live Stock', icon: 'inventory', to: 'inventory/stock', show: caps.viewInventory },
     { label: 'Raise ITO', icon: 'transfer', to: 'inventory/transfers/new', show: caps.viewInventory && can.manageTransfer },
-    { label: 'Approvals', icon: 'approvals', to: 'tasks', show: caps.approveCount || caps.approveTransfer || caps.approveRecipe || caps.approvePrice || caps.approveInvoices || caps.approveCreditMemos },
+    {
+      label: 'Approvals',
+      icon: 'approvals',
+      to: 'tasks?tab=approvals',
+      show:
+        caps.approveCount
+        || caps.approveTransfer
+        || caps.approveRecipe
+        || caps.approvePrice
+        || caps.approveInvoices
+        || caps.approveCreditMemos
+        || can.requestPurchase,
+    },
   ];
 
   const openTask = (task: SilaReceivingTask) => {
@@ -103,6 +119,20 @@ const HomeScreen: React.FC = () => {
     }
     if (task.invoiceId) {
       go(`receive/invoices/${task.invoiceId}`);
+      return;
+    }
+    // Voice/text POs waiting for approval — open the PO with Approve/Reject.
+    if (
+      task.purchaseOrderId
+      && (
+        task.type === 'PURCHASE_ORDER'
+        || (task.title || '').toLowerCase().includes('approve purchase')
+        || task.action === 'REVIEW'
+      )
+      && task.action !== 'RECEIVE'
+      && task.action !== 'RECEIVE_BALANCE'
+    ) {
+      go(`receive/pos/${task.purchaseOrderId}`);
       return;
     }
     if (task.purchaseOrderId && (task.action === 'RECEIVE' || task.action === 'RECEIVE_BALANCE')) {
@@ -164,11 +194,27 @@ const HomeScreen: React.FC = () => {
 
         <section className="sm-section" aria-labelledby="sm-home-approvals">
           <h2 id="sm-home-approvals">Pending Approvals</h2>
-          {approvals.length === 0 && !dashboard.loading && <Empty text="No pending approvals." description="PO and GRN reversal approvals are not in the current engine." />}
+          {approvals.length === 0 && !dashboard.loading && (
+            <Empty text="No pending approvals." description="Invoice, credit memo, transfer and purchase order approvals waiting for you appear here." />
+          )}
           <ul className="sm-list">
             {approvals.map((row, index) => (
               <li key={`${row.document}-${index}`}>
-                <button type="button" className="sm-list-btn" onClick={() => row.creditMemoId ? go(`receive/credit-memos/${row.creditMemoId}`) : row.invoiceId ? go(`receive/invoices/${row.invoiceId}`) : row.transferId ? go('inventory/transfers?tab=to-approve') : undefined}>
+                <button
+                  type="button"
+                  className="sm-list-btn"
+                  onClick={() =>
+                    row.creditMemoId
+                      ? go(`receive/credit-memos/${row.creditMemoId}`)
+                      : row.invoiceId
+                        ? go(`receive/invoices/${row.invoiceId}`)
+                        : row.transferId
+                          ? go('inventory/transfers?tab=to-approve')
+                          : row.purchaseOrderId
+                            ? go(`receive/pos/${row.purchaseOrderId}`)
+                            : undefined
+                  }
+                >
                   <span className="sm-row"><strong>{row.document}</strong><StatusBadge status={row.status} /></span>
                   <span className="sm-meta">{row.type}{row.supplierName ? ` · ${row.supplierName}` : ''} · {row.age}</span>
                 </button>

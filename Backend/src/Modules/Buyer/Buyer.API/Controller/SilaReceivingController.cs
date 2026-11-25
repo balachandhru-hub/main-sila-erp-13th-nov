@@ -2,6 +2,7 @@ using Buyer.Application.Features.Commands.CopySilaInvoice;
 using Buyer.Application.Features.Commands.CreateSilaInvoice;
 using Buyer.Application.Features.Commands.DecideSilaCreditMemo;
 using Buyer.Application.Features.Commands.DecideSilaInvoice;
+using Buyer.Application.Features.Commands.DecideSilaPurchaseOrder;
 using Buyer.Application.Features.Commands.PrepareSilaCreateInvoice;
 using Buyer.Application.Features.Commands.ExtractSilaInvoice;
 using Buyer.Application.Features.Commands.LinkSilaInvoiceGoodsReceipts;
@@ -121,6 +122,29 @@ namespace Buyer.API.Controllers
                 PurchaseOrderId = purchaseOrderId
             });
             _logger.LogDebug($"Purchase order for receiving fetched. PurchaseOrderId: {purchaseOrderId}");
+            return Ok(result);
+        }
+
+        /// <summary>
+        /// Approves or rejects a local Voice/text purchase order. On final approval, posts Create PO to SAP.
+        /// </summary>
+        [HttpPost]
+        [Route("api/v1/buyer/sila/purchase-orders/{purchaseOrderId}/approval")]
+        [ApiAuthorization(AnyOf = "CREATE_PURCHASE_ORDER|REQUEST_SILA_PURCHASE|GET_PURCHASE_ORDER")]
+        [SwaggerOperation("DecideSilaPurchaseOrder")]
+        [SwaggerResponse(200, type: typeof(PurchaseOrderProcessResultDto))]
+        public async Task<IActionResult> DecidePurchaseOrder([FromRoute] Guid purchaseOrderId, [FromBody] SilaInvoiceDecisionDto request)
+        {
+            _logger.LogDebug($"Deciding purchase order approval. PurchaseOrderId: {purchaseOrderId}");
+            PurchaseOrderProcessResultDto result = await _mediator.Send(new DecideSilaPurchaseOrderCommand
+            {
+                OrganizationId = GetOrganizationId(),
+                UserId = GetUserId(),
+                RoleId = GetRoleId(),
+                PurchaseOrderId = purchaseOrderId,
+                Request = request ?? new SilaInvoiceDecisionDto()
+            });
+            _logger.LogDebug($"Purchase order approval finished. PurchaseOrderId: {purchaseOrderId}, Status: {result.Status}, Erp: {result.ErpPurchaseOrderId}");
             return Ok(result);
         }
 

@@ -1,4 +1,5 @@
 using Buyer.Application.Features.Commands.CreateSilaAdjustment;
+using Buyer.Application.Features.Commands.ReverseSilaAdjustment;
 using Buyer.Application.Features.Queries.GetSilaAdjustment;
 using Buyer.Application.Features.Queries.GetSilaAdjustments;
 using Buyer.Domain.Dtos;
@@ -89,6 +90,32 @@ namespace Buyer.API.Controllers
                 StatusCode = 200,
                 Message = "Success",
                 Description = "Stock adjustment posted."
+            });
+        }
+
+        [HttpPost]
+        [Route("api/v1/buyer/sila/adjustments/{adjustmentId}/reverse")]
+        [ApiAuthorization(Name = "POST_SILA_ADJUSTMENT")]
+        [SwaggerOperation("ReverseSilaAdjustment")]
+        [SwaggerResponse(200, type: typeof(SuccessResponseDto))]
+        public async Task<IActionResult> Reverse([FromRoute] Guid adjustmentId, [FromBody] SilaAdjustmentReverseDto? request)
+        {
+            _logger.LogDebug($"Reversing stock adjustment. AdjustmentId: {adjustmentId}");
+            Guid id = await _mediator.Send(new ReverseSilaAdjustmentCommand
+            {
+                OrganizationId = GetOrganizationId(),
+                UserId = GetUserId(),
+                RoleId = GetRoleId(),
+                AdjustmentId = adjustmentId,
+                Request = request ?? new SilaAdjustmentReverseDto()
+            });
+            _logger.LogDebug($"Stock adjustment reverse posted. AdjustmentId: {id}");
+            return Ok(new SuccessResponseDto
+            {
+                Id = id.ToString(),
+                StatusCode = 200,
+                Message = "Success",
+                Description = "Stock adjustment reverse posted."
             });
         }
     }
