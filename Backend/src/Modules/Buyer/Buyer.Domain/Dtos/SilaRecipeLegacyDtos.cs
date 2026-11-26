@@ -189,4 +189,23 @@ namespace Buyer.Domain.Dtos
         public int Skipped { get; set; }
         public string? ReportJson { get; set; }
     }
+
+    /// <summary>What a staged recipe of the recipe workbook format carries beyond the legacy columns.</summary>
+    public class SilaRecipeLegacyExtrasDto
+    {
+        public string? FamilyCode { get; set; }
+        public string? CategoryCode { get; set; }
+        public string? PosCode { get; set; }
+        public string? SellingUom { get; set; }
+        public string? Currency { get; set; }
+        public List<SilaRecipeLegacyOutletPriceDto> OutletPrices { get; set; } = new();
+    }
+
+    public class SilaRecipeLegacyOutletPriceDto
+    {
+        public string? OutletCode { get; set; }
+        public decimal? MenuPrice { get; set; }
+        public string? Currency { get; set; }
+        public int Row { get; set; }
+    }
 }

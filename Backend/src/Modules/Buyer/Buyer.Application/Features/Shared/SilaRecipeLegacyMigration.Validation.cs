@@ -135,43 +135,76 @@ namespace Buyer.Application.Features.Shared
                 .Select(g => g.Key)
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
+            List<SilaRecipeLegacyExtrasDto?> allExtras = recipes.Select(ExtrasOf).ToList();
+            HashSet<string> batchIds = recipes.Select(x => x.LegacyRecipeId).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            List<string> outsideSubCodes = recipes
+                .SelectMany(x => Deserialize<List<SilaRecipeLegacySubRecipeDto>>(x.SubRecipesJson) ?? new())
+                .Select(x => x.SubLegacyRecipeId)
+                .Where(x => !string.IsNullOrWhiteSpace(x) && !batchIds.Contains(x))
+                .Select(x => x.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            Dictionary<string, Recipe> existingRecipes = outsideSubCodes.Count == 0
+                ? new Dictionary<string, Recipe>(StringComparer.OrdinalIgnoreCase)
+                : await repository.Recipe
+                    .FindByCondition(x => x.BuyerId == buyer.Id && x.IsActive && outsideSubCodes.Contains(x.RecipeCode))
+                    .ToDictionaryAsync(x => x.RecipeCode, StringComparer.OrdinalIgnoreCase, cancellationToken);
+            HashSet<string> familyCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            HashSet<string> categoryCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            HashSet<string> outletCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (allExtras.Any(x => x != null))
+            {
+                familyCodes = (await repository.RecipeFamily.FindByCondition(x => x.BuyerId == buyer.Id && x.IsActive).Select(x => x.Code).ToListAsync(cancellationToken))
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                categoryCodes = (await repository.RecipeCategory.FindByCondition(x => x.BuyerId == buyer.Id && x.IsActive).Select(x => x.Code).ToListAsync(cancellationToken))
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                outletCodes = (await repository.InventoryLocation
+                        .FindByCondition(x => x.BuyerId == buyer.Id && x.IsActive && x.LocationType == Common.SILA_LOCATION_OUTLET)
+                        .Select(x => x.LocationCode).ToListAsync(cancellationToken))
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            }
+
             int valid = 0, warning = 0, error = 0, unmapped = 0, duplicate = 0;
             List<object> reportRows = new List<object>();
 
             foreach (RecipeLegacyRecipe recipe in recipes)
             {
                 List<SilaRecipeLegacyFindingDto> findings = new List<SilaRecipeLegacyFindingDto>();
+                SilaRecipeLegacyExtrasDto? extras = ExtrasOf(recipe);
+                string headerSheet = extras != null ? SilaRecipeImport.SHEET_RECIPES : SHEET_HEADER;
+                string ingredientsSheet = extras != null ? SilaRecipeImport.SHEET_RECIPES : SHEET_INGREDIENTS;
+                string subsSheet = extras != null ? SilaRecipeImport.SHEET_RECIPES : SHEET_SUB_RECIPES;
                 bool isDuplicate = recipe.ValidationStatus == Common.SILA_RECIPE_LEGACY_DUPLICATE
                     || recipes.Count(x => string.Equals(x.LegacyRecipeId, recipe.LegacyRecipeId, StringComparison.OrdinalIgnoreCase)) > 1;
 
                 if (string.IsNullOrWhiteSpace(recipe.RecipeName))
                 {
-                    findings.Add(Finding(SEVERITY_ERROR, "NAME_REQUIRED", "Recipe name is required.", "RecipeName", recipe.SourceRow, SHEET_HEADER));
+                    findings.Add(Finding(SEVERITY_ERROR, "NAME_REQUIRED", "Recipe name is required.", "RecipeName", recipe.SourceRow, headerSheet));
                 }
 
                 if (!string.IsNullOrWhiteSpace(recipe.RecipeFormat) && !Validation.IsKnownFormat(recipe.RecipeFormat))
                 {
-                    findings.Add(Finding(SEVERITY_ERROR, "FORMAT_INVALID", $"Unknown recipe format '{recipe.RecipeFormat}'.", "RecipeFormat", recipe.SourceRow, SHEET_HEADER));
+                    findings.Add(Finding(SEVERITY_ERROR, "FORMAT_INVALID", $"Unknown recipe format '{recipe.RecipeFormat}'.", "RecipeFormat", recipe.SourceRow, headerSheet));
                 }
 
                 if (!string.IsNullOrWhiteSpace(recipe.ProductClass) && !Validation.IsKnownProductClass(recipe.ProductClass))
                 {
-                    findings.Add(Finding(SEVERITY_ERROR, "PRODUCT_CLASS_INVALID", $"Unknown product class '{recipe.ProductClass}'.", "ProductClass", recipe.SourceRow, SHEET_HEADER));
+                    findings.Add(Finding(SEVERITY_ERROR, "PRODUCT_CLASS_INVALID", $"Unknown product class '{recipe.ProductClass}'.", "ProductClass", recipe.SourceRow, headerSheet));
                 }
 
                 if (ServingQtyOf(recipe) <= 0)
                 {
-                    findings.Add(Finding(SEVERITY_ERROR, "YIELD_REQUIRED", "Yield or portion quantity must be greater than zero.", "YieldQty", recipe.SourceRow, SHEET_HEADER));
+                    findings.Add(Finding(SEVERITY_ERROR, "YIELD_REQUIRED", "Yield or portion quantity must be greater than zero.", "YieldQty", recipe.SourceRow, headerSheet));
                 }
 
                 if (circular.Contains(recipe.LegacyRecipeId))
                 {
-                    findings.Add(Finding(SEVERITY_ERROR, "CIRCULAR_SUB_RECIPE", "Sub-recipe references form a cycle.", "SubRecipes", recipe.SourceRow, SHEET_SUB_RECIPES));
+                    findings.Add(Finding(SEVERITY_ERROR, "CIRCULAR_SUB_RECIPE", "Sub-recipe references form a cycle.", "SubRecipes", recipe.SourceRow, subsSheet));
                 }
 
                 if (nameDupes.Contains(recipe.RecipeName.Trim()))
                 {
-                    findings.Add(Finding(SEVERITY_WARNING, "NAME_DUPLICATE", "Another staged recipe shares this name.", "RecipeName", recipe.SourceRow, SHEET_HEADER));
+                    findings.Add(Finding(SEVERITY_WARNING, "NAME_DUPLICATE", "Another staged recipe shares this name.", "RecipeName", recipe.SourceRow, headerSheet));
                 }
 
                 List<SilaRecipeLegacyIngredientDto> ingredients = Deserialize<List<SilaRecipeLegacyIngredientDto>>(recipe.IngredientsJson) ?? new();
@@ -180,20 +213,33 @@ namespace Buyer.Application.Features.Shared
 
                 if (itemMode != Common.SILA_RECIPE_DIRECT && ingredients.Count == 0 && subs.Count == 0)
                 {
-                    findings.Add(Finding(SEVERITY_ERROR, "INGREDIENTS_REQUIRED", "At least one ingredient or sub-recipe is required.", "Ingredients", recipe.SourceRow, SHEET_INGREDIENTS));
+                    findings.Add(Finding(SEVERITY_ERROR, "INGREDIENTS_REQUIRED", "At least one ingredient or sub-recipe is required.", "Ingredients", recipe.SourceRow, ingredientsSheet));
                 }
 
                 foreach (SilaRecipeLegacySubRecipeDto sub in subs)
                 {
-                    if (!recipes.Any(x => string.Equals(x.LegacyRecipeId, sub.SubLegacyRecipeId, StringComparison.OrdinalIgnoreCase)))
+                    if (!batchIds.Contains(sub.SubLegacyRecipeId)
+                        && (!existingRecipes.TryGetValue(sub.SubLegacyRecipeId.Trim(), out Recipe? existingSub)
+                            || existingSub.ActiveVersion <= 0
+                            || existingSub.Status == Common.SILA_RECIPE_INACTIVE))
                     {
-                        findings.Add(Finding(SEVERITY_ERROR, "SUB_RECIPE_MISSING", $"Sub-recipe '{sub.SubLegacyRecipeId}' is not in this batch.", "SubRecipes", recipe.SourceRow, SHEET_SUB_RECIPES));
+                        findings.Add(Finding(SEVERITY_ERROR, "SUB_RECIPE_MISSING", $"Sub-recipe '{sub.SubLegacyRecipeId}' is not in this batch and is not an approved recipe.", "SubRecipes", recipe.SourceRow, subsSheet));
                     }
 
                     if (sub.Quantity <= 0)
                     {
-                        findings.Add(Finding(SEVERITY_ERROR, "SUB_QTY_INVALID", $"Sub-recipe '{sub.SubLegacyRecipeId}' quantity must be greater than zero.", "SubRecipes", recipe.SourceRow, SHEET_SUB_RECIPES));
+                        findings.Add(Finding(SEVERITY_ERROR, "SUB_QTY_INVALID", $"Sub-recipe '{sub.SubLegacyRecipeId}' quantity must be greater than zero.", "SubRecipes", recipe.SourceRow, subsSheet));
                     }
+                }
+
+                if (subs.Count > 0 && itemMode != Common.SILA_RECIPE_BATCH)
+                {
+                    findings.Add(Finding(SEVERITY_ERROR, "SUB_NEEDS_BATCH", "Only a BATCH recipe can contain a sub-recipe. Set ItemMode to BATCH.", "ItemMode", recipe.SourceRow, headerSheet));
+                }
+
+                if (extras != null)
+                {
+                    AddWorkbookFindings(findings, recipe, extras, familyCodes, categoryCodes, outletCodes, headerSheet);
                 }
 
                 bool hasUnmapped = false;
@@ -205,12 +251,12 @@ namespace Buyer.Application.Features.Shared
                 {
                     if (ingredient.Quantity <= 0)
                     {
-                        findings.Add(Finding(SEVERITY_ERROR, "QTY_INVALID", $"Ingredient line {ingredient.Line} quantity must be greater than zero.", "Quantity", recipe.SourceRow, SHEET_INGREDIENTS));
+                        findings.Add(Finding(SEVERITY_ERROR, "QTY_INVALID", $"Ingredient line {ingredient.Line} quantity must be greater than zero.", "Quantity", recipe.SourceRow, ingredientsSheet));
                     }
 
                     if (string.IsNullOrWhiteSpace(ingredient.Uom))
                     {
-                        findings.Add(Finding(SEVERITY_WARNING, "UOM_MISSING", $"Ingredient line {ingredient.Line} has no UOM.", "UOM", recipe.SourceRow, SHEET_INGREDIENTS));
+                        findings.Add(Finding(SEVERITY_WARNING, "UOM_MISSING", $"Ingredient line {ingredient.Line} has no UOM.", "UOM", recipe.SourceRow, ingredientsSheet));
                     }
 
                     RecipeLegacyMaterialMap? map = recipeMaps.FirstOrDefault(x => x.IngredientLine == ingredient.Line);
@@ -227,7 +273,7 @@ namespace Buyer.Application.Features.Shared
                         hasUnmapped = true;
                         map.Status = Common.SILA_RECIPE_LEGACY_UNMAPPED;
                         map.MappedMaterialId = null;
-                        findings.Add(Finding(SEVERITY_ERROR, "MATERIAL_UNMAPPED", $"Ingredient line {ingredient.Line} has no material number.", "MaterialNumber", recipe.SourceRow, SHEET_INGREDIENTS));
+                        findings.Add(Finding(SEVERITY_ERROR, "MATERIAL_UNMAPPED", $"Ingredient line {ingredient.Line} has no material number.", "MaterialNumber", recipe.SourceRow, ingredientsSheet));
                         continue;
                     }
 
@@ -247,7 +293,7 @@ namespace Buyer.Application.Features.Shared
                         hasUnmapped = true;
                         map.Status = Common.SILA_RECIPE_LEGACY_UNMAPPED;
                         map.MappedMaterialId = null;
-                        findings.Add(Finding(SEVERITY_ERROR, "MATERIAL_NOT_FOUND", $"Material '{code}' was not found in Item Master.", "MaterialNumber", recipe.SourceRow, SHEET_INGREDIENTS));
+                        findings.Add(Finding(SEVERITY_ERROR, "MATERIAL_NOT_FOUND", $"Material '{code}' was not found in Item Master.", "MaterialNumber", recipe.SourceRow, ingredientsSheet));
                     }
                 }
 
@@ -335,6 +381,54 @@ namespace Buyer.Application.Features.Shared
                 }).ToList()
             };
             return SilaRecipeExcel.Build($"recipe-legacy-validation-{batch.BatchNumber}.xlsx", sheet);
+        }
+
+        private static void AddWorkbookFindings(
+            List<SilaRecipeLegacyFindingDto> findings,
+            RecipeLegacyRecipe recipe,
+            SilaRecipeLegacyExtrasDto extras,
+            HashSet<string> familyCodes,
+            HashSet<string> categoryCodes,
+            HashSet<string> outletCodes,
+            string headerSheet)
+        {
+            if (string.IsNullOrWhiteSpace(recipe.RecipeFormat))
+            {
+                findings.Add(Finding(SEVERITY_ERROR, "ITEM_MODE_REQUIRED", "ItemMode is required (DIRECT, RECIPE or BATCH).", "ItemMode", recipe.SourceRow, headerSheet));
+            }
+
+            if (recipe.PortionQty is not > 0 || string.IsNullOrWhiteSpace(recipe.PortionUom))
+            {
+                findings.Add(Finding(SEVERITY_ERROR, "SERVING_REQUIRED", "ServingQty must be greater than zero and ServingUom is required.", "ServingQty", recipe.SourceRow, headerSheet));
+            }
+
+            if (!string.IsNullOrWhiteSpace(extras.FamilyCode) && !familyCodes.Contains(extras.FamilyCode))
+            {
+                findings.Add(Finding(SEVERITY_ERROR, "FAMILY_NOT_FOUND", $"Family '{extras.FamilyCode}' does not exist. Use a family code from Recipe master data.", "Family", recipe.SourceRow, headerSheet));
+            }
+
+            if (!string.IsNullOrWhiteSpace(extras.CategoryCode) && !categoryCodes.Contains(extras.CategoryCode))
+            {
+                findings.Add(Finding(SEVERITY_ERROR, "CATEGORY_NOT_FOUND", $"Category '{extras.CategoryCode}' does not exist. Use a category code from Recipe master data.", "Category", recipe.SourceRow, headerSheet));
+            }
+
+            HashSet<string> priced = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (SilaRecipeLegacyOutletPriceDto price in extras.OutletPrices)
+            {
+                if (string.IsNullOrWhiteSpace(price.OutletCode) || !outletCodes.Contains(price.OutletCode))
+                {
+                    findings.Add(Finding(SEVERITY_ERROR, "OUTLET_NOT_FOUND", $"Outlet '{price.OutletCode}' is not an active outlet location.", "OutletCode", price.Row, SilaRecipeImport.SHEET_PRICES));
+                }
+                else if (!priced.Add(price.OutletCode))
+                {
+                    findings.Add(Finding(SEVERITY_ERROR, "OUTLET_DUPLICATE", $"Outlet '{price.OutletCode}' is priced twice for this recipe.", "OutletCode", price.Row, SilaRecipeImport.SHEET_PRICES));
+                }
+
+                if (price.MenuPrice is not > 0)
+                {
+                    findings.Add(Finding(SEVERITY_ERROR, "MENU_PRICE_INVALID", "MenuPrice must be a number greater than zero.", "MenuPrice", price.Row, SilaRecipeImport.SHEET_PRICES));
+                }
+            }
         }
 
         private static Dictionary<string, IReadOnlyList<string>> BuildSubRecipeAdjacency(List<RecipeLegacyRecipe> recipes)

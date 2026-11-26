@@ -81,6 +81,9 @@ namespace Buyer.Domain.Entities
 
         public string? VariantsJson { get; set; }
 
+        /// <summary>Fields of the recipe workbook format that have no column of their own (family, category, POS code, outlet prices).</summary>
+        public string? ExtrasJson { get; set; }
+
         [Required]
         [MaxLength(20)]
         public string ValidationStatus { get; set; } = string.Empty;

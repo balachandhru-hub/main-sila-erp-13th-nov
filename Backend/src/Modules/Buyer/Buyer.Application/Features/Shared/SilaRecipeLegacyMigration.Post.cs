@@ -151,16 +151,34 @@ namespace Buyer.Application.Features.Shared
 
             foreach (SilaRecipeLegacySubRecipeDto sub in subs)
             {
-                if (!byLegacy.TryGetValue(sub.SubLegacyRecipeId, out RecipeLegacyRecipe? subStaged) || subStaged.CreatedRecipeId == null)
+                if (byLegacy.TryGetValue(sub.SubLegacyRecipeId, out RecipeLegacyRecipe? subStaged))
                 {
-                    throw new BadRequestCustomException("Sub-recipe not posted.", $"Post sub-recipe {sub.SubLegacyRecipeId} before {staged.LegacyRecipeId}.");
+                    if (subStaged.CreatedRecipeId == null)
+                    {
+                        throw new BadRequestCustomException("Sub-recipe not posted.", $"Post sub-recipe {sub.SubLegacyRecipeId} before {staged.LegacyRecipeId}.");
+                    }
+
+                    lines.Add(new SilaRecipeIngredientWriteDto
+                    {
+                        SubRecipeId = subStaged.CreatedRecipeId,
+                        Quantity = sub.Quantity,
+                        Uom = sub.Uom ?? ServingUomOf(subStaged)
+                    });
+                    continue;
+                }
+
+                string subCode = sub.SubLegacyRecipeId.Trim();
+                Recipe? existingSub = await repository.Recipe.FindFirstByConditionAsync(x => x.BuyerId == buyerId && x.IsActive && x.RecipeCode == subCode);
+                if (existingSub == null || existingSub.ActiveVersion <= 0 || existingSub.Status == Common.SILA_RECIPE_INACTIVE)
+                {
+                    throw new BadRequestCustomException("Sub-recipe not found.", $"Sub-recipe {sub.SubLegacyRecipeId} is not in this batch and is not an approved recipe.");
                 }
 
                 lines.Add(new SilaRecipeIngredientWriteDto
                 {
-                    SubRecipeId = subStaged.CreatedRecipeId,
+                    SubRecipeId = existingSub.Id,
                     Quantity = sub.Quantity,
-                    Uom = sub.Uom ?? ServingUomOf(subStaged)
+                    Uom = sub.Uom ?? existingSub.ServingUom
                 });
             }
 
@@ -196,6 +214,12 @@ namespace Buyer.Application.Features.Shared
                 OutletPrices = new List<SilaRecipeOutletPriceWriteDto>()
             };
 
+            SilaRecipeLegacyExtrasDto? extras = ExtrasOf(staged);
+            if (extras != null)
+            {
+                await ApplyWorkbookExtrasAsync(repository, buyerId, extras, write, cancellationToken);
+            }
+
             string recipeCode = await DocumentNumber.NextAsync(repository, buyerId, DocumentNumber.RECIPE, 8, cancellationToken);
             Recipe recipe = new Recipe
             {
@@ -215,6 +239,7 @@ namespace Buyer.Application.Features.Shared
             // dependency chain: we post topological order; for BATCH ApplyAsync, sub-recipes must be APPROVED.
             // Practical approach: if any SubRecipeId lines exist, ensure those recipes are APPROVED (ActiveVersion=Version)
             // via direct promote for migration-created drafts so ApplyAsync accepts them — documented here.
+            bool promoted = false;
             foreach (SilaRecipeIngredientWriteDto line in lines.Where(x => x.SubRecipeId != null))
             {
                 Recipe? sub = await repository.Recipe.FindFirstByConditionAsync(x => x.Id == line.SubRecipeId && x.BuyerId == buyerId && x.IsActive);
@@ -226,7 +251,14 @@ namespace Buyer.Application.Features.Shared
                     repository.Recipe.Update(sub);
                     ledger.AddEvent(Common.SILA_REF_RECIPE, sub.Id, SilaRecipeRules.EVENT_APPROVED,
                         $"Auto-promoted for legacy migration dependency of {staged.LegacyRecipeId}.");
+                    promoted = true;
                 }
+            }
+
+            if (promoted)
+            {
+                // ApplyAsync reads sub-recipes from the database (no tracking), so the promotion must be saved first.
+                await repository.SaveAsync();
             }
 
             await SilaRecipeRules.ApplyAsync(repository, logger, buyerId, userId, roleId, recipe, write, cancellationToken);
@@ -244,6 +276,44 @@ namespace Buyer.Application.Features.Shared
             staged.PublishStatus = PUBLISH_PENDING;
             repository.RecipeLegacyRecipe.Update(staged);
             await repository.SaveAsync();
+        }
+
+        private static async Task ApplyWorkbookExtrasAsync(
+            IRepositoryWrapper repository, Guid buyerId, SilaRecipeLegacyExtrasDto extras, SilaRecipeWriteDto write, CancellationToken cancellationToken)
+        {
+            write.PosCode = extras.PosCode;
+            write.Currency = extras.Currency;
+            if (!string.IsNullOrWhiteSpace(extras.SellingUom))
+            {
+                write.SellingUom = extras.SellingUom;
+            }
+
+            if (!string.IsNullOrWhiteSpace(extras.FamilyCode))
+            {
+                string familyCode = extras.FamilyCode;
+                RecipeFamily? family = await repository.RecipeFamily.FindFirstByConditionAsync(x => x.BuyerId == buyerId && x.IsActive && x.Code == familyCode);
+                write.FamilyId = family?.Id ?? throw new BadRequestCustomException("Family not found.", $"Family {familyCode} does not exist.");
+            }
+
+            if (!string.IsNullOrWhiteSpace(extras.CategoryCode))
+            {
+                string categoryCode = extras.CategoryCode;
+                RecipeCategory? category = await repository.RecipeCategory.FindFirstByConditionAsync(x => x.BuyerId == buyerId && x.IsActive && x.Code == categoryCode);
+                write.CategoryId = category?.Id ?? throw new BadRequestCustomException("Category not found.", $"Category {categoryCode} does not exist.");
+            }
+
+            foreach (SilaRecipeLegacyOutletPriceDto price in extras.OutletPrices)
+            {
+                string outletCode = price.OutletCode ?? string.Empty;
+                InventoryLocation? outlet = await repository.InventoryLocation.FindFirstByConditionAsync(
+                    x => x.BuyerId == buyerId && x.IsActive && x.LocationType == Common.SILA_LOCATION_OUTLET && x.LocationCode == outletCode);
+                if (outlet == null || price.MenuPrice is not > 0)
+                {
+                    throw new BadRequestCustomException("Outlet price invalid.", $"Outlet {outletCode} or its menu price is not valid.");
+                }
+
+                write.OutletPrices.Add(new SilaRecipeOutletPriceWriteDto { OutletLocationId = outlet.Id, MenuPrice = price.MenuPrice.Value, Currency = price.Currency });
+            }
         }
 
         private static List<string> TopologicalOrder(List<RecipeLegacyRecipe> candidates, Dictionary<string, RecipeLegacyRecipe> all)
