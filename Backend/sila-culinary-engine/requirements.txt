@@ -1,0 +1,11 @@
+# SILA Culinary Intelligence Engine — Minimal Phase 0 Stack (pinned to VM-verified compatible versions)
+fastapi==0.115.6
+pydantic==2.10.4
+pydantic-settings==2.7.0
+uvicorn==0.34.0
+httpx==0.28.1
+numpy==2.2.1
+RapidFuzz==3.11.0
+openpyxl==3.1.5
+pytest==8.3.4
+pytest-asyncio==0.25.0
