@@ -1,4 +1,5 @@
 using Buyer.Application.Features.Shared;
+using Buyer.Domain.Common;
 using Buyer.Domain.Dtos;
 using Buyer.Domain.Entities;
 using Buyer.Infrastructure.Contracts.IRepository;
@@ -23,7 +24,8 @@ namespace Buyer.Application.Features.Queries.GetSilaCulinaryAiStatus
             BuyerBusinessProfile buyer = await SilaAccess.GetBuyerAsync(_repository, _logger, request.OrganizationId);
             SilaCulinaryAiConfiguration? entity = await _repository.SilaCulinaryAiConfiguration.FindFirstByConditionAsync(
                 x => x.BuyerId == buyer.Id && x.IsActive);
-            return SilaCulinaryAiSettings.ToStatusDto(entity, buyer.Id);
+            bool canSelectProvider = SilaAccess.HasFullAccess(request.RoleId) || request.RoleId == Common.OUTLET_MANAGER_ROLE_ID;
+            return SilaCulinaryAiSettings.ToStatusDto(entity, buyer.Id, canSelectProvider);
         }
     }
 }

@@ -4,6 +4,7 @@ using Buyer.Domain.Dtos;
 using Buyer.Domain.Entities;
 using Buyer.Infrastructure.Contracts.IRepository;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 using SharedKernel.Integration.Services;
 using SharedKernel.LoggerServices;
 
@@ -101,7 +102,10 @@ namespace Buyer.Application.Features.Commands.SaveSilaCulinaryAiConfig
 
             await _repository.SaveAsync();
             _logger.LogInfo($"Saved Culinary AI Engine configuration. BuyerId: {buyer.Id}, Mode: {entity.OperatingMode}");
-            return SilaCulinaryAiSettings.ToDto(entity, buyer.Id, SilaAccess.IsAdministrator(command.RoleId), _protector);
+            List<SilaCulinaryAiUsageLog> logs = await _repository.SilaCulinaryAiUsageLog
+                .FindByCondition(x => x.BuyerId == buyer.Id && x.IsActive)
+                .ToListAsync(cancellationToken);
+            return SilaCulinaryAiSettings.ToDto(entity, buyer.Id, SilaAccess.IsAdministrator(command.RoleId), _protector, logs);
         }
     }
 }

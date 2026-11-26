@@ -156,6 +156,9 @@ namespace Buyer.Infrastructure.DbContext
         public DbSet<SilaVoicePoSession> SilaVoicePoSession { get; set; }
         public DbSet<SilaVoicePoTurn> SilaVoicePoTurn { get; set; }
         public DbSet<SilaCulinaryAiConfiguration> SilaCulinaryAiConfiguration { get; set; }
+        public DbSet<SilaCulinaryRecipeDraft> SilaCulinaryRecipeDraft { get; set; }
+        public DbSet<SilaCulinaryRecipeRevision> SilaCulinaryRecipeRevision { get; set; }
+        public DbSet<SilaCulinaryAiUsageLog> SilaCulinaryAiUsageLog { get; set; }
 
 
         protected override void OnModelCreating(Microsoft.EntityFrameworkCore.ModelBuilder modelBuilder)
@@ -352,6 +355,13 @@ namespace Buyer.Infrastructure.DbContext
             _ = modelBuilder.Entity<SilaOcrConfiguration>().HasIndex(a => a.BuyerId).IsUnique();
             _ = modelBuilder.Entity<SilaCulinaryAiConfiguration>().HasIndex(a => a.IsActive);
             _ = modelBuilder.Entity<SilaCulinaryAiConfiguration>().HasIndex(a => a.BuyerId).IsUnique();
+            _ = modelBuilder.Entity<SilaCulinaryRecipeDraft>().HasIndex(a => a.IsActive);
+            _ = modelBuilder.Entity<SilaCulinaryRecipeDraft>().HasIndex(a => new { a.BuyerId, a.DraftReference }).IsUnique();
+            _ = modelBuilder.Entity<SilaCulinaryRecipeDraft>().HasIndex(a => new { a.BuyerId, a.Status });
+            _ = modelBuilder.Entity<SilaCulinaryRecipeRevision>().HasIndex(a => a.IsActive);
+            _ = modelBuilder.Entity<SilaCulinaryRecipeRevision>().HasIndex(a => new { a.DraftId, a.RevisionNumber }).IsUnique();
+            _ = modelBuilder.Entity<SilaCulinaryAiUsageLog>().HasIndex(a => a.IsActive);
+            _ = modelBuilder.Entity<SilaCulinaryAiUsageLog>().HasIndex(a => new { a.BuyerId, a.DateCreated });
             _ = modelBuilder.Entity<RecipeSubstitutionProposal>().HasIndex(a => a.IsActive);
             _ = modelBuilder.Entity<RecipeSubstitutionProposal>().HasIndex(a => new { a.BuyerId, a.ProposalNumber }).IsUnique();
             _ = modelBuilder.Entity<RecipeSubstitutionProposal>().HasIndex(a => new { a.BuyerId, a.Status });

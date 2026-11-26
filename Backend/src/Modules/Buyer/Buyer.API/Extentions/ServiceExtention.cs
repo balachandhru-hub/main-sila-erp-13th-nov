@@ -157,6 +157,7 @@ namespace Buyer.API.Extensions
             _ = services.AddScoped<IAesEncryption, AesEncryption>();
             _ = services.AddScoped<IStockInHandProvider, ErpStockInHandProvider>();
             _ = services.AddScoped<ISilaCulinaryAiProviderGateway, SilaCulinaryAiProviderGateway>();
+            _ = services.AddScoped<ISilaCulinaryRecipeService, SilaCulinaryRecipeService>();
             _ = services.AddControllers().AddJsonOptions(options =>
             {
                 // Empty JSON strings must not 400 Guid? model binding (PO flex write payloads).
@@ -182,6 +183,10 @@ namespace Buyer.API.Extensions
             _ = services.AddHttpClient(Common.HTTP_CLIENT_CULINARY_AI, client =>
             {
                 client.Timeout = TimeSpan.FromSeconds(30);
+            });
+            _ = services.AddHttpClient(Common.HTTP_CLIENT_CULINARY_ENGINE, client =>
+            {
+                client.Timeout = TimeSpan.FromSeconds(150);
             });
             _ = services.AddHttpClient(Common.HTTP_CLIENT_OCR, client =>
             {

@@ -18,6 +18,7 @@ namespace Buyer.Application.Features.Shared
         public const string FALLBACK_CONFIGURED_ORDER = "CONFIGURED_ORDER";
 
         public const string TASK_ROUTE_DISABLED = "DISABLED";
+        public const string PROMPT_VERSION_V1 = "culinary-recipe-v1.0";
 
         public static readonly string[] OperatingModes = { MODE_LOCAL, MODE_GEMINI, MODE_CLAUDE, MODE_HYBRID };
         public static readonly string[] FallbackPolicies = { FALLBACK_NONE, FALLBACK_LOCAL_ONLY, FALLBACK_CONFIGURED_ORDER };
@@ -25,12 +26,17 @@ namespace Buyer.Application.Features.Shared
         public static readonly string[] SupportedTasks =
         {
             "RECIPE_GENERATION",
+            "RECIPE_REFINEMENT",
+            "RECIPE_DOCUMENT_INTERPRETATION",
+            "RECIPE_IMAGE_INTERPRETATION",
+            "INGREDIENT_SUBSTITUTION",
+            "PREPARATION_INSTRUCTIONS",
+            "DIETARY_ANALYSIS",
+            "CULINARY_EXPLANATION",
             "MENU_GENERATION",
             "EVENT_PLANNING",
             "INGREDIENT_EXTRACTION",
-            "RECIPE_DOCUMENT_INTERPRETATION",
             "MATERIAL_SEMANTIC_MATCHING",
-            "INGREDIENT_SUBSTITUTION",
             "FOOD_COST_RECOMMENDATIONS",
             "MANAGEMENT_INSIGHTS",
             "REPORT_SUMMARIES",
@@ -67,6 +73,8 @@ namespace Buyer.Application.Features.Shared
         public static string NormalizeFallback(string? policy)
         {
             string normalized = (policy ?? FALLBACK_NONE).Trim().ToUpperInvariant();
+            if (normalized == "LOCAL_IF_ALLOWED") normalized = FALLBACK_LOCAL_ONLY;
+            if (normalized == "CONFIGURED_SECONDARY") normalized = FALLBACK_CONFIGURED_ORDER;
             if (!FallbackPolicies.Contains(normalized))
             {
                 throw new BadRequestCustomException(
@@ -107,9 +115,10 @@ namespace Buyer.Application.Features.Shared
             Dictionary<string, string> normalized = DefaultTaskRouting();
             if (raw == null) return normalized;
 
+            Dictionary<string, string> ci = new(raw, StringComparer.OrdinalIgnoreCase);
             foreach (string task in SupportedTasks)
             {
-                if (!raw.TryGetValue(task, out string? candidate) || string.IsNullOrWhiteSpace(candidate))
+                if (!ci.TryGetValue(task, out string? candidate) || string.IsNullOrWhiteSpace(candidate))
                 {
                     continue;
                 }
@@ -223,12 +232,41 @@ namespace Buyer.Application.Features.Shared
             SilaCulinaryAiConfiguration? entity,
             Guid buyerId,
             bool canEdit,
-            IIntegrationCredentialProtector protector)
+            IIntegrationCredentialProtector protector,
+            List<SilaCulinaryAiUsageLog>? usageLogs = null)
         {
             bool saved = entity != null && entity.Id != Guid.Empty;
             SilaCulinaryAiConfiguration cfg = entity ?? CreateDefault(buyerId);
+            List<SilaCulinaryAiUsageLog> logs = usageLogs ?? new List<SilaCulinaryAiUsageLog>();
+            int totalReq = logs.Count;
+            int okReq = logs.Count(x => x.Success);
+            int failReq = totalReq - okReq;
+            int fallbackCount = logs.Count(x => x.UsedFallback);
+            double? avgLatency = totalReq > 0 ? Math.Round(logs.Average(x => (double)x.LatencyMs), 1) : null;
+            SilaCulinaryAiUsageSummaryDto usage = new()
+            {
+                TrackingActive = true,
+                Note = totalReq > 0
+                    ? "Counters reflect recorded Phase 1A server AI executions (zero fabricated metrics)."
+                    : "Counters reflect recorded server executions only (no executions recorded yet).",
+                TotalRequests = totalReq,
+                SuccessfulRequests = okReq,
+                FailedRequests = failReq,
+                InputTokens = logs.Sum(x => (long)x.InputTokens),
+                OutputTokens = logs.Sum(x => (long)x.OutputTokens),
+                EstimatedCostUsd = logs.Sum(x => x.EstimatedCostUsd),
+                FallbackExecutions = fallbackCount,
+                FallbackCount = fallbackCount,
+                AverageLatencyMs = avgLatency,
+                LocalInferenceStatus = cfg.LastTestProvider == MODE_LOCAL && !string.IsNullOrWhiteSpace(cfg.LastTestStatus)
+                    ? cfg.LastTestStatus
+                    : (cfg.LocalEnabled ? "READY_TO_TEST" : "DISABLED")
+            };
+
             return new SilaCulinaryAiConfigDto
             {
+                Id = cfg.Id,
+                BuyerId = buyerId,
                 Saved = saved,
                 CanEdit = canEdit,
                 OperatingMode = cfg.OperatingMode,
@@ -253,6 +291,7 @@ namespace Buyer.Application.Features.Shared
                 MonthlyCostBudgetUsd = cfg.MonthlyCostBudgetUsd,
                 RetryCount = cfg.RetryCount,
                 FallbackPolicy = cfg.FallbackPolicy,
+                PromptVersion = PROMPT_VERSION_V1,
                 TaskRouting = ParseTaskRouting(cfg.TaskRoutingJson),
                 FeatureFlags = ParseFeatureFlags(cfg.FeatureFlagsJson),
                 LastTestProvider = cfg.LastTestProvider,
@@ -260,26 +299,35 @@ namespace Buyer.Application.Features.Shared
                 LastTestMessage = cfg.LastTestMessage,
                 LastTestedOn = cfg.LastTestedOn,
                 UpdatedOn = saved ? cfg.DateUpdated : null,
-                Usage = new SilaCulinaryAiUsageSummaryDto
-                {
-                    LocalInferenceStatus = cfg.LastTestProvider == MODE_LOCAL && !string.IsNullOrWhiteSpace(cfg.LastTestStatus)
-                        ? cfg.LastTestStatus
-                        : (cfg.LocalEnabled ? "READY_TO_TEST" : "DISABLED")
-                }
+                Usage = usage,
+                UsageSummary = usage
             };
         }
 
-        public static SilaCulinaryAiStatusDto ToStatusDto(SilaCulinaryAiConfiguration? entity, Guid buyerId)
+        public static SilaCulinaryAiStatusDto ToStatusDto(
+            SilaCulinaryAiConfiguration? entity,
+            Guid buyerId,
+            bool canSelectProvider = false)
         {
             SilaCulinaryAiConfiguration cfg = entity ?? CreateDefault(buyerId);
+            bool localOk = cfg.LocalEnabled && !string.IsNullOrWhiteSpace(cfg.LocalEndpoint);
+            bool geminiOk = cfg.AllowExternalAi && cfg.GeminiEnabled && !string.IsNullOrWhiteSpace(cfg.ProtectedGeminiApiKey);
+            bool claudeOk = cfg.AllowExternalAi && cfg.ClaudeEnabled && !string.IsNullOrWhiteSpace(cfg.ProtectedClaudeApiKey);
             return new SilaCulinaryAiStatusDto
             {
-                Phase = "PHASE_0",
+                BuyerId = buyerId,
+                Configured = entity != null && entity.Id != Guid.Empty,
+                Phase = "PHASE_1A",
                 OperatingMode = cfg.OperatingMode,
-                LocalConfigured = cfg.LocalEnabled && !string.IsNullOrWhiteSpace(cfg.LocalEndpoint),
-                GeminiConfigured = cfg.AllowExternalAi && cfg.GeminiEnabled && !string.IsNullOrWhiteSpace(cfg.ProtectedGeminiApiKey),
-                ClaudeConfigured = cfg.AllowExternalAi && cfg.ClaudeEnabled && !string.IsNullOrWhiteSpace(cfg.ProtectedClaudeApiKey),
+                LocalConfigured = localOk,
+                LocalEnabled = cfg.LocalEnabled,
+                GeminiConfigured = geminiOk,
+                GeminiEnabled = geminiOk,
+                ClaudeConfigured = claudeOk,
+                ClaudeEnabled = claudeOk,
                 AllowExternalAi = cfg.AllowExternalAi,
+                CanSelectProvider = canSelectProvider,
+                PromptVersion = PROMPT_VERSION_V1,
                 FeatureFlags = ParseFeatureFlags(cfg.FeatureFlagsJson)
             };
         }

@@ -29,16 +29,24 @@ export interface SilaCulinaryAiUsageSummary {
   estimatedCostUsd: number;
   averageLatencyMs: number | null;
   fallbackCount: number;
+  fallbackExecutions?: number;
+  localInferenceStatus?: string;
 }
 
 export interface SilaCulinaryAiStatus {
   buyerId: string;
   configured: boolean;
+  phase?: string;
   operatingMode: CulinaryAiMode;
   allowExternalAi: boolean;
   localEnabled: boolean;
+  localConfigured?: boolean;
   geminiEnabled: boolean;
+  geminiConfigured?: boolean;
   claudeEnabled: boolean;
+  claudeConfigured?: boolean;
+  canSelectProvider?: boolean;
+  promptVersion?: string;
   featureFlags: SilaCulinaryAiFeatureFlags;
 }
 
@@ -69,6 +77,7 @@ export interface SilaCulinaryAiConfig {
   monthlyCostBudgetUsd: number;
   retryCount: number;
   fallbackPolicy: CulinaryAiFallbackPolicy;
+  promptVersion?: string;
   taskRouting: Record<string, string>;
   featureFlags: SilaCulinaryAiFeatureFlags;
   lastTestProvider: string | null;
@@ -129,12 +138,17 @@ export const DEFAULT_CULINARY_FEATURE_FLAGS: SilaCulinaryAiFeatureFlags = {
 
 export const CULINARY_TASK_LABELS: { key: string; label: string }[] = [
   { key: "recipe_generation", label: "Recipe generation" },
+  { key: "recipe_refinement", label: "Recipe refinement" },
+  { key: "recipe_document_interpretation", label: "Recipe document interpretation" },
+  { key: "recipe_image_interpretation", label: "Dish photograph interpretation" },
+  { key: "preparation_instructions", label: "Preparation instructions" },
+  { key: "ingredient_substitution_suggestions", label: "Ingredient substitution suggestions" },
+  { key: "dietary_analysis", label: "Dietary & allergen analysis" },
+  { key: "culinary_explanation", label: "Culinary explanation" },
   { key: "menu_generation", label: "Menu generation" },
   { key: "event_planning", label: "Event planning" },
   { key: "ingredient_extraction", label: "Ingredient extraction" },
-  { key: "recipe_document_interpretation", label: "Recipe document interpretation" },
   { key: "material_semantic_matching", label: "Material semantic matching" },
-  { key: "ingredient_substitution_suggestions", label: "Ingredient substitution suggestions" },
   { key: "food_cost_recommendations", label: "Food cost recommendations" },
   { key: "management_insights", label: "Management insights" },
   { key: "report_summaries", label: "Report summaries" },

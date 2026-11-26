@@ -387,7 +387,10 @@ const CulinaryAiEngineSetupWorkspace: React.FC<CulinaryAiEngineSetupWorkspacePro
       <div className="cs2-grid-2">
         <section className="cs2-card">
           <div className="cs2-card__head">
-            <h3 className="cs2-card__title">Task-Based Engine Selection (11 Tasks)</h3>
+            <h3 className="cs2-card__title">Task-Based Engine Selection ({CULINARY_TASK_LABELS.length} Tasks)</h3>
+            {config.promptVersion && (
+              <span className="cs2-badge cs2-badge--indigo">Prompt {config.promptVersion}</span>
+            )}
           </div>
           <div className="cs2-table-wrap">
             <table className="cs2-table">
@@ -474,6 +477,16 @@ const CulinaryAiEngineSetupWorkspace: React.FC<CulinaryAiEngineSetupWorkspacePro
               <div className="cs2-kpi">
                 <span className="cs2-kpi__label">Est. Cost (USD)</span>
                 <span className="cs2-kpi__value">${config.usageSummary.estimatedCostUsd.toFixed(2)}</span>
+                <span className="cs2-kpi__hint">
+                  Fallbacks: {config.usageSummary.fallbackCount ?? 0}
+                  {config.usageSummary.averageLatencyMs != null ? ` · Avg ${Math.round(config.usageSummary.averageLatencyMs)} ms` : ""}
+                </span>
+              </div>
+              <div className="cs2-kpi">
+                <span className="cs2-kpi__label">Local Runtime Status</span>
+                <span className="cs2-kpi__value" style={{ fontSize: 15 }}>
+                  {config.usageSummary.localInferenceStatus ?? "NOT_TESTED"}
+                </span>
               </div>
             </div>
           </section>
