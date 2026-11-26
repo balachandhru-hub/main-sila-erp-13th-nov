@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 import time
 from abc import ABC, abstractmethod
@@ -24,23 +25,31 @@ class ProviderPolicy(BaseModel):
     gemini_enabled: bool = False
     gemini_model: str = "gemini-2.5-flash"
     gemini_api_key_present: bool = False
+    gemini_api_key: str | None = Field(default=None, repr=False)
     claude_enabled: bool = False
     claude_model: str = "claude-sonnet-4-20250514"
     claude_api_key_present: bool = False
+    claude_api_key: str | None = Field(default=None, repr=False)
     tenant_external_ai_allowed: bool = False
     timeout_seconds: float = Field(default=30.0, gt=0.0, le=120.0)
     max_retries: int = Field(default=1, ge=0, le=3)
     fallback_policy: FallbackPolicy = "NONE"
+    fallback_order: list[ProviderKind] = Field(default_factory=lambda: ["LOCAL", "GEMINI", "CLAUDE"])
     task_routing: dict[str, ProviderKind] = Field(default_factory=dict)
+    pricing_overrides: dict[str, dict[str, Decimal]] = Field(default_factory=dict)
 
 
 class AiExecutionRequest(BaseModel):
     task_name: str
-    prompt_version: str = "v1.0"
+    prompt_version: str = "culinary-recipe-v1.0"
     system_prompt: str
     user_payload: dict
-    max_output_tokens: int = Field(default=2048, ge=64, le=8192)
+    max_output_tokens: int = Field(default=2048, ge=64, le=16384)
     temperature: float = Field(default=0.2, ge=0.0, le=1.0)
+    image_base64: str | None = None
+    image_mime_type: str | None = None
+    output_json_schema: dict | None = None
+    repair_hint: str | None = None
 
 
 class AiProviderResponse(BaseModel):
@@ -51,8 +60,10 @@ class AiProviderResponse(BaseModel):
     input_tokens: int = 0
     output_tokens: int = 0
     estimated_cost_usd: Decimal = Decimal("0")
+    cost_available: bool = False
     latency_ms: int = 0
     used_fallback: bool = False
+    validation_retries: int = 0
 
 
 class ProviderUnavailableError(RuntimeError):
@@ -94,7 +105,8 @@ def resolve_candidate_providers(policy: ProviderPolicy, task_name: str) -> list[
     if policy.fallback_policy == "LOCAL_ONLY" and "LOCAL" not in candidates:
         candidates.append("LOCAL")
     elif policy.fallback_policy == "CONFIGURED_ORDER":
-        for p in ("LOCAL", "GEMINI", "CLAUDE"):
+        order = policy.fallback_order or ["LOCAL", "GEMINI", "CLAUDE"]
+        for p in order:
             if p not in candidates:
                 candidates.append(p)
 
@@ -104,10 +116,10 @@ def resolve_candidate_providers(policy: ProviderPolicy, task_name: str) -> list[
             if policy.local_enabled and (policy.local_endpoint or "").strip():
                 authorized.append(("LOCAL", policy.local_model))
         elif kind == "GEMINI":
-            if policy.tenant_external_ai_allowed and policy.gemini_enabled and policy.gemini_api_key_present:
+            if policy.tenant_external_ai_allowed and policy.gemini_enabled and (policy.gemini_api_key_present or bool(policy.gemini_api_key)):
                 authorized.append(("GEMINI", policy.gemini_model))
         elif kind == "CLAUDE":
-            if policy.tenant_external_ai_allowed and policy.claude_enabled and policy.claude_api_key_present:
+            if policy.tenant_external_ai_allowed and policy.claude_enabled and (policy.claude_api_key_present or bool(policy.claude_api_key)):
                 authorized.append(("CLAUDE", policy.claude_model))
     return authorized
 
@@ -140,23 +152,35 @@ class AiProviderRouter:
                 last_error = f"Provider adapter {provider_kind} is not registered."
                 continue
 
+            current_req = request.model_copy(deep=True)
+            retries_used = 0
             for attempt in range(policy.max_retries + 1):
                 if cancel_event and cancel_event.is_set():
                     raise ProviderUnavailableError("CANCELLED", "AI execution cancelled.")
                 start = time.monotonic()
                 try:
-                    raw = await asyncio.wait_for(
-                        adapter.invoke_structured(request, model_name, policy.timeout_seconds),
-                        timeout=policy.timeout_seconds,
-                    )
+                    sig = inspect.signature(adapter.invoke_structured)
+                    if "policy" in sig.parameters:
+                        coro = adapter.invoke_structured(current_req, model_name, policy.timeout_seconds, policy=policy)
+                    else:
+                        coro = adapter.invoke_structured(current_req, model_name, policy.timeout_seconds)
+                    raw = await asyncio.wait_for(coro, timeout=policy.timeout_seconds)
                     validated = output_schema.model_validate(raw.raw_json)
                     raw.latency_ms = int((time.monotonic() - start) * 1000)
                     raw.used_fallback = idx > 0
+                    raw.validation_retries = retries_used
                     return validated, raw
                 except asyncio.TimeoutError:
                     last_error = f"{provider_kind} timed out after {policy.timeout_seconds}s."
                 except (ValidationError, json.JSONDecodeError, ValueError) as exc:
+                    retries_used += 1
                     last_error = f"{provider_kind} returned invalid structured JSON: {exc}"
+                    current_req.repair_hint = str(exc)[:400]
+                except ProviderUnavailableError as exc:
+                    if exc.code == "CANCELLED":
+                        raise
+                    last_error = exc.message
+                    break
                 except Exception as exc:
                     last_error = f"{provider_kind} invocation failed: {exc}"
 
