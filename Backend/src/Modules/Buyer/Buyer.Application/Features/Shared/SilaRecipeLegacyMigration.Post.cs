@@ -239,6 +239,7 @@ namespace Buyer.Application.Features.Shared
             // dependency chain: we post topological order; for BATCH ApplyAsync, sub-recipes must be APPROVED.
             // Practical approach: if any SubRecipeId lines exist, ensure those recipes are APPROVED (ActiveVersion=Version)
             // via direct promote for migration-created drafts so ApplyAsync accepts them — documented here.
+            bool promoted = false;
             foreach (SilaRecipeIngredientWriteDto line in lines.Where(x => x.SubRecipeId != null))
             {
                 Recipe? sub = await repository.Recipe.FindFirstByConditionAsync(x => x.Id == line.SubRecipeId && x.BuyerId == buyerId && x.IsActive);
@@ -250,7 +251,14 @@ namespace Buyer.Application.Features.Shared
                     repository.Recipe.Update(sub);
                     ledger.AddEvent(Common.SILA_REF_RECIPE, sub.Id, SilaRecipeRules.EVENT_APPROVED,
                         $"Auto-promoted for legacy migration dependency of {staged.LegacyRecipeId}.");
+                    promoted = true;
                 }
+            }
+
+            if (promoted)
+            {
+                // ApplyAsync reads sub-recipes from the database (no tracking), so the promotion must be saved first.
+                await repository.SaveAsync();
             }
 
             await SilaRecipeRules.ApplyAsync(repository, logger, buyerId, userId, roleId, recipe, write, cancellationToken);
