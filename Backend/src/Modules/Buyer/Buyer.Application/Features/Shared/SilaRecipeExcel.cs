@@ -155,6 +155,13 @@ namespace Buyer.Application.Features.Shared
             return decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out decimal value) ? value : null;
         }
 
+        public static List<string> SheetNames(byte[] content)
+        {
+            using MemoryStream stream = new MemoryStream(content);
+            using XLWorkbook workbook = new XLWorkbook(stream);
+            return workbook.Worksheets.Select(x => x.Name.Trim()).ToList();
+        }
+
         private static List<List<string>> ReadTable(IXLWorksheet sheet)
         {
             List<List<string>> table = new List<List<string>>();

@@ -28,6 +28,15 @@ namespace Buyer.Application.Features.Shared
             List<Dictionary<string, string>> headers = SilaRecipeExcel.ReadSheet(logger, fileName, content, SHEET_HEADER, RequiredHeaderColumns);
             if (headers.Count == 0)
             {
+                List<string> sheetNames = SilaRecipeExcel.SheetNames(content);
+                if (!sheetNames.Any(name => string.Equals(name, SHEET_HEADER, StringComparison.OrdinalIgnoreCase)))
+                {
+                    logger.LogError($"Legacy workbook has no {SHEET_HEADER} sheet. FileName: {fileName}, Sheets: {string.Join(",", sheetNames)}");
+                    throw new BadRequestCustomException(
+                        $"The sheet \"{SHEET_HEADER}\" is missing.",
+                        $"This file has the sheets: {string.Join(", ", sheetNames)}. Use the legacy migration template (Download template) and fill its \"{SHEET_HEADER}\" sheet. The regular recipe template cannot be used here.");
+                }
+
                 throw new BadRequestCustomException("No recipes found.", $"Add at least one row to the {SHEET_HEADER} sheet.");
             }
 
