@@ -14,6 +14,7 @@ using SharedKernel.LoggerServices;
 using Buyer.Application.Services;
 using Buyer.Application.Services.Integration;
 using Buyer.Application.Features.Queries.GetOrganizationProfile;
+using Buyer.Application.Features.Shared;
 using Buyer.Infrastructure.Contracts.IRepository;
 using Buyer.Infrastructure.Repository;
 using Buyer.Application.Contracts;
@@ -155,6 +156,7 @@ namespace Buyer.API.Extensions
             _ = services.AddScoped<IBuyerPurchaseDocumentGateway, BuyerPurchaseDocumentGateway>();
             _ = services.AddScoped<IAesEncryption, AesEncryption>();
             _ = services.AddScoped<IStockInHandProvider, ErpStockInHandProvider>();
+            _ = services.AddScoped<ISilaCulinaryAiProviderGateway, SilaCulinaryAiProviderGateway>();
             _ = services.AddControllers().AddJsonOptions(options =>
             {
                 // Empty JSON strings must not 400 Guid? model binding (PO flex write payloads).
@@ -176,6 +178,10 @@ namespace Buyer.API.Extensions
             _ = services.AddHttpClient(Common.HTTP_CLIENT_VOICE_ENGINE, client =>
             {
                 client.Timeout = TimeSpan.FromSeconds(60);
+            });
+            _ = services.AddHttpClient(Common.HTTP_CLIENT_CULINARY_AI, client =>
+            {
+                client.Timeout = TimeSpan.FromSeconds(30);
             });
             _ = services.AddHttpClient(Common.HTTP_CLIENT_OCR, client =>
             {

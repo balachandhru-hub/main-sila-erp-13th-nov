@@ -144,6 +144,7 @@ namespace Buyer.Infrastructure.Contracts.IRepository
         ISilaUserPoFlexConditionRepository SilaUserPoFlexCondition { get; }
         ISilaVoicePoSessionRepository SilaVoicePoSession { get; }
         ISilaVoicePoTurnRepository SilaVoicePoTurn { get; }
+        ISilaCulinaryAiConfigurationRepository SilaCulinaryAiConfiguration { get; }
         bool Save();
         Task<bool> SaveAsync();
     }

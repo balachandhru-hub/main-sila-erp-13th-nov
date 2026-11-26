@@ -374,6 +374,10 @@ namespace Buyer.Domain.Common
                 public const string SILA_REF_MASTER_DATA = "MASTER_DATA";
                 public const string SILA_REF_VOICE_PO = "VOICE_PO";
                 public const string SILA_REF_USER_PO_PROFILE = "USER_PO_PROFILE";
+                public const string SILA_REF_CULINARY_AI_SETUP = "CULINARY_AI_SETUP";
+                public const string SILA_AUDIT_CULINARY_AI_SAVED = "CULINARY_AI_CONFIG_SAVED";
+                public const string SILA_AUDIT_CULINARY_AI_TESTED = "CULINARY_AI_CONNECTION_TESTED";
+                public const string HTTP_CLIENT_CULINARY_AI = "sila-culinary-ai";
                 public const string SILA_MOVEMENT_INVOICE = "INVOICE";
                 public const string SILA_MOVEMENT_INVOICE_ATTACHMENT = "SUPPLIER_INVOICE_ATTACHMENT";
                 public const string INTEGRATION_PROCESS_POST_INVOICE = "POST_INVOICE";

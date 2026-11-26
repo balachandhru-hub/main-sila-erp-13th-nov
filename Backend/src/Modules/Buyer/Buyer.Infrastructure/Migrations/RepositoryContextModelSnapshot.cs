@@ -7615,6 +7615,169 @@ namespace Buyer.Infrastructure.Migrations
                     b.ToTable("sila_ocr_configuration", "buyersystem");
                 });
 
+            modelBuilder.Entity("Buyer.Domain.Entities.SilaCulinaryAiConfiguration", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("AllowExternalAi")
+                        .HasColumnType("bit")
+                        .HasColumnName("allow_external_ai");
+
+                    b.Property<Guid>("BuyerId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("buyer_id");
+
+                    b.Property<bool>("ClaudeEnabled")
+                        .HasColumnType("bit")
+                        .HasColumnName("claude_enabled");
+
+                    b.Property<string>("ClaudeModel")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)")
+                        .HasColumnName("claude_model");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("created_by");
+
+                    b.Property<int>("DailyRequestLimit")
+                        .HasColumnType("int")
+                        .HasColumnName("daily_request_limit");
+
+                    b.Property<int>("DailyTokenBudget")
+                        .HasColumnType("int")
+                        .HasColumnName("daily_token_budget");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("date_created");
+
+                    b.Property<DateTime>("DateUpdated")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("date_updated");
+
+                    b.Property<string>("FallbackPolicy")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)")
+                        .HasColumnName("fallback_policy");
+
+                    b.Property<string>("FeatureFlagsJson")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("feature_flags_json");
+
+                    b.Property<bool>("GeminiEnabled")
+                        .HasColumnType("bit")
+                        .HasColumnName("gemini_enabled");
+
+                    b.Property<string>("GeminiModel")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)")
+                        .HasColumnName("gemini_model");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("LastTestMessage")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)")
+                        .HasColumnName("last_test_message");
+
+                    b.Property<string>("LastTestProvider")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)")
+                        .HasColumnName("last_test_provider");
+
+                    b.Property<string>("LastTestStatus")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)")
+                        .HasColumnName("last_test_status");
+
+                    b.Property<DateTime?>("LastTestedOn")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("last_tested_on");
+
+                    b.Property<bool>("LocalEnabled")
+                        .HasColumnType("bit")
+                        .HasColumnName("local_enabled");
+
+                    b.Property<string>("LocalEndpoint")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)")
+                        .HasColumnName("local_endpoint");
+
+                    b.Property<string>("LocalModel")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)")
+                        .HasColumnName("local_model");
+
+                    b.Property<int>("MaxOutputTokens")
+                        .HasColumnType("int")
+                        .HasColumnName("max_output_tokens");
+
+                    b.Property<decimal>("MonthlyCostBudgetUsd")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)")
+                        .HasColumnName("monthly_cost_budget_usd");
+
+                    b.Property<int>("MonthlyRequestLimit")
+                        .HasColumnType("int")
+                        .HasColumnName("monthly_request_limit");
+
+                    b.Property<string>("OperatingMode")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasColumnName("operating_mode");
+
+                    b.Property<string>("ProtectedClaudeApiKey")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)")
+                        .HasColumnName("protected_claude_api_key");
+
+                    b.Property<string>("ProtectedGeminiApiKey")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)")
+                        .HasColumnName("protected_gemini_api_key");
+
+                    b.Property<int>("RequestTimeoutSeconds")
+                        .HasColumnType("int")
+                        .HasColumnName("request_timeout_seconds");
+
+                    b.Property<int>("RetryCount")
+                        .HasColumnType("int")
+                        .HasColumnName("retry_count");
+
+                    b.Property<string>("TaskRoutingJson")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("task_routing_json");
+
+                    b.Property<decimal>("Temperature")
+                        .HasPrecision(6, 2)
+                        .HasColumnType("decimal(6,2)")
+                        .HasColumnName("temperature");
+
+                    b.Property<Guid>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_sila_culinary_ai_configuration");
+
+                    b.HasIndex("BuyerId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_sila_culinary_ai_configuration_buyer_id");
+
+                    b.HasIndex("IsActive")
+                        .HasDatabaseName("ix_sila_culinary_ai_configuration_is_active");
+
+                    b.ToTable("sila_culinary_ai_configuration", "buyersystem");
+                });
+
             modelBuilder.Entity("Buyer.Domain.Entities.SilaSupplier", b =>
                 {
                     b.Property<Guid>("Id")
@@ -10600,6 +10763,18 @@ namespace Buyer.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_sila_ocr_configuration_buyer_business_profile_buyer_id");
+
+                    b.Navigation("BuyerBusinessProfile");
+                });
+
+            modelBuilder.Entity("Buyer.Domain.Entities.SilaCulinaryAiConfiguration", b =>
+                {
+                    b.HasOne("Buyer.Domain.Entities.BuyerBusinessProfile", "BuyerBusinessProfile")
+                        .WithMany()
+                        .HasForeignKey("BuyerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_sila_culinary_ai_configuration_buyer_business_profile_buyer_id");
 
                     b.Navigation("BuyerBusinessProfile");
                 });

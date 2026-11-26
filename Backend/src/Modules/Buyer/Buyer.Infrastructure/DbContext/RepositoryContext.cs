@@ -155,6 +155,7 @@ namespace Buyer.Infrastructure.DbContext
         public DbSet<SilaUserPoFlexCondition> SilaUserPoFlexCondition { get; set; }
         public DbSet<SilaVoicePoSession> SilaVoicePoSession { get; set; }
         public DbSet<SilaVoicePoTurn> SilaVoicePoTurn { get; set; }
+        public DbSet<SilaCulinaryAiConfiguration> SilaCulinaryAiConfiguration { get; set; }
 
 
         protected override void OnModelCreating(Microsoft.EntityFrameworkCore.ModelBuilder modelBuilder)
@@ -349,6 +350,8 @@ namespace Buyer.Infrastructure.DbContext
             _ = modelBuilder.Entity<InvoiceExtraction>().HasIndex(a => new { a.InvoiceId, a.Attempt });
             _ = modelBuilder.Entity<SilaOcrConfiguration>().HasIndex(a => a.IsActive);
             _ = modelBuilder.Entity<SilaOcrConfiguration>().HasIndex(a => a.BuyerId).IsUnique();
+            _ = modelBuilder.Entity<SilaCulinaryAiConfiguration>().HasIndex(a => a.IsActive);
+            _ = modelBuilder.Entity<SilaCulinaryAiConfiguration>().HasIndex(a => a.BuyerId).IsUnique();
             _ = modelBuilder.Entity<RecipeSubstitutionProposal>().HasIndex(a => a.IsActive);
             _ = modelBuilder.Entity<RecipeSubstitutionProposal>().HasIndex(a => new { a.BuyerId, a.ProposalNumber }).IsUnique();
             _ = modelBuilder.Entity<RecipeSubstitutionProposal>().HasIndex(a => new { a.BuyerId, a.Status });
