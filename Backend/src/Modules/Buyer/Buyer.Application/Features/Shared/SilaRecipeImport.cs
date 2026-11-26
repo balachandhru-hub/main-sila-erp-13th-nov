@@ -34,6 +34,16 @@ namespace Buyer.Application.Features.Shared
         private static readonly string[] RequiredRecipeColumns = { "RecipeCode", "Name", "ItemMode", "ServingQty", "ServingUom", "MaterialCode", "Quantity", "Uom" };
         private static readonly string[] RequiredPriceColumns = { "RecipeCode", "Name", "OutletCode", "MenuPrice" };
 
+        public static SilaRecipeFileDto BuildTemplate()
+        {
+            SilaRecipeExcel.Sheet recipeSheet = new SilaRecipeExcel.Sheet { Name = SHEET_RECIPES, Headers = RecipeColumns };
+            SilaRecipeExcel.Sheet priceSheet = new SilaRecipeExcel.Sheet { Name = SHEET_PRICES, Headers = PriceColumns };
+            recipeSheet.Rows.Add(new object?[] { null, "Gin and tonic", "BEVERAGE", "COCKTAIL", "RECIPE", 1m, "EA", "EA", "POS-1001", "AED", null, "MAT-GIN", null, 50m, "ML", null, null });
+            recipeSheet.Rows.Add(new object?[] { null, "Gin and tonic", "BEVERAGE", "COCKTAIL", "RECIPE", 1m, "EA", "EA", "POS-1001", "AED", null, "MAT-TONIC", null, 1m, "BTL", null, null });
+            priceSheet.Rows.Add(new object?[] { null, "Gin and tonic", "OUTLET-01", 45m, "AED" });
+            return SilaRecipeExcel.Build("recipes-template.xlsx", recipeSheet, priceSheet);
+        }
+
         /// <summary>One recipe of the workbook, its rows, what is wrong and the write request built from it.</summary>
         public class Group
         {

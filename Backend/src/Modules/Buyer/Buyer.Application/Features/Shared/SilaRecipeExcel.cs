@@ -157,9 +157,16 @@ namespace Buyer.Application.Features.Shared
 
         public static List<string> SheetNames(byte[] content)
         {
-            using MemoryStream stream = new MemoryStream(content);
-            using XLWorkbook workbook = new XLWorkbook(stream);
-            return workbook.Worksheets.Select(x => x.Name.Trim()).ToList();
+            try
+            {
+                using MemoryStream stream = new MemoryStream(content);
+                using XLWorkbook workbook = new XLWorkbook(stream);
+                return workbook.Worksheets.Select(x => x.Name.Trim()).ToList();
+            }
+            catch (Exception exception) when (exception is not BaseCustomException)
+            {
+                return new List<string>();
+            }
         }
 
         private static List<List<string>> ReadTable(IXLWorksheet sheet)

@@ -29,17 +29,15 @@ namespace Buyer.Application.Features.Queries.ExportSilaRecipes
         {
             _logger.LogInfo($"Exporting recipes. OrganizationId: {request.OrganizationId}, Template: {request.Template}");
 
-            SilaRecipeExcel.Sheet recipeSheet = new SilaRecipeExcel.Sheet { Name = SilaRecipeImport.SHEET_RECIPES, Headers = SilaRecipeImport.RecipeColumns };
-            SilaRecipeExcel.Sheet priceSheet = new SilaRecipeExcel.Sheet { Name = SilaRecipeImport.SHEET_PRICES, Headers = SilaRecipeImport.PriceColumns };
             if (request.Template)
             {
-                recipeSheet.Rows.Add(new object?[] { null, "Gin and tonic", "BEVERAGE", "COCKTAIL", "RECIPE", 1m, "EA", "EA", "POS-1001", "AED", null, "MAT-GIN", null, 50m, "ML", null, null });
-                recipeSheet.Rows.Add(new object?[] { null, "Gin and tonic", "BEVERAGE", "COCKTAIL", "RECIPE", 1m, "EA", "EA", "POS-1001", "AED", null, "MAT-TONIC", null, 1m, "BTL", null, null });
-                priceSheet.Rows.Add(new object?[] { null, "Gin and tonic", "OUTLET-01", 45m, "AED" });
-                SilaRecipeFileDto template = SilaRecipeExcel.Build("recipes-template.xlsx", recipeSheet, priceSheet);
+                SilaRecipeFileDto template = SilaRecipeImport.BuildTemplate();
                 _logger.LogInfo("Recipe template built.");
                 return template;
             }
+
+            SilaRecipeExcel.Sheet recipeSheet = new SilaRecipeExcel.Sheet { Name = SilaRecipeImport.SHEET_RECIPES, Headers = SilaRecipeImport.RecipeColumns };
+            SilaRecipeExcel.Sheet priceSheet = new SilaRecipeExcel.Sheet { Name = SilaRecipeImport.SHEET_PRICES, Headers = SilaRecipeImport.PriceColumns };
 
             BuyerBusinessProfile buyer = await SilaAccess.GetBuyerAsync(_repository, _logger, request.OrganizationId);
             List<Recipe> recipes = await _repository.Recipe

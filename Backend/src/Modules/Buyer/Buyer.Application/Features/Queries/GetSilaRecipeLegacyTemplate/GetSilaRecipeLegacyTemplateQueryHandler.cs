@@ -8,7 +8,7 @@ namespace Buyer.Application.Features.Queries.GetSilaRecipeLegacyTemplate
     {
         public Task<SilaRecipeFileDto> Handle(GetSilaRecipeLegacyTemplateQuery request, CancellationToken cancellationToken)
         {
-            return Task.FromResult(SilaRecipeLegacyMigration.BuildTemplate());
+            return Task.FromResult(SilaRecipeImport.BuildTemplate());
         }
     }
 }

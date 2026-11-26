@@ -25,6 +25,13 @@ namespace Buyer.Application.Features.Shared
             BuyerBusinessProfile buyer = await SilaAccess.GetBuyerAsync(repository, logger, organizationId);
             string basePath = RequireBasePath(configuration, logger);
 
+            if (IsWorkbookFormat(SilaRecipeExcel.SheetNames(content)))
+            {
+                (List<RecipeLegacyRecipe> workbookStaged, List<RecipeLegacyMaterialMap> workbookMaps) =
+                    StageWorkbookFormat(logger, fileName, content, buyer.Id);
+                return await SaveBatchAsync(repository, logger, buyer, basePath, userId, fileName, content, workbookStaged, workbookMaps, 0, cancellationToken);
+            }
+
             List<Dictionary<string, string>> headers = SilaRecipeExcel.ReadSheet(logger, fileName, content, SHEET_HEADER, RequiredHeaderColumns);
             if (headers.Count == 0)
             {
@@ -33,8 +40,8 @@ namespace Buyer.Application.Features.Shared
                 {
                     logger.LogError($"Legacy workbook has no {SHEET_HEADER} sheet. FileName: {fileName}, Sheets: {string.Join(",", sheetNames)}");
                     throw new BadRequestCustomException(
-                        $"The sheet \"{SHEET_HEADER}\" is missing.",
-                        $"This file has the sheets: {string.Join(", ", sheetNames)}. Use the legacy migration template (Download template) and fill its \"{SHEET_HEADER}\" sheet. The regular recipe template cannot be used here.");
+                        "No recipe sheet found.",
+                        $"This file has the sheets: {string.Join(", ", sheetNames)}. Use the recipe template (Download template) with its \"{SilaRecipeImport.SHEET_RECIPES}\" sheet, or the legacy workbook with a \"{SHEET_HEADER}\" sheet.");
                 }
 
                 throw new BadRequestCustomException("No recipes found.", $"Add at least one row to the {SHEET_HEADER} sheet.");
@@ -46,12 +53,6 @@ namespace Buyer.Application.Features.Shared
             List<Dictionary<string, string>> variants = SilaRecipeExcel.ReadSheet(logger, fileName, content, SHEET_VARIANTS, new[] { "Legacy Recipe ID" });
 
             Guid batchId = Guid.NewGuid();
-            string batchNumber = await DocumentNumber.NextAsync(repository, buyer.Id, DocumentNumber.RECIPE_LEGACY_BATCH, 8, cancellationToken);
-            string kind = SilaFileRules.KIND_XLSX;
-            string storedName = SilaFileRules.StoredName(batchId, kind);
-            string directory = BatchDirectory(basePath, buyer.Id, batchId);
-            Directory.CreateDirectory(directory);
-            await File.WriteAllBytesAsync(Path.Combine(directory, storedName), content, cancellationToken);
 
             Dictionary<string, List<SilaRecipeLegacyIngredientDto>> ingredientsByLegacy = GroupIngredients(ingredients);
             Dictionary<string, List<string>> instructionsByLegacy = GroupInstructions(instructions);
@@ -150,6 +151,30 @@ namespace Buyer.Application.Features.Shared
             {
                 throw new BadRequestCustomException("No valid recipes found.", "Each header row needs a Legacy Recipe ID and Recipe Name.");
             }
+
+            return await SaveBatchAsync(repository, logger, buyer, basePath, userId, fileName, content, staged, maps, duplicateCount, cancellationToken);
+        }
+
+        private static async Task<SilaRecipeLegacyBatchDetailDto> SaveBatchAsync(
+            IRepositoryWrapper repository,
+            ILoggerManager logger,
+            BuyerBusinessProfile buyer,
+            string basePath,
+            Guid userId,
+            string? fileName,
+            byte[] content,
+            List<RecipeLegacyRecipe> staged,
+            List<RecipeLegacyMaterialMap> maps,
+            int duplicateCount,
+            CancellationToken cancellationToken)
+        {
+            Guid batchId = staged[0].BatchId;
+            string batchNumber = await DocumentNumber.NextAsync(repository, buyer.Id, DocumentNumber.RECIPE_LEGACY_BATCH, 8, cancellationToken);
+            string kind = SilaFileRules.KIND_XLSX;
+            string storedName = SilaFileRules.StoredName(batchId, kind);
+            string directory = BatchDirectory(basePath, buyer.Id, batchId);
+            Directory.CreateDirectory(directory);
+            await File.WriteAllBytesAsync(Path.Combine(directory, storedName), content, cancellationToken);
 
             RecipeLegacyBatch batch = new RecipeLegacyBatch
             {

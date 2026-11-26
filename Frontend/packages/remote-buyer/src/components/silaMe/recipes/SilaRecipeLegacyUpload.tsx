@@ -325,7 +325,7 @@ const SilaRecipeLegacyUpload: React.FC<SilaRecipeLegacyUploadProps> = ({
         <section className="rlegacy-panel">
           <h2 className="rlegacy-panel__title">New Upload</h2>
           <p className="rlegacy-panel__hint">
-            Upload the legacy workbook (.xlsx). Records are staged only — no Recipe IDs are created until approved posting.
+            Upload the recipe workbook (.xlsx, sheets Recipes and OutletPrices). Rows are staged as they are and checked in the Validate step — no Recipe IDs are created until approved posting.
           </p>
           <div className="rlegacy-drop">
             <input
@@ -385,7 +385,7 @@ const SilaRecipeLegacyUpload: React.FC<SilaRecipeLegacyUploadProps> = ({
                 {history.length === 0 ? (
                   <tr>
                     <td colSpan={9}>
-                      <EmptyState title="No uploads yet" description="Start with New Upload and the migration template." />
+                      <EmptyState title="No uploads yet" description="Start with New Upload and the recipe template." />
                     </td>
                   </tr>
                 ) : null}
