@@ -81,6 +81,7 @@ namespace Buyer.Infrastructure.Repository
         private ISilaUserPoFlexConditionRepository? _silaUserPoFlexCondition;
         private ISilaVoicePoSessionRepository? _silaVoicePoSession;
         private ISilaVoicePoTurnRepository? _silaVoicePoTurn;
+        private ISilaCulinaryAiConfigurationRepository? _silaCulinaryAiConfiguration;
         private IBuyerBusinessProfileRepository _buyerBusinessProfileRepository;
         private IBuyerCategoryRepository _buyerCategoryRepository;
         private IAssetRepository _assetRepository;
@@ -1534,6 +1535,15 @@ namespace Buyer.Infrastructure.Repository
             {
                 _silaVoicePoTurn ??= new SilaVoicePoTurnRepository(_context);
                 return _silaVoicePoTurn;
+            }
+        }
+
+        public ISilaCulinaryAiConfigurationRepository SilaCulinaryAiConfiguration
+        {
+            get
+            {
+                _silaCulinaryAiConfiguration ??= new SilaCulinaryAiConfigurationRepository(_context);
+                return _silaCulinaryAiConfiguration;
             }
         }
 
