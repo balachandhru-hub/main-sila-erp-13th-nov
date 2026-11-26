@@ -109,6 +109,9 @@ const RecipeStudioHomeScreen: React.FC = () => {
               Approvals{(approvals.data?.length ?? 0) > 0 ? ` (${approvals.data!.length})` : ''}
             </button>
           )}
+          <button type="button" className="sm-btn" onClick={() => go('recipes/culinary-suite')}>
+            Culinary 2.0 (Demo)
+          </button>
         </div>
 
         {catalog.loading && <Loading text="Loading recipes…" />}

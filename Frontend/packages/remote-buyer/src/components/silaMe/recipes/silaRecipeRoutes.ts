@@ -1,7 +1,7 @@
 /**
  * Canonical Recipe Studio URLs under the buyer dashboard's first-segment routing
  * (`useRouteNav` maps `silaRecipes` → `/sila-recipes`). Nested segments after that
- * are owned by SilaRecipes so New/Edit/Detail survive refresh and deep links.
+ * are owned by SilaRecipes so New/Edit/Detail and Recipe Studio 2.0 workspaces survive refresh and deep links.
  *
  * Contract:
  * - /sila-recipes
@@ -9,16 +9,51 @@
  * - /sila-recipes/legacy-upload
  * - /sila-recipes/:recipeId
  * - /sila-recipes/:recipeId/edit
+ * - /sila-recipes/{overview|ai-planner|materials|material-requests|menus|events|mrp|procurement|production|food-cost|event-pnl|analytics|reports|ai-setup}
  */
 
 export const SILA_RECIPES_BASE = "/sila-recipes";
+
+export type CulinaryWorkspaceKind =
+  | "overview"
+  | "ai-planner"
+  | "materials"
+  | "material-requests"
+  | "menus"
+  | "events"
+  | "mrp"
+  | "procurement"
+  | "production"
+  | "food-cost"
+  | "event-pnl"
+  | "analytics"
+  | "reports"
+  | "ai-setup";
 
 export type SilaRecipeRoute =
   | { kind: "list" }
   | { kind: "new" }
   | { kind: "legacy-upload" }
   | { kind: "detail"; recipeId: string }
-  | { kind: "edit"; recipeId: string };
+  | { kind: "edit"; recipeId: string }
+  | { kind: CulinaryWorkspaceKind };
+
+const CULINARY_SEGMENTS: ReadonlySet<string> = new Set<string>([
+  "overview",
+  "ai-planner",
+  "materials",
+  "material-requests",
+  "menus",
+  "events",
+  "mrp",
+  "procurement",
+  "production",
+  "food-cost",
+  "event-pnl",
+  "analytics",
+  "reports",
+  "ai-setup",
+]);
 
 const GUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -37,8 +72,12 @@ export const parseSilaRecipePath = (pathname: string): SilaRecipeRoute => {
   const third = parts[baseIdx + 2]?.trim().toLowerCase() ?? "";
 
   if (!second) return { kind: "list" };
-  if (second.toLowerCase() === "new") return { kind: "new" };
-  if (second.toLowerCase() === "legacy-upload") return { kind: "legacy-upload" };
+  const lowerSecond = second.toLowerCase();
+  if (lowerSecond === "new") return { kind: "new" };
+  if (lowerSecond === "legacy-upload") return { kind: "legacy-upload" };
+  if (CULINARY_SEGMENTS.has(lowerSecond)) {
+    return { kind: lowerSecond as CulinaryWorkspaceKind };
+  }
 
   if (!isRecipeId(second)) return { kind: "list" };
   if (third === "edit") return { kind: "edit", recipeId: second };
@@ -51,6 +90,9 @@ export const silaRecipeCatalogPath = (): string => SILA_RECIPES_BASE;
 export const silaRecipeNewPath = (): string => `${SILA_RECIPES_BASE}/new`;
 
 export const silaRecipeLegacyUploadPath = (): string => `${SILA_RECIPES_BASE}/legacy-upload`;
+
+export const silaRecipeCulinaryPath = (kind: CulinaryWorkspaceKind): string =>
+  `${SILA_RECIPES_BASE}/${kind}`;
 
 export const silaRecipeDetailPath = (recipeId: string): string =>
   `${SILA_RECIPES_BASE}/${encodeURIComponent(recipeId)}`;

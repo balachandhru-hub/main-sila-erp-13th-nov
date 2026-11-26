@@ -49,6 +49,7 @@ import RecipeStudioHomeScreen from './screens/recipes/RecipeStudioHomeScreen';
 import RecipeDraftWizardScreen from './screens/recipes/RecipeDraftWizardScreen';
 import RecipeDraftsScreen from './screens/recipes/RecipeDraftsScreen';
 import RecipeApprovalsScreen from './screens/recipes/RecipeApprovalsScreen';
+import CulinarySuitePreviewScreen from './screens/recipes/CulinarySuitePreviewScreen';
 import MenuDashboardScreen from './screens/menu/MenuDashboardScreen';
 import MenuItemsScreen from './screens/menu/MenuItemsScreen';
 import MenuItemEditorScreen from './screens/menu/MenuItemEditorScreen';
@@ -152,6 +153,7 @@ const MobileSurface: React.FC<{ base: string }> = ({ base }) => {
                 <Route path="inventory/transfers/new" element={<TransferFormScreen />} />
                 <Route path="inventory/transfers/:transferId" element={<TransferDetailScreen />} />
                 <Route path="recipes" element={<RecipeStudioHomeScreen />} />
+                <Route path="recipes/culinary-suite" element={<CulinarySuitePreviewScreen />} />
                 <Route path="recipes/catalog" element={<RecipesScreen />} />
                 <Route path="recipes/draft/new" element={<RecipeDraftWizardScreen />} />
                 <Route path="recipes/drafts" element={<RecipeDraftsScreen />} />

@@ -36,11 +36,22 @@ import { PRODUCT_CLASSES } from "./recipeHospitality";
 import {
   parseSilaRecipePath,
   silaRecipeCatalogPath,
+  silaRecipeCulinaryPath,
   silaRecipeDetailPath,
   silaRecipeEditPath,
   silaRecipeLegacyUploadPath,
   silaRecipeNewPath,
+  type CulinaryWorkspaceKind,
 } from "./silaRecipeRoutes";
+import {
+  DEFAULT_CULINARY_FEATURE_FLAGS,
+  getCulinaryAiStatus,
+  type SilaCulinaryAiStatus,
+} from "../../../api/silaMe/silaCulinaryAiApi";
+import type { SilaMePermissions } from "../silaMePermissions";
+import SilaRecipeStudio2Workspaces, {
+  isCulinaryWorkspaceRoute,
+} from "./culinary/SilaRecipeStudio2Workspaces";
 import { loadStudioViewMode, resolveStudioKind, saveStudioViewMode, StudioCover, type StudioViewMode } from "./recipeStudioVisuals";
 import "../silaMeTheme.css";
 import "./SilaRecipes.css";
@@ -52,18 +63,22 @@ interface SilaRecipesProps {
   canApprove?: boolean;
   /** Reserved for later rebuild steps (Material price requests). Unused in Step 1 shell. */
   canRequestPrice?: boolean;
+  permissions?: Partial<SilaMePermissions>;
+  onNavigate?: (key: string) => void;
 }
 
 const PAGE_SIZE = 48;
 
 /**
- * Recipe Studio — catalog/detail + New/Edit workspace shell (Steps 1–6).
+ * Recipe Studio — catalog/detail + New/Edit workspace shell (Steps 1–6) + Recipe Studio 2.0 Phase 0 shell.
  * Canonical URLs under /sila-recipes; SilaRecipeEditor is not mounted.
  */
 const SilaRecipes: React.FC<SilaRecipesProps> = ({
   canManage,
   canApprove = false,
   canRequestPrice: _canRequestPrice = false,
+  permissions,
+  onNavigate,
 }) => {
   const { pathname, key: locationKey } = useLocation();
   const navigate = useNavigate();
@@ -91,6 +106,13 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({
   const [deleting, setDeleting] = useState(false);
   /** Remount New shell when New is clicked again while already on /sila-recipes/new. */
   const [newShellEpoch, setNewShellEpoch] = useState(0);
+  const [aiStatus, setAiStatus] = useState<SilaCulinaryAiStatus | null>(null);
+
+  const refreshAiStatus = useCallback(() => {
+    getCulinaryAiStatus()
+      .then((res) => setAiStatus(res))
+      .catch(() => undefined);
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -128,7 +150,8 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({
         setDashboard(dash);
       })
       .catch(() => undefined);
-  }, []);
+    refreshAiStatus();
+  }, [refreshAiStatus]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -203,6 +226,34 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({
       setDeleting(false);
     }
   };
+
+  const culinaryFlags = aiStatus?.featureFlags ?? DEFAULT_CULINARY_FEATURE_FLAGS;
+  const selectCulinaryRoute = (target: "list" | "legacy-upload" | CulinaryWorkspaceKind) => {
+    if (target === "list") {
+      goCatalog();
+    } else if (target === "legacy-upload") {
+      navigate(silaRecipeLegacyUploadPath());
+    } else {
+      navigate(silaRecipeCulinaryPath(target));
+    }
+  };
+
+  // --- Recipe Studio 2.0 Phase 0 Culinary Intelligence Workspaces ---
+  if (isCulinaryWorkspaceRoute(route)) {
+    return (
+      <SilaRecipeStudio2Workspaces
+        route={route}
+        flags={culinaryFlags}
+        aiStatus={aiStatus}
+        dashboard={dashboard}
+        totalCatalogCount={total}
+        permissions={permissions}
+        onSelectRecipeRoute={selectCulinaryRoute}
+        onNavigateGlobal={onNavigate}
+        onRefreshAiStatus={refreshAiStatus}
+      />
+    );
+  }
 
   // --- Legacy Recipe Upload (isolated migration workspace) ---
   if (route.kind === "legacy-upload") {
@@ -315,6 +366,18 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({
           </button>
         </div>
       </header>
+
+      <SilaRecipeStudio2Workspaces
+        route={route}
+        flags={culinaryFlags}
+        aiStatus={aiStatus}
+        dashboard={dashboard}
+        totalCatalogCount={total}
+        permissions={permissions}
+        onSelectRecipeRoute={selectCulinaryRoute}
+        onNavigateGlobal={onNavigate}
+        onRefreshAiStatus={refreshAiStatus}
+      />
 
       <div className="rstudio-kpis" data-testid="recipe-studio-dashboard-kpis" aria-label="Recipe Studio overview">
         <div className="rstudio-kpi rstudio-kpi--sky">

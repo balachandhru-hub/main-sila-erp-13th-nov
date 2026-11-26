@@ -176,6 +176,8 @@ const SilaMeWorkspace: React.FC<SilaMeWorkspaceProps> = ({ navKey, role, permiss
             canManage={can.manageRecipe}
             canApprove={can.approveRecipe}
             canRequestPrice={can.manageMasterData}
+            permissions={can}
+            onNavigate={onNavigate}
           />
         );
       case "silaRecipes":
@@ -184,6 +186,8 @@ const SilaMeWorkspace: React.FC<SilaMeWorkspaceProps> = ({ navKey, role, permiss
             canManage={can.manageRecipe}
             canApprove={can.approveRecipe}
             canRequestPrice={can.manageMasterData}
+            permissions={can}
+            onNavigate={onNavigate}
           />
         );
       case "silaRecipeApprovals":
