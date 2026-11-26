@@ -3,6 +3,7 @@ using Buyer.Domain.Dtos;
 using Buyer.Domain.Entities;
 using Buyer.Infrastructure.Contracts.IRepository;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 using SharedKernel.Integration.Services;
 using SharedKernel.LoggerServices;
 
@@ -29,8 +30,11 @@ namespace Buyer.Application.Features.Queries.GetSilaCulinaryAiConfig
             BuyerBusinessProfile buyer = await SilaAccess.GetBuyerAsync(_repository, _logger, request.OrganizationId);
             SilaCulinaryAiConfiguration? entity = await _repository.SilaCulinaryAiConfiguration.FindFirstByConditionAsync(
                 x => x.BuyerId == buyer.Id && x.IsActive);
+            List<SilaCulinaryAiUsageLog> logs = await _repository.SilaCulinaryAiUsageLog
+                .FindByCondition(x => x.BuyerId == buyer.Id && x.IsActive)
+                .ToListAsync(cancellationToken);
             bool canEdit = SilaAccess.IsAdministrator(request.RoleId);
-            return SilaCulinaryAiSettings.ToDto(entity, buyer.Id, canEdit, _protector);
+            return SilaCulinaryAiSettings.ToDto(entity, buyer.Id, canEdit, _protector, logs);
         }
     }
 }

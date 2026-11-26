@@ -82,6 +82,9 @@ namespace Buyer.Infrastructure.Repository
         private ISilaVoicePoSessionRepository? _silaVoicePoSession;
         private ISilaVoicePoTurnRepository? _silaVoicePoTurn;
         private ISilaCulinaryAiConfigurationRepository? _silaCulinaryAiConfiguration;
+        private ISilaCulinaryRecipeDraftRepository? _silaCulinaryRecipeDraft;
+        private ISilaCulinaryRecipeRevisionRepository? _silaCulinaryRecipeRevision;
+        private ISilaCulinaryAiUsageLogRepository? _silaCulinaryAiUsageLog;
         private IBuyerBusinessProfileRepository _buyerBusinessProfileRepository;
         private IBuyerCategoryRepository _buyerCategoryRepository;
         private IAssetRepository _assetRepository;
@@ -1544,6 +1547,33 @@ namespace Buyer.Infrastructure.Repository
             {
                 _silaCulinaryAiConfiguration ??= new SilaCulinaryAiConfigurationRepository(_context);
                 return _silaCulinaryAiConfiguration;
+            }
+        }
+
+        public ISilaCulinaryRecipeDraftRepository SilaCulinaryRecipeDraft
+        {
+            get
+            {
+                _silaCulinaryRecipeDraft ??= new SilaCulinaryRecipeDraftRepository(_context);
+                return _silaCulinaryRecipeDraft;
+            }
+        }
+
+        public ISilaCulinaryRecipeRevisionRepository SilaCulinaryRecipeRevision
+        {
+            get
+            {
+                _silaCulinaryRecipeRevision ??= new SilaCulinaryRecipeRevisionRepository(_context);
+                return _silaCulinaryRecipeRevision;
+            }
+        }
+
+        public ISilaCulinaryAiUsageLogRepository SilaCulinaryAiUsageLog
+        {
+            get
+            {
+                _silaCulinaryAiUsageLog ??= new SilaCulinaryAiUsageLogRepository(_context);
+                return _silaCulinaryAiUsageLog;
             }
         }
 

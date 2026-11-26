@@ -51,6 +51,9 @@ namespace Buyer.Application.Features.Shared
                 case Common.SILA_REF_RECIPE:
                     return await repository.Recipe.FindByCondition(x => x.BuyerId == buyerId && ids.Contains(x.Id))
                         .ToDictionaryAsync(x => x.Id, x => x.RecipeCode, cancellationToken);
+                case Common.SILA_REF_CULINARY_RECIPE_DRAFT:
+                    return await repository.SilaCulinaryRecipeDraft.FindByCondition(x => x.BuyerId == buyerId && ids.Contains(x.Id))
+                        .ToDictionaryAsync(x => x.Id, x => x.DraftReference, cancellationToken);
                 case Common.SILA_REF_GRN:
                     return await repository.GoodsReceipt.FindByCondition(x => x.BuyerId == buyerId && ids.Contains(x.Id))
                         .ToDictionaryAsync(x => x.Id, x => x.GrnNumber, cancellationToken);

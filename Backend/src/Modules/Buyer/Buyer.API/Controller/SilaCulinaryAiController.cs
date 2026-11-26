@@ -37,7 +37,8 @@ namespace Buyer.API.Controllers
         {
             SilaCulinaryAiStatusDto result = await _mediator.Send(new GetSilaCulinaryAiStatusQuery
             {
-                OrganizationId = GetOrganizationId()
+                OrganizationId = GetOrganizationId(),
+                RoleId = GetRoleId()
             });
             return Ok(result);
         }

@@ -52,7 +52,8 @@ namespace Buyer.Tests.Shared
             Assert.Equal("••••abcd", dto.GeminiKeyMasked);
             Assert.False(dto.ClaudeKeyConfigured);
             Assert.True(dto.FeatureFlags.CulinarySuiteEnabled);
-            Assert.Equal(11, dto.TaskRouting.Count);
+            Assert.Equal(SilaCulinaryAiSettings.SupportedTasks.Length, dto.TaskRouting.Count);
+            Assert.Equal("PHASE_1A", SilaCulinaryAiSettings.ToStatusDto(entity, buyerId, true).Phase);
         }
 
         [Fact]

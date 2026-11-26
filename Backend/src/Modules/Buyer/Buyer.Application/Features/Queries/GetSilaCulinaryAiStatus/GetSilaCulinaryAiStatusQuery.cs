@@ -6,5 +6,6 @@ namespace Buyer.Application.Features.Queries.GetSilaCulinaryAiStatus
     public class GetSilaCulinaryAiStatusQuery : IRequest<SilaCulinaryAiStatusDto>
     {
         public Guid OrganizationId { get; set; }
+        public Guid RoleId { get; set; }
     }
 }
