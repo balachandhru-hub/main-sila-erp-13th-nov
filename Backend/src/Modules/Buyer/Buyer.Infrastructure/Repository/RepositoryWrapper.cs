@@ -101,6 +101,11 @@ namespace Buyer.Infrastructure.Repository
         private ISilaCulinaryMenuRepository? _silaCulinaryMenu;
         private ISilaCulinaryMenuLineRepository? _silaCulinaryMenuLine;
         private ISilaCulinaryEventRevisionRepository? _silaCulinaryEventRevision;
+        private ISilaCulinaryMrpRunRepository? _silaCulinaryMrpRun;
+        private ISilaCulinaryMrpLineRepository? _silaCulinaryMrpLine;
+        private ISilaCulinaryMrpExceptionRepository? _silaCulinaryMrpException;
+        private ISilaCulinaryMrpScenarioRepository? _silaCulinaryMrpScenario;
+        private ISilaCulinaryMrpSnapshotRepository? _silaCulinaryMrpSnapshot;
         private IBuyerBusinessProfileRepository _buyerBusinessProfileRepository;
         private IBuyerCategoryRepository _buyerCategoryRepository;
         private IAssetRepository _assetRepository;
@@ -1734,6 +1739,51 @@ namespace Buyer.Infrastructure.Repository
             {
                 _silaCulinaryEventRevision ??= new SilaCulinaryEventRevisionRepository(_context);
                 return _silaCulinaryEventRevision;
+            }
+        }
+
+        public ISilaCulinaryMrpRunRepository SilaCulinaryMrpRun
+        {
+            get
+            {
+                _silaCulinaryMrpRun ??= new SilaCulinaryMrpRunRepository(_context);
+                return _silaCulinaryMrpRun;
+            }
+        }
+
+        public ISilaCulinaryMrpLineRepository SilaCulinaryMrpLine
+        {
+            get
+            {
+                _silaCulinaryMrpLine ??= new SilaCulinaryMrpLineRepository(_context);
+                return _silaCulinaryMrpLine;
+            }
+        }
+
+        public ISilaCulinaryMrpExceptionRepository SilaCulinaryMrpException
+        {
+            get
+            {
+                _silaCulinaryMrpException ??= new SilaCulinaryMrpExceptionRepository(_context);
+                return _silaCulinaryMrpException;
+            }
+        }
+
+        public ISilaCulinaryMrpScenarioRepository SilaCulinaryMrpScenario
+        {
+            get
+            {
+                _silaCulinaryMrpScenario ??= new SilaCulinaryMrpScenarioRepository(_context);
+                return _silaCulinaryMrpScenario;
+            }
+        }
+
+        public ISilaCulinaryMrpSnapshotRepository SilaCulinaryMrpSnapshot
+        {
+            get
+            {
+                _silaCulinaryMrpSnapshot ??= new SilaCulinaryMrpSnapshotRepository(_context);
+                return _silaCulinaryMrpSnapshot;
             }
         }
 

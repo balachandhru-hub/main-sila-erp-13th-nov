@@ -175,6 +175,11 @@ namespace Buyer.Infrastructure.DbContext
         public DbSet<SilaCulinaryMenu> SilaCulinaryMenu { get; set; }
         public DbSet<SilaCulinaryMenuLine> SilaCulinaryMenuLine { get; set; }
         public DbSet<SilaCulinaryEventRevision> SilaCulinaryEventRevision { get; set; }
+        public DbSet<SilaCulinaryMrpRun> SilaCulinaryMrpRun { get; set; }
+        public DbSet<SilaCulinaryMrpLine> SilaCulinaryMrpLine { get; set; }
+        public DbSet<SilaCulinaryMrpException> SilaCulinaryMrpException { get; set; }
+        public DbSet<SilaCulinaryMrpScenario> SilaCulinaryMrpScenario { get; set; }
+        public DbSet<SilaCulinaryMrpSnapshot> SilaCulinaryMrpSnapshot { get; set; }
 
 
         protected override void OnModelCreating(Microsoft.EntityFrameworkCore.ModelBuilder modelBuilder)
@@ -498,6 +503,14 @@ namespace Buyer.Infrastructure.DbContext
             _ = modelBuilder.Entity<SilaCulinaryMenu>().HasIndex(a => new { a.BuyerId, a.EventId });
             _ = modelBuilder.Entity<SilaCulinaryMenuLine>().HasIndex(a => new { a.BuyerId, a.MenuId, a.SortOrder });
             _ = modelBuilder.Entity<SilaCulinaryEventRevision>().HasIndex(a => new { a.BuyerId, a.EventId, a.RevisionNumber });
+            _ = modelBuilder.Entity<SilaCulinaryMrpRun>().HasIndex(a => new { a.BuyerId, a.MrpCode }).IsUnique();
+            _ = modelBuilder.Entity<SilaCulinaryMrpRun>().HasIndex(a => new { a.BuyerId, a.Status });
+            _ = modelBuilder.Entity<SilaCulinaryMrpRun>().HasIndex(a => new { a.BuyerId, a.PropertyId });
+            _ = modelBuilder.Entity<SilaCulinaryMrpLine>().HasIndex(a => new { a.BuyerId, a.MrpRunId, a.RequiredDateBucket });
+            _ = modelBuilder.Entity<SilaCulinaryMrpLine>().HasIndex(a => new { a.BuyerId, a.MaterialId });
+            _ = modelBuilder.Entity<SilaCulinaryMrpException>().HasIndex(a => new { a.BuyerId, a.MrpRunId, a.ResolutionStatus });
+            _ = modelBuilder.Entity<SilaCulinaryMrpScenario>().HasIndex(a => new { a.BuyerId, a.MrpRunId });
+            _ = modelBuilder.Entity<SilaCulinaryMrpSnapshot>().HasIndex(a => new { a.BuyerId, a.MrpRunId, a.VersionNumber });
 
             base.OnModelCreating(modelBuilder);
 
