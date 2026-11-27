@@ -124,6 +124,25 @@ namespace Buyer.Infrastructure.Repository
         private ISilaCulinaryRecommendationRepository? _silaCulinaryRecommendation;
         private ISilaCulinaryWasteRecordRepository? _silaCulinaryWasteRecord;
         private ISilaCulinaryAnalyticsAuditRepository? _silaCulinaryAnalyticsAudit;
+        private ISilaCulinaryKitchenRepository? _silaCulinaryKitchen;
+        private ISilaCulinaryWorkstationRepository? _silaCulinaryWorkstation;
+        private ISilaCulinaryEquipmentRepository? _silaCulinaryEquipment;
+        private ISilaCulinaryStaffAssignmentRepository? _silaCulinaryStaffAssignment;
+        private ISilaCulinaryProductionDemandRepository? _silaCulinaryProductionDemand;
+        private ISilaCulinaryProductionPlanRepository? _silaCulinaryProductionPlan;
+        private ISilaCulinaryProductionPlanLineRepository? _silaCulinaryProductionPlanLine;
+        private ISilaCulinaryProductionPlanVersionRepository? _silaCulinaryProductionPlanVersion;
+        private ISilaCulinaryProductionOrderRepository? _silaCulinaryProductionOrder;
+        private ISilaCulinaryProductionOrderIngredientRepository? _silaCulinaryProductionOrderIngredient;
+        private ISilaCulinaryProductionBatchRepository? _silaCulinaryProductionBatch;
+        private ISilaCulinaryProductionTaskRepository? _silaCulinaryProductionTask;
+        private ISilaCulinaryProductionPickingLineRepository? _silaCulinaryProductionPickingLine;
+        private ISilaCulinaryProductionMaterialIssueRefRepository? _silaCulinaryProductionMaterialIssueRef;
+        private ISilaCulinaryProductionQualityCheckpointRepository? _silaCulinaryProductionQualityCheckpoint;
+        private ISilaCulinaryProductionQualityResultRepository? _silaCulinaryProductionQualityResult;
+        private ISilaCulinaryProductionExceptionRepository? _silaCulinaryProductionException;
+        private ISilaCulinaryProductionDispatchRepository? _silaCulinaryProductionDispatch;
+        private ISilaCulinaryProductionAuditRepository? _silaCulinaryProductionAudit;
         private IBuyerBusinessProfileRepository _buyerBusinessProfileRepository;
         private IBuyerCategoryRepository _buyerCategoryRepository;
         private IAssetRepository _assetRepository;
@@ -1966,6 +1985,26 @@ namespace Buyer.Infrastructure.Repository
                 return _silaCulinaryAnalyticsAudit;
             }
         }
+
+        public ISilaCulinaryKitchenRepository SilaCulinaryKitchen { get => _silaCulinaryKitchen ??= new SilaCulinaryKitchenRepository(_context); }
+        public ISilaCulinaryWorkstationRepository SilaCulinaryWorkstation { get => _silaCulinaryWorkstation ??= new SilaCulinaryWorkstationRepository(_context); }
+        public ISilaCulinaryEquipmentRepository SilaCulinaryEquipment { get => _silaCulinaryEquipment ??= new SilaCulinaryEquipmentRepository(_context); }
+        public ISilaCulinaryStaffAssignmentRepository SilaCulinaryStaffAssignment { get => _silaCulinaryStaffAssignment ??= new SilaCulinaryStaffAssignmentRepository(_context); }
+        public ISilaCulinaryProductionDemandRepository SilaCulinaryProductionDemand { get => _silaCulinaryProductionDemand ??= new SilaCulinaryProductionDemandRepository(_context); }
+        public ISilaCulinaryProductionPlanRepository SilaCulinaryProductionPlan { get => _silaCulinaryProductionPlan ??= new SilaCulinaryProductionPlanRepository(_context); }
+        public ISilaCulinaryProductionPlanLineRepository SilaCulinaryProductionPlanLine { get => _silaCulinaryProductionPlanLine ??= new SilaCulinaryProductionPlanLineRepository(_context); }
+        public ISilaCulinaryProductionPlanVersionRepository SilaCulinaryProductionPlanVersion { get => _silaCulinaryProductionPlanVersion ??= new SilaCulinaryProductionPlanVersionRepository(_context); }
+        public ISilaCulinaryProductionOrderRepository SilaCulinaryProductionOrder { get => _silaCulinaryProductionOrder ??= new SilaCulinaryProductionOrderRepository(_context); }
+        public ISilaCulinaryProductionOrderIngredientRepository SilaCulinaryProductionOrderIngredient { get => _silaCulinaryProductionOrderIngredient ??= new SilaCulinaryProductionOrderIngredientRepository(_context); }
+        public ISilaCulinaryProductionBatchRepository SilaCulinaryProductionBatch { get => _silaCulinaryProductionBatch ??= new SilaCulinaryProductionBatchRepository(_context); }
+        public ISilaCulinaryProductionTaskRepository SilaCulinaryProductionTask { get => _silaCulinaryProductionTask ??= new SilaCulinaryProductionTaskRepository(_context); }
+        public ISilaCulinaryProductionPickingLineRepository SilaCulinaryProductionPickingLine { get => _silaCulinaryProductionPickingLine ??= new SilaCulinaryProductionPickingLineRepository(_context); }
+        public ISilaCulinaryProductionMaterialIssueRefRepository SilaCulinaryProductionMaterialIssueRef { get => _silaCulinaryProductionMaterialIssueRef ??= new SilaCulinaryProductionMaterialIssueRefRepository(_context); }
+        public ISilaCulinaryProductionQualityCheckpointRepository SilaCulinaryProductionQualityCheckpoint { get => _silaCulinaryProductionQualityCheckpoint ??= new SilaCulinaryProductionQualityCheckpointRepository(_context); }
+        public ISilaCulinaryProductionQualityResultRepository SilaCulinaryProductionQualityResult { get => _silaCulinaryProductionQualityResult ??= new SilaCulinaryProductionQualityResultRepository(_context); }
+        public ISilaCulinaryProductionExceptionRepository SilaCulinaryProductionException { get => _silaCulinaryProductionException ??= new SilaCulinaryProductionExceptionRepository(_context); }
+        public ISilaCulinaryProductionDispatchRepository SilaCulinaryProductionDispatch { get => _silaCulinaryProductionDispatch ??= new SilaCulinaryProductionDispatchRepository(_context); }
+        public ISilaCulinaryProductionAuditRepository SilaCulinaryProductionAudit { get => _silaCulinaryProductionAudit ??= new SilaCulinaryProductionAuditRepository(_context); }
 
         public bool Save()
         {

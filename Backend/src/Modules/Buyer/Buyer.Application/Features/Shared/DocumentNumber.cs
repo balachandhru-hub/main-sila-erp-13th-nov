@@ -39,6 +39,10 @@ namespace Buyer.Application.Features.Shared
         public const string EVENT = "EVT";
         public const string EVENT_TEMPLATE = "ETP";
         public const string CULINARY_MENU = "MNU";
+        public const string PRODUCTION_PLAN = "PRD-PLN";
+        public const string PRODUCTION_ORDER = "PRD-ORD";
+        public const string PRODUCTION_EXCEPTION = "PRD-EXC";
+        public const string PRODUCTION_DISPATCH = "PRD-DSP";
 
         private const int SEED_CANDIDATES = 50;
 
@@ -131,6 +135,10 @@ namespace Buyer.Application.Features.Shared
                 EVENT => repository.SilaCulinaryEvent.FindByCondition(x => x.BuyerId == buyerId).Select(x => x.EventCode),
                 EVENT_TEMPLATE => repository.SilaCulinaryEventTemplate.FindByCondition(x => x.BuyerId == buyerId).Select(x => x.TemplateCode),
                 CULINARY_MENU => repository.SilaCulinaryMenu.FindByCondition(x => x.BuyerId == buyerId).Select(x => x.MenuCode),
+                PRODUCTION_PLAN => repository.SilaCulinaryProductionPlan.FindByCondition(x => x.BuyerId == buyerId).Select(x => x.PlanCode),
+                PRODUCTION_ORDER => repository.SilaCulinaryProductionOrder.FindByCondition(x => x.BuyerId == buyerId).Select(x => x.OrderNumber),
+                PRODUCTION_EXCEPTION => repository.SilaCulinaryProductionException.FindByCondition(x => x.BuyerId == buyerId).Select(x => x.ExceptionCode),
+                PRODUCTION_DISPATCH => repository.SilaCulinaryProductionDispatch.FindByCondition(x => x.BuyerId == buyerId).Select(x => x.DispatchNumber),
                 _ => throw new ArgumentOutOfRangeException(nameof(prefix), prefix, "Unknown SILA document number prefix.")
             };
 

@@ -198,6 +198,25 @@ namespace Buyer.Infrastructure.DbContext
         public DbSet<SilaCulinaryRecommendation> SilaCulinaryRecommendation { get; set; }
         public DbSet<SilaCulinaryWasteRecord> SilaCulinaryWasteRecord { get; set; }
         public DbSet<SilaCulinaryAnalyticsAudit> SilaCulinaryAnalyticsAudit { get; set; }
+        public DbSet<SilaCulinaryKitchen> SilaCulinaryKitchen { get; set; }
+        public DbSet<SilaCulinaryWorkstation> SilaCulinaryWorkstation { get; set; }
+        public DbSet<SilaCulinaryEquipment> SilaCulinaryEquipment { get; set; }
+        public DbSet<SilaCulinaryStaffAssignment> SilaCulinaryStaffAssignment { get; set; }
+        public DbSet<SilaCulinaryProductionDemand> SilaCulinaryProductionDemand { get; set; }
+        public DbSet<SilaCulinaryProductionPlan> SilaCulinaryProductionPlan { get; set; }
+        public DbSet<SilaCulinaryProductionPlanLine> SilaCulinaryProductionPlanLine { get; set; }
+        public DbSet<SilaCulinaryProductionPlanVersion> SilaCulinaryProductionPlanVersion { get; set; }
+        public DbSet<SilaCulinaryProductionOrder> SilaCulinaryProductionOrder { get; set; }
+        public DbSet<SilaCulinaryProductionOrderIngredient> SilaCulinaryProductionOrderIngredient { get; set; }
+        public DbSet<SilaCulinaryProductionBatch> SilaCulinaryProductionBatch { get; set; }
+        public DbSet<SilaCulinaryProductionTask> SilaCulinaryProductionTask { get; set; }
+        public DbSet<SilaCulinaryProductionPickingLine> SilaCulinaryProductionPickingLine { get; set; }
+        public DbSet<SilaCulinaryProductionMaterialIssueRef> SilaCulinaryProductionMaterialIssueRef { get; set; }
+        public DbSet<SilaCulinaryProductionQualityCheckpoint> SilaCulinaryProductionQualityCheckpoint { get; set; }
+        public DbSet<SilaCulinaryProductionQualityResult> SilaCulinaryProductionQualityResult { get; set; }
+        public DbSet<SilaCulinaryProductionException> SilaCulinaryProductionException { get; set; }
+        public DbSet<SilaCulinaryProductionDispatch> SilaCulinaryProductionDispatch { get; set; }
+        public DbSet<SilaCulinaryProductionAudit> SilaCulinaryProductionAudit { get; set; }
 
 
         protected override void OnModelCreating(Microsoft.EntityFrameworkCore.ModelBuilder modelBuilder)
@@ -560,6 +579,18 @@ namespace Buyer.Infrastructure.DbContext
             _ = modelBuilder.Entity<SilaCulinaryWasteRecord>().HasIndex(a => new { a.BuyerId, a.WasteNumber }).IsUnique();
             _ = modelBuilder.Entity<SilaCulinaryWasteRecord>().HasIndex(a => new { a.BuyerId, a.IdempotencyKey });
             _ = modelBuilder.Entity<SilaCulinaryAnalyticsAudit>().HasIndex(a => new { a.BuyerId, a.ExecutedAtUtc });
+            _ = modelBuilder.Entity<SilaCulinaryKitchen>().HasIndex(a => new { a.BuyerId, a.KitchenCode }).IsUnique();
+            _ = modelBuilder.Entity<SilaCulinaryWorkstation>().HasIndex(a => new { a.BuyerId, a.KitchenId, a.WorkstationCode }).IsUnique();
+            _ = modelBuilder.Entity<SilaCulinaryEquipment>().HasIndex(a => new { a.BuyerId, a.KitchenId, a.EquipmentCode }).IsUnique();
+            _ = modelBuilder.Entity<SilaCulinaryStaffAssignment>().HasIndex(a => new { a.BuyerId, a.KitchenId, a.UserId });
+            _ = modelBuilder.Entity<SilaCulinaryProductionDemand>().HasIndex(a => new { a.BuyerId, a.SourceDocumentKey }).IsUnique();
+            _ = modelBuilder.Entity<SilaCulinaryProductionPlan>().HasIndex(a => new { a.BuyerId, a.PlanCode }).IsUnique();
+            _ = modelBuilder.Entity<SilaCulinaryProductionOrder>().HasIndex(a => new { a.BuyerId, a.OrderNumber }).IsUnique();
+            _ = modelBuilder.Entity<SilaCulinaryProductionBatch>().HasIndex(a => new { a.BuyerId, a.BatchNumber }).IsUnique();
+            _ = modelBuilder.Entity<SilaCulinaryProductionMaterialIssueRef>().HasIndex(a => new { a.BuyerId, a.IdempotencyKey }).IsUnique();
+            _ = modelBuilder.Entity<SilaCulinaryProductionException>().HasIndex(a => new { a.BuyerId, a.ExceptionCode }).IsUnique();
+            _ = modelBuilder.Entity<SilaCulinaryProductionDispatch>().HasIndex(a => new { a.BuyerId, a.DispatchNumber }).IsUnique();
+            _ = modelBuilder.Entity<SilaCulinaryProductionAudit>().HasIndex(a => new { a.BuyerId, a.ExecutedAtUtc });
 
             base.OnModelCreating(modelBuilder);
 

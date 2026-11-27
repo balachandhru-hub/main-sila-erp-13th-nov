@@ -35,6 +35,14 @@ namespace Buyer.Domain.Dtos
         public bool CulinaryCopilotEnabled { get; set; } = true;
         public bool CrossPropertyBenchmarkingEnabled { get; set; } = true;
         public bool RecommendationCockpitEnabled { get; set; } = true;
+        // Phase 4A Kitchen Production Planning, Batch Scheduling & Execution flags (independent of procurement V1 release)
+        public bool CulinaryPhase4AEnabled { get; set; } = true;
+        public bool KitchenMasterEnabled { get; set; } = true;
+        public bool ProductionPlanningEnabled { get; set; } = true;
+        public bool ProductionSchedulingEnabled { get; set; } = true;
+        public bool KdsDisplayEnabled { get; set; } = true;
+        public bool QualityCheckpointsEnabled { get; set; } = true;
+        public bool CentralKitchenEnabled { get; set; } = true;
     }
 
     public class SilaCulinaryAiUsageSummaryDto
