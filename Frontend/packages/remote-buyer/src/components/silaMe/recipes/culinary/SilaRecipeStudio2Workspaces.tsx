@@ -22,6 +22,8 @@ interface SilaRecipeStudio2WorkspacesProps {
   dashboard: SilaRecipeDashboard | null;
   totalCatalogCount: number;
   permissions?: Partial<SilaMePermissions>;
+  showOptions?: boolean;
+  optionsPanelId?: string;
   onSelectRecipeRoute: (target: "list" | "legacy-upload" | CulinaryWorkspaceKind) => void;
   onNavigateGlobal?: (navKey: string) => void;
   onRefreshAiStatus: () => void;
@@ -45,6 +47,8 @@ const SilaRecipeStudio2Workspaces: React.FC<SilaRecipeStudio2WorkspacesProps> = 
   dashboard,
   totalCatalogCount,
   permissions,
+  showOptions = true,
+  optionsPanelId = "cs2-culinary-options-panel",
   onSelectRecipeRoute,
   onNavigateGlobal,
   onRefreshAiStatus,
@@ -77,8 +81,9 @@ const SilaRecipeStudio2Workspaces: React.FC<SilaRecipeStudio2WorkspacesProps> = 
     [handleSelectMaterialDraft, onSelectRecipeRoute]
   );
 
-  const nav = (
+  const nav = showOptions ? (
     <SilaRecipeStudio2Nav
+      id={optionsPanelId}
       activeRoute={route}
       flags={flags}
       aiStatus={aiStatus}
@@ -86,7 +91,7 @@ const SilaRecipeStudio2Workspaces: React.FC<SilaRecipeStudio2WorkspacesProps> = 
       onSelectRecipeRoute={onSelectRecipeRoute}
       onNavigateGlobal={onNavigateGlobal}
     />
-  );
+  ) : null;
 
   if (!isCulinaryWorkspaceRoute(route)) {
     return nav;
@@ -156,9 +161,9 @@ const SilaRecipeStudio2Workspaces: React.FC<SilaRecipeStudio2WorkspacesProps> = 
   };
 
   return (
-    <div className="sila-me srec-page rstudio-page">
+    <div className="cs2-shell">
       {nav}
-      <div style={{ marginTop: 16 }}>{renderBody()}</div>
+      <div>{renderBody()}</div>
     </div>
   );
 };

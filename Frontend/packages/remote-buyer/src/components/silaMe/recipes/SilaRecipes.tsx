@@ -107,6 +107,7 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({
   /** Remount New shell when New is clicked again while already on /sila-recipes/new. */
   const [newShellEpoch, setNewShellEpoch] = useState(0);
   const [aiStatus, setAiStatus] = useState<SilaCulinaryAiStatus | null>(null);
+  const [showCulinaryOptions, setShowCulinaryOptions] = useState<boolean>(() => isCulinaryWorkspaceRoute(route));
 
   const refreshAiStatus = useCallback(() => {
     getCulinaryAiStatus()
@@ -238,20 +239,66 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({
     }
   };
 
+  const renderCulinaryRibbon = () => {
+    if (!culinaryFlags.culinarySuiteEnabled) return null;
+    return (
+      <button
+        type="button"
+        className={`cs2-flexi-ribbon${showCulinaryOptions ? " is-open" : ""}`}
+        aria-expanded={showCulinaryOptions}
+        aria-controls="cs2-culinary-options-panel"
+        data-testid="culinary-flexi-ribbon"
+        onClick={() => setShowCulinaryOptions((open) => !open)}
+        title={
+          showCulinaryOptions
+            ? "Hide Recipe Studio 2.0 · Culinary Intelligence options"
+            : "Show Recipe Studio 2.0 · Culinary Intelligence options"
+        }
+      >
+        <span className="cs2-flexi-ribbon__badge" aria-hidden="true">2.0</span>
+        <span className="cs2-flexi-ribbon__text">RECIPE STUDIO 2.0 · CULINARY INTELLIGENCE</span>
+        <span className="cs2-flexi-ribbon__chevron" aria-hidden="true">
+          {showCulinaryOptions ? "▴" : "▾"}
+        </span>
+      </button>
+    );
+  };
+
   // --- Recipe Studio 2.0 Phase 0 Culinary Intelligence Workspaces ---
   if (isCulinaryWorkspaceRoute(route)) {
     return (
-      <SilaRecipeStudio2Workspaces
-        route={route}
-        flags={culinaryFlags}
-        aiStatus={aiStatus}
-        dashboard={dashboard}
-        totalCatalogCount={total}
-        permissions={permissions}
-        onSelectRecipeRoute={selectCulinaryRoute}
-        onNavigateGlobal={onNavigate}
-        onRefreshAiStatus={refreshAiStatus}
-      />
+      <div className="sila-me srec-page rstudio-page">
+        <header className="rstudio-hero rstudio-hero--compact">
+          <div className="rstudio-hero__copy">
+            <div className="rstudio-hero__title-row">
+              <h1 className="rstudio-hero__title">SILA Recipe Studio</h1>
+              {renderCulinaryRibbon()}
+            </div>
+          </div>
+          <div className="rstudio-hero__actions">
+            <button
+              type="button"
+              className="sila-btn sila-btn--secondary"
+              onClick={goCatalog}
+            >
+              Back to Recipe Catalog
+            </button>
+          </div>
+        </header>
+
+        <SilaRecipeStudio2Workspaces
+          route={route}
+          flags={culinaryFlags}
+          aiStatus={aiStatus}
+          dashboard={dashboard}
+          totalCatalogCount={total}
+          permissions={permissions}
+          showOptions={showCulinaryOptions}
+          onSelectRecipeRoute={selectCulinaryRoute}
+          onNavigateGlobal={onNavigate}
+          onRefreshAiStatus={refreshAiStatus}
+        />
+      </div>
     );
   }
 
@@ -335,7 +382,10 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({
     <div className="sila-me srec-page rstudio-page">
       <header className="rstudio-hero">
         <div className="rstudio-hero__copy">
-          <h1 className="rstudio-hero__title">SILA Recipe Studio</h1>
+          <div className="rstudio-hero__title-row">
+            <h1 className="rstudio-hero__title">SILA Recipe Studio</h1>
+            {renderCulinaryRibbon()}
+          </div>
         </div>
         <div className="rstudio-hero__actions">
           <SilaRecipeExcelPanel
@@ -374,6 +424,7 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({
         dashboard={dashboard}
         totalCatalogCount={total}
         permissions={permissions}
+        showOptions={showCulinaryOptions}
         onSelectRecipeRoute={selectCulinaryRoute}
         onNavigateGlobal={onNavigate}
         onRefreshAiStatus={refreshAiStatus}

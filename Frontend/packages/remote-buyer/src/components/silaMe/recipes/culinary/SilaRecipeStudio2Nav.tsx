@@ -5,6 +5,7 @@ import type { SilaRecipeRoute } from "../silaRecipeRoutes";
 import "./CulinarySuite.css";
 
 export interface SilaRecipeStudio2NavProps {
+  id?: string;
   activeRoute: SilaRecipeRoute;
   flags: SilaCulinaryAiFeatureFlags;
   aiStatus: SilaCulinaryAiStatus | null;
@@ -26,6 +27,7 @@ interface NavItem {
 }
 
 const SilaRecipeStudio2Nav: React.FC<SilaRecipeStudio2NavProps> = ({
+  id,
   activeRoute,
   flags,
   aiStatus,
@@ -204,7 +206,7 @@ const SilaRecipeStudio2Nav: React.FC<SilaRecipeStudio2NavProps> = ({
   };
 
   return (
-    <nav className="cs2-nav-bar" aria-label="Recipe Studio 2.0 Culinary Intelligence Navigation" data-testid="culinary-studio-nav">
+    <nav id={id} className="cs2-nav-bar" aria-label="Recipe Studio 2.0 Culinary Intelligence Navigation" data-testid="culinary-studio-nav">
       <div className="cs2-nav-top">
         <div className="cs2-nav-brand">
           <span className="cs2-brand-pill">Recipe Studio 2.0 · Culinary Intelligence</span>

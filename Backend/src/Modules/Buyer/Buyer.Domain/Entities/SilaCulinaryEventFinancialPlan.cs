@@ -213,8 +213,10 @@ namespace Buyer.Domain.Entities
 
         public string? SnapshotPayloadJson { get; set; }
 
+        [Column("phase3b_handover_json")]
         public string? Phase3BHandoverJson { get; set; }
 
+        [Column("phase4b_handover_json")]
         public string? Phase4BHandoverJson { get; set; }
 
         public Guid? SubmittedByUserId { get; set; }

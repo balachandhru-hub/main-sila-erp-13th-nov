@@ -43,6 +43,16 @@ namespace Buyer.Domain.Dtos
         public bool KdsDisplayEnabled { get; set; } = true;
         public bool QualityCheckpointsEnabled { get; set; } = true;
         public bool CentralKitchenEnabled { get; set; } = true;
+        // Phase 4B Actual Consumption, Wastage, Returns, Production Settlement & Event Closure flags
+        public bool CulinaryPhase4BEnabled { get; set; } = true;
+        public bool ProductionReconciliationEnabled { get; set; } = true;
+        public bool ActualConsumptionEnabled { get; set; } = true;
+        public bool WasteAndDisposalEnabled { get; set; } = true;
+        public bool YieldAndPortionAnalyticsEnabled { get; set; } = true;
+        public bool ActualEventPnlEnabled { get; set; } = true;
+        public bool ProductionSettlementEnabled { get; set; } = true;
+        public bool EventClosureEnabled { get; set; } = true;
+        public bool HistoricalLearningFoundationEnabled { get; set; } = true;
     }
 
     public class SilaCulinaryAiUsageSummaryDto
