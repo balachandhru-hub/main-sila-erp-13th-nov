@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { getMenuEngineering } from '../../../../remote-buyer/src/api/silaMe/silaMenuEngineeringApi';
 import { getMeMobileSummary } from '../../../../remote-buyer/src/api/silaMe/menuEngineeringStudioApi';
 import { getSilaStoreRoleIntelligence } from '../../../../remote-buyer/src/api/silaMe/menuEngineeringAiApi';
+import { getHierarchicalForecast, getWastePrediction } from '../../../../remote-buyer/src/api/silaMe/menuEngineeringTwinApi';
 import ScreenHeader from '../../components/ScreenHeader';
 import StatusBadge from '../../components/StatusBadge';
 import { Empty, ErrorNotice, Loading, OfflineBanner } from '../../components/StateViews';
@@ -36,9 +37,19 @@ const MenuDashboardScreen: React.FC = () => {
     () => getSilaStoreRoleIntelligence(rolePersona).catch(() => null),
     can.viewMenuEngineering ? `menu-role-intel-${rolePersona}-${date}` : null,
   );
+  const twinDemand = useLoad(
+    () => getHierarchicalForecast(undefined, 3).catch(() => null),
+    can.viewMenuEngineering ? `menu-twin-demand-${date}` : null,
+  );
+  const twinWaste = useLoad(
+    () => getWastePrediction().catch(() => null),
+    can.viewMenuEngineering ? `menu-twin-waste-${date}` : null,
+  );
   const dash = data?.dashboard;
   const summary = mobile.data;
   const personaData = roleIntel.data;
+  const propertyForecast = twinDemand.data?.nodes.find((n) => n.level === 'PROPERTY')?.reconciledForecast?.[0];
+  const smallBatchHints = (twinWaste.data?.items || []).flatMap((i) => i.recommendations.map((r) => `${i.name}: ${r}`)).slice(0, 3);
 
   const routeFor = (kind?: string): string => {
     if (kind === 'RECIPE_MISSING' || kind === 'COST_MISSING') return 'menu/items';
@@ -90,7 +101,20 @@ const MenuDashboardScreen: React.FC = () => {
             <p className="sm-meta">
               Source {dash.occupancySource || 'MANUAL'} · {dash.occupancyFreshness || 'UNAVAILABLE'}
               {summary ? ` · Pending Approvals: ${summary.pendingApprovals.length} · Ingredient Alerts: ${summary.ingredientReadiness.length}` : ''}
+              {propertyForecast != null ? ` · Twin Demand Forecast: ${Math.round(propertyForecast)} covers` : ''}
             </p>
+            {smallBatchHints.length > 0 && (
+              <section className="sm-section">
+                <h2>Digital Twin Kitchen &amp; Waste Guidance</h2>
+                <ul className="sm-list">
+                  {smallBatchHints.map((hint, idx) => (
+                    <li key={`twin-hint-${idx}`} className="sm-list-btn">
+                      <span className="sm-meta">{hint}</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
 
             {/* Role-Specific AI Intelligence (SILA Store Phase ME.2) */}
             <section className="sm-section">

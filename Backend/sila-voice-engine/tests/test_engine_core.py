@@ -227,6 +227,39 @@ async def test_menu_engineering_voice_intents_and_agent():
     r8 = await agent.handle("MENU_CREATE_OBJECTIVE", {"transcript": "Create a breakfast menu for 300 guests."}, {})
     assert r8["ok"] and "confirm" in r8["spoken"].lower()
 
+    # Phase ME.3 Section 38 SILA Voice questions
+    for phrase, expected in [
+        ("How much chicken do we need tomorrow?", "MENU_INGREDIENT_DEMAND_TOMORROW"),
+        ("What is the expected breakfast demand?", "MENU_EXPECTED_DEMAND"),
+        ("Which ingredients may run out?", "MENU_SHORTAGE_RISK"),
+        ("Which dishes should we prepare in smaller batches?", "MENU_SMALLER_BATCH_PREP"),
+    ]:
+        res = await llm.interpret(transcript=phrase, session_state={}, allowed_intents=[expected])
+        assert res.intent == expected
+        assert res.agent_id == "MENU_ENGINEERING_AGENT"
+
+    reg.register(
+        ToolSpec("GetMenuPurchasePlan", "purchase2"),
+        lambda a, c: _async_val({"ok": True, "data": {"rows": [{"materialName": "Chicken Breast", "grossRequirement": 45.0, "uom": "KG", "shortage": 12.0}]}}),
+    )
+    reg.register(
+        ToolSpec("GetTwinDemandForecast", "demand"),
+        lambda a, c: _async_val({"ok": True, "data": {"selectedModel": "EXP_SMOOTHING", "nodes": [{"level": "MEAL_PERIOD", "nodeName": "Breakfast", "tomorrowForecast": 310}]}}),
+    )
+    reg.register(
+        ToolSpec("GetTwinWasteRecommendations", "waste"),
+        lambda a, c: _async_val({"ok": True, "data": {"recommendations": ["Prepare Creamy Pasta in smaller batches"]}}),
+    )
+
+    v1 = await agent.handle("MENU_INGREDIENT_DEMAND_TOMORROW", {"transcript": "How much chicken do we need tomorrow?"}, {})
+    assert v1["ok"] and "Chicken Breast" in v1["spoken"] and "45.0" in v1["spoken"]
+    v2 = await agent.handle("MENU_EXPECTED_DEMAND", {"transcript": "What is the expected breakfast demand?"}, {})
+    assert v2["ok"] and "310" in v2["spoken"]
+    v3 = await agent.handle("MENU_SHORTAGE_RISK", {"transcript": "Which ingredients may run out?"}, {})
+    assert v3["ok"] and "Chicken Breast" in v3["spoken"]
+    v4 = await agent.handle("MENU_SMALLER_BATCH_PREP", {"transcript": "Which dishes should we prepare in smaller batches?"}, {})
+    assert v4["ok"] and "smaller batches" in v4["spoken"].lower()
+
 
 async def _async_val(val):
     return val

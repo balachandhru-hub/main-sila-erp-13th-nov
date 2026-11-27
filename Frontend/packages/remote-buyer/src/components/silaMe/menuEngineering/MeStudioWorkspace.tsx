@@ -29,6 +29,41 @@ import {
   type AiNlSimulationResult,
   type AiOperatingMode,
 } from "../../../api/silaMe/menuEngineeringAiApi";
+import {
+  analyzeTwinDependencies,
+  archiveTwinScenario,
+  captureOutcomeLearning,
+  convertTwinScenarioToDraft,
+  copyTwinScenario,
+  createTwinScenario,
+  createTwinSnapshot,
+  getHierarchicalForecast,
+  getHistoricalSimilarity,
+  getModelGovernanceStatus,
+  getProductionFeasibility,
+  getScenarioLab,
+  getTwinSnapshots,
+  getWastePrediction,
+  optimizeInventoryMenu,
+  refreshTwinSnapshot,
+  runMonteCarlo,
+  runMultiObjectiveOptimization,
+  runSensitivity,
+  runStressTest,
+  type MeHierarchicalForecastResult,
+  type MeHistoricalSimilarityResult,
+  type MeModelGovernanceStatus,
+  type MeMonteCarloResult,
+  type MePhase3InventoryMenuResult,
+  type MePhase3OptimizationJob,
+  type MePhase3ProductionFeasibility,
+  type MeScenarioComparisonResult,
+  type MeSensitivityResult,
+  type MeStressTestResult,
+  type MeWastePredictResult,
+  type TwinDependencyAnalysisResult,
+  type TwinSnapshotDto,
+} from "../../../api/silaMe/menuEngineeringTwinApi";
 import { AiMultiAgentCommandBar } from "./ai/AiMultiAgentCommandBar";
 import { AiValueTag } from "./ai/AiSharedWidgets";
 
@@ -45,12 +80,13 @@ type StudioTab =
   | "DESIGN"
   | "COSTING"
   | "PORTION_DEMAND"
-  | "PERFORMANCE"
+  | "DIGITAL_TWIN"
   | "READINESS"
-  | "HISTORICAL"
+  | "PRODUCTION_FEASIBILITY"
   | "AI_OPTIMIZATION"
-  | "WHAT_IF"
-  | "COMPARE"
+  | "SCENARIO_LAB"
+  | "RISK_SENSITIVITY"
+  | "HISTORICAL"
   | "APPROVAL";
 
 const MENU_TYPES = [
@@ -135,6 +171,24 @@ const MeStudioWorkspace: React.FC<Props> = ({
   const [itemAiFeedback, setItemAiFeedback] = useState<{ itemName: string; response: AiContextualResponse } | null>(null);
   const [nlQuery, setNlQuery] = useState("What happens if salmon cost increases by 20%?");
   const [nlSimResult, setNlSimResult] = useState<AiNlSimulationResult | null>(null);
+  const [twinSnapshots, setTwinSnapshots] = useState<TwinSnapshotDto[]>([]);
+  const [depAnalysis, setDepAnalysis] = useState<TwinDependencyAnalysisResult | null>(null);
+  const [shockIngredient, setShockIngredient] = useState("Salmon");
+  const [shockPct, setShockPct] = useState("20");
+  const [prodFeasibility, setProdFeasibility] = useState<MePhase3ProductionFeasibility | null>(null);
+  const [multiOptJob, setMultiOptJob] = useState<MePhase3OptimizationJob | null>(null);
+  const [optMode, setOptMode] = useState("PARETO_FRONTIER");
+  const [invOptResult, setInvOptResult] = useState<MePhase3InventoryMenuResult | null>(null);
+  const [scenarioLab, setScenarioLab] = useState<MeScenarioComparisonResult | null>(null);
+  const [newScenarioName, setNewScenarioName] = useState("Executive Pareto Draft");
+  const [monteCarloResult, setMonteCarloResult] = useState<MeMonteCarloResult | null>(null);
+  const [sensitivityResult, setSensitivityResult] = useState<MeSensitivityResult | null>(null);
+  const [stressResult, setStressResult] = useState<MeStressTestResult | null>(null);
+  const [wasteResult, setWasteResult] = useState<MeWastePredictResult | null>(null);
+  const [hierForecast, setHierForecast] = useState<MeHierarchicalForecastResult | null>(null);
+  const [histSimilarity, setHistSimilarity] = useState<MeHistoricalSimilarityResult | null>(null);
+  const [govStatus, setGovStatus] = useState<MeModelGovernanceStatus | null>(null);
+  const [twinBusy, setTwinBusy] = useState(false);
   const debounceRef = useRef<number | null>(null);
 
   const hydrateFromPlan = useCallback((p?: MenuPlanEnhanced | null) => {
@@ -904,14 +958,15 @@ const MeStudioWorkspace: React.FC<Props> = ({
             [
               ["DESIGN", "1. Design"],
               ["COSTING", "2. Live Costing"],
-              ["PORTION_DEMAND", "3. Portion & Demand"],
-              ["PERFORMANCE", "4. Menu Performance"],
+              ["PORTION_DEMAND", "3. Demand & Portion"],
+              ["DIGITAL_TWIN", "4. Digital Twin"],
               ["READINESS", "5. Ingredient Readiness"],
-              ["HISTORICAL", "6. Historical Intelligence"],
+              ["PRODUCTION_FEASIBILITY", "6. Production Feasibility"],
               ["AI_OPTIMIZATION", "7. AI Optimization"],
-              ["WHAT_IF", "8. What-If Simulation"],
-              ["COMPARE", "9. Compare Scenarios"],
-              ["APPROVAL", "10. Approval & Publish"],
+              ["SCENARIO_LAB", "8. Scenario Lab"],
+              ["RISK_SENSITIVITY", "9. Risk & Sensitivity"],
+              ["HISTORICAL", "10. Historical Intelligence"],
+              ["APPROVAL", "11. Approval & Publish"],
             ] as [StudioTab, string][]
           ).map(([tabKey, label]) => (
             <button
@@ -921,12 +976,23 @@ const MeStudioWorkspace: React.FC<Props> = ({
               onClick={async () => {
                 setActiveTab(tabKey);
                 setBottomExpanded(true);
-                if (tabKey === "AI_OPTIMIZATION" && !aiData) {
-                  try {
+                try {
+                  if (tabKey === "AI_OPTIMIZATION" && !aiData) {
                     setAiData(await getMeAiIntelligence(selectedPlanId || undefined, propertyId || undefined));
-                  } catch {
-                    // handled gracefully
+                  } else if (tabKey === "DIGITAL_TWIN" && twinSnapshots.length === 0) {
+                    setTwinSnapshots(await getTwinSnapshots(selectedPlanId || undefined));
+                  } else if (tabKey === "PRODUCTION_FEASIBILITY" && !prodFeasibility) {
+                    setProdFeasibility(await getProductionFeasibility(selectedPlanId || undefined, propertyId || undefined));
+                  } else if (tabKey === "SCENARIO_LAB" && !scenarioLab) {
+                    setScenarioLab(await getScenarioLab(selectedPlanId || undefined));
+                  } else if (tabKey === "PORTION_DEMAND" && !hierForecast) {
+                    setHierForecast(await getHierarchicalForecast(propertyId || undefined, 7));
+                  } else if (tabKey === "HISTORICAL") {
+                    if (!histSimilarity) setHistSimilarity(await getHistoricalSimilarity(selectedPlanId || undefined));
+                    if (!govStatus) setGovStatus(await getModelGovernanceStatus());
                   }
+                } catch {
+                  // handled gracefully
                 }
               }}
             >
@@ -938,8 +1004,23 @@ const MeStudioWorkspace: React.FC<Props> = ({
         {bottomExpanded && (
           <div style={{ paddingTop: "0.5rem" }}>
             {activeTab === "DESIGN" && (
-              <div className="sme-muted">
-                Active menu <strong>{draftName}</strong> ({draftType}, {draftCovers} covers, {lines.length} dishes). Use the 3-panel canvas above to compose dishes, adjust portions/prices, and save draft or controlled new version.
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                <div className="sme-muted">
+                  Active menu <strong>{draftName}</strong> ({draftType}, {draftCovers} covers, {lines.length} dishes). Use the 3-panel canvas above to compose dishes, adjust portions/prices, and save draft or controlled new version.
+                </div>
+                {ws.performanceMatrix && (
+                  <div>
+                    <div className="sme-quadrant-grid">
+                      <div className="sme-quadrant sme-quadrant--star"><strong>STARS ({ws.performanceMatrix.stars})</strong><div className="sme-muted">High popularity &amp; high margin</div></div>
+                      <div className="sme-quadrant sme-quadrant--plow"><strong>PLOWHORSES ({ws.performanceMatrix.plowhorses})</strong><div className="sme-muted">High popularity, lower margin</div></div>
+                      <div className="sme-quadrant sme-quadrant--puzzle"><strong>PUZZLES ({ws.performanceMatrix.puzzles})</strong><div className="sme-muted">Low popularity, high margin</div></div>
+                      <div className="sme-quadrant sme-quadrant--dog"><strong>DOGS ({ws.performanceMatrix.dogs})</strong><div className="sme-muted">Low popularity &amp; low margin</div></div>
+                    </div>
+                    <div className="sme-muted" style={{ marginTop: "0.35rem" }}>
+                      Excluded incomplete/new items: {ws.performanceMatrix.excludedCount} • Basis: {ws.performanceMatrix.costBasis}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -977,12 +1058,29 @@ const MeStudioWorkspace: React.FC<Props> = ({
             )}
 
             {activeTab === "PORTION_DEMAND" && (
-              <div>
-                <div className="sme-row" style={{ marginBottom: "0.5rem" }}>
-                  <span className="sme-muted">Buffet & service portion math: Expected Portions = Covers × Participation × Servings/Guest.</span>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                <div className="sme-row">
+                  <span className="sme-muted">Buffet &amp; service portion math: Expected Portions = Covers × Participation × Servings/Guest.</span>
                   <div style={{ display: "flex", gap: "0.5rem" }}>
-                    <button type="button" className="sila-btn sila-btn--secondary" onClick={() => onNavigate("silaMenuPortions")}>Open Portion Planning</button>
-                    <button type="button" className="sila-btn sila-btn--secondary" onClick={() => onNavigate("silaMenuDemand")}>Open Demand Planning</button>
+                    <button
+                      type="button"
+                      className="sila-btn sila-btn--primary"
+                      disabled={twinBusy}
+                      onClick={async () => {
+                        setTwinBusy(true);
+                        try {
+                          setHierForecast(await getHierarchicalForecast(propertyId || undefined, 7));
+                        } catch (e) {
+                          toastService.error(e instanceof Error ? e.message : "Forecast failed.");
+                        } finally {
+                          setTwinBusy(false);
+                        }
+                      }}
+                    >
+                      Run Hierarchical Backtested Forecast
+                    </button>
+                    <button type="button" className="sila-btn sila-btn--secondary" onClick={() => onNavigate("silaMenuPortions")}>Portion Planning</button>
+                    <button type="button" className="sila-btn sila-btn--secondary" onClick={() => onNavigate("silaMenuDemand")}>Demand Planning</button>
                   </div>
                 </div>
                 <table className="sila-table">
@@ -1005,44 +1103,231 @@ const MeStudioWorkspace: React.FC<Props> = ({
                     })}
                   </tbody>
                 </table>
+                {hierForecast && (
+                  <div className="sme-kpi-box">
+                    <div className="sme-row">
+                      <strong>Hierarchical Forecast ({hierForecast.reconciliationMethod})</strong>
+                      <span className="sme-chip">Leakage Checked: {hierForecast.leakageChecked ? "YES" : "NO"} · Max Gap: {hierForecast.consistencyMaxGap.toFixed(2)}</span>
+                    </div>
+                    <table className="sila-table" style={{ marginTop: "0.5rem" }}>
+                      <thead><tr><th>Node</th><th>Level</th><th>Selected Model</th><th>Tomorrow (P10–P90)</th><th>MAE</th><th>WAPE %</th><th>Bias %</th></tr></thead>
+                      <tbody>
+                        {hierForecast.nodes.slice(0, 8).map((n) => (
+                          <tr key={n.nodeKey}>
+                            <td>{n.nodeKey}</td>
+                            <td>{n.level}</td>
+                            <td>{n.selectedModel}</td>
+                            <td>{num(n.reconciledForecast[0], 0)} ({num(n.lowerP10[0], 0)}–{num(n.upperP90[0], 0)})</td>
+                            <td>{num(n.mae, 2)}</td>
+                            <td>{pct(n.wape)}</td>
+                            <td>{pct(n.bias)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             )}
 
-            {activeTab === "PERFORMANCE" && ws.performanceMatrix && (
-              <div>
-                <div className="sme-quadrant-grid">
-                  <div className="sme-quadrant sme-quadrant--star"><strong>STARS ({ws.performanceMatrix.stars})</strong><div className="sme-muted">High popularity & high margin</div></div>
-                  <div className="sme-quadrant sme-quadrant--plow"><strong>PLOWHORSES ({ws.performanceMatrix.plowhorses})</strong><div className="sme-muted">High popularity, lower margin</div></div>
-                  <div className="sme-quadrant sme-quadrant--puzzle"><strong>PUZZLES ({ws.performanceMatrix.puzzles})</strong><div className="sme-muted">Low popularity, high margin</div></div>
-                  <div className="sme-quadrant sme-quadrant--dog"><strong>DOGS ({ws.performanceMatrix.dogs})</strong><div className="sme-muted">Low popularity & low margin</div></div>
+            {activeTab === "DIGITAL_TWIN" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                <div className="sme-row">
+                  <span className="sme-muted">
+                    Culinary Digital Twin — 9-component live/historical/simulated representation without duplicating master data.
+                  </span>
+                  <div style={{ display: "flex", gap: "0.5rem" }}>
+                    <button
+                      type="button"
+                      className="sila-btn sila-btn--primary"
+                      disabled={twinBusy}
+                      onClick={async () => {
+                        setTwinBusy(true);
+                        try {
+                          const snap = await createTwinSnapshot({ propertyId: propertyId || undefined, outletLocationId: outletLocationId || undefined, menuPlanId: selectedPlanId || undefined, snapshotType: "LIVE" });
+                          setTwinSnapshots((prev) => [snap, ...prev]);
+                          toastService.success(`Captured Digital Twin Snapshot v${snap.versionNumber} (${snap.dataQualityLabel}).`);
+                        } catch (e) {
+                          toastService.error(e instanceof Error ? e.message : "Failed to create snapshot.");
+                        } finally {
+                          setTwinBusy(false);
+                        }
+                      }}
+                    >
+                      Capture Live Twin Snapshot
+                    </button>
+                    {twinSnapshots[0]?.isStale && (
+                      <button
+                        type="button"
+                        className="sila-btn sila-btn--secondary"
+                        disabled={twinBusy}
+                        onClick={async () => {
+                          setTwinBusy(true);
+                          try {
+                            const refreshed = await refreshTwinSnapshot(twinSnapshots[0].snapshotId);
+                            setTwinSnapshots((prev) => [refreshed, ...prev]);
+                            toastService.success(`Refreshed stale snapshot -> v${refreshed.versionNumber}.`);
+                          } finally {
+                            setTwinBusy(false);
+                          }
+                        }}
+                      >
+                        Refresh Stale Baseline
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <div className="sme-muted" style={{ marginTop: "0.5rem" }}>
-                  Excluded incomplete/new items: {ws.performanceMatrix.excludedCount} • Basis: {ws.performanceMatrix.costBasis}
+
+                {twinSnapshots[0] && (
+                  <>
+                    <div className="sme-kpi-box">
+                      <div className="sme-row">
+                        <strong>
+                          Snapshot v{twinSnapshots[0].versionNumber} ({twinSnapshots[0].snapshotType}) · Hash {twinSnapshots[0].snapshotHash}
+                        </strong>
+                        <span className={`sme-chip ${twinSnapshots[0].isStale ? "" : "sme-chip--ok"}`}>
+                          {twinSnapshots[0].isStale ? `STALE: ${twinSnapshots[0].stalenessReason}` : `FRESH · DQ ${twinSnapshots[0].dataQualityScore}% (${twinSnapshots[0].dataQualityLabel})`}
+                        </span>
+                      </div>
+                      <div className="sme-muted">
+                        Calc: {twinSnapshots[0].calculationVersion} · Model: {twinSnapshots[0].modelVersion} · Captured: {new Date(twinSnapshots[0].capturedAtUtc).toLocaleString()}
+                      </div>
+                    </div>
+                    <div className="sme-quadrant-grid">
+                      {twinSnapshots[0].components.map((c) => (
+                        <div key={c.componentKey} className="sme-kpi-box">
+                          <div className="sme-row">
+                            <strong>{c.displayName}</strong>
+                            <span className="sme-chip">{c.dataQuality}</span>
+                          </div>
+                          <div className="sme-muted">{c.recordCount} records</div>
+                          <div style={{ fontSize: "0.78rem", marginTop: "0.2rem" }}>{c.summaryMetric}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+
+                <div className="sme-kpi-box" style={{ background: "#f8fafc" }}>
+                  <div className="sme-row">
+                    <strong>Dependency Graph &amp; Reverse Price-Shock Cascade</strong>
+                    <div style={{ display: "flex", gap: "0.4rem", alignItems: "center" }}>
+                      <input className="sila-input" style={{ width: "160px" }} value={shockIngredient} onChange={(e) => setShockIngredient(e.target.value)} placeholder="Ingredient (e.g. Salmon)" />
+                      <input className="sila-input" style={{ width: "80px" }} type="number" value={shockPct} onChange={(e) => setShockPct(e.target.value)} />
+                      <span className="sme-muted">%</span>
+                      <button
+                        type="button"
+                        className="sila-btn sila-btn--primary"
+                        disabled={twinBusy}
+                        onClick={async () => {
+                          setTwinBusy(true);
+                          try {
+                            const res = await analyzeTwinDependencies({
+                              propertyId: propertyId || undefined,
+                              menuPlanId: selectedPlanId || undefined,
+                              shockIngredientName: shockIngredient,
+                              priceChangePercent: Number(shockPct) || 20,
+                            });
+                            setDepAnalysis(res);
+                          } catch (e) {
+                            toastService.error(e instanceof Error ? e.message : "Dependency analysis failed.");
+                          } finally {
+                            setTwinBusy(false);
+                          }
+                        }}
+                      >
+                        Analyze Impact Cascade
+                      </button>
+                    </div>
+                  </div>
+                  {depAnalysis && (
+                    <div style={{ marginTop: "0.5rem" }}>
+                      <div className="sme-muted">
+                        Graph: {depAnalysis.nodeCount} nodes, {depAnalysis.edgeCount} edges · Acyclic: {depAnalysis.isAcyclic ? "YES" : `NO (${depAnalysis.cycles.length} cycles)`} ·
+                        Affected Recipes: {depAnalysis.affectedRecipes.length} · Affected Dishes: {depAnalysis.affectedMenuItems.length} ·
+                        Total Cost Impact: {viewCost ? num(depAnalysis.totalCostImpact) : "[REDACTED]"}
+                      </div>
+                      {depAnalysis.impactedObjects.length > 0 && (
+                        <table className="sila-table" style={{ marginTop: "0.4rem" }}>
+                          <thead><tr><th>Object</th><th>Type</th><th>Hops</th>{viewCost && <th>Baseline Cost</th>}{viewCost && <th>Shocked Cost</th>}{viewCost && <th>Cost Δ %</th>}</tr></thead>
+                          <tbody>
+                            {depAnalysis.impactedObjects.slice(0, 8).map((o) => (
+                              <tr key={o.nodeId}>
+                                <td>{o.label}</td>
+                                <td>{o.nodeType}</td>
+                                <td>{o.hopDistance}</td>
+                                {viewCost && <td>{num(o.baselineCost)}</td>}
+                                {viewCost && <td>{num(o.shockedCost)}</td>}
+                                {viewCost && <td>{pct(o.costDeltaPercent)}</td>}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
 
             {activeTab === "READINESS" && (
-              <div>
-                <div className="sme-row" style={{ marginBottom: "0.5rem" }}>
-                  <span className="sme-muted">Time-phased against required service date; late open POs excluded.</span>
-                  {perms.generatePurchaseRecommendation && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                <div className="sme-row">
+                  <span className="sme-muted">Time-phased against required service date; reserved, blocked &amp; expired stock excluded (FEFO).</span>
+                  <div style={{ display: "flex", gap: "0.5rem" }}>
                     <button
                       type="button"
-                      className="sila-btn sila-btn--primary"
+                      className="sila-btn sila-btn--secondary"
+                      disabled={twinBusy}
                       onClick={async () => {
+                        setTwinBusy(true);
                         try {
-                          const rec = await createMeDraftPurchaseRec({ menuPlanId: selectedPlanId || undefined, propertyId: propertyId || undefined });
-                          toastService.success(`Generated ${rec.items.length} draft purchase recommendation(s).`);
+                          const r = await optimizeInventoryMenu({
+                            propertyId: propertyId || undefined,
+                            guestCount: Number(draftCovers) || 150,
+                            maxFoodCostPercent: Number(draftTargetFc) || 32,
+                          });
+                          setInvOptResult(r);
                         } catch (e) {
-                          toastService.error(e instanceof Error ? e.message : "Could not generate draft recommendation.");
+                          toastService.error(e instanceof Error ? e.message : "Inventory menu optimization failed.");
+                        } finally {
+                          setTwinBusy(false);
                         }
                       }}
                     >
-                      Generate Draft Purchase Recommendation
+                      Design Menu From Eligible Stock (FEFO)
                     </button>
-                  )}
+                    {perms.generatePurchaseRecommendation && (
+                      <button
+                        type="button"
+                        className="sila-btn sila-btn--primary"
+                        onClick={async () => {
+                          try {
+                            const rec = await createMeDraftPurchaseRec({ menuPlanId: selectedPlanId || undefined, propertyId: propertyId || undefined });
+                            toastService.success(`Generated ${rec.items.length} draft purchase recommendation(s).`);
+                          } catch (e) {
+                            toastService.error(e instanceof Error ? e.message : "Could not generate draft recommendation.");
+                          }
+                        }}
+                      >
+                        Generate Draft Purchase Recommendation
+                      </button>
+                    )}
+                  </div>
                 </div>
+                {invOptResult && (
+                  <div className="sme-kpi-box" style={{ background: "#f0fdf4" }}>
+                    <div className="sme-row">
+                      <strong>FEFO Inventory-Driven Optimization ({invOptResult.status})</strong>
+                      <span className="sme-chip sme-chip--ok">Utilization {pct(invOptResult.inventoryUtilizationPercent)}</span>
+                    </div>
+                    <div className="sme-muted">
+                      Selected Dishes: {invOptResult.selectedDishes.map((d) => `${d.name} (${d.plannedPortions})`).join(", ")} ·
+                      Avoidable Purchase: {viewCost ? num(invOptResult.avoidablePurchaseCost) : "[REDACTED]"} ·
+                      Reserved Excluded: {num(invOptResult.excludedStockSummary?.reservedQty ?? 0, 1)}
+                    </div>
+                  </div>
+                )}
                 <table className="sila-table">
                   <thead>
                     <tr><th>Ingredient</th><th>UOM</th><th>Required</th><th>Available</th><th>Open PO</th><th>Shortage</th><th>Status</th></tr>
@@ -1064,41 +1349,123 @@ const MeStudioWorkspace: React.FC<Props> = ({
               </div>
             )}
 
-            {activeTab === "HISTORICAL" && (
-              <table className="sila-table">
-                <thead>
-                  <tr><th>Historical Menu</th><th>Type</th><th>Date</th><th>Guests</th><th>Actual Sales</th>{viewCost && <th>Current Recost</th>}<th>Action</th></tr>
-                </thead>
-                <tbody>
-                  {ws.historicalMenus.map((h) => (
-                    <tr key={h.sourceId}>
-                      <td>{h.name} (v{h.versionNumber})</td>
-                      <td>{h.eventType}</td>
-                      <td>{h.businessDate.slice(0, 10)}</td>
-                      <td>{h.guestCount}</td>
-                      <td>{num(h.actualSales)}</td>
-                      {viewCost && <td>{num(h.recalculatedCurrentCost)} ({pct(h.recalculatedCurrentFoodCostPercent)})</td>}
-                      <td>
-                        <button
-                          type="button"
-                          className="sila-btn sila-btn--secondary"
-                          onClick={async () => {
-                            const created = await createMePlanFromHistorical(h.sourceId, h.sourceKind, propertyId || undefined);
-                            toastService.success(`Copied historical menu into draft '${created.name}' at current prices.`);
-                            await loadWorkspace(created.id);
-                          }}
-                        >
-                          Copy to Draft
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            {activeTab === "PRODUCTION_FEASIBILITY" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                <div className="sme-row">
+                  <span className="sme-muted">Kitchen, workstation, equipment, staff, batch-size &amp; allergen segregation validation.</span>
+                  <button
+                    type="button"
+                    className="sila-btn sila-btn--primary"
+                    disabled={twinBusy}
+                    onClick={async () => {
+                      setTwinBusy(true);
+                      try {
+                        setProdFeasibility(await getProductionFeasibility(selectedPlanId || undefined, propertyId || undefined));
+                      } finally {
+                        setTwinBusy(false);
+                      }
+                    }}
+                  >
+                    Re-Evaluate Kitchen Capacity
+                  </button>
+                </div>
+                {prodFeasibility && (
+                  <div className="sme-kpi-box">
+                    <div className="sme-row">
+                      <strong>Status: {prodFeasibility.isFeasible ? "OPERATIONALLY FEASIBLE" : "INFEASIBLE — BOTTLENECK DETECTED"}</strong>
+                      <span className="sme-chip">{pct(prodFeasibility.utilizationPercent)} Kitchen Utilization</span>
+                    </div>
+                    <div className="sme-muted" style={{ marginTop: "0.3rem" }}>
+                      Active Kitchens: {prodFeasibility.activeKitchenCount} · Equipment: {prodFeasibility.activeEquipmentCount} · Staff: {prodFeasibility.activeStaffCount} ·
+                      Required Prep: {num(prodFeasibility.totalRequiredPrepMinutes, 0)} min / Available: {num(prodFeasibility.availableKitchenMinutes, 0)} min
+                    </div>
+                    {prodFeasibility.bottlenecks.map((b, i) => (
+                      <div key={i} style={{ color: "#b91c1c", fontSize: "0.82rem", marginTop: "0.25rem" }}>• Bottleneck: {b}</div>
+                    ))}
+                    {prodFeasibility.recommendations.map((r, i) => (
+                      <div key={i} className="sme-muted" style={{ marginTop: "0.2rem" }}>• Action: {r}</div>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
 
             {activeTab === "AI_OPTIMIZATION" && (
-              <div className="sme-list">
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                <div className="sme-kpi-box" style={{ background: "#f0f7ff" }}>
+                  <div className="sme-row">
+                    <strong>OR-Tools CP-SAT Multi-Objective Menu Optimizer</strong>
+                    <div style={{ display: "flex", gap: "0.4rem", alignItems: "center" }}>
+                      <select className="sila-input" value={optMode} onChange={(e) => setOptMode(e.target.value)}>
+                        <option value="PARETO_FRONTIER">Pareto Frontier (Trade-offs)</option>
+                        <option value="WEIGHTED_MULTI_OBJECTIVE">Weighted Multi-Objective</option>
+                        <option value="LEXICOGRAPHIC">Lexicographic</option>
+                        <option value="SINGLE_OBJECTIVE">Single Objective (Min Cost)</option>
+                      </select>
+                      <button
+                        type="button"
+                        className="sila-btn sila-btn--primary"
+                        disabled={twinBusy}
+                        onClick={async () => {
+                          setTwinBusy(true);
+                          try {
+                            const job = await runMultiObjectiveOptimization({
+                              propertyId: propertyId || undefined,
+                              menuPlanId: selectedPlanId || undefined,
+                              baselineSnapshotId: twinSnapshots[0]?.snapshotId,
+                              mode: optMode,
+                              menuFormat: draftType,
+                              guestCount: Number(draftCovers) || 300,
+                              maxFoodCostPercent: Number(draftTargetFc) || 30,
+                              minTotalItems: 4,
+                              maxTotalItems: 16,
+                            });
+                            setMultiOptJob(job);
+                            toastService.success(`Solver finished (${job.status}) in ${job.runtimeMs.toFixed(0)} ms.`);
+                          } catch (e) {
+                            toastService.error(e instanceof Error ? e.message : "Optimization failed.");
+                          } finally {
+                            setTwinBusy(false);
+                          }
+                        }}
+                      >
+                        Run Mathematical Optimization
+                      </button>
+                    </div>
+                  </div>
+                  {multiOptJob && (
+                    <div style={{ marginTop: "0.5rem" }}>
+                      <div className="sme-muted">
+                        Job {multiOptJob.jobId.slice(0, 8)} · Solver: {multiOptJob.solverUsed} · Status: <strong>{multiOptJob.status}</strong> · Runtime: {multiOptJob.runtimeMs.toFixed(1)} ms
+                      </div>
+                      {multiOptJob.infeasibilityReasons.length > 0 && (
+                        <div style={{ color: "#b91c1c", fontSize: "0.82rem", marginTop: "0.25rem" }}>
+                          Hard Constraint Infeasibility (never silently relaxed): {multiOptJob.infeasibilityReasons.join("; ")}
+                        </div>
+                      )}
+                      {multiOptJob.solutions.length > 0 && (
+                        <table className="sila-table" style={{ marginTop: "0.4rem" }}>
+                          <thead><tr><th>Pareto Scenario</th><th>Status</th><th>Dishes</th>{viewCost && <th>Food Cost %</th>}{viewMargin && <th>Margin</th>}<th>Stock Util %</th><th>Prep Min</th><th>Trade-Off</th></tr></thead>
+                          <tbody>
+                            {multiOptJob.solutions.map((s) => (
+                              <tr key={`${s.paretoRank}-${s.scenarioLabel}`}>
+                                <td><strong>{s.scenarioLabel}</strong> (#{s.paretoRank})</td>
+                                <td>{s.solverStatus}</td>
+                                <td>{s.selectedDishes.length}</td>
+                                {viewCost && <td>{pct(s.foodCostPercent)}</td>}
+                                {viewMargin && <td>{num(s.totalContributionMargin)}</td>}
+                                <td>{pct(s.inventoryUtilizationPercent)}</td>
+                                <td>{num(s.totalPrepMinutes, 0)}</td>
+                                <td className="sme-muted">{s.tradeOffExplanation.join(" · ")}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  )}
+                </div>
+
                 <div className="sme-muted">
                   Mode: <strong>{aiData?.providerMode ?? "LOCAL_DETERMINISTIC"}</strong> {aiData?.fallbackNotice ? `• ${aiData.fallbackNotice}` : ""}
                 </div>
@@ -1118,8 +1485,76 @@ const MeStudioWorkspace: React.FC<Props> = ({
               </div>
             )}
 
-            {activeTab === "WHAT_IF" && (
+            {activeTab === "SCENARIO_LAB" && (
               <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                <div className="sme-row">
+                  <div style={{ display: "flex", gap: "0.4rem", alignItems: "center", flex: 1 }}>
+                    <input className="sila-input" style={{ maxWidth: "260px" }} value={newScenarioName} onChange={(e) => setNewScenarioName(e.target.value)} placeholder="New scenario name…" />
+                    <button
+                      type="button"
+                      className="sila-btn sila-btn--primary"
+                      disabled={twinBusy}
+                      onClick={async () => {
+                        setTwinBusy(true);
+                        try {
+                          await createTwinScenario({
+                            propertyId: propertyId || undefined,
+                            menuPlanId: selectedPlanId || undefined,
+                            baselineSnapshotId: twinSnapshots[0]?.snapshotId,
+                            scenarioName: newScenarioName,
+                            scenarioType: "OPTIMIZED",
+                          });
+                          setScenarioLab(await getScenarioLab(selectedPlanId || undefined));
+                        } finally {
+                          setTwinBusy(false);
+                        }
+                      }}
+                    >
+                      Save Scenario Snapshot
+                    </button>
+                    <button
+                      type="button"
+                      className="sila-btn sila-btn--secondary"
+                      onClick={async () => setScenarioLab(await getScenarioLab(selectedPlanId || undefined))}
+                    >
+                      Refresh Scenario Ranking
+                    </button>
+                  </div>
+                </div>
+
+                {scenarioLab && (
+                  <>
+                    <div className="sme-muted">Basis: {scenarioLab.calculationBasis} · Feasible Scenarios Ranked First ({scenarioLab.feasibleScenarios.length} feasible, {scenarioLab.infeasibleScenarios.length} infeasible)</div>
+                    <table className="sila-table">
+                      <thead>
+                        <tr><th>Scenario</th><th>Type</th><th>Rank Score</th><th>Revenue</th>{viewCost && <th>FC %</th>}{viewMargin && <th>Margin</th>}<th>Stock Util</th><th>Stale?</th><th>Actions</th></tr>
+                      </thead>
+                      <tbody>
+                        {[...scenarioLab.feasibleScenarios, ...scenarioLab.infeasibleScenarios].map((sc) => (
+                          <tr key={sc.scenarioId}>
+                            <td>
+                              <strong>{sc.scenarioName}</strong> {sc.isPreferred ? "★" : ""}{" "}
+                              {!sc.isFeasible && <span className="sme-chip">INFEASIBLE</span>}
+                            </td>
+                            <td>{sc.scenarioType}</td>
+                            <td>{num(sc.compositeRankScore, 1)}</td>
+                            <td>{num(sc.expectedRevenue)}</td>
+                            {viewCost && <td>{pct(sc.expectedFoodCostPercent)}</td>}
+                            {viewMargin && <td>{num(sc.expectedContributionMargin)}</td>}
+                            <td>{pct(sc.inventoryUtilizationPercent)}</td>
+                            <td>{sc.isBaselineStale ? "STALE" : "FRESH"}</td>
+                            <td style={{ display: "flex", gap: "0.3rem" }}>
+                              <button type="button" className="sila-btn sila-btn--secondary" onClick={async () => { await copyTwinScenario(sc.scenarioId); setScenarioLab(await getScenarioLab(selectedPlanId || undefined)); }}>Copy</button>
+                              <button type="button" className="sila-btn sila-btn--secondary" onClick={async () => { await archiveTwinScenario(sc.scenarioId); setScenarioLab(await getScenarioLab(selectedPlanId || undefined)); }}>Archive</button>
+                              <button type="button" className="sila-btn sila-btn--primary" onClick={async () => { const d = await convertTwinScenarioToDraft(sc.scenarioId); await loadWorkspace(d.menuPlanId); }}>To Draft</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </>
+                )}
+
                 {operatingMode !== "MANUAL" && (
                   <div className="sme-kpi-box" style={{ background: "#f0f7ff" }}>
                     <div className="sme-row">
@@ -1135,11 +1570,7 @@ const MeStudioWorkspace: React.FC<Props> = ({
                         className="sila-btn sila-btn--primary"
                         onClick={async () => {
                           try {
-                            const r = await runMeNlSimulation({
-                              command: nlQuery,
-                              menuPlanId: selectedPlanId || undefined,
-                              propertyId,
-                            });
+                            const r = await runMeNlSimulation({ command: nlQuery, menuPlanId: selectedPlanId || undefined, propertyId });
                             setNlSimResult(r);
                           } catch (e) {
                             toastService.error(e instanceof Error ? e.message : "NL simulation failed.");
@@ -1151,17 +1582,12 @@ const MeStudioWorkspace: React.FC<Props> = ({
                     </div>
                     {nlSimResult && (
                       <div style={{ marginTop: "0.5rem" }}>
-                        <AiValueTag kind="SIMULATION" /> <strong>{nlSimResult.parsedIntent}</strong>
-                        <div className="sme-muted">{nlSimResult.sanitizedCommand}</div>
-                        <div className="sme-muted">
-                          Baseline Cost: {num(nlSimResult.simulation.baselineCost)} → Simulated: {num(nlSimResult.simulation.foodCost)} ·{" "}
-                          Margin: {num(nlSimResult.simulation.baselineMargin)} → {num(nlSimResult.simulation.contributionMargin)} ·{" "}
-                          Live Data Modified: {nlSimResult.liveDataMutated ? "Yes" : "No (Read-Only Sandbox)"}
-                        </div>
+                        <AiValueTag kind="SIMULATION" /> <strong>{nlSimResult.parsedIntent}</strong> — {nlSimResult.sanitizedCommand}
                       </div>
                     )}
                   </div>
                 )}
+
                 <div className="sme-form">
                   <label className="sila-field"><span>Scenario Name</span><input className="sila-input" value={simReq.scenarioName} onChange={(e) => setSimReq({ ...simReq, scenarioName: e.target.value })} /></label>
                   <label className="sila-field"><span>Guest Count</span><input className="sila-input" type="number" value={simReq.expectedCovers} onChange={(e) => setSimReq({ ...simReq, expectedCovers: e.target.value })} /></label>
@@ -1171,8 +1597,15 @@ const MeStudioWorkspace: React.FC<Props> = ({
                   <label className="sila-field"><span>Discount %</span><input className="sila-input" type="number" value={simReq.discountPercent} onChange={(e) => setSimReq({ ...simReq, discountPercent: e.target.value })} /></label>
                 </div>
                 <div style={{ display: "flex", gap: "0.5rem" }}>
-                  <button type="button" className="sila-btn sila-btn--secondary" onClick={() => handleRunSim(false)}>Run Isolated Simulation</button>
-                  <button type="button" className="sila-btn sila-btn--primary" onClick={() => handleRunSim(true)}>Save Scenario</button>
+                  <button type="button" className="sila-btn sila-btn--secondary" onClick={() => handleRunSim(false)}>Run Isolated What-If</button>
+                  <button type="button" className="sila-btn sila-btn--primary" onClick={() => handleRunSim(true)}>Save What-If Scenario</button>
+                  <button
+                    type="button"
+                    className="sila-btn sila-btn--secondary"
+                    onClick={async () => setCompareResult(await compareMeScenarios(compareIds))}
+                  >
+                    Compare Legacy Scenarios
+                  </button>
                 </div>
                 {simResult && (
                   <div className="sme-kpi-box">
@@ -1181,64 +1614,224 @@ const MeStudioWorkspace: React.FC<Props> = ({
                       {viewCost && <div>Baseline Cost: {num(simResult.baselineCost)} → <strong>{num(simResult.foodCost)}</strong> ({simResult.costVariancePct}%)</div>}
                       <div>Baseline Rev: {num(simResult.baselineRevenue)} → <strong>{num(simResult.revenue)}</strong> ({simResult.revenueVariancePct}%)</div>
                       {viewMargin && <div>Baseline Margin: {num(simResult.baselineMargin)} → <strong>{num(simResult.contributionMargin)}</strong> ({simResult.marginVariancePct}%)</div>}
-                      <div>Requirement: {simResult.ingredientRequirement} • Waste Qty: {simResult.expectedWasteQty}</div>
                     </div>
                   </div>
                 )}
-              </div>
-            )}
-
-            {activeTab === "COMPARE" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                <div className="sme-row">
-                  <span className="sme-muted">Select 2+ scenarios or menus to compare side-by-side on identical calculation basis.</span>
-                  <button
-                    type="button"
-                    className="sila-btn sila-btn--primary"
-                    onClick={async () => {
-                      const res = await compareMeScenarios(compareIds);
-                      setCompareResult(res);
-                    }}
-                  >
-                    Compare Selected ({compareIds.length || "All"})
-                  </button>
-                </div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
-                  {ws.scenarios.map((s) => (
-                    <label key={s.id} className="sme-chip" style={{ cursor: "pointer" }}>
-                      <input
-                        type="checkbox"
-                        checked={compareIds.includes(s.id)}
-                        onChange={(e) => setCompareIds((prev) => (e.target.checked ? [...prev, s.id] : prev.filter((x) => x !== s.id)))}
-                      />
-                      {s.scenarioName} {s.isPreferred ? "★" : ""}
-                    </label>
-                  ))}
-                </div>
                 {compareResult && (
                   <table className="sila-table">
-                    <thead>
-                      <tr><th>Scenario</th><th>Covers</th><th>Items</th><th>Revenue</th>{viewCost && <th>Food Cost</th>}{viewCost && <th>FC %</th>}{viewMargin && <th>Margin</th>}<th>Readiness</th><th>Action</th></tr>
-                    </thead>
+                    <thead><tr><th>Scenario</th><th>Covers</th><th>Revenue</th>{viewCost && <th>FC %</th>}{viewMargin && <th>Margin</th>}<th>Action</th></tr></thead>
                     <tbody>
                       {compareResult.scenarios.map((s) => (
                         <tr key={s.id}>
-                          <td><strong>{s.scenarioName}</strong> {s.isPreferred && <span className="sme-chip sme-chip--star">Preferred</span>}</td>
+                          <td><strong>{s.scenarioName}</strong> {s.isPreferred && "★"}</td>
                           <td>{s.expectedCovers}</td>
-                          <td>{s.itemCount}</td>
                           <td>{num(s.expectedRevenue)}</td>
-                          {viewCost && <td>{num(s.totalFoodCost)}</td>}
                           {viewCost && <td>{pct(s.foodCostPercent)}</td>}
                           {viewMargin && <td>{num(s.contributionMargin)}</td>}
-                          <td>{pct(s.ingredientAvailabilityPercent)}</td>
-                          <td style={{ display: "flex", gap: "0.35rem" }}>
-                            <button type="button" className="sila-btn sila-btn--secondary" onClick={async () => { await setMePreferredScenario(s.id); await loadWorkspace(selectedPlanId || undefined); }}>Select Preferred</button>
-                            <button type="button" className="sila-btn sila-btn--primary" onClick={async () => { const d = await convertMeScenarioToDraft(s.id); await loadWorkspace(d.id); }}>Convert to Draft</button>
+                          <td>
+                            <button type="button" className="sila-btn sila-btn--secondary" onClick={async () => { await setMePreferredScenario(s.id); await loadWorkspace(selectedPlanId || undefined); }}>Preferred</button>
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
+                )}
+              </div>
+            )}
+
+            {activeTab === "RISK_SENSITIVITY" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                <div className="sme-row">
+                  <span className="sme-muted">Probabilistic Monte Carlo risk, Tornado sensitivity, operational stress testing &amp; separated food waste prediction.</span>
+                  <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+                    <button
+                      type="button"
+                      className="sila-btn sila-btn--primary"
+                      disabled={twinBusy}
+                      onClick={async () => {
+                        setTwinBusy(true);
+                        try {
+                          const [mc, sens, st, w] = await Promise.all([
+                            runMonteCarlo({ propertyId: propertyId || undefined, menuPlanId: selectedPlanId || undefined, seed: 42, runs: 1000, guestCountMean: Number(draftCovers) || 300, targetFoodCostPercent: Number(draftTargetFc) || 30 }),
+                            runSensitivity({ propertyId: propertyId || undefined, menuPlanId: selectedPlanId || undefined, targetFoodCostPercent: Number(draftTargetFc) || 30 }),
+                            runStressTest({ propertyId: propertyId || undefined, menuPlanId: selectedPlanId || undefined, baselineGuests: Number(draftCovers) || 300 }),
+                            getWastePrediction(propertyId || undefined, selectedPlanId || undefined),
+                          ]);
+                          setMonteCarloResult(mc);
+                          setSensitivityResult(sens);
+                          setStressResult(st);
+                          setWasteResult(w);
+                        } catch (e) {
+                          toastService.error(e instanceof Error ? e.message : "Risk suite failed.");
+                        } finally {
+                          setTwinBusy(false);
+                        }
+                      }}
+                    >
+                      Run Full Risk, Monte Carlo &amp; Stress Suite
+                    </button>
+                  </div>
+                </div>
+
+                {monteCarloResult && (
+                  <div className="sme-kpi-box">
+                    <div className="sme-row">
+                      <strong>Monte Carlo Distribution ({monteCarloResult.runs} seeded runs · Seed {monteCarloResult.seed})</strong>
+                      <span className="sme-chip">Runtime {monteCarloResult.runtimeMs.toFixed(1)} ms</span>
+                    </div>
+                    <div className="sme-quadrant-grid" style={{ marginTop: "0.4rem" }}>
+                      <div><span className="sme-muted">P(Exceed Budget)</span><div><strong>{pct(monteCarloResult.probExceedBudget)}</strong></div></div>
+                      <div><span className="sme-muted">P(Exceed FC Target)</span><div><strong>{pct(monteCarloResult.probExceedFoodCostTarget)}</strong></div></div>
+                      <div><span className="sme-muted">P(Shortage)</span><div><strong>{pct(monteCarloResult.probIngredientShortage)}</strong></div></div>
+                      {viewMargin && <div><span className="sme-muted">Margin P10 / Exp / P90</span><div><strong>{num(monteCarloResult.marginP10)} / {num(monteCarloResult.expectedContributionMargin)} / {num(monteCarloResult.marginP90)}</strong></div></div>}
+                    </div>
+                  </div>
+                )}
+
+                {sensitivityResult && (
+                  <div className="sme-kpi-box">
+                    <strong>Tornado Sensitivity Analysis (Break-Even FC Ceiling: {pct(sensitivityResult.breakEvenFoodCostCeiling)})</strong>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem", marginTop: "0.4rem" }}>
+                      {sensitivityResult.tornado.map((t) => {
+                        const maxSwing = Math.max(1, sensitivityResult.tornado[0]?.marginSwing ?? 1);
+                        const barPct = Math.min(100, Math.round((t.marginSwing / maxSwing) * 100));
+                        return (
+                          <div key={t.variableName} style={{ display: "grid", gridTemplateColumns: "180px 1fr 120px", gap: "0.5rem", alignItems: "center", fontSize: "0.8rem" }}>
+                            <span>{t.variableName}</span>
+                            <div style={{ background: "#e2e8f0", height: "10px", borderRadius: "4px", overflow: "hidden" }}>
+                              <div style={{ width: `${barPct}%`, background: "#0284c7", height: "100%" }} />
+                            </div>
+                            <span>{viewMargin ? `Swing ${num(t.marginSwing)}` : `FC Δ ${pct(t.foodCostSwingPercent)}`}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {stressResult && (
+                  <table className="sila-table">
+                    <thead><tr><th>Stress Test</th><th>Guests</th>{viewCost && <th>Revised FC %</th>}{viewMargin && <th>Revised Margin</th>}<th>Feasible?</th><th>Shortage Risk</th><th>Corrective Action</th></tr></thead>
+                    <tbody>
+                      {stressResult.outcomes.map((o) => (
+                        <tr key={o.stressType}>
+                          <td><strong>{o.label}</strong></td>
+                          <td>{o.revisedGuests}</td>
+                          {viewCost && <td>{pct(o.revisedFoodCostPercent)}</td>}
+                          {viewMargin && <td>{num(o.revisedMargin)}</td>}
+                          <td>{o.isOperationallyFeasible ? "YES" : "NO"}</td>
+                          <td>{o.shortageRisk}</td>
+                          <td className="sme-muted">{o.correctiveActions.join("; ")}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+
+                {wasteResult && (
+                  <div className="sme-kpi-box">
+                    <div className="sme-row">
+                      <strong>Food Waste Prediction (Yield &amp; Waste Separated: {wasteResult.yieldAndWasteSeparated ? "YES" : "NO"})</strong>
+                      <span className="sme-chip sme-chip--ok">Food Safety Priority Enforced</span>
+                    </div>
+                    <table className="sila-table" style={{ marginTop: "0.4rem" }}>
+                      <thead><tr><th>Item</th><th>Prep Waste</th><th>Yield Loss</th><th>Overprod.</th><th>Buffet Leftover</th><th>Expiry Risk</th><th>Guidance</th></tr></thead>
+                      <tbody>
+                        {wasteResult.items.slice(0, 6).map((w) => (
+                          <tr key={w.itemId}>
+                            <td>{w.name}</td>
+                            <td>{num(w.prepWasteQty, 1)}</td>
+                            <td>{num(w.cookingYieldLossQty, 1)}</td>
+                            <td>{num(w.overproductionQty, 1)}</td>
+                            <td>{num(w.buffetLeftoverQty, 1)}</td>
+                            <td>{num(w.expiryRiskQty, 1)}</td>
+                            <td className="sme-muted">{w.recommendations.join("; ")}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === "HISTORICAL" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                {selectedPlanId && (
+                  <div className="sme-row">
+                    <span className="sme-muted">Historical menus, structural similarity, and continuous champion/challenger outcome learning.</span>
+                    <button
+                      type="button"
+                      className="sila-btn sila-btn--secondary"
+                      onClick={async () => {
+                        await captureOutcomeLearning(selectedPlanId);
+                        setGovStatus(await getModelGovernanceStatus());
+                        toastService.success("Captured actual vs predicted event outcome lineage.");
+                      }}
+                    >
+                      Capture Completed Outcome Lineage
+                    </button>
+                  </div>
+                )}
+                <table className="sila-table">
+                  <thead>
+                    <tr><th>Historical Menu</th><th>Type</th><th>Date</th><th>Guests</th><th>Actual Sales</th>{viewCost && <th>Current Recost</th>}<th>Action</th></tr>
+                  </thead>
+                  <tbody>
+                    {ws.historicalMenus.map((h) => (
+                      <tr key={h.sourceId}>
+                        <td>{h.name} (v{h.versionNumber})</td>
+                        <td>{h.eventType}</td>
+                        <td>{h.businessDate.slice(0, 10)}</td>
+                        <td>{h.guestCount}</td>
+                        <td>{num(h.actualSales)}</td>
+                        {viewCost && <td>{num(h.recalculatedCurrentCost)} ({pct(h.recalculatedCurrentFoodCostPercent)})</td>}
+                        <td>
+                          <button
+                            type="button"
+                            className="sila-btn sila-btn--secondary"
+                            onClick={async () => {
+                              const created = await createMePlanFromHistorical(h.sourceId, h.sourceKind, propertyId || undefined);
+                              toastService.success(`Copied historical menu into draft '${created.name}' at current prices.`);
+                              await loadWorkspace(created.id);
+                            }}
+                          >
+                            Copy to Draft
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                {histSimilarity && histSimilarity.matches.length > 0 && (
+                  <div className="sme-kpi-box">
+                    <strong>Comparable Historical Events / Menus ({histSimilarity.targetTitle})</strong>
+                    <table className="sila-table" style={{ marginTop: "0.4rem" }}>
+                      <thead><tr><th>Comparable</th><th>Similarity</th><th>Matching Factors</th><th>Key Differences</th>{viewCost && <th>Actual FC %</th>}<th>Actual Waste %</th></tr></thead>
+                      <tbody>
+                        {histSimilarity.matches.map((m) => (
+                          <tr key={m.recordId}>
+                            <td>{m.title}</td>
+                            <td>{(m.similarityScore * 100).toFixed(0)}%</td>
+                            <td className="sme-muted">{m.matchingFactors.join(", ")}</td>
+                            <td className="sme-muted">{m.importantDifferences.join(", ") || "—"}</td>
+                            {viewCost && <td>{pct(m.actualFoodCostPercent)}</td>}
+                            <td>{pct(m.actualWastePercent)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {govStatus && (
+                  <div className="sme-kpi-box">
+                    <div className="sme-row">
+                      <strong>Continuous Learning &amp; Model Governance (Champion: {govStatus.activeChampionModel})</strong>
+                      <span className="sme-chip">Drift Events: {govStatus.driftEvents.length} · Tracked Outcomes: {govStatus.recentOutcomeLineage.length}</span>
+                    </div>
+                  </div>
                 )}
               </div>
             )}

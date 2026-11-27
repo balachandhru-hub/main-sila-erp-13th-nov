@@ -121,6 +121,14 @@ class SilaBuyerTools:
             ToolSpec("RunMeStudioObjective", "Run ME Studio multi-agent menu generation or optimization (draft requires confirmation)", "UseAiMenuIntelligence"),
             self.run_me_studio_objective,
         )
+        registry.register(
+            ToolSpec("GetTwinDemandForecast", "Retrieve hierarchical Digital Twin demand forecast by meal period", "ViewMeStudio"),
+            self.get_twin_demand_forecast,
+        )
+        registry.register(
+            ToolSpec("GetTwinWasteRecommendations", "Retrieve Digital Twin food waste and smaller-batch prep recommendations", "ViewMeStudio"),
+            self.get_twin_waste_recommendations,
+        )
 
     async def get_current_user_context(self, args: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
         return {
@@ -263,3 +271,11 @@ class SilaBuyerTools:
                 "saveSelectedProposalAsDraft": save_draft,
             },
         )
+
+    async def get_twin_demand_forecast(self, args: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
+        qs = f"?propertyId={ctx['propertyId']}&horizonDays=3" if ctx.get("propertyId") else "?horizonDays=3"
+        return await self._request("GET", f"/api/v1/buyer/sila/me-studio/twin/forecast/hierarchical{qs}", ctx)
+
+    async def get_twin_waste_recommendations(self, args: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
+        qs = f"?propertyId={ctx['propertyId']}" if ctx.get("propertyId") else ""
+        return await self._request("GET", f"/api/v1/buyer/sila/me-studio/twin/predict/waste{qs}", ctx)

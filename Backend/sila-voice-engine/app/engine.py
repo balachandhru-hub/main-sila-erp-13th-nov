@@ -187,6 +187,10 @@ class VoiceEngine:
                         "MENU_CONSUMPTION_ANOMALY",
                         "MENU_PURCHASE_NEXT_WEEK",
                         "MENU_COMPARE_HISTORY",
+                        "MENU_INGREDIENT_DEMAND_TOMORROW",
+                        "MENU_EXPECTED_DEMAND",
+                        "MENU_SHORTAGE_RISK",
+                        "MENU_SMALLER_BATCH_PREP",
                     ],
                     language=session.language,
                 )

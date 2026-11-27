@@ -91,6 +91,34 @@ class RulesLlm:
             )
         if _CANCEL.search(lower):
             return LlmTurnResult(intent="CANCEL", spoken_reply="Cancelling this conversation.", agent_id=agent)
+        if re.search(r"\b(how much|need tomorrow|ingredient requirement for)\b", lower):
+            return LlmTurnResult(
+                intent="MENU_INGREDIENT_DEMAND_TOMORROW",
+                spoken_reply="Checking predicted ingredient requirement for tomorrow.",
+                agent_id="MENU_ENGINEERING_AGENT",
+                structured={"transcript": text},
+            )
+        if re.search(r"\b(expected|forecast)\b.*\b(breakfast|lunch|dinner|brunch|demand|covers)\b", lower):
+            return LlmTurnResult(
+                intent="MENU_EXPECTED_DEMAND",
+                spoken_reply="Fetching Digital Twin expected guest demand.",
+                agent_id="MENU_ENGINEERING_AGENT",
+                structured={"transcript": text},
+            )
+        if re.search(r"\b(run out|shortage|shortages|running low|stockout)\b", lower):
+            return LlmTurnResult(
+                intent="MENU_SHORTAGE_RISK",
+                spoken_reply="Identifying ingredients with upcoming shortage risk.",
+                agent_id="MENU_ENGINEERING_AGENT",
+                structured={"transcript": text},
+            )
+        if re.search(r"\b(smaller batch|smaller batches|batch size|overproduction|waste)\b", lower):
+            return LlmTurnResult(
+                intent="MENU_SMALLER_BATCH_PREP",
+                spoken_reply="Checking dishes recommended for smaller-batch preparation.",
+                agent_id="MENU_ENGINEERING_AGENT",
+                structured={"transcript": text},
+            )
         if re.search(r"\b(create|plan|optimize)\b.*\b(menu|buffet|breakfast|lunch|dinner|food cost)\b|\breduce\s+food\s+cost\b", lower):
             return LlmTurnResult(
                 intent="MENU_CREATE_OBJECTIVE",

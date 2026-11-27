@@ -131,4 +131,69 @@ class MenuEngineeringAgent:
                 spoken += " Please confirm if you want me to save this proposal as a draft menu."
             return {"ok": True, "intent": intent, "results": [res], "spoken": spoken, "data": data}
 
+        if intent == "MENU_INGREDIENT_DEMAND_TOMORROW":
+            m = re.search(r"how much\s+([a-z0-9\s-]+?)\s+(?:do we need|is needed|required)", transcript, re.I)
+            ing_query = (m.group(1).strip() if m else "").lower()
+            res = await self.tools.invoke("GetMenuPurchasePlan", {}, ctx)
+            if not res.get("ok"):
+                return {"ok": False, "intent": intent, "results": [res], "spoken": "Could not retrieve tomorrow's ingredient demand."}
+            data = res.get("data") or {}
+            rows = data.get("rows") or []
+            matched = [r for r in rows if not ing_query or ing_query in (r.get("materialName") or "").lower()]
+            if matched:
+                top = matched[0]
+                spoken = f"Tomorrow's predicted requirement for {top.get('materialName')}: {top.get('grossRequirement') or top.get('requiredQty') or 0} {top.get('uom', 'units')} (shortage {top.get('shortage', 0)})."
+            else:
+                spoken = f"No upcoming menu demand found for {ing_query or 'that ingredient'}."
+            return {"ok": True, "intent": intent, "results": [res], "spoken": spoken, "data": data}
+
+        if intent == "MENU_EXPECTED_DEMAND":
+            m = _MEAL_RE.search(transcript)
+            meal = m.group(1).title() if m else "Breakfast"
+            res = await self.tools.invoke("GetTwinDemandForecast", {}, ctx)
+            if not res.get("ok"):
+                return {"ok": False, "intent": intent, "results": [res], "spoken": "Could not retrieve expected demand forecast."}
+            data = res.get("data") or {}
+            nodes = data.get("nodes") or []
+            match_node = next((n for n in nodes if meal.lower() in (n.get("nodeName") or n.get("nodeKey") or "").lower()), None)
+            if not match_node:
+                match_node = next((n for n in nodes if (n.get("level") or "").upper() == "PROPERTY"), None)
+            if match_node:
+                reconciled = match_node.get("reconciledForecast") or []
+                fc_val = match_node.get("tomorrowForecast") if match_node.get("tomorrowForecast") is not None else (reconciled[0] if reconciled else 0)
+                model_name = data.get("selectedModel") or match_node.get("selectedModel") or "Digital Twin"
+                spoken = f"Expected {meal.lower()} demand tomorrow is {fc_val} covers (selected model: {model_name})."
+            else:
+                spoken = f"No demand forecast nodes are currently available for {meal.lower()}."
+            return {"ok": True, "intent": intent, "results": [res], "spoken": spoken, "data": data}
+
+        if intent == "MENU_SHORTAGE_RISK":
+            res = await self.tools.invoke("GetMenuPurchasePlan", {}, ctx)
+            if not res.get("ok"):
+                return {"ok": False, "intent": intent, "results": [res], "spoken": "Could not evaluate ingredient shortage risks."}
+            data = res.get("data") or {}
+            shortages = [r for r in (data.get("rows") or []) if float(r.get("shortage") or 0) > 0]
+            if shortages:
+                names = ", ".join(r.get("materialName", "Ingredient") for r in shortages[:4])
+                spoken = f"{len(shortages)} ingredients may run out based on upcoming demand: {names}."
+            else:
+                spoken = "No immediate ingredient stockouts are predicted against eligible on-hand stock."
+            return {"ok": True, "intent": intent, "results": [res], "spoken": spoken, "data": data}
+
+        if intent == "MENU_SMALLER_BATCH_PREP":
+            res = await self.tools.invoke("GetTwinWasteRecommendations", {}, ctx)
+            if not res.get("ok"):
+                return {"ok": False, "intent": intent, "results": [res], "spoken": "Could not evaluate smaller-batch prep recommendations."}
+            data = res.get("data") or {}
+            recs = list(data.get("recommendations") or [])
+            if not recs:
+                for item in data.get("items") or []:
+                    for r in item.get("recommendations") or []:
+                        recs.append(f"{item.get('name', 'Dish')}: {r}")
+            if recs:
+                spoken = f"Smaller-batch prep guidance: {'; '.join(recs[:2])}."
+            else:
+                spoken = "No high-leftover dishes require smaller-batch splitting right now."
+            return {"ok": True, "intent": intent, "results": [res], "spoken": spoken, "data": data}
+
         return {"ok": True, "intent": intent, "results": [], "spoken": payload.get("spoken_reply") or "Ready for Menu Engineering commands."}
