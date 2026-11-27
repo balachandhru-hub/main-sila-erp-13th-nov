@@ -128,5 +128,12 @@ namespace Buyer.Domain.Entities
         public string? ApprovalRolesJson { get; set; }
 
         public int ConfigVersion { get; set; } = 1;
+
+        [MaxLength(30)]
+        public string DefaultOperatingMode { get; set; } = "AI_ASSISTED";
+
+        public bool ProactiveAlertsEnabled { get; set; } = true;
+
+        public int ProactiveCooldownMinutes { get; set; } = 120;
     }
 }

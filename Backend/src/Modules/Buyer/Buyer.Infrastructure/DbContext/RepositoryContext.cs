@@ -150,6 +150,12 @@ namespace Buyer.Infrastructure.DbContext
         public DbSet<MenuEngineeringApprovalHistory> MenuEngineeringApprovalHistory { get; set; }
         public DbSet<MenuDemandOverride> MenuDemandOverride { get; set; }
         public DbSet<MenuEngineeringConfigHistory> MenuEngineeringConfigHistory { get; set; }
+        public DbSet<MenuEngineeringAgentRun> MenuEngineeringAgentRun { get; set; }
+        public DbSet<MenuEngineeringRecommendation> MenuEngineeringRecommendation { get; set; }
+        public DbSet<MenuEngineeringProactiveAlert> MenuEngineeringProactiveAlert { get; set; }
+        public DbSet<MenuEngineeringLearningOutcome> MenuEngineeringLearningOutcome { get; set; }
+        public DbSet<MenuEngineeringModelEvaluation> MenuEngineeringModelEvaluation { get; set; }
+        public DbSet<MenuEngineeringAiFeedback> MenuEngineeringAiFeedback { get; set; }
         public DbSet<RecipeLegacyBatch> RecipeLegacyBatch { get; set; }
         public DbSet<RecipeLegacyRecipe> RecipeLegacyRecipe { get; set; }
         public DbSet<RecipeLegacyMaterialMap> RecipeLegacyMaterialMap { get; set; }
@@ -634,6 +640,12 @@ namespace Buyer.Infrastructure.DbContext
             _ = modelBuilder.Entity<MenuEngineeringApprovalHistory>().HasIndex(a => new { a.BuyerId, a.EntityType, a.EntityId, a.ActionAtUtc });
             _ = modelBuilder.Entity<MenuDemandOverride>().HasIndex(a => new { a.BuyerId, a.BusinessDate, a.OutletLocationId });
             _ = modelBuilder.Entity<MenuEngineeringConfigHistory>().HasIndex(a => new { a.BuyerId, a.PropertyId, a.ConfigVersion });
+            _ = modelBuilder.Entity<MenuEngineeringAgentRun>().HasIndex(a => new { a.BuyerId, a.IdempotencyKey }).IsUnique();
+            _ = modelBuilder.Entity<MenuEngineeringRecommendation>().HasIndex(a => new { a.BuyerId, a.Status, a.Priority });
+            _ = modelBuilder.Entity<MenuEngineeringProactiveAlert>().HasIndex(a => new { a.BuyerId, a.DeduplicationKey });
+            _ = modelBuilder.Entity<MenuEngineeringLearningOutcome>().HasIndex(a => new { a.BuyerId, a.DatasetVersion, a.CapturedAtUtc });
+            _ = modelBuilder.Entity<MenuEngineeringModelEvaluation>().HasIndex(a => new { a.BuyerId, a.ModelName, a.EvaluatedAtUtc });
+            _ = modelBuilder.Entity<MenuEngineeringAiFeedback>().HasIndex(a => new { a.BuyerId, a.AgentId, a.SubmittedAtUtc });
 
             base.OnModelCreating(modelBuilder);
 
