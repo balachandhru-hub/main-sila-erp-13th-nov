@@ -164,6 +164,11 @@ namespace Buyer.Infrastructure.DbContext
         public DbSet<SilaCulinaryMaterialAlias> SilaCulinaryMaterialAlias { get; set; }
         public DbSet<SilaCulinaryMaterialFeedback> SilaCulinaryMaterialFeedback { get; set; }
         public DbSet<SilaCulinaryMaterialIndexState> SilaCulinaryMaterialIndexState { get; set; }
+        public DbSet<SilaCulinaryMaterialRequest> SilaCulinaryMaterialRequest { get; set; }
+        public DbSet<SilaCulinaryMaterialRequestLink> SilaCulinaryMaterialRequestLink { get; set; }
+        public DbSet<SilaCulinaryMaterialRequestHistory> SilaCulinaryMaterialRequestHistory { get; set; }
+        public DbSet<SilaCulinaryCostingSnapshot> SilaCulinaryCostingSnapshot { get; set; }
+        public DbSet<SilaCulinaryRecipeLifecycle> SilaCulinaryRecipeLifecycle { get; set; }
 
 
         protected override void OnModelCreating(Microsoft.EntityFrameworkCore.ModelBuilder modelBuilder)
@@ -379,6 +384,19 @@ namespace Buyer.Infrastructure.DbContext
             _ = modelBuilder.Entity<SilaCulinaryMaterialFeedback>().HasIndex(a => new { a.BuyerId, a.FeedbackType });
             _ = modelBuilder.Entity<SilaCulinaryMaterialIndexState>().HasIndex(a => a.IsActive);
             _ = modelBuilder.Entity<SilaCulinaryMaterialIndexState>().HasIndex(a => a.BuyerId).IsUnique();
+            _ = modelBuilder.Entity<SilaCulinaryMaterialRequest>().HasIndex(a => a.IsActive);
+            _ = modelBuilder.Entity<SilaCulinaryMaterialRequest>().HasIndex(a => new { a.BuyerId, a.RequestReference }).IsUnique();
+            _ = modelBuilder.Entity<SilaCulinaryMaterialRequest>().HasIndex(a => new { a.BuyerId, a.Status });
+            _ = modelBuilder.Entity<SilaCulinaryMaterialRequestLink>().HasIndex(a => a.IsActive);
+            _ = modelBuilder.Entity<SilaCulinaryMaterialRequestLink>().HasIndex(a => new { a.BuyerId, a.MaterialRequestId, a.DraftId, a.IngredientTempRef }).IsUnique();
+            _ = modelBuilder.Entity<SilaCulinaryMaterialRequestHistory>().HasIndex(a => a.IsActive);
+            _ = modelBuilder.Entity<SilaCulinaryMaterialRequestHistory>().HasIndex(a => new { a.BuyerId, a.MaterialRequestId });
+            _ = modelBuilder.Entity<SilaCulinaryCostingSnapshot>().HasIndex(a => a.IsActive);
+            _ = modelBuilder.Entity<SilaCulinaryCostingSnapshot>().HasIndex(a => new { a.BuyerId, a.CostingReference }).IsUnique();
+            _ = modelBuilder.Entity<SilaCulinaryCostingSnapshot>().HasIndex(a => new { a.BuyerId, a.DraftId });
+            _ = modelBuilder.Entity<SilaCulinaryRecipeLifecycle>().HasIndex(a => a.IsActive);
+            _ = modelBuilder.Entity<SilaCulinaryRecipeLifecycle>().HasIndex(a => new { a.BuyerId, a.DraftId }).IsUnique();
+            _ = modelBuilder.Entity<SilaCulinaryRecipeLifecycle>().HasIndex(a => new { a.BuyerId, a.ProductionRecipeId });
             _ = modelBuilder.Entity<RecipeSubstitutionProposal>().HasIndex(a => a.IsActive);
             _ = modelBuilder.Entity<RecipeSubstitutionProposal>().HasIndex(a => new { a.BuyerId, a.ProposalNumber }).IsUnique();
             _ = modelBuilder.Entity<RecipeSubstitutionProposal>().HasIndex(a => new { a.BuyerId, a.Status });
@@ -453,6 +471,17 @@ namespace Buyer.Infrastructure.DbContext
 
 
 
+
+            _ = modelBuilder.Entity<SilaCulinaryMaterialRequestLink>()
+                .HasOne(x => x.MaterialRequest)
+                .WithMany()
+                .HasForeignKey(x => x.MaterialRequestId)
+                .OnDelete(DeleteBehavior.NoAction);
+            _ = modelBuilder.Entity<SilaCulinaryMaterialRequestHistory>()
+                .HasOne(x => x.MaterialRequest)
+                .WithMany()
+                .HasForeignKey(x => x.MaterialRequestId)
+                .OnDelete(DeleteBehavior.NoAction);
 
             base.OnModelCreating(modelBuilder);
 

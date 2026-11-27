@@ -62,6 +62,15 @@ namespace Buyer.Application.Features.Shared
                         .ToDictionaryAsync(x => x.Id, x => $"{x.AliasText} -> {x.MaterialCode}", cancellationToken);
                 case Common.SILA_REF_CULINARY_MATERIAL_INDEX:
                     return ids.ToDictionary(id => id, _ => "MAT-INDEX");
+                case Common.SILA_REF_CULINARY_MATERIAL_REQUEST:
+                    return await repository.SilaCulinaryMaterialRequest.FindByCondition(x => x.BuyerId == buyerId && ids.Contains(x.Id))
+                        .ToDictionaryAsync(x => x.Id, x => x.RequestReference, cancellationToken);
+                case Common.SILA_REF_CULINARY_COSTING:
+                    return await repository.SilaCulinaryCostingSnapshot.FindByCondition(x => x.BuyerId == buyerId && ids.Contains(x.Id))
+                        .ToDictionaryAsync(x => x.Id, x => x.CostingReference, cancellationToken);
+                case Common.SILA_REF_CULINARY_RECIPE_LIFECYCLE:
+                    return await repository.SilaCulinaryRecipeLifecycle.FindByCondition(x => x.BuyerId == buyerId && ids.Contains(x.Id))
+                        .ToDictionaryAsync(x => x.Id, x => x.ProductionRecipeCode ?? $"DRAFT-{x.ApprovedDraftRevision}", cancellationToken);
                 case Common.SILA_REF_GRN:
                     return await repository.GoodsReceipt.FindByCondition(x => x.BuyerId == buyerId && ids.Contains(x.Id))
                         .ToDictionaryAsync(x => x.Id, x => x.GrnNumber, cancellationToken);

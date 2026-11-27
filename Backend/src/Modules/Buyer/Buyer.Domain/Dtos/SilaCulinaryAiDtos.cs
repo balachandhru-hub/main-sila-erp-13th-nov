@@ -75,6 +75,7 @@ namespace Buyer.Domain.Dtos
         public Dictionary<string, string> TaskRouting { get; set; } = new();
         public SilaCulinaryAiFeatureFlagsDto FeatureFlags { get; set; } = new();
         public SilaCulinaryMaterialConfigDto MaterialConfig { get; set; } = new();
+        public SilaCulinaryCostingConfigDto CostingConfig { get; set; } = new();
         public string? LastTestProvider { get; set; }
         public string? LastTestStatus { get; set; }
         public string? LastTestMessage { get; set; }
@@ -111,6 +112,7 @@ namespace Buyer.Domain.Dtos
         public Dictionary<string, string>? TaskRouting { get; set; }
         public SilaCulinaryAiFeatureFlagsDto? FeatureFlags { get; set; }
         public SilaCulinaryMaterialConfigDto? MaterialConfig { get; set; }
+        public SilaCulinaryCostingConfigDto? CostingConfig { get; set; }
     }
 
     public class SilaCulinaryMaterialConfigDto
@@ -133,6 +135,29 @@ namespace Buyer.Domain.Dtos
         public string ExecutionDevice { get; set; } = "cpu";
         public int EmbeddingBatchSize { get; set; } = 32;
         public int MaxIngredientsPerBulk { get; set; } = 100;
+    }
+
+    public class SilaCulinaryCostingConfigDto
+    {
+        public string ReportingCurrency { get; set; } = "AED";
+        public string TaxBasis { get; set; } = "TAX_EXCLUSIVE";
+        public decimal DefaultTargetFoodCostPercent { get; set; } = 28.0m;
+        public List<string> CostSourceHierarchy { get; set; } = new()
+        {
+            "OUTLET_PRICE",
+            "MOVING_AVERAGE_PRICE",
+            "STANDARD_PRICE",
+            "UNIT_COST",
+            "LATEST_PURCHASE_PRICE",
+            "MANUAL_ESTIMATE"
+        };
+        public bool AllowManualCostEstimate { get; set; } = true;
+        public bool BlockPublishOnMissingCost { get; set; } = true;
+        public bool RequireApprovalOnPriceExceedTarget { get; set; } = true;
+        public string ExpiredPricePolicy { get; set; } = "WARN_AND_FALLBACK";
+        public int MaxSubRecipeDepth { get; set; } = 5;
+        public bool AutoRecostOnLocalPriceChange { get; set; } = false;
+        public string DefaultMaterialRequestApprovalMode { get; set; } = "TENANT_FLOW_OR_ADMIN";
     }
 
     public class SilaCulinaryAiConnectionTestRequestDto

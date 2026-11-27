@@ -85,6 +85,10 @@ namespace Buyer.Application.Features.Commands.SaveSilaCulinaryAiConfig
             {
                 entity.MaterialConfigJson = SilaCulinaryAiSettings.SerializeMaterialConfig(input.MaterialConfig);
             }
+            if (input.CostingConfig != null)
+            {
+                entity.CostingConfigJson = SilaCulinaryAiSettings.SerializeCostingConfig(input.CostingConfig);
+            }
             entity.IsActive = true;
 
             if (isNew)

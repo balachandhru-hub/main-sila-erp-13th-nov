@@ -33,6 +33,9 @@ namespace Buyer.Application.Features.Shared
         public const string MENU_ITEM = "ME";
         public const string MENU_PLAN = "MN";
         public const string VOICE_PO = "VPO";
+        public const string MATERIAL_REQUEST = "MRQ";
+        public const string STANDALONE_MATERIAL = "MAT";
+        public const string COSTING_SNAPSHOT = "CST";
 
         private const int SEED_CANDIDATES = 50;
 
@@ -119,6 +122,9 @@ namespace Buyer.Application.Features.Shared
                 PURCHASE_ORDER => repository.PurchaseOrder.FindByCondition(x => x.BuyerId == buyerId && x.ContractId != null).Select(x => x.PoNumber),
                 CREDIT_MEMO => repository.CreditMemo.FindByCondition(x => x.BuyerId == buyerId && x.CreditMemoNumber != null).Select(x => x.CreditMemoNumber!),
                 VOICE_PO => repository.SilaVoicePoSession.FindByCondition(x => x.BuyerId == buyerId).Select(x => x.SessionNumber),
+                MATERIAL_REQUEST => repository.SilaCulinaryMaterialRequest.FindByCondition(x => x.BuyerId == buyerId).Select(x => x.RequestReference),
+                STANDALONE_MATERIAL => repository.ItemBuyerMaster.FindByCondition(x => x.BuyerId == buyerId).Select(x => x.MaterialCode),
+                COSTING_SNAPSHOT => repository.SilaCulinaryCostingSnapshot.FindByCondition(x => x.BuyerId == buyerId).Select(x => x.CostingReference),
                 _ => throw new ArgumentOutOfRangeException(nameof(prefix), prefix, "Unknown SILA document number prefix.")
             };
 

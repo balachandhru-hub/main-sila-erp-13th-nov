@@ -7639,6 +7639,10 @@ namespace Buyer.Infrastructure.Migrations
                         .HasColumnType("nvarchar(200)")
                         .HasColumnName("claude_model");
 
+                    b.Property<string>("CostingConfigJson")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("costing_config_json");
+
                     b.Property<Guid>("CreatedBy")
                         .HasColumnType("uniqueidentifier")
                         .HasColumnName("created_by");
@@ -11187,6 +11191,884 @@ namespace Buyer.Infrastructure.Migrations
                     b.Navigation("BuyerBusinessProfile");
                 });
 
+            modelBuilder.Entity("Buyer.Domain.Entities.SilaCulinaryMaterialRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AlternateUom")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)")
+                        .HasColumnName("alternate_uom");
+
+                    b.Property<string>("ApprovalTrailJson")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("approval_trail_json");
+
+                    b.Property<DateTime?>("ApprovedOnUtc")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("approved_on_utc");
+
+                    b.Property<int?>("ApprovedRevisionNumber")
+                        .HasColumnType("int")
+                        .HasColumnName("approved_revision_number");
+
+                    b.Property<string>("AttachmentsJson")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("attachments_json");
+
+                    b.Property<string>("Barcode")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)")
+                        .HasColumnName("barcode");
+
+                    b.Property<string>("BaseUom")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)")
+                        .HasColumnName("base_uom");
+
+                    b.Property<bool>("BatchManaged")
+                        .HasColumnType("bit")
+                        .HasColumnName("batch_managed");
+
+                    b.Property<string>("Brand")
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)")
+                        .HasColumnName("brand");
+
+                    b.Property<string>("BusinessJustification")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)")
+                        .HasColumnName("business_justification");
+
+                    b.Property<Guid>("BuyerId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("buyer_id");
+
+                    b.Property<string>("CompanyCode")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)")
+                        .HasColumnName("company_code");
+
+                    b.Property<decimal?>("ConversionDenominator")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("conversion_denominator");
+
+                    b.Property<decimal?>("ConversionNumerator")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("conversion_numerator");
+
+                    b.Property<string>("CorrelationId")
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)")
+                        .HasColumnName("correlation_id");
+
+                    b.Property<string>("CountryOfOrigin")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)")
+                        .HasColumnName("country_of_origin");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("DataOrigin")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)")
+                        .HasColumnName("data_origin");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("date_created");
+
+                    b.Property<DateTime>("DateUpdated")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("date_updated");
+
+                    b.Property<string>("DecisionComment")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)")
+                        .HasColumnName("decision_comment");
+
+                    b.Property<string>("DietaryClassification")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)")
+                        .HasColumnName("dietary_classification");
+
+                    b.Property<string>("DuplicateCheckJson")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("duplicate_check_json");
+
+                    b.Property<string>("ExecutionReference")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)")
+                        .HasColumnName("execution_reference");
+
+                    b.Property<string>("ExecutionStatus")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)")
+                        .HasColumnName("execution_status");
+
+                    b.Property<string>("FoodSafetyRequirements")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)")
+                        .HasColumnName("food_safety_requirements");
+
+                    b.Property<decimal?>("GrossWeight")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("gross_weight");
+
+                    b.Property<string>("IdempotencyKey")
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)")
+                        .HasColumnName("idempotency_key");
+
+                    b.Property<string>("IngredientCategory")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)")
+                        .HasColumnName("ingredient_category");
+
+                    b.Property<string>("IngredientForm")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)")
+                        .HasColumnName("ingredient_form");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)")
+                        .HasColumnName("last_error");
+
+                    b.Property<string>("LongDescription")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)")
+                        .HasColumnName("long_description");
+
+                    b.Property<string>("Manufacturer")
+                        .HasMaxLength(160)
+                        .HasColumnType("nvarchar(160)")
+                        .HasColumnName("manufacturer");
+
+                    b.Property<DateTime?>("MaterialAvailableOnUtc")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("material_available_on_utc");
+
+                    b.Property<string>("MaterialGroup")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)")
+                        .HasColumnName("material_group");
+
+                    b.Property<string>("MaterialType")
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)")
+                        .HasColumnName("material_type");
+
+                    b.Property<decimal?>("NetWeight")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("net_weight");
+
+                    b.Property<decimal?>("PackSize")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("pack_size");
+
+                    b.Property<string>("PlantCode")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)")
+                        .HasColumnName("plant_code");
+
+                    b.Property<string>("PotentialAllergens")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)")
+                        .HasColumnName("potential_allergens");
+
+                    b.Property<string>("ProductHierarchy")
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)")
+                        .HasColumnName("product_hierarchy");
+
+                    b.Property<string>("ProductSpecification")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)")
+                        .HasColumnName("product_specification");
+
+                    b.Property<Guid?>("PropertyId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("property_id");
+
+                    b.Property<string>("PropertyName")
+                        .HasMaxLength(160)
+                        .HasColumnType("nvarchar(160)")
+                        .HasColumnName("property_name");
+
+                    b.Property<string>("ProposedDescription")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)")
+                        .HasColumnName("proposed_description");
+
+                    b.Property<string>("PurchasingGroup")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)")
+                        .HasColumnName("purchasing_group");
+
+                    b.Property<string>("PurchasingOrganization")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)")
+                        .HasColumnName("purchasing_organization");
+
+                    b.Property<string>("PurchasingUom")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)")
+                        .HasColumnName("purchasing_uom");
+
+                    b.Property<string>("QualitySpecifications")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)")
+                        .HasColumnName("quality_specifications");
+
+                    b.Property<string>("RequestReference")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)")
+                        .HasColumnName("request_reference");
+
+                    b.Property<string>("RequestType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasColumnName("request_type");
+
+                    b.Property<string>("RequestedByName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)")
+                        .HasColumnName("requested_by_name");
+
+                    b.Property<Guid?>("RequestedByUserId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("requested_by_user_id");
+
+                    b.Property<DateTime?>("RequiredDateUtc")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("required_date_utc");
+
+                    b.Property<decimal?>("RequiredQuantity")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("required_quantity");
+
+                    b.Property<string>("ResultingMaterialCode")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)")
+                        .HasColumnName("resulting_material_code");
+
+                    b.Property<Guid?>("ResultingMaterialId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("resulting_material_id");
+
+                    b.Property<int>("RevisionNumber")
+                        .HasColumnType("int")
+                        .HasColumnName("revision_number");
+
+                    b.Property<int?>("ShelfLifeDays")
+                        .HasColumnType("int")
+                        .HasColumnName("shelf_life_days");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("StorageLocation")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)")
+                        .HasColumnName("storage_location");
+
+                    b.Property<string>("StorageRequirements")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)")
+                        .HasColumnName("storage_requirements");
+
+                    b.Property<DateTime?>("SubmittedOnUtc")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("submitted_on_utc");
+
+                    b.Property<string>("SuggestedSupplier")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)")
+                        .HasColumnName("suggested_supplier");
+
+                    b.Property<string>("TargetMaterialCode")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)")
+                        .HasColumnName("target_material_code");
+
+                    b.Property<Guid?>("TargetMaterialId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("target_material_id");
+
+                    b.Property<Guid>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("updated_by");
+
+                    b.Property<decimal?>("Volume")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("volume");
+
+                    b.HasKey("Id")
+                        .HasName("pk_sila_culinary_material_request");
+
+                    b.HasIndex("IsActive")
+                        .HasDatabaseName("ix_sila_culinary_material_request_is_active");
+
+                    b.HasIndex("BuyerId", "RequestReference")
+                        .IsUnique()
+                        .HasDatabaseName("ix_sila_culinary_material_request_buyer_id_request_reference");
+
+                    b.HasIndex("BuyerId", "Status")
+                        .HasDatabaseName("ix_sila_culinary_material_request_buyer_id_status");
+
+                    b.ToTable("sila_culinary_material_request", "buyersystem");
+                });
+
+            modelBuilder.Entity("Buyer.Domain.Entities.SilaCulinaryMaterialRequestLink", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("BuyerId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("buyer_id");
+
+                    b.Property<bool>("ChefConfirmed")
+                        .HasColumnType("bit")
+                        .HasColumnName("chef_confirmed");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("date_created");
+
+                    b.Property<DateTime>("DateUpdated")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("date_updated");
+
+                    b.Property<Guid>("DraftId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("draft_id");
+
+                    b.Property<string>("IngredientDescription")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)")
+                        .HasColumnName("ingredient_description");
+
+                    b.Property<string>("IngredientTempRef")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)")
+                        .HasColumnName("ingredient_temp_ref");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit")
+                        .HasColumnName("is_active");
+
+                    b.Property<Guid>("MaterialRequestId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("material_request_id");
+
+                    b.Property<string>("RecipeUom")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)")
+                        .HasColumnName("recipe_uom");
+
+                    b.Property<bool>("Reconnected")
+                        .HasColumnType("bit")
+                        .HasColumnName("reconnected");
+
+                    b.Property<DateTime?>("ReconnectedOnUtc")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("reconnected_on_utc");
+
+                    b.Property<decimal>("RequiredQuantity")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("required_quantity");
+
+                    b.Property<Guid>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_sila_culinary_material_request_link");
+
+                    b.HasIndex("IsActive")
+                        .HasDatabaseName("ix_sila_culinary_material_request_link_is_active");
+
+                    b.HasIndex("MaterialRequestId");
+
+                    b.HasIndex("BuyerId", "MaterialRequestId", "DraftId", "IngredientTempRef")
+                        .IsUnique()
+                        .HasDatabaseName("ix_sila_culinary_material_request_link_buyer_id_material_request_id_draft_id_ingredient_temp_ref");
+
+                    b.ToTable("sila_culinary_material_request_link", "buyersystem");
+                });
+
+            modelBuilder.Entity("Buyer.Domain.Entities.SilaCulinaryMaterialRequestHistory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)")
+                        .HasColumnName("action");
+
+                    b.Property<string>("ActorName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)")
+                        .HasColumnName("actor_name");
+
+                    b.Property<Guid>("ActorUserId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("actor_user_id");
+
+                    b.Property<Guid>("BuyerId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("buyer_id");
+
+                    b.Property<string>("Comment")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)")
+                        .HasColumnName("comment");
+
+                    b.Property<string>("CorrelationId")
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)")
+                        .HasColumnName("correlation_id");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("date_created");
+
+                    b.Property<DateTime>("DateUpdated")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("date_updated");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit")
+                        .HasColumnName("is_active");
+
+                    b.Property<Guid>("MaterialRequestId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("material_request_id");
+
+                    b.Property<string>("NewStatus")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasColumnName("new_status");
+
+                    b.Property<string>("PreviousStatus")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasColumnName("previous_status");
+
+                    b.Property<Guid>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_sila_culinary_material_request_history");
+
+                    b.HasIndex("IsActive")
+                        .HasDatabaseName("ix_sila_culinary_material_request_history_is_active");
+
+                    b.HasIndex("MaterialRequestId");
+
+                    b.HasIndex("BuyerId", "MaterialRequestId")
+                        .HasDatabaseName("ix_sila_culinary_material_request_history_buyer_id_material_request_id");
+
+                    b.ToTable("sila_culinary_material_request_history", "buyersystem");
+                });
+
+            modelBuilder.Entity("Buyer.Domain.Entities.SilaCulinaryCostingSnapshot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("id");
+
+                    b.Property<decimal>("AdditionalDirectCost")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("additional_direct_cost");
+
+                    b.Property<string>("AdditionalCostsJson")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("additional_costs_json");
+
+                    b.Property<decimal>("AllocatedOverheadCost")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("allocated_overhead_cost");
+
+                    b.Property<string>("ApprovalStatus")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)")
+                        .HasColumnName("approval_status");
+
+                    b.Property<string>("AssumptionsJson")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("assumptions_json");
+
+                    b.Property<Guid>("BuyerId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("buyer_id");
+
+                    b.Property<decimal?>("ContributionAmount")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("contribution_amount");
+
+                    b.Property<string>("CostCompleteness")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)")
+                        .HasColumnName("cost_completeness");
+
+                    b.Property<string>("CostingBasis")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)")
+                        .HasColumnName("costing_basis");
+
+                    b.Property<string>("CostingReference")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)")
+                        .HasColumnName("costing_reference");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("CreatedByName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)")
+                        .HasColumnName("created_by_name");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)")
+                        .HasColumnName("currency");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("date_created");
+
+                    b.Property<DateTime>("DateUpdated")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("date_updated");
+
+                    b.Property<Guid?>("DraftId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("draft_id");
+
+                    b.Property<int?>("DraftRevision")
+                        .HasColumnType("int")
+                        .HasColumnName("draft_revision");
+
+                    b.Property<decimal?>("EstimatedRevenue")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("estimated_revenue");
+
+                    b.Property<decimal?>("FoodCostPercent")
+                        .HasPrecision(8, 2)
+                        .HasColumnType("decimal(8,2)")
+                        .HasColumnName("food_cost_percent");
+
+                    b.Property<decimal>("IngredientCostPerPortion")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("ingredient_cost_per_portion");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit")
+                        .HasColumnName("is_active");
+
+                    b.Property<bool>("IsApprovedSnapshot")
+                        .HasColumnType("bit")
+                        .HasColumnName("is_approved_snapshot");
+
+                    b.Property<bool>("IsBaseline")
+                        .HasColumnType("bit")
+                        .HasColumnName("is_baseline");
+
+                    b.Property<string>("LinesJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("lines_json");
+
+                    b.Property<int>("MissingPriceCount")
+                        .HasColumnType("int")
+                        .HasColumnName("missing_price_count");
+
+                    b.Property<Guid?>("ProductionRecipeId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("production_recipe_id");
+
+                    b.Property<Guid?>("PropertyId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("property_id");
+
+                    b.Property<int?>("RecipeVersion")
+                        .HasColumnType("int")
+                        .HasColumnName("recipe_version");
+
+                    b.Property<decimal?>("RecommendedSellingPrice")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("recommended_selling_price");
+
+                    b.Property<string>("ScenarioName")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("nvarchar(160)")
+                        .HasColumnName("scenario_name");
+
+                    b.Property<decimal?>("SellingPricePerPortion")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("selling_price_per_portion");
+
+                    b.Property<decimal>("Servings")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("servings");
+
+                    b.Property<decimal>("SubRecipeCost")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("sub_recipe_cost");
+
+                    b.Property<decimal?>("TargetFoodCostPercent")
+                        .HasPrecision(8, 2)
+                        .HasColumnType("decimal(8,2)")
+                        .HasColumnName("target_food_cost_percent");
+
+                    b.Property<string>("TaxBasis")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)")
+                        .HasColumnName("tax_basis");
+
+                    b.Property<decimal>("TotalCostPerPortion")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("total_cost_per_portion");
+
+                    b.Property<decimal>("TotalIngredientCost")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("total_ingredient_cost");
+
+                    b.Property<decimal>("TotalRecipeCost")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("total_recipe_cost");
+
+                    b.Property<Guid>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_sila_culinary_costing_snapshot");
+
+                    b.HasIndex("IsActive")
+                        .HasDatabaseName("ix_sila_culinary_costing_snapshot_is_active");
+
+                    b.HasIndex("BuyerId", "CostingReference")
+                        .IsUnique()
+                        .HasDatabaseName("ix_sila_culinary_costing_snapshot_buyer_id_costing_reference");
+
+                    b.HasIndex("BuyerId", "DraftId")
+                        .HasDatabaseName("ix_sila_culinary_costing_snapshot_buyer_id_draft_id");
+
+                    b.ToTable("sila_culinary_costing_snapshot", "buyersystem");
+                });
+
+            modelBuilder.Entity("Buyer.Domain.Entities.SilaCulinaryRecipeLifecycle", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ApprovalComment")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)")
+                        .HasColumnName("approval_comment");
+
+                    b.Property<string>("ApprovedByName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)")
+                        .HasColumnName("approved_by_name");
+
+                    b.Property<Guid?>("ApprovedByUserId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("approved_by_user_id");
+
+                    b.Property<int>("ApprovedDraftRevision")
+                        .HasColumnType("int")
+                        .HasColumnName("approved_draft_revision");
+
+                    b.Property<DateTime?>("ApprovedOnUtc")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("approved_on_utc");
+
+                    b.Property<Guid>("BuyerId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("buyer_id");
+
+                    b.Property<string>("ChangeReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)")
+                        .HasColumnName("change_reason");
+
+                    b.Property<string>("CorrelationId")
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)")
+                        .HasColumnName("correlation_id");
+
+                    b.Property<Guid?>("CostingSnapshotId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("costing_snapshot_id");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("date_created");
+
+                    b.Property<DateTime>("DateUpdated")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("date_updated");
+
+                    b.Property<Guid>("DraftId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("draft_id");
+
+                    b.Property<DateTime?>("EffectiveDateUtc")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("effective_date_utc");
+
+                    b.Property<string>("IdempotencyKey")
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)")
+                        .HasColumnName("idempotency_key");
+
+                    b.Property<bool>("ImageAssigned")
+                        .HasColumnType("bit")
+                        .HasColumnName("image_assigned");
+
+                    b.Property<string>("ImageOrigin")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)")
+                        .HasColumnName("image_origin");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("LifecycleStatus")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasColumnName("lifecycle_status");
+
+                    b.Property<string>("ProductionRecipeCode")
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)")
+                        .HasColumnName("production_recipe_code");
+
+                    b.Property<Guid?>("ProductionRecipeId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("production_recipe_id");
+
+                    b.Property<int?>("ProductionRecipeVersion")
+                        .HasColumnType("int")
+                        .HasColumnName("production_recipe_version");
+
+                    b.Property<DateTime?>("PublishedOnUtc")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("published_on_utc");
+
+                    b.Property<string>("ReadinessSummaryJson")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("readiness_summary_json");
+
+                    b.Property<string>("RejectionReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)")
+                        .HasColumnName("rejection_reason");
+
+                    b.Property<string>("SubRecipeDependenciesJson")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("sub_recipe_dependencies_json");
+
+                    b.Property<Guid>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_sila_culinary_recipe_lifecycle");
+
+                    b.HasIndex("IsActive")
+                        .HasDatabaseName("ix_sila_culinary_recipe_lifecycle_is_active");
+
+                    b.HasIndex("BuyerId", "DraftId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_sila_culinary_recipe_lifecycle_buyer_id_draft_id");
+
+                    b.HasIndex("BuyerId", "ProductionRecipeId")
+                        .HasDatabaseName("ix_sila_culinary_recipe_lifecycle_buyer_id_production_recipe_id");
+
+                    b.ToTable("sila_culinary_recipe_lifecycle", "buyersystem");
+                });
+
             modelBuilder.Entity("Buyer.Domain.Entities.SilaCulinaryAiUsageLog", b =>
                 {
                     b.HasOne("Buyer.Domain.Entities.BuyerBusinessProfile", "BuyerBusinessProfile")
@@ -11221,6 +12103,82 @@ namespace Buyer.Infrastructure.Migrations
                         .HasConstraintName("fk_sila_culinary_recipe_revision_sila_culinary_recipe_draft_draft_id");
 
                     b.Navigation("Draft");
+                });
+
+            modelBuilder.Entity("Buyer.Domain.Entities.SilaCulinaryMaterialRequest", b =>
+                {
+                    b.HasOne("Buyer.Domain.Entities.BuyerBusinessProfile", "BuyerBusinessProfile")
+                        .WithMany()
+                        .HasForeignKey("BuyerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_sila_culinary_material_request_buyer_business_profile_buyer_id");
+
+                    b.Navigation("BuyerBusinessProfile");
+                });
+
+            modelBuilder.Entity("Buyer.Domain.Entities.SilaCulinaryMaterialRequestLink", b =>
+                {
+                    b.HasOne("Buyer.Domain.Entities.BuyerBusinessProfile", "BuyerBusinessProfile")
+                        .WithMany()
+                        .HasForeignKey("BuyerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_sila_culinary_material_request_link_buyer_business_profile_buyer_id");
+
+                    b.HasOne("Buyer.Domain.Entities.SilaCulinaryMaterialRequest", "MaterialRequest")
+                        .WithMany()
+                        .HasForeignKey("MaterialRequestId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired()
+                        .HasConstraintName("fk_sila_culinary_material_request_link_sila_culinary_material_request_material_request_id");
+
+                    b.Navigation("BuyerBusinessProfile");
+                    b.Navigation("MaterialRequest");
+                });
+
+            modelBuilder.Entity("Buyer.Domain.Entities.SilaCulinaryMaterialRequestHistory", b =>
+                {
+                    b.HasOne("Buyer.Domain.Entities.BuyerBusinessProfile", "BuyerBusinessProfile")
+                        .WithMany()
+                        .HasForeignKey("BuyerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_sila_culinary_material_request_history_buyer_business_profile_buyer_id");
+
+                    b.HasOne("Buyer.Domain.Entities.SilaCulinaryMaterialRequest", "MaterialRequest")
+                        .WithMany()
+                        .HasForeignKey("MaterialRequestId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired()
+                        .HasConstraintName("fk_sila_culinary_material_request_history_sila_culinary_material_request_material_request_id");
+
+                    b.Navigation("BuyerBusinessProfile");
+                    b.Navigation("MaterialRequest");
+                });
+
+            modelBuilder.Entity("Buyer.Domain.Entities.SilaCulinaryCostingSnapshot", b =>
+                {
+                    b.HasOne("Buyer.Domain.Entities.BuyerBusinessProfile", "BuyerBusinessProfile")
+                        .WithMany()
+                        .HasForeignKey("BuyerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_sila_culinary_costing_snapshot_buyer_business_profile_buyer_id");
+
+                    b.Navigation("BuyerBusinessProfile");
+                });
+
+            modelBuilder.Entity("Buyer.Domain.Entities.SilaCulinaryRecipeLifecycle", b =>
+                {
+                    b.HasOne("Buyer.Domain.Entities.BuyerBusinessProfile", "BuyerBusinessProfile")
+                        .WithMany()
+                        .HasForeignKey("BuyerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_sila_culinary_recipe_lifecycle_buyer_business_profile_buyer_id");
+
+                    b.Navigation("BuyerBusinessProfile");
                 });
 
             modelBuilder.Entity("Buyer.Domain.Entities.SilaSupplier", b =>
