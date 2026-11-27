@@ -80,40 +80,31 @@ const CulinaryOverviewWorkspace: React.FC<CulinaryOverviewWorkspaceProps> = ({
 
   return (
     <div className="cs2-shell" data-testid="culinary-overview-workspace">
-      <div className="cs2-header">
-        <div>
-          <h2 className="cs2-title">Culinary Intelligence Overview</h2>
-          <p className="cs2-subtitle">
-            Unified culinary command center across Recipe Master, Material Intelligence, Event Planning,
-            Event MRP, Procurement, Kitchen Production, Food Costing, Event P&amp;L, Analytics, and Governance.
-          </p>
-        </div>
-        <div className="cs2-actions-row">
-          {demoEnabled && (
-            <button
-              type="button"
-              className={`sila-studio-btn ${demoMode ? "sila-studio-btn--primary" : "sila-studio-btn--secondary"}`}
-              data-testid="overview-demo-toggle"
-              onClick={() => setDemoMode((v) => !v)}
-            >
-              {demoMode ? "Sample Dataset: Active" : "View Sample Dataset"}
-            </button>
-          )}
+      <div className="cs2-actions-row cs2-overview-actions" data-testid="culinary-overview-actions">
+        {demoEnabled && (
           <button
             type="button"
-            className="sila-studio-btn sila-studio-btn--secondary"
-            onClick={() => onOpenWorkspace("list")}
+            className={`sila-studio-btn ${demoMode ? "sila-studio-btn--primary" : "sila-studio-btn--secondary"}`}
+            data-testid="overview-demo-toggle"
+            onClick={() => setDemoMode((v) => !v)}
           >
-            Open Recipe Master
+            {demoMode ? "Sample Dataset: Active" : "View Sample Dataset"}
           </button>
-          <button
-            type="button"
-            className="sila-studio-btn sila-studio-btn--primary"
-            onClick={() => onOpenWorkspace("ai-planner")}
-          >
-            Open AI Recipe Planner
-          </button>
-        </div>
+        )}
+        <button
+          type="button"
+          className="sila-studio-btn sila-studio-btn--secondary"
+          onClick={() => onOpenWorkspace("list")}
+        >
+          Open Recipe Master
+        </button>
+        <button
+          type="button"
+          className="sila-studio-btn sila-studio-btn--primary"
+          onClick={() => onOpenWorkspace("ai-planner")}
+        >
+          Open AI Recipe Planner
+        </button>
       </div>
 
       {demoMode ? (

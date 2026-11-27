@@ -450,6 +450,24 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({
       subtitle="Intelligent Culinary Workspace"
       topRight={
         <>
+          <SilaRecipeExcelPanel
+            noun="recipe"
+            canImport={canManage}
+            iconOnly
+            onTemplate={downloadRecipeTemplate}
+            onExport={exportRecipes}
+            onPreview={previewRecipeImport}
+            onConfirm={confirmRecipeImport}
+            onImported={load}
+          />
+          <StudioOverviewButton
+            active={false}
+            tooltip="Legacy Recipe Upload"
+            ariaLabel="Legacy Recipe Upload"
+            testId="recipe-legacy-upload-entry"
+            icon={<FileSpreadsheet size={17} strokeWidth={2} aria-hidden="true" />}
+            onClick={() => navigate(silaRecipeLegacyUploadPath())}
+          />
           {culinaryFlags.culinarySuiteEnabled && (
             <StudioIntelligenceToggle
               iconOnly
@@ -479,24 +497,6 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({
       }
       actions={
         <StudioActionBar ariaLabel="Recipe Studio primary actions">
-          <SilaRecipeExcelPanel
-            noun="recipe"
-            canImport={canManage}
-            onTemplate={downloadRecipeTemplate}
-            onExport={exportRecipes}
-            onPreview={previewRecipeImport}
-            onConfirm={confirmRecipeImport}
-            onImported={load}
-          />
-          <button
-            type="button"
-            className="sila-studio-btn sila-studio-btn--secondary"
-            onClick={() => navigate(silaRecipeLegacyUploadPath())}
-            data-testid="recipe-legacy-upload-entry"
-          >
-            <FileSpreadsheet size={15} strokeWidth={1.9} aria-hidden="true" />
-            <span>Legacy Recipe Upload</span>
-          </button>
           <button
             type="button"
             className="sila-studio-btn sila-studio-btn--primary"

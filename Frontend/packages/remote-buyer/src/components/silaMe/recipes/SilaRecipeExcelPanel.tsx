@@ -14,6 +14,8 @@ interface SilaRecipeExcelPanelProps {
   onConfirm: (file: File) => Promise<SilaImportPreview>;
   /** Called after the import was saved. */
   onImported: () => void;
+  /** Render square icon buttons (tooltips and aria-labels keep the wording). */
+  iconOnly?: boolean;
 }
 
 const MAX_BYTES = 5 * 1024 * 1024;
@@ -29,6 +31,7 @@ const SilaRecipeExcelPanel: React.FC<SilaRecipeExcelPanelProps> = ({
   onPreview,
   onConfirm,
   onImported,
+  iconOnly = false,
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState<Busy>("");
@@ -94,39 +97,84 @@ const SilaRecipeExcelPanel: React.FC<SilaRecipeExcelPanelProps> = ({
   const changes = preview ? preview.newCount + preview.changedCount : 0;
   const canConfirm = !!preview && preview.invalidRows === 0 && changes > 0;
 
+  const iconClass = "sila-studio-overview-btn";
+  const iconProps = { size: 17, strokeWidth: 2, "aria-hidden": true } as const;
+
   return (
     <>
       {canImport && (
-        <button
-          type="button"
-          className="sila-studio-btn sila-studio-btn--secondary"
-          disabled={busy !== ""}
-          onClick={() => download("template", onTemplate)}
-        >
-          <FileDown size={15} strokeWidth={1.9} aria-hidden="true" />
-          <span>{busy === "template" ? "Downloading..." : "Download Template"}</span>
-        </button>
-      )}
-      <button
-        type="button"
-        className="sila-studio-btn sila-studio-btn--secondary"
-        disabled={busy !== ""}
-        onClick={() => download("export", onExport)}
-      >
-        <Download size={15} strokeWidth={1.9} aria-hidden="true" />
-        <span>{busy === "export" ? "Exporting..." : "Download Excel"}</span>
-      </button>
-      {canImport && (
-        <>
+        iconOnly ? (
+          <button
+            type="button"
+            className={iconClass}
+            disabled={busy !== ""}
+            onClick={() => download("template", onTemplate)}
+            title={busy === "template" ? "Downloading template..." : "Download Template"}
+            aria-label="Download Template"
+            data-testid="recipe-download-template"
+          >
+            <FileDown {...iconProps} />
+          </button>
+        ) : (
           <button
             type="button"
             className="sila-studio-btn sila-studio-btn--secondary"
             disabled={busy !== ""}
-            onClick={() => inputRef.current?.click()}
+            onClick={() => download("template", onTemplate)}
           >
-            <Upload size={15} strokeWidth={1.9} aria-hidden="true" />
-            <span>{busy === "preview" ? "Reading..." : "Upload Excel"}</span>
+            <FileDown size={15} strokeWidth={1.9} aria-hidden="true" />
+            <span>{busy === "template" ? "Downloading..." : "Download Template"}</span>
           </button>
+        )
+      )}
+      {iconOnly ? (
+        <button
+          type="button"
+          className={iconClass}
+          disabled={busy !== ""}
+          onClick={() => download("export", onExport)}
+          title={busy === "export" ? "Exporting..." : "Download Excel"}
+          aria-label="Download Excel"
+          data-testid="recipe-download-excel"
+        >
+          <Download {...iconProps} />
+        </button>
+      ) : (
+        <button
+          type="button"
+          className="sila-studio-btn sila-studio-btn--secondary"
+          disabled={busy !== ""}
+          onClick={() => download("export", onExport)}
+        >
+          <Download size={15} strokeWidth={1.9} aria-hidden="true" />
+          <span>{busy === "export" ? "Exporting..." : "Download Excel"}</span>
+        </button>
+      )}
+      {canImport && (
+        <>
+          {iconOnly ? (
+            <button
+              type="button"
+              className={iconClass}
+              disabled={busy !== ""}
+              onClick={() => inputRef.current?.click()}
+              title={busy === "preview" ? "Reading file..." : "Upload Excel"}
+              aria-label="Upload Excel"
+              data-testid="recipe-upload-excel"
+            >
+              <Upload {...iconProps} />
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="sila-studio-btn sila-studio-btn--secondary"
+              disabled={busy !== ""}
+              onClick={() => inputRef.current?.click()}
+            >
+              <Upload size={15} strokeWidth={1.9} aria-hidden="true" />
+              <span>{busy === "preview" ? "Reading..." : "Upload Excel"}</span>
+            </button>
+          )}
           <input
             ref={inputRef}
             type="file"
