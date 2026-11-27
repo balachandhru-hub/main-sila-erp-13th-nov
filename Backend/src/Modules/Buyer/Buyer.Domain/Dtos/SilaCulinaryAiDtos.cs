@@ -25,6 +25,16 @@ namespace Buyer.Domain.Dtos
         public bool AiSetupEnabled { get; set; } = true;
         public bool MobileRecipeStudio2Enabled { get; set; } = true;
         public bool DemonstrationModeEnabled { get; set; } = true;
+        // Phase 3B Culinary Analytics, Menu Engineering & AI Optimization flags (tenant-controlled, independent of procurement release)
+        public bool CulinaryPhase3BEnabled { get; set; } = true;
+        public bool MenuEngineeringMatrixEnabled { get; set; } = true;
+        public bool WhatIfSimulationEnabled { get; set; } = true;
+        public bool PythonOptimizationEnabled { get; set; } = true;
+        public bool DemandForecastingEnabled { get; set; } = true;
+        public bool WasteIntelligenceEnabled { get; set; } = true;
+        public bool CulinaryCopilotEnabled { get; set; } = true;
+        public bool CrossPropertyBenchmarkingEnabled { get; set; } = true;
+        public bool RecommendationCockpitEnabled { get; set; } = true;
     }
 
     public class SilaCulinaryAiUsageSummaryDto

@@ -554,6 +554,21 @@ namespace Buyer.Domain.Common
                 public const string SILA_AUDIT_CULINARY_FIN_AI = "AI_FINANCIAL_ANALYSIS_COMPLETED";
                 public const string SILA_AUDIT_CULINARY_FIN_REPORT = "FINANCIAL_REPORT_GENERATED";
                 public const string SILA_AUDIT_CULINARY_FIN_OVERRIDE_PROPOSED = "MANUAL_COST_OVERRIDE_PROPOSED";
+                // Phase 3B Culinary Analytics, Menu Engineering & AI Optimization references & audit constants
+                public const string SILA_REF_CULINARY_ANALYTICS = "CULINARY_ANALYTICS";
+                public const string SILA_REF_CULINARY_SIMULATION = "CULINARY_SIMULATION";
+                public const string SILA_REF_CULINARY_RECOMMENDATION = "CULINARY_RECOMMENDATION";
+                public const string SILA_REF_CULINARY_WASTE = "CULINARY_WASTE";
+                public const string SILA_APPROVAL_TYPE_CULINARY_REC = "CULINARY_RECOMMENDATION";
+                public const string SILA_AUDIT_CULINARY_B3_CONFIG_SAVED = "ANALYTICS_CONFIG_SAVED";
+                public const string SILA_AUDIT_CULINARY_B3_SIM_RUN = "WHAT_IF_SIMULATION_EXECUTED";
+                public const string SILA_AUDIT_CULINARY_B3_OPT_RUN = "OPTIMIZATION_JOB_EXECUTED";
+                public const string SILA_AUDIT_CULINARY_B3_REC_CREATED = "RECOMMENDATION_CREATED";
+                public const string SILA_AUDIT_CULINARY_B3_REC_DECIDED = "RECOMMENDATION_DECIDED";
+                public const string SILA_AUDIT_CULINARY_B3_WASTE_RECORDED = "WASTE_RECORD_CREATED";
+                public const string SILA_AUDIT_CULINARY_B3_COPILOT_RUN = "CULINARY_COPILOT_QUERIED";
+                public const string SILA_AUDIT_CULINARY_B3_REPORT_EXPORTED = "ANALYTICS_REPORT_EXPORTED";
+                public static readonly string SCHEDULER_CULINARY_ANALYTICS_CRON = "Scheduler:CulinaryAnalyticsCron";
                 public const string HTTP_CLIENT_CULINARY_AI = "sila-culinary-ai";
                 public const string HTTP_CLIENT_CULINARY_ENGINE = "sila-culinary-engine";
                 public static readonly string CULINARY_ENGINE_URL = "InterCallService:CulinaryEngineUrl";

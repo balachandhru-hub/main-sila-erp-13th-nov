@@ -118,6 +118,12 @@ namespace Buyer.Infrastructure.Repository
         private ISilaCulinaryEventExpenseLineRepository? _silaCulinaryEventExpenseLine;
         private ISilaCulinaryFinancialExceptionRepository? _silaCulinaryFinancialException;
         private ISilaCulinaryFinancialScenarioRepository? _silaCulinaryFinancialScenario;
+        private ISilaCulinaryAnalyticsConfigRepository? _silaCulinaryAnalyticsConfig;
+        private ISilaCulinarySimulationRepository? _silaCulinarySimulation;
+        private ISilaCulinaryOptimizationJobRepository? _silaCulinaryOptimizationJob;
+        private ISilaCulinaryRecommendationRepository? _silaCulinaryRecommendation;
+        private ISilaCulinaryWasteRecordRepository? _silaCulinaryWasteRecord;
+        private ISilaCulinaryAnalyticsAuditRepository? _silaCulinaryAnalyticsAudit;
         private IBuyerBusinessProfileRepository _buyerBusinessProfileRepository;
         private IBuyerCategoryRepository _buyerCategoryRepository;
         private IAssetRepository _assetRepository;
@@ -1904,6 +1910,60 @@ namespace Buyer.Infrastructure.Repository
             {
                 _silaCulinaryFinancialScenario ??= new SilaCulinaryFinancialScenarioRepository(_context);
                 return _silaCulinaryFinancialScenario;
+            }
+        }
+
+        public ISilaCulinaryAnalyticsConfigRepository SilaCulinaryAnalyticsConfig
+        {
+            get
+            {
+                _silaCulinaryAnalyticsConfig ??= new SilaCulinaryAnalyticsConfigRepository(_context);
+                return _silaCulinaryAnalyticsConfig;
+            }
+        }
+
+        public ISilaCulinarySimulationRepository SilaCulinarySimulation
+        {
+            get
+            {
+                _silaCulinarySimulation ??= new SilaCulinarySimulationRepository(_context);
+                return _silaCulinarySimulation;
+            }
+        }
+
+        public ISilaCulinaryOptimizationJobRepository SilaCulinaryOptimizationJob
+        {
+            get
+            {
+                _silaCulinaryOptimizationJob ??= new SilaCulinaryOptimizationJobRepository(_context);
+                return _silaCulinaryOptimizationJob;
+            }
+        }
+
+        public ISilaCulinaryRecommendationRepository SilaCulinaryRecommendation
+        {
+            get
+            {
+                _silaCulinaryRecommendation ??= new SilaCulinaryRecommendationRepository(_context);
+                return _silaCulinaryRecommendation;
+            }
+        }
+
+        public ISilaCulinaryWasteRecordRepository SilaCulinaryWasteRecord
+        {
+            get
+            {
+                _silaCulinaryWasteRecord ??= new SilaCulinaryWasteRecordRepository(_context);
+                return _silaCulinaryWasteRecord;
+            }
+        }
+
+        public ISilaCulinaryAnalyticsAuditRepository SilaCulinaryAnalyticsAudit
+        {
+            get
+            {
+                _silaCulinaryAnalyticsAudit ??= new SilaCulinaryAnalyticsAuditRepository(_context);
+                return _silaCulinaryAnalyticsAudit;
             }
         }
 
