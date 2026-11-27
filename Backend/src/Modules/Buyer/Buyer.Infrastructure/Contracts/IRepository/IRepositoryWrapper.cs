@@ -187,6 +187,25 @@ namespace Buyer.Infrastructure.Contracts.IRepository
         ISilaCulinaryRecommendationRepository SilaCulinaryRecommendation { get; }
         ISilaCulinaryWasteRecordRepository SilaCulinaryWasteRecord { get; }
         ISilaCulinaryAnalyticsAuditRepository SilaCulinaryAnalyticsAudit { get; }
+        ISilaCulinaryKitchenRepository SilaCulinaryKitchen { get; }
+        ISilaCulinaryWorkstationRepository SilaCulinaryWorkstation { get; }
+        ISilaCulinaryEquipmentRepository SilaCulinaryEquipment { get; }
+        ISilaCulinaryStaffAssignmentRepository SilaCulinaryStaffAssignment { get; }
+        ISilaCulinaryProductionDemandRepository SilaCulinaryProductionDemand { get; }
+        ISilaCulinaryProductionPlanRepository SilaCulinaryProductionPlan { get; }
+        ISilaCulinaryProductionPlanLineRepository SilaCulinaryProductionPlanLine { get; }
+        ISilaCulinaryProductionPlanVersionRepository SilaCulinaryProductionPlanVersion { get; }
+        ISilaCulinaryProductionOrderRepository SilaCulinaryProductionOrder { get; }
+        ISilaCulinaryProductionOrderIngredientRepository SilaCulinaryProductionOrderIngredient { get; }
+        ISilaCulinaryProductionBatchRepository SilaCulinaryProductionBatch { get; }
+        ISilaCulinaryProductionTaskRepository SilaCulinaryProductionTask { get; }
+        ISilaCulinaryProductionPickingLineRepository SilaCulinaryProductionPickingLine { get; }
+        ISilaCulinaryProductionMaterialIssueRefRepository SilaCulinaryProductionMaterialIssueRef { get; }
+        ISilaCulinaryProductionQualityCheckpointRepository SilaCulinaryProductionQualityCheckpoint { get; }
+        ISilaCulinaryProductionQualityResultRepository SilaCulinaryProductionQualityResult { get; }
+        ISilaCulinaryProductionExceptionRepository SilaCulinaryProductionException { get; }
+        ISilaCulinaryProductionDispatchRepository SilaCulinaryProductionDispatch { get; }
+        ISilaCulinaryProductionAuditRepository SilaCulinaryProductionAudit { get; }
         bool Save();
         Task<bool> SaveAsync();
     }

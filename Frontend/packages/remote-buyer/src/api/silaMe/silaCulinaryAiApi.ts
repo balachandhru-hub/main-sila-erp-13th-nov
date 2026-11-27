@@ -16,6 +16,13 @@ export interface SilaCulinaryAiFeatureFlags {
   analyticsReportPreviewEnabled: boolean;
   aiSetupEnabled: boolean;
   demonstrationModeEnabled: boolean;
+  culinaryPhase4AEnabled?: boolean;
+  kitchenMasterEnabled?: boolean;
+  productionPlanningEnabled?: boolean;
+  productionSchedulingEnabled?: boolean;
+  kdsDisplayEnabled?: boolean;
+  qualityCheckpointsEnabled?: boolean;
+  centralKitchenEnabled?: boolean;
 }
 
 export interface SilaCulinaryAiUsageSummary {
@@ -212,6 +219,13 @@ export const DEFAULT_CULINARY_FEATURE_FLAGS: SilaCulinaryAiFeatureFlags = {
   analyticsReportPreviewEnabled: true,
   aiSetupEnabled: true,
   demonstrationModeEnabled: true,
+  culinaryPhase4AEnabled: true,
+  kitchenMasterEnabled: true,
+  productionPlanningEnabled: true,
+  productionSchedulingEnabled: true,
+  kdsDisplayEnabled: true,
+  qualityCheckpointsEnabled: true,
+  centralKitchenEnabled: true,
 };
 
 export const CULINARY_TASK_LABELS: { key: string; label: string }[] = [

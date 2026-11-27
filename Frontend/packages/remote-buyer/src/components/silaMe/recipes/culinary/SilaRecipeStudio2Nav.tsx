@@ -125,10 +125,10 @@ const SilaRecipeStudio2Nav: React.FC<SilaRecipeStudio2NavProps> = ({
     {
       id: "production",
       label: "Production Planner",
-      badge: "Demo Timeline",
-      badgeTone: "demo",
+      badge: "Phase 4A Live",
+      badgeTone: "live",
       routeKind: "production",
-      visible: flags.menuEventPreviewEnabled,
+      visible: flags.culinaryPhase4AEnabled ?? flags.menuEventPreviewEnabled,
     },
     {
       id: "food-cost",

@@ -567,6 +567,27 @@ namespace Buyer.Domain.Common
                 public const string SILA_AUDIT_CULINARY_B3_REC_DECIDED = "RECOMMENDATION_DECIDED";
                 public const string SILA_AUDIT_CULINARY_B3_WASTE_RECORDED = "WASTE_RECORD_CREATED";
                 public const string SILA_AUDIT_CULINARY_B3_COPILOT_RUN = "CULINARY_COPILOT_QUERIED";
+                // Phase 4A Kitchen Production Planning, Batch Scheduling & Execution constants
+                public const string SILA_REF_PRODUCTION_PLAN = "CULINARY_PRODUCTION_PLAN";
+                public const string SILA_REF_PRODUCTION_ORDER = "CULINARY_PRODUCTION_ORDER";
+                public const string SILA_REF_PRODUCTION_BATCH = "CULINARY_PRODUCTION_BATCH";
+                public const string SILA_REF_PRODUCTION_QUALITY = "CULINARY_PRODUCTION_QUALITY";
+                public const string SILA_REF_PRODUCTION_EXCEPTION = "CULINARY_PRODUCTION_EXCEPTION";
+                public const string SILA_REF_PRODUCTION_DISPATCH = "CULINARY_PRODUCTION_DISPATCH";
+                public const string SILA_APPROVAL_TYPE_PRODUCTION_PLAN = "CULINARY_PRODUCTION_PLAN";
+                public const string SILA_APPROVAL_TYPE_PRODUCTION_AMEND = "CULINARY_PRODUCTION_AMENDMENT";
+                public const string SILA_AUDIT_PROD_PLAN_CREATED = "PRODUCTION_PLAN_CREATED";
+                public const string SILA_AUDIT_PROD_PLAN_AMENDED = "PRODUCTION_PLAN_AMENDED";
+                public const string SILA_AUDIT_PROD_ORDER_RELEASED = "PRODUCTION_ORDER_RELEASED";
+                public const string SILA_AUDIT_PROD_BATCH_GENERATED = "PRODUCTION_BATCH_GENERATED";
+                public const string SILA_AUDIT_PROD_SCHEDULED = "PRODUCTION_AI_SCHEDULED";
+                public const string SILA_AUDIT_PROD_RESCHEDULED = "PRODUCTION_RESCHEDULED";
+                public const string SILA_AUDIT_PROD_PICKED = "PRODUCTION_PICKING_CONFIRMED";
+                public const string SILA_AUDIT_PROD_ISSUED = "PRODUCTION_MATERIAL_ISSUED";
+                public const string SILA_AUDIT_PROD_QUALITY_RECORDED = "PRODUCTION_QUALITY_RECORDED";
+                public const string SILA_AUDIT_PROD_BATCH_COMPLETED = "PRODUCTION_BATCH_COMPLETED";
+                public const string SILA_AUDIT_PROD_DISPATCHED = "PRODUCTION_CENTRAL_DISPATCHED";
+                public const string SILA_AUDIT_PROD_EXCEPTION = "PRODUCTION_EXCEPTION_UPDATED";
                 public const string SILA_AUDIT_CULINARY_B3_REPORT_EXPORTED = "ANALYTICS_REPORT_EXPORTED";
                 public static readonly string SCHEDULER_CULINARY_ANALYTICS_CRON = "Scheduler:CulinaryAnalyticsCron";
                 public const string HTTP_CLIENT_CULINARY_AI = "sila-culinary-ai";

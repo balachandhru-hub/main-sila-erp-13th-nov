@@ -19,23 +19,19 @@ import {
   getCulinaryAnalyticsReportCatalog,
   type SilaCulinaryAnalyticsReportCatalogItem,
 } from "../../../../api/silaMe/silaCulinaryAnalyticsApi";
+import {
+  exportProductionReport,
+  getProductionReportCatalog,
+  type SilaCulinaryProductionReportCatalogItem,
+} from "../../../../api/silaMe/silaCulinaryProductionApi";
 import CulinaryAnalyticsStudioWorkspace from "./CulinaryAnalyticsStudioWorkspace";
+import CulinaryProductionStudioWorkspace from "./CulinaryProductionStudioWorkspace";
 import { triggerBlobDownload } from "./culinaryRecipePlannerHelpers";
 import "./CulinarySuite.css";
 
 interface Props {
   mode: "production" | "analytics" | "reports";
 }
-
-const DEMO_PRODUCTION_TIMELINE = [
-  { window: "08:00–11:00", startPct: 0, widthPct: 21, kitchen: "Main Kitchen", task: "Marinades and sauces", status: "Demo Ready" },
-  { window: "09:00–14:00", startPct: 7, widthPct: 36, kitchen: "Pastry Kitchen", task: "Dessert preparation", status: "Demo Ready" },
-  { window: "10:00–13:00", startPct: 14, widthPct: 21, kitchen: "Cold Kitchen", task: "Vegetable preparation", status: "Demo Ready" },
-  { window: "11:00–15:00", startPct: 21, widthPct: 29, kitchen: "Butchery", task: "Meat preparation", status: "Demo Ready" },
-  { window: "14:00–18:00", startPct: 43, widthPct: 29, kitchen: "Hot Kitchen", task: "Main course cooking", status: "Chef Validation Req." },
-  { window: "17:00–19:00", startPct: 64, widthPct: 14, kitchen: "Banquet Team", task: "Buffet setup", status: "Pre-Service" },
-  { window: "19:00–22:00", startPct: 78, widthPct: 22, kitchen: "Banquet Kitchen", task: "Service & replenishment (Service 19:00)", status: "Live Service" },
-];
 
 const RECIPE_REPORTS = [
   "1. Recipe Master Report", "2. Recipe Cost Sheet", "3. Ingredient Usage Report",
@@ -84,6 +80,8 @@ const CulinaryProductionAnalyticsReportWorkspaces: React.FC<Props> = ({ mode }) 
   const [eventReportCode, setEventReportCode] = useState("EVENT_SUMMARY");
   const [phase3BCatalog, setPhase3BCatalog] = useState<SilaCulinaryAnalyticsReportCatalogItem[]>(DEFAULT_PHASE3B_REPORTS);
   const [phase3BReportCode, setPhase3BReportCode] = useState("MENU_ENGINEERING");
+  const [phase4ACatalog, setPhase4ACatalog] = useState<SilaCulinaryProductionReportCatalogItem[]>([]);
+  const [phase4AReportCode, setPhase4AReportCode] = useState("DAILY_PRODUCTION_PLAN");
   const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
@@ -104,6 +102,12 @@ const CulinaryProductionAnalyticsReportWorkspaces: React.FC<Props> = ({ mode }) 
       .then((cat) => {
         setPhase3BCatalog(cat);
         if (cat.length > 0) setPhase3BReportCode(cat[0].reportCode);
+      })
+      .catch(() => {});
+    getProductionReportCatalog()
+      .then((cat) => {
+        setPhase4ACatalog(cat);
+        if (cat.length > 0) setPhase4AReportCode(cat[0].reportCode);
       })
       .catch(() => {});
   }, [mode]);
@@ -139,53 +143,7 @@ const CulinaryProductionAnalyticsReportWorkspaces: React.FC<Props> = ({ mode }) 
   };
 
   if (mode === "production") {
-    return (
-      <div className="cs2-shell" data-testid="culinary-production-workspace">
-        <div className="cs2-header">
-          <div>
-            <h2 className="cs2-title">Kitchen Production Planner — Illustrative Timeline (§52–§55)</h2>
-            <p className="cs2-subtitle">
-              Gantt-style kitchen schedule for <code>EVT-2027-0001</code> (Service at 19:00). OR-Tools CP-SAT capacity &amp;
-              food-safety holding validation activate in Phase 4A.
-            </p>
-          </div>
-          <span className="cs2-badge cs2-badge--demo">Demo Timeline · Phase 4A</span>
-        </div>
-
-        <div className="cs2-banner" role="status">
-          <div>
-            <strong>ILLUSTRATIVE PRODUCTION SCHEDULE (08:00–22:00)</strong>
-            <div>Actual production schedules require chef validation against kitchen capacity and food safety holding limits.</div>
-          </div>
-          <span className="cs2-badge cs2-badge--planned">CP-SAT Activates Phase 4A</span>
-        </div>
-
-        <section className="cs2-card">
-          <div className="cs2-timeline">
-            {DEMO_PRODUCTION_TIMELINE.map((item) => (
-              <div className="cs2-timeline-row" key={item.window}>
-                <div>
-                  <strong>{item.window}</strong>
-                  <div className="cs2-empty-note">{item.kitchen}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>{item.task}</div>
-                  <div className="cs2-timeline-bar-track">
-                    <div
-                      className="cs2-timeline-bar-fill"
-                      style={{ left: `${item.startPct}%`, width: `${item.widthPct}%` }}
-                    />
-                  </div>
-                </div>
-                <div style={{ textAlign: "right" }}>
-                  <span className="cs2-badge cs2-badge--indigo">{item.status}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-      </div>
-    );
+    return <CulinaryProductionStudioWorkspace />;
   }
 
   if (mode === "analytics") {
@@ -206,17 +164,62 @@ const CulinaryProductionAnalyticsReportWorkspaces: React.FC<Props> = ({ mode }) 
     }
   };
 
+  const handleExportPhase4AReport = async (format: "CSV" | "EXCEL" | "PDF") => {
+    setExporting(true);
+    try {
+      const res = await exportProductionReport(phase4AReportCode, format);
+      const blob = new Blob([res.content], { type: res.contentType });
+      triggerBlobDownload(blob, res.fileName);
+      toastService.success(`Exported ${res.fileName}`);
+    } catch (err: unknown) {
+      toastService.error(err instanceof Error ? err.message : "Phase 4A export failed.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="cs2-shell" data-testid="culinary-reports-workspace">
       <div className="cs2-header">
         <div>
-          <h2 className="cs2-title">Culinary Intelligence Report Studio (Phase 1C – 3B Live)</h2>
+          <h2 className="cs2-title">Culinary Intelligence Report Studio (Phase 1C – 4A Live)</h2>
           <p className="cs2-subtitle">
-            Generate formula-injection-safe Excel, CSV, and PDF reports across Recipe Costing, Events, Menu Engineering, Consumption Variance, Waste, Benchmarking &amp; Savings.
+            Generate formula-injection-safe Excel, CSV, and PDF reports across Kitchen Production, Recipe Costing, Events, Menu Engineering, Consumption Variance, Waste &amp; Savings.
           </p>
         </div>
-        <span className="cs2-badge cs2-badge--live">Phase 3B Reports Live</span>
+        <span className="cs2-badge cs2-badge--live">Phase 4A Reports Live</span>
       </div>
+
+      <section className="cs2-card">
+        <div className="cs2-card__head">
+          <h3 className="cs2-card__title">Export Live Phase 4A Kitchen Production Reports (20 Reports)</h3>
+          <span className="cs2-badge cs2-badge--live">RBAC &amp; Formula-Safe</span>
+        </div>
+        <div className="cs2-form-grid">
+          <div className="sila-field">
+            <label className="sila-label">Phase 4A Production Report</label>
+            <select className="sila-select" value={phase4AReportCode} onChange={(e) => setPhase4AReportCode(e.target.value)}>
+              {phase4ACatalog.map((c) => (
+                <option key={c.reportCode} value={c.reportCode}>
+                  {c.name}
+                </option>
+              ))}
+              {phase4ACatalog.length === 0 && <option value="DAILY_PRODUCTION_PLAN">1. Daily Production Plan</option>}
+            </select>
+          </div>
+          <div className="sila-field" style={{ display: "flex", alignItems: "flex-end", gap: 6 }}>
+            <button type="button" className="sila-btn sila-btn--sm sila-btn--primary" disabled={exporting} onClick={() => void handleExportPhase4AReport("EXCEL")}>
+              Export Excel
+            </button>
+            <button type="button" className="sila-btn sila-btn--sm sila-btn--secondary" disabled={exporting} onClick={() => void handleExportPhase4AReport("CSV")}>
+              CSV
+            </button>
+            <button type="button" className="sila-btn sila-btn--sm sila-btn--secondary" disabled={exporting} onClick={() => void handleExportPhase4AReport("PDF")}>
+              PDF
+            </button>
+          </div>
+        </div>
+      </section>
 
       <section className="cs2-card">
         <div className="cs2-card__head">
