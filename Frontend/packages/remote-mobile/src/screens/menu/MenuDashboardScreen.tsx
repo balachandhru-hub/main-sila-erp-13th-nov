@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { getMenuEngineering } from '../../../../remote-buyer/src/api/silaMe/silaMenuEngineeringApi';
 import { getMeMobileSummary } from '../../../../remote-buyer/src/api/silaMe/menuEngineeringStudioApi';
 import { getSilaStoreRoleIntelligence } from '../../../../remote-buyer/src/api/silaMe/menuEngineeringAiApi';
+import { approveActionItem } from '../../../../remote-buyer/src/api/silaMe/menuEngineeringAutonomousApi';
 import { getHierarchicalForecast, getWastePrediction } from '../../../../remote-buyer/src/api/silaMe/menuEngineeringTwinApi';
 import ScreenHeader from '../../components/ScreenHeader';
 import StatusBadge from '../../components/StatusBadge';
@@ -163,6 +164,79 @@ const MenuDashboardScreen: React.FC = () => {
                 </ul>
               )}
             </section>
+
+            {personaData?.dailyBriefing && (
+              <section className="sm-section">
+                <h2>Daily Intelligent Briefing</h2>
+                <div className="sm-list-btn">
+                  <strong>{personaData.dailyBriefing.headline}</strong>
+                  {personaData.dailyBriefing.keyHighlights.map((hl, idx) => (
+                    <span key={`db-hl-${idx}`} className="sm-meta">• {hl}</span>
+                  ))}
+                  {personaData.dailyBriefing.urgentRisks.map((rk, idx) => (
+                    <span key={`db-rk-${idx}`} className="sm-meta">Risk: {rk}</span>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {personaData?.assignedTasks && personaData.assignedTasks.length > 0 && (
+              <section className="sm-section">
+                <h2>Assigned Corrective Tasks</h2>
+                <ul className="sm-list">
+                  {personaData.assignedTasks.map((task, idx) => (
+                    <li key={`task-${idx}`} className="sm-list-btn">
+                      <span className="sm-meta">{task}</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            {personaData?.pendingApprovals && personaData.pendingApprovals.length > 0 && (
+              <section className="sm-section">
+                <h2>Autonomous Action Approvals</h2>
+                <ul className="sm-list">
+                  {personaData.pendingApprovals.map((ap) => (
+                    <li key={ap.id} className="sm-list-btn">
+                      <span className="sm-row">
+                        <strong>{ap.title}</strong>
+                        <StatusBadge status={ap.riskClassification} />
+                      </span>
+                      <span className="sm-meta">Impact: ${ap.financialImpact.toFixed(2)} · Status: {ap.approvalStatus}</span>
+                      {can.approveMenu && (
+                        <div className="sm-grid-2" style={{ marginTop: '0.35rem' }}>
+                          <button
+                            type="button"
+                            className="sm-btn sm-btn--primary"
+                            onClick={() => {
+                              if (typeof navigator !== 'undefined' && !navigator.onLine) {
+                                return;
+                              }
+                              void approveActionItem(ap.id, true, 'SILA_STORE_MOBILE').then(() => roleIntel.reload());
+                            }}
+                          >
+                            {typeof navigator !== 'undefined' && !navigator.onLine ? 'Online Required' : 'Approve'}
+                          </button>
+                          <button
+                            type="button"
+                            className="sm-btn"
+                            onClick={() => {
+                              if (typeof navigator !== 'undefined' && !navigator.onLine) {
+                                return;
+                              }
+                              void approveActionItem(ap.id, false, 'SILA_STORE_MOBILE', 'Rejected in SILA Store').then(() => roleIntel.reload());
+                            }}
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
 
             {/* Operational SILA Store handoffs — reuses existing mobile screens without duplicating */}
             <section className="sm-section">

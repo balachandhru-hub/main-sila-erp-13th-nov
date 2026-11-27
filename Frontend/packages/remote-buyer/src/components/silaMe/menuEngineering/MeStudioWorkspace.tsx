@@ -66,6 +66,12 @@ import {
 } from "../../../api/silaMe/menuEngineeringTwinApi";
 import { AiMultiAgentCommandBar } from "./ai/AiMultiAgentCommandBar";
 import { AiValueTag } from "./ai/AiSharedWidgets";
+import {
+  getProactiveMenuHealth,
+  processPendingEvents,
+  publishBusinessEvent,
+  type ProactiveMenuHealthDto,
+} from "../../../api/silaMe/menuEngineeringAutonomousApi";
 
 interface Props {
   propertyId?: string;
@@ -188,6 +194,7 @@ const MeStudioWorkspace: React.FC<Props> = ({
   const [hierForecast, setHierForecast] = useState<MeHierarchicalForecastResult | null>(null);
   const [histSimilarity, setHistSimilarity] = useState<MeHistoricalSimilarityResult | null>(null);
   const [govStatus, setGovStatus] = useState<MeModelGovernanceStatus | null>(null);
+  const [proactiveHealth, setProactiveHealth] = useState<ProactiveMenuHealthDto | null>(null);
   const [twinBusy, setTwinBusy] = useState(false);
   const debounceRef = useRef<number | null>(null);
 
@@ -209,7 +216,8 @@ const MeStudioWorkspace: React.FC<Props> = ({
     setDraftVersion(p.versionNumber);
     if (p.categoriesOrder?.length) setCategoriesOrder(p.categoriesOrder);
     setLines(p.lines || []);
-  }, []);
+    void getProactiveMenuHealth(p.id, propertyId).then(setProactiveHealth).catch(() => setProactiveHealth(null));
+  }, [propertyId]);
 
   const loadWorkspace = useCallback(
     async (planId?: string) => {
@@ -771,6 +779,53 @@ const MeStudioWorkspace: React.FC<Props> = ({
               <input className="sila-input" placeholder="Halal, Vegan, GF…" value={draftDietary} onChange={(e) => setDraftDietary(e.target.value)} />
             </label>
           </div>
+
+          {proactiveHealth && proactiveHealth.alerts.length > 0 && (
+            <div className="sme-kpi-box" style={{ marginBottom: "0.75rem", borderColor: "#f59e0b", background: "#fffbeb" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                <strong>Proactive Culinary Health Alerts — {proactiveHealth.menuTitle}</strong>
+                <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    className="sila-btn sila-btn--secondary"
+                    onClick={() => setActiveTab("AI_OPTIMIZATION")}
+                  >
+                    Optimize Menu
+                  </button>
+                  <button
+                    type="button"
+                    className="sila-btn sila-btn--secondary"
+                    onClick={() => setActiveTab("SCENARIO_LAB")}
+                  >
+                    Compare Scenarios
+                  </button>
+                  <button
+                    type="button"
+                    className="sila-btn sila-btn--primary"
+                    onClick={() => {
+                      void publishBusinessEvent({
+                        propertyId,
+                        eventType: "ForecastDeviationDetected",
+                        sourceSystem: "ME_STUDIO",
+                        objectType: "MenuPlan",
+                        objectId: selectedPlanId || undefined,
+                        objectLabel: proactiveHealth.menuTitle,
+                        materialityScore: 12,
+                        payload: { alerts: proactiveHealth.alerts },
+                      })
+                        .then(() => processPendingEvents(propertyId))
+                        .then(() => toastService.success("Prepared consolidated Business Action Plan in AI Control Tower."));
+                    }}
+                  >
+                    Prepare Corrective Action Plan
+                  </button>
+                </div>
+              </div>
+              {proactiveHealth.alerts.map((al, idx) => (
+                <div key={idx} className="sme-muted">• {al}</div>
+              ))}
+            </div>
+          )}
 
           {/* CATEGORY GROUPS */}
           <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>

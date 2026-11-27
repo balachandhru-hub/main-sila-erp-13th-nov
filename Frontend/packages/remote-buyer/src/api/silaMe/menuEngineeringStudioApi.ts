@@ -354,6 +354,15 @@ export interface MenuEngineeringSetupDto {
   requireApprovalOnSubstitution: boolean;
   requireApprovalOnPublish: boolean;
   approvalRoles: string[];
+  autonomousModePaused?: boolean;
+  automatedExecutionDisabled?: boolean;
+  emergencyPauseReason?: string | null;
+  maxConcurrentJobs?: number;
+  dailyAiTokenBudget?: number;
+  monthlyAiBudgetUsd?: number;
+  teamsNotificationsEnabled?: boolean;
+  teamsWebhookUrl?: string | null;
+  eventScheduleConfigJson?: string | null;
   configVersion: number;
   changeSummary?: string | null;
   history: { id: string; configVersion: number; changeSummary?: string | null; changedAtUtc: string }[];

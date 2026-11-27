@@ -391,6 +391,24 @@ export interface SilaStoreRoleIntelligence {
   roleRecommendations: MeRecommendationCockpitItem[];
   highlights: string[];
   quickActions: string[];
+  dailyBriefing?: {
+    id: string;
+    persona: string;
+    headline: string;
+    keyHighlights: string[];
+    urgentRisks: string[];
+    pendingDecisions: string[];
+  } | null;
+  pendingApprovals?: {
+    id: string;
+    actionPlanId: string;
+    title: string;
+    riskClassification: string;
+    financialImpact: number;
+    approvalStatus: string;
+    executionStatus: string;
+  }[];
+  assignedTasks?: string[];
 }
 
 async function aiGet<T>(path: string, params?: Record<string, unknown>): Promise<T> {

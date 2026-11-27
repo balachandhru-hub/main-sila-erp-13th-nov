@@ -56,6 +56,7 @@ import {
   PosSalesAiPanel,
   SetupWizardAiPanel,
 } from "./ai/MeScreenAiPanels";
+import { AiControlTowerPanel } from "./ai/AiControlTowerPanel";
 
 interface Props {
   navKey: string;
@@ -752,10 +753,11 @@ const MeOperationalViews: React.FC<Props> = ({
     );
   }
 
-  // 11. AI MENU INTELLIGENCE
+  // 11. AI MENU INTELLIGENCE & CONTROL TOWER
   if (navKey === "silaMenuIntelligence" && aiIntel) {
     return (
       <div className="sme-list">
+        <AiControlTowerPanel propertyId={filter.propertyId} permissions={permissions} />
         <AiCockpitFullPanel propertyId={filter.propertyId} canApprove={permissions.approveMenu} />
         <div className="sme-panel">
           <div className="sme-panel__header">
@@ -883,6 +885,13 @@ const MeOperationalViews: React.FC<Props> = ({
           <label className="sila-field"><span>F. POS Sync Cron</span><input className="sila-input" value={setup.posSyncScheduleCron} onChange={(e) => setSetup({ ...setup, posSyncScheduleCron: e.target.value })} /></label>
           <label className="sila-field"><span>G. AI Confidence Threshold</span><input className="sila-input" type="number" step="0.05" value={setup.aiConfidenceThreshold} onChange={(e) => setSetup({ ...setup, aiConfidenceThreshold: Number(e.target.value) })} /></label>
           <label className="sila-field"><span>H. Require Approval on Publish</span><input type="checkbox" checked={setup.requireApprovalOnPublish} onChange={(e) => setSetup({ ...setup, requireApprovalOnPublish: e.target.checked })} /></label>
+          <label className="sila-field"><span>I. Autonomous Mode Paused</span><input type="checkbox" checked={Boolean(setup.autonomousModePaused)} onChange={(e) => setSetup({ ...setup, autonomousModePaused: e.target.checked })} /></label>
+          <label className="sila-field"><span>I. Automated Execution Disabled</span><input type="checkbox" checked={Boolean(setup.automatedExecutionDisabled)} onChange={(e) => setSetup({ ...setup, automatedExecutionDisabled: e.target.checked })} /></label>
+          <label className="sila-field"><span>I. Daily AI Token Budget</span><input className="sila-input" type="number" value={setup.dailyAiTokenBudget ?? 250000} onChange={(e) => setSetup({ ...setup, dailyAiTokenBudget: Number(e.target.value) })} /></label>
+          <label className="sila-field"><span>I. Monthly AI Budget (USD)</span><input className="sila-input" type="number" step="10" value={setup.monthlyAiBudgetUsd ?? 250} onChange={(e) => setSetup({ ...setup, monthlyAiBudgetUsd: Number(e.target.value) })} /></label>
+          <label className="sila-field"><span>I. Max Concurrent Jobs</span><input className="sila-input" type="number" value={setup.maxConcurrentJobs ?? 4} onChange={(e) => setSetup({ ...setup, maxConcurrentJobs: Number(e.target.value) })} /></label>
+          <label className="sila-field"><span>J. Microsoft Teams Alerts</span><input type="checkbox" checked={Boolean(setup.teamsNotificationsEnabled)} onChange={(e) => setSetup({ ...setup, teamsNotificationsEnabled: e.target.checked })} /></label>
+          <label className="sila-field"><span>J. Teams Webhook URL</span><input className="sila-input" value={setup.teamsWebhookUrl ?? ""} placeholder="https://..." onChange={(e) => setSetup({ ...setup, teamsWebhookUrl: e.target.value })} /></label>
         </div>
         {setup.history.length > 0 && (
           <div className="sme-kpi-box">
