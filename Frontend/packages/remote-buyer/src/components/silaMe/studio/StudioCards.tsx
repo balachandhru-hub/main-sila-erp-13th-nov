@@ -159,14 +159,10 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({
             </h3>
             <span className={resolvedStatusClass}>{statusLabel}</span>
           </div>
-          <p className="sila-studio-item-card__meta" title={resolvedMeta}>
-            {resolvedMeta}
+          <p className="sila-studio-item-card__meta" title={`${resolvedMeta} · ${versionText}`}>
+            {resolvedMeta} · {versionText}
+            {resolvedIngredients ? ` · ${resolvedIngredients}` : ""} · {yieldText}
           </p>
-          <div className="sila-studio-item-card__compact-stats">
-            <span title="Version">{versionText}</span>
-            {resolvedIngredients && <span>{resolvedIngredients}</span>}
-            <span>{yieldText}</span>
-          </div>
           <div className="sila-studio-item-card__compact-foot">
             <span className="sila-studio-item-card__compact-cost" title="Cost / portion">
               {resolvedCost}
