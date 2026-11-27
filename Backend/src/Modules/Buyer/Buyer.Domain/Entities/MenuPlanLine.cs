@@ -46,5 +46,36 @@ namespace Buyer.Domain.Entities
         public decimal? ActualPortions { get; set; }
 
         public string? Warning { get; set; }
+
+        public string? CategoryName { get; set; }
+
+        public int SequenceOrder { get; set; }
+
+        public Guid? RecipeId { get; set; }
+
+        public int? RecipeVersion { get; set; }
+
+        [Precision(18, 4)]
+        public decimal? PortionSize { get; set; }
+
+        public string? PortionUom { get; set; }
+
+        [Precision(18, 4)]
+        public decimal? ExpectedServingsPerGuest { get; set; }
+
+        [Precision(18, 4)]
+        public decimal? SellingPrice { get; set; }
+
+        [Precision(18, 4)]
+        public decimal? ExpectedCovers { get; set; }
+
+        [Precision(18, 4)]
+        public decimal? SampledActualPortion { get; set; }
+
+        public string? LineNotes { get; set; }
+
+        public string? AlternativesJson { get; set; }
+
+        public string? DietaryTags { get; set; }
     }
 }

@@ -69,5 +69,37 @@ namespace Buyer.Domain.Entities
 
         /// <summary>Original POS line number for RETURN/VOID when the file supplies one.</summary>
         public int? OriginalLineId { get; set; }
+
+        public string? PosLineId { get; set; }
+
+        public Guid? PropertyId { get; set; }
+
+        public DateTime? TransactionTimestampUtc { get; set; }
+
+        [Precision(18, 4)]
+        public decimal? GrossSellingPrice { get; set; }
+
+        [Precision(18, 4)]
+        public decimal? DiscountAmount { get; set; }
+
+        [Precision(18, 4)]
+        public decimal? TaxAmount { get; set; }
+
+        [Precision(18, 4)]
+        public decimal? NetRevenue { get; set; }
+
+        public bool IsVoid { get; set; }
+
+        public bool IsRefund { get; set; }
+
+        public bool IsComplimentary { get; set; }
+
+        public string? ModifierCode { get; set; }
+
+        public string? ComboReference { get; set; }
+
+        public string? MealPeriod { get; set; }
+
+        public Guid? MenuItemId { get; set; }
     }
 }

@@ -145,6 +145,11 @@ namespace Buyer.Infrastructure.DbContext
         public DbSet<MenuPosMapping> MenuPosMapping { get; set; }
         public DbSet<PmsDemandSnapshot> PmsDemandSnapshot { get; set; }
         public DbSet<MenuEngineeringSettings> MenuEngineeringSettings { get; set; }
+        public DbSet<MenuItemVersion> MenuItemVersion { get; set; }
+        public DbSet<MenuEngineeringScenario> MenuEngineeringScenario { get; set; }
+        public DbSet<MenuEngineeringApprovalHistory> MenuEngineeringApprovalHistory { get; set; }
+        public DbSet<MenuDemandOverride> MenuDemandOverride { get; set; }
+        public DbSet<MenuEngineeringConfigHistory> MenuEngineeringConfigHistory { get; set; }
         public DbSet<RecipeLegacyBatch> RecipeLegacyBatch { get; set; }
         public DbSet<RecipeLegacyRecipe> RecipeLegacyRecipe { get; set; }
         public DbSet<RecipeLegacyMaterialMap> RecipeLegacyMaterialMap { get; set; }
@@ -624,6 +629,11 @@ namespace Buyer.Infrastructure.DbContext
             _ = modelBuilder.Entity<SilaCulinaryErpReconciliationRef>().HasIndex(a => new { a.BuyerId, a.IdempotencyKey }).IsUnique();
             _ = modelBuilder.Entity<SilaCulinaryHistoricalLearningSnapshot>().HasIndex(a => new { a.BuyerId, a.SnapshotNumber }).IsUnique();
             _ = modelBuilder.Entity<SilaCulinaryReconciliationAudit>().HasIndex(a => new { a.BuyerId, a.ExecutedAtUtc });
+            _ = modelBuilder.Entity<MenuItemVersion>().HasIndex(a => new { a.BuyerId, a.MenuItemId, a.VersionNumber });
+            _ = modelBuilder.Entity<MenuEngineeringScenario>().HasIndex(a => new { a.BuyerId, a.MenuPlanId });
+            _ = modelBuilder.Entity<MenuEngineeringApprovalHistory>().HasIndex(a => new { a.BuyerId, a.EntityType, a.EntityId, a.ActionAtUtc });
+            _ = modelBuilder.Entity<MenuDemandOverride>().HasIndex(a => new { a.BuyerId, a.BusinessDate, a.OutletLocationId });
+            _ = modelBuilder.Entity<MenuEngineeringConfigHistory>().HasIndex(a => new { a.BuyerId, a.PropertyId, a.ConfigVersion });
 
             base.OnModelCreating(modelBuilder);
 

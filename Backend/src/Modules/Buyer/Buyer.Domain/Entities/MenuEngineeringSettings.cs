@@ -51,5 +51,82 @@ namespace Buyer.Domain.Entities
         public string? PosConnectionName { get; set; }
 
         public string? AiNotes { get; set; }
+
+        public bool MenuEngineeringEnabled { get; set; } = true;
+
+        public bool MeStudioEnabled { get; set; } = true;
+
+        public Guid? PropertyId { get; set; }
+
+        public string? ServiceFormatsJson { get; set; }
+
+        public string? CuisinesJson { get; set; }
+
+        public string? DietaryTagsJson { get; set; }
+
+        public string? CostingMethod { get; set; } = "CURRENT_COST";
+
+        [Precision(9, 4)]
+        public decimal TargetFoodCostPercent { get; set; } = 0.30m;
+
+        [Precision(18, 4)]
+        public decimal? TargetContributionMargin { get; set; }
+
+        public string? CostRefreshFrequency { get; set; } = "REALTIME";
+
+        public string? DefaultCurrency { get; set; } = "USD";
+
+        public string? TaxTreatment { get; set; } = "EXCLUSIVE";
+
+        public string? DefaultPortionUom { get; set; } = "PORTION";
+
+        [Precision(9, 4)]
+        public decimal PortionVarianceThresholdPercent { get; set; } = 10m;
+
+        public int ForecastHorizonDays { get; set; } = 14;
+
+        public string? ForecastMethod { get; set; } = "HYBRID_RIDGE";
+
+        public int HistoricalLookbackDays { get; set; } = 90;
+
+        [Precision(9, 4)]
+        public decimal ForecastAccuracyThresholdPercent { get; set; } = 80m;
+
+        public string? ProfitabilityBasis { get; set; } = "FOOD_COST_ONLY";
+
+        [Precision(9, 4)]
+        public decimal? ProfitabilityThresholdPercent { get; set; }
+
+        public int MinimumSalesHistoryDays { get; set; } = 14;
+
+        [Precision(18, 4)]
+        public decimal MinimumSalesQuantity { get; set; } = 10m;
+
+        public string? ComparableGrouping { get; set; } = "CATEGORY";
+
+        public string? PosSyncScheduleCron { get; set; } = "0 */4 * * *";
+
+        public int PosRetryMaxAttempts { get; set; } = 3;
+
+        public string? AiEnabledAgentsJson { get; set; }
+
+        [Precision(9, 4)]
+        public decimal AiConfidenceThreshold { get; set; } = 0.70m;
+
+        public int AiUsageLimitPerDay { get; set; } = 100;
+
+        [Precision(9, 4)]
+        public decimal ApprovalFoodCostThresholdPercent { get; set; } = 35m;
+
+        [Precision(9, 4)]
+        public decimal ApprovalPriceChangePercent { get; set; } = 10m;
+
+        public bool RequireApprovalOnSubstitution { get; set; } = true;
+
+        public bool RequireApprovalOnPublish { get; set; } = true;
+
+        public string? ApprovalRolesJson { get; set; }
+
+        public int ConfigVersion { get; set; } = 1;
     }
 }
