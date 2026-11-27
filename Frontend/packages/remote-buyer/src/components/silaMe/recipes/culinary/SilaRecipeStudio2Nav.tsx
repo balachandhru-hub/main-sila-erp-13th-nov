@@ -141,8 +141,8 @@ const SilaRecipeStudio2Nav: React.FC<SilaRecipeStudio2NavProps> = ({
     {
       id: "event-pnl",
       label: "Event P&L",
-      badge: "Interactive Demo",
-      badgeTone: "demo",
+      badge: "Phase 3A Live",
+      badgeTone: "live",
       routeKind: "event-pnl",
       visible: flags.interactiveSimulatorsEnabled,
     },

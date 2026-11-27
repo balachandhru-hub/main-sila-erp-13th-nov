@@ -112,6 +112,12 @@ namespace Buyer.Infrastructure.Repository
         private ISilaCulinaryProcurementAllocationRepository? _silaCulinaryProcurementAllocation;
         private ISilaCulinaryProcurementExceptionRepository? _silaCulinaryProcurementException;
         private ISilaCulinaryProcurementScenarioRepository? _silaCulinaryProcurementScenario;
+        private ISilaCulinaryFinancialConfigRepository? _silaCulinaryFinancialConfig;
+        private ISilaCulinaryEventFinancialPlanRepository? _silaCulinaryEventFinancialPlan;
+        private ISilaCulinaryEventRevenueLineRepository? _silaCulinaryEventRevenueLine;
+        private ISilaCulinaryEventExpenseLineRepository? _silaCulinaryEventExpenseLine;
+        private ISilaCulinaryFinancialExceptionRepository? _silaCulinaryFinancialException;
+        private ISilaCulinaryFinancialScenarioRepository? _silaCulinaryFinancialScenario;
         private IBuyerBusinessProfileRepository _buyerBusinessProfileRepository;
         private IBuyerCategoryRepository _buyerCategoryRepository;
         private IAssetRepository _assetRepository;
@@ -1844,6 +1850,60 @@ namespace Buyer.Infrastructure.Repository
             {
                 _silaCulinaryProcurementScenario ??= new SilaCulinaryProcurementScenarioRepository(_context);
                 return _silaCulinaryProcurementScenario;
+            }
+        }
+
+        public ISilaCulinaryFinancialConfigRepository SilaCulinaryFinancialConfig
+        {
+            get
+            {
+                _silaCulinaryFinancialConfig ??= new SilaCulinaryFinancialConfigRepository(_context);
+                return _silaCulinaryFinancialConfig;
+            }
+        }
+
+        public ISilaCulinaryEventFinancialPlanRepository SilaCulinaryEventFinancialPlan
+        {
+            get
+            {
+                _silaCulinaryEventFinancialPlan ??= new SilaCulinaryEventFinancialPlanRepository(_context);
+                return _silaCulinaryEventFinancialPlan;
+            }
+        }
+
+        public ISilaCulinaryEventRevenueLineRepository SilaCulinaryEventRevenueLine
+        {
+            get
+            {
+                _silaCulinaryEventRevenueLine ??= new SilaCulinaryEventRevenueLineRepository(_context);
+                return _silaCulinaryEventRevenueLine;
+            }
+        }
+
+        public ISilaCulinaryEventExpenseLineRepository SilaCulinaryEventExpenseLine
+        {
+            get
+            {
+                _silaCulinaryEventExpenseLine ??= new SilaCulinaryEventExpenseLineRepository(_context);
+                return _silaCulinaryEventExpenseLine;
+            }
+        }
+
+        public ISilaCulinaryFinancialExceptionRepository SilaCulinaryFinancialException
+        {
+            get
+            {
+                _silaCulinaryFinancialException ??= new SilaCulinaryFinancialExceptionRepository(_context);
+                return _silaCulinaryFinancialException;
+            }
+        }
+
+        public ISilaCulinaryFinancialScenarioRepository SilaCulinaryFinancialScenario
+        {
+            get
+            {
+                _silaCulinaryFinancialScenario ??= new SilaCulinaryFinancialScenarioRepository(_context);
+                return _silaCulinaryFinancialScenario;
             }
         }
 
