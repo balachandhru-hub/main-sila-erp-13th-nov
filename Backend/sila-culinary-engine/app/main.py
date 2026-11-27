@@ -118,6 +118,22 @@ from app.engines.analytics_advanced import (
     optimize_menu_milp as optimize_menu_phase3b_milp,
     simulate_what_if,
 )
+from app.engines.me_ai_native import (
+    evaluate_and_forecast_demand,
+    optimize_menu_multi_constraint,
+    parse_nl_command,
+    suggest_pos_mappings_ai,
+)
+from app.schemas.me_ai_native import (
+    MeBacktestForecastRequest,
+    MeBacktestForecastResponse,
+    MeMultiConstraintOptimizeRequest,
+    MeMultiConstraintOptimizeResponse,
+    MeNlParseRequest,
+    MeNlParseResponse,
+    MePosMappingSuggestRequest,
+    MePosMappingSuggestResponse,
+)
 from app.engines.production_scheduler import (
     allocate_central_kitchen_batch,
     optimize_kitchen_schedule,
@@ -678,6 +694,31 @@ def post_reconciliation_export_workbook(req: ReconWorkbookExportRequest) -> Resp
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": 'attachment; filename="sila-phase4b-reconciliation-reports.xlsx"'},
     )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase ME.2 — AI-Native Menu Engineering Optimization, Forecasting & Mapping
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@app.post("/v1/me-ai/parse-command", response_model=MeNlParseResponse)
+def post_me_ai_parse_command(req: MeNlParseRequest) -> MeNlParseResponse:
+    return parse_nl_command(req)
+
+
+@app.post("/v1/me-ai/optimize-scenarios", response_model=MeMultiConstraintOptimizeResponse)
+def post_me_ai_optimize_scenarios(req: MeMultiConstraintOptimizeRequest) -> MeMultiConstraintOptimizeResponse:
+    return optimize_menu_multi_constraint(req)
+
+
+@app.post("/v1/me-ai/backtest-forecast", response_model=MeBacktestForecastResponse)
+def post_me_ai_backtest_forecast(req: MeBacktestForecastRequest) -> MeBacktestForecastResponse:
+    return evaluate_and_forecast_demand(req)
+
+
+@app.post("/v1/me-ai/suggest-pos-mapping", response_model=MePosMappingSuggestResponse)
+def post_me_ai_suggest_pos_mapping(req: MePosMappingSuggestRequest) -> MePosMappingSuggestResponse:
+    return suggest_pos_mappings_ai(req)
 
 
 

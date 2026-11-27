@@ -91,6 +91,34 @@ class RulesLlm:
             )
         if _CANCEL.search(lower):
             return LlmTurnResult(intent="CANCEL", spoken_reply="Cancelling this conversation.", agent_id=agent)
+        if re.search(r"\b(create|plan|optimize)\b.*\b(menu|buffet|breakfast|lunch|dinner|food cost)\b|\breduce\s+food\s+cost\b", lower):
+            return LlmTurnResult(
+                intent="MENU_CREATE_OBJECTIVE",
+                spoken_reply="Running ME Studio intelligent optimization.",
+                agent_id="MENU_ENGINEERING_AGENT",
+                structured={"transcript": text},
+            )
+        if re.search(r"\b(consum(ing|ption)|more ingredients than expected|variance)\b", lower):
+            return LlmTurnResult(
+                intent="MENU_CONSUMPTION_ANOMALY",
+                spoken_reply="Analyzing ingredient consumption anomalies.",
+                agent_id="MENU_ENGINEERING_AGENT",
+                structured={"transcript": text},
+            )
+        if re.search(r"\b(purchase|buy)\b.*\b(next week|ingredients?)\b", lower):
+            return LlmTurnResult(
+                intent="MENU_PURCHASE_NEXT_WEEK",
+                spoken_reply="Checking time-phased ingredient purchase requirements.",
+                agent_id="MENU_ENGINEERING_AGENT",
+                structured={"transcript": text},
+            )
+        if re.search(r"\bcompare\b.*\b(last month|historical|best[- ]performing)\b", lower):
+            return LlmTurnResult(
+                intent="MENU_COMPARE_HISTORY",
+                spoken_reply="Comparing with best-performing historical menus.",
+                agent_id="MENU_ENGINEERING_AGENT",
+                structured={"transcript": text},
+            )
         if re.search(r"\b(today'?s|show)\b.*\b(breakfast|lunch|dinner|brunch|menu)\b", lower):
             return LlmTurnResult(
                 intent="MENU_TODAY_MEAL",

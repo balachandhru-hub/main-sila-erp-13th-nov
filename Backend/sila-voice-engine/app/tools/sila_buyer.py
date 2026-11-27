@@ -105,6 +105,22 @@ class SilaBuyerTools:
             ToolSpec("GetMenuAiIntelligence", "Get recipe or ingredient substitution recommendations", "UseAiMenuIntelligence"),
             self.get_menu_ai_intelligence,
         )
+        registry.register(
+            ToolSpec("GetMenuConsumptionAnomalies", "Get top ingredient consumption variance root causes", "ViewMeStudio"),
+            self.get_menu_consumption_anomalies,
+        )
+        registry.register(
+            ToolSpec("GetMenuPurchasePlan", "Get next week ingredient purchase requirements", "GeneratePurchaseRecommendation"),
+            self.get_menu_purchase_plan,
+        )
+        registry.register(
+            ToolSpec("GetHistoricalMenus", "Get historical best-performing menus for comparison", "ViewMeStudio"),
+            self.get_historical_menus,
+        )
+        registry.register(
+            ToolSpec("RunMeStudioObjective", "Run ME Studio multi-agent menu generation or optimization (draft requires confirmation)", "UseAiMenuIntelligence"),
+            self.run_me_studio_objective,
+        )
 
     async def get_current_user_context(self, args: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
         return {
@@ -220,3 +236,30 @@ class SilaBuyerTools:
     async def get_menu_ai_intelligence(self, args: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
         qs = f"?propertyId={ctx['propertyId']}" if ctx.get("propertyId") else ""
         return await self._request("GET", f"/api/v1/buyer/sila/me-studio/ai-intelligence{qs}", ctx)
+
+    async def get_menu_consumption_anomalies(self, args: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
+        qs = f"?propertyId={ctx['propertyId']}" if ctx.get("propertyId") else ""
+        return await self._request("GET", f"/api/v1/buyer/sila/me-studio/ai/consumption/root-causes{qs}", ctx)
+
+    async def get_menu_purchase_plan(self, args: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
+        qs = f"?propertyId={ctx['propertyId']}" if ctx.get("propertyId") else ""
+        return await self._request("GET", f"/api/v1/buyer/sila/me-studio/purchase-plan{qs}", ctx)
+
+    async def get_historical_menus(self, args: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
+        qs = f"?propertyId={ctx['propertyId']}" if ctx.get("propertyId") else ""
+        return await self._request("GET", f"/api/v1/buyer/sila/me-studio/historical-menus{qs}", ctx)
+
+    async def run_me_studio_objective(self, args: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
+        objective = (args.get("objective") or "").strip()
+        save_draft = bool(args.get("confirmation"))
+        return await self._request(
+            "POST",
+            "/api/v1/buyer/sila/me-studio/ai/multi-agent-run",
+            ctx,
+            {
+                "objective": objective,
+                "operatingMode": "AI_ASSISTED",
+                "propertyId": ctx.get("propertyId"),
+                "saveSelectedProposalAsDraft": save_draft,
+            },
+        )

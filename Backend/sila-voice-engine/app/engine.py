@@ -183,6 +183,10 @@ class VoiceEngine:
                         "MENU_CALC_COVERS",
                         "MENU_LOW_MARGIN",
                         "MENU_ALTERNATIVE",
+                        "MENU_CREATE_OBJECTIVE",
+                        "MENU_CONSUMPTION_ANOMALY",
+                        "MENU_PURCHASE_NEXT_WEEK",
+                        "MENU_COMPARE_HISTORY",
                     ],
                     language=session.language,
                 )

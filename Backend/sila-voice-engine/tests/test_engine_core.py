@@ -190,6 +190,43 @@ async def test_menu_engineering_voice_intents_and_agent():
     r4 = await agent.handle("MENU_ALTERNATIVE", {"transcript": "Suggest an alternative to salmon."}, {})
     assert r4["ok"] and "Arctic Char" in r4["spoken"] and "approval" in r4["spoken"].lower()
 
+    for phrase, expected in [
+        ("Create a breakfast menu for 300 guests.", "MENU_CREATE_OBJECTIVE"),
+        ("Which dishes are consuming more ingredients than expected?", "MENU_CONSUMPTION_ANOMALY"),
+        ("Show all ingredients we need to purchase for next week.", "MENU_PURCHASE_NEXT_WEEK"),
+        ("Compare this menu with last month's best-performing menu.", "MENU_COMPARE_HISTORY"),
+        ("Reduce food cost to 28%.", "MENU_CREATE_OBJECTIVE"),
+    ]:
+        res = await llm.interpret(transcript=phrase, session_state={}, allowed_intents=[expected])
+        assert res.intent == expected
+        assert res.agent_id == "MENU_ENGINEERING_AGENT"
+
+    reg.register(
+        ToolSpec("GetMenuConsumptionAnomalies", "anomalies"),
+        lambda a, c: _async_val({"ok": True, "data": {"anomalies": [{"materialName": "Salmon", "varianceQty": 8.5, "rankedCauses": [{"description": "Over-portioning"}]}]}}),
+    )
+    reg.register(
+        ToolSpec("GetMenuPurchasePlan", "purchase"),
+        lambda a, c: _async_val({"ok": True, "data": {"rows": [{"materialName": "Basmati Rice", "shortage": 25.0}]}}),
+    )
+    reg.register(
+        ToolSpec("GetHistoricalMenus", "history"),
+        lambda a, c: _async_val({"ok": True, "data": [{"name": "March Gala", "actualSales": 42000, "historicalFoodCostPercent": 27.5}]}),
+    )
+    reg.register(
+        ToolSpec("RunMeStudioObjective", "objective"),
+        lambda a, c: _async_val({"ok": True, "data": {"explanation": "Generated 300-guest breakfast at 28.0% food cost."}}),
+    )
+
+    r5 = await agent.handle("MENU_CONSUMPTION_ANOMALY", {"transcript": "Which dishes are consuming more ingredients than expected?"}, {})
+    assert r5["ok"] and "Salmon" in r5["spoken"]
+    r6 = await agent.handle("MENU_PURCHASE_NEXT_WEEK", {"transcript": "Show all ingredients we need to purchase for next week."}, {})
+    assert r6["ok"] and "Basmati Rice" in r6["spoken"]
+    r7 = await agent.handle("MENU_COMPARE_HISTORY", {"transcript": "Compare this menu with last month's best-performing menu."}, {})
+    assert r7["ok"] and "March Gala" in r7["spoken"]
+    r8 = await agent.handle("MENU_CREATE_OBJECTIVE", {"transcript": "Create a breakfast menu for 300 guests."}, {})
+    assert r8["ok"] and "confirm" in r8["spoken"].lower()
+
 
 async def _async_val(val):
     return val
