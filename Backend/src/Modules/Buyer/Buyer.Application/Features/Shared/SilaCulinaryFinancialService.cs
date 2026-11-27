@@ -120,8 +120,20 @@ namespace Buyer.Application.Features.Shared
                 IsActive = true,
             };
             _repository.SilaCulinaryFinancialConfig.Create(cfg);
-            await _repository.SaveAsync();
-            return cfg;
+            try
+            {
+                await _repository.SaveAsync();
+                return cfg;
+            }
+            catch (DbUpdateException)
+            {
+                _repository.SilaCulinaryFinancialConfig.DetachAllEntities();
+                SilaCulinaryFinancialConfig? existing = await _repository.SilaCulinaryFinancialConfig
+                    .FindByConditionTracked(x => x.BuyerId == buyerId && x.IsActive)
+                    .FirstOrDefaultAsync(cancellationToken);
+                if (existing != null) return existing;
+                throw;
+            }
         }
 
         private static SilaCulinaryFinancialConfigDto ToConfigDto(SilaCulinaryFinancialConfig c)

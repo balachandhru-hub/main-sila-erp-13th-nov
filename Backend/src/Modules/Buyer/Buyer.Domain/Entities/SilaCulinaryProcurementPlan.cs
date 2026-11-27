@@ -94,6 +94,7 @@ namespace Buyer.Domain.Entities
 
         public string? ReadinessSummaryJson { get; set; }
 
+        [Column("phase3a_handover_json")]
         public string? Phase3AHandoverJson { get; set; }
 
         public int RequiredMaterialsCount { get; set; }
