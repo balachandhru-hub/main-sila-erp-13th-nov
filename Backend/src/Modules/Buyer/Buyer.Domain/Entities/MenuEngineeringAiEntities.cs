@@ -163,6 +163,19 @@ namespace Buyer.Domain.Entities
         public DateTime? CooldownUntilUtc { get; set; }
 
         public DateTime? ValidatedAtUtc { get; set; }
+
+        public Guid? ActionPlanId { get; set; }
+
+        [MaxLength(40)]
+        public string? LifecycleStatus { get; set; }
+
+        [MaxLength(60)]
+        public string? RejectionReasonCode { get; set; }
+
+        [MaxLength(1000)]
+        public string? RejectionReasonDetail { get; set; }
+
+        public Guid? SupersededById { get; set; }
     }
 
     public class MenuEngineeringProactiveAlert : BaseModel

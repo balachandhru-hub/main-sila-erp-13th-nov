@@ -135,5 +135,30 @@ namespace Buyer.Domain.Entities
         public bool ProactiveAlertsEnabled { get; set; } = true;
 
         public int ProactiveCooldownMinutes { get; set; } = 120;
+
+        public bool AutonomousModePaused { get; set; }
+
+        public bool AutomatedExecutionDisabled { get; set; }
+
+        [MaxLength(500)]
+        public string? EmergencyPauseReason { get; set; }
+
+        public DateTime? EmergencyPausedAtUtc { get; set; }
+
+        public Guid? EmergencyPausedByUserId { get; set; }
+
+        public int MaxConcurrentJobs { get; set; } = 4;
+
+        public int DailyAiTokenBudget { get; set; } = 250000;
+
+        [Precision(18, 2)]
+        public decimal MonthlyAiBudgetUsd { get; set; } = 100.00m;
+
+        public bool TeamsNotificationsEnabled { get; set; }
+
+        [MaxLength(500)]
+        public string? TeamsWebhookUrl { get; set; }
+
+        public string? EventScheduleConfigJson { get; set; }
     }
 }

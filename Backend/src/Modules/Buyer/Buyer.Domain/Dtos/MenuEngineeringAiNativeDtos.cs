@@ -606,5 +606,8 @@ namespace Buyer.Domain.Dtos
         public List<MeRecommendationCockpitItemDto> RoleRecommendations { get; set; } = new();
         public List<string> Highlights { get; set; } = new();
         public List<string> QuickActions { get; set; } = new();
+        public ExecutiveBriefingDto? DailyBriefing { get; set; }
+        public List<ActionItemDto> PendingApprovals { get; set; } = new();
+        public List<string> AssignedTasks { get; set; } = new();
     }
 }

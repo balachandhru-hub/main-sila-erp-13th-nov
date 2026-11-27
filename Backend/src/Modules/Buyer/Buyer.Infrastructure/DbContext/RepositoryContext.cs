@@ -159,6 +159,13 @@ namespace Buyer.Infrastructure.DbContext
         public DbSet<MenuEngineeringTwinSnapshot> MenuEngineeringTwinSnapshot { get; set; }
         public DbSet<MenuEngineeringTwinSimulationRun> MenuEngineeringTwinSimulationRun { get; set; }
         public DbSet<MenuEngineeringModelDriftEvent> MenuEngineeringModelDriftEvent { get; set; }
+        public DbSet<MenuEngineeringBusinessEvent> MenuEngineeringBusinessEvent { get; set; }
+        public DbSet<MenuEngineeringAgentAutonomyPolicy> MenuEngineeringAgentAutonomyPolicy { get; set; }
+        public DbSet<MenuEngineeringActionPlan> MenuEngineeringActionPlan { get; set; }
+        public DbSet<MenuEngineeringActionItem> MenuEngineeringActionItem { get; set; }
+        public DbSet<MenuEngineeringRealizedBenefit> MenuEngineeringRealizedBenefit { get; set; }
+        public DbSet<MenuEngineeringExecutiveBriefing> MenuEngineeringExecutiveBriefing { get; set; }
+        public DbSet<MenuEngineeringIntegrationMonitorEvent> MenuEngineeringIntegrationMonitorEvent { get; set; }
         public DbSet<RecipeLegacyBatch> RecipeLegacyBatch { get; set; }
         public DbSet<RecipeLegacyRecipe> RecipeLegacyRecipe { get; set; }
         public DbSet<RecipeLegacyMaterialMap> RecipeLegacyMaterialMap { get; set; }
@@ -654,6 +661,16 @@ namespace Buyer.Infrastructure.DbContext
             _ = modelBuilder.Entity<MenuEngineeringTwinSimulationRun>().HasIndex(a => new { a.BuyerId, a.IdempotencyKey }).IsUnique();
             _ = modelBuilder.Entity<MenuEngineeringTwinSimulationRun>().HasIndex(a => new { a.BuyerId, a.RunType, a.Status });
             _ = modelBuilder.Entity<MenuEngineeringModelDriftEvent>().HasIndex(a => new { a.BuyerId, a.ModelName, a.DetectedAtUtc });
+            _ = modelBuilder.Entity<MenuEngineeringBusinessEvent>().HasIndex(a => new { a.BuyerId, a.IdempotencyKey }).IsUnique();
+            _ = modelBuilder.Entity<MenuEngineeringBusinessEvent>().HasIndex(a => new { a.BuyerId, a.ProcessingStatus, a.EffectiveAtUtc });
+            _ = modelBuilder.Entity<MenuEngineeringAgentAutonomyPolicy>().HasIndex(a => new { a.BuyerId, a.PropertyId, a.AgentId, a.ActionType }).IsUnique();
+            _ = modelBuilder.Entity<MenuEngineeringActionPlan>().HasIndex(a => new { a.BuyerId, a.DeduplicationKey }).IsUnique();
+            _ = modelBuilder.Entity<MenuEngineeringActionPlan>().HasIndex(a => new { a.BuyerId, a.Status });
+            _ = modelBuilder.Entity<MenuEngineeringActionItem>().HasIndex(a => new { a.BuyerId, a.IdempotencyKey }).IsUnique();
+            _ = modelBuilder.Entity<MenuEngineeringActionItem>().HasIndex(a => new { a.ActionPlanId, a.SequenceOrder });
+            _ = modelBuilder.Entity<MenuEngineeringRealizedBenefit>().HasIndex(a => new { a.BuyerId, a.DeduplicationKey }).IsUnique();
+            _ = modelBuilder.Entity<MenuEngineeringExecutiveBriefing>().HasIndex(a => new { a.BuyerId, a.DeduplicationKey }).IsUnique();
+            _ = modelBuilder.Entity<MenuEngineeringIntegrationMonitorEvent>().HasIndex(a => new { a.BuyerId, a.IntegrationType, a.CheckedAtUtc });
 
             base.OnModelCreating(modelBuilder);
 
