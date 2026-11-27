@@ -97,6 +97,26 @@ import {
   type SilaCulinaryCopilotResponse,
   type SilaCulinaryMobileOpsSummary,
 } from '../../../../remote-buyer/src/api/silaMe/silaCulinaryAnalyticsApi';
+import {
+  confirmProductionPickingLine,
+  executeProductionBatchAction,
+  getMobileProductionSummary,
+  getProductionBatchTraceability,
+  getProductionKdsFeed,
+  issueMaterialToProduction,
+  listBatchTasks,
+  listProductionExceptions,
+  recordProductionQualityCheck,
+  reportProductionException,
+  triggerBuffetReplenishment,
+  updateProductionTaskStatus,
+  type SilaCulinaryMobileProductionSummary,
+  type SilaCulinaryProductionBatch,
+  type SilaCulinaryProductionBatchTraceability,
+  type SilaCulinaryProductionException,
+  type SilaCulinaryProductionPickingLine,
+  type SilaCulinaryProductionTask,
+} from '../../../../remote-buyer/src/api/silaMe/silaCulinaryProductionApi';
 import { scaleDraftLocally } from '../../../../remote-buyer/src/components/silaMe/recipes/culinary/culinaryRecipePlannerHelpers';
 import {
   calculateRecipeScaling,
@@ -105,11 +125,36 @@ import {
   DEMO_SALMON_RECIPE,
 } from '../../../../remote-buyer/src/components/silaMe/recipes/culinary/culinarySimulatorsMath';
 import ScreenHeader from '../../components/ScreenHeader';
+import { useOnline } from '../../components/StateViews';
 import { useGo } from '../../navigation';
-import { errorText, useLoad } from '../../useLoad';
+import { errorText, readStored, useLoad, writeStored } from '../../useLoad';
 import './recipeStudio.css';
 
-type MobileTab = 'generate' | 'draft' | 'materials' | 'lifecycle' | 'events' | 'mrp' | 'procurement' | 'pnl' | 'analytics' | 'history' | 'demo';
+type MobileTab = 'generate' | 'draft' | 'materials' | 'lifecycle' | 'events' | 'mrp' | 'procurement' | 'pnl' | 'analytics' | 'production' | 'history' | 'demo';
+
+interface MobileProdOfflineAction {
+  id: string;
+  idempotencyKey: string;
+  kind: 'BATCH_STATUS' | 'TASK_UPDATE' | 'QUALITY_CHECK' | 'PICKING_CONFIRM' | 'BUFFET_REPLENISH' | 'EXCEPTION_REPORT';
+  label: string;
+  payload: Record<string, unknown>;
+  createdAt: string;
+  syncStatus: 'PENDING' | 'CONFLICT' | 'FAILED';
+  error?: string;
+}
+
+const MOBILE_PROD_QUEUE_KEY = 'sila_mobile_prod_offline_queue_v1';
+
+const loadOfflineProdQueue = (): MobileProdOfflineAction[] => {
+  const raw = readStored(MOBILE_PROD_QUEUE_KEY);
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
 
 /**
  * Phase 1A + Phase 1B Mobile Culinary Intelligence — responsive chef AI recipe generation,
@@ -210,6 +255,185 @@ const CulinarySuitePreviewScreen: React.FC = () => {
   const [mobWasteQty, setMobWasteQty] = useState(1.5);
   const [mobCopilotQ, setMobCopilotQ] = useState('What should we prioritize for today prep and waste control?');
   const [mobCopilotAns, setMobCopilotAns] = useState<SilaCulinaryCopilotResponse | null>(null);
+
+  // Phase 4A Mobile Kitchen Production Operations & Offline Queue state (§29)
+  const isOnline = useOnline();
+  const [prodSummary, setProdSummary] = useState<SilaCulinaryMobileProductionSummary | null>(null);
+  const [prodKdsBatches, setProdKdsBatches] = useState<SilaCulinaryProductionBatch[]>([]);
+  const [prodTasks, setProdTasks] = useState<SilaCulinaryProductionTask[]>([]);
+  const [prodPicks, setProdPicks] = useState<SilaCulinaryProductionPickingLine[]>([]);
+  const [prodExceptions, setProdExceptions] = useState<SilaCulinaryProductionException[]>([]);
+  const [selectedBatchId, setSelectedBatchId] = useState('');
+  const [selectedTrace, setSelectedTrace] = useState<SilaCulinaryProductionBatchTraceability | null>(null);
+  const [prodLoading, setProdLoading] = useState(false);
+  const [mobScanCode, setMobScanCode] = useState('');
+  const [mobQcName, setMobQcName] = useState('Cooking Core Temp');
+  const [mobQcExpected, setMobQcExpected] = useState('>= 75 C');
+  const [mobQcValue, setMobQcValue] = useState('76');
+  const [mobQcPassed, setMobQcPassed] = useState(true);
+  const [mobQcNotes, setMobQcNotes] = useState('');
+  const [mobBuffetRecipe, setMobBuffetRecipe] = useState('');
+  const [mobBuffetPortions, setMobBuffetPortions] = useState(40);
+  const [mobExcTitle, setMobExcTitle] = useState('');
+  const [mobExcType, setMobExcType] = useState('INGREDIENT_SHORTAGE');
+  const [offlineQueue, setOfflineQueue] = useState<MobileProdOfflineAction[]>(() => loadOfflineProdQueue());
+  const [syncingQueue, setSyncingQueue] = useState(false);
+
+  const persistOfflineQueue = (next: MobileProdOfflineAction[]) => {
+    setOfflineQueue(next);
+    writeStored(MOBILE_PROD_QUEUE_KEY, JSON.stringify(next));
+  };
+
+  const enqueueOfflineAction = (
+    kind: MobileProdOfflineAction['kind'],
+    label: string,
+    payload: Record<string, unknown>,
+  ) => {
+    const action: MobileProdOfflineAction = {
+      id: `q-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      idempotencyKey: `MOB4A-${kind}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      kind,
+      label,
+      payload,
+      createdAt: new Date().toISOString(),
+      syncStatus: 'PENDING',
+    };
+    const next = [action, ...offlineQueue];
+    persistOfflineQueue(next);
+    setStatusMsg(`Queued offline (${next.length} pending): ${label}. Sync when online.`);
+  };
+
+  const loadMobileProductionData = async (batchOverride?: string) => {
+    setProdLoading(true);
+    setErrMsg(null);
+    try {
+      const [summary, kds, excs] = await Promise.all([
+        getMobileProductionSummary().catch(() => null),
+        getProductionKdsFeed().catch(() => []),
+        listProductionExceptions().catch(() => []),
+      ]);
+      setProdSummary(summary);
+      setProdKdsBatches(kds.length > 0 ? kds : summary?.activeBatches ?? []);
+      setProdPicks(summary?.pickingLines ?? []);
+      setProdExceptions(excs.length > 0 ? excs : summary?.exceptions ?? []);
+      const targetBatch = batchOverride || selectedBatchId || kds[0]?.id || summary?.activeBatches?.[0]?.id || '';
+      if (targetBatch) {
+        setSelectedBatchId(targetBatch);
+        const [tasks, trace] = await Promise.all([
+          listBatchTasks(targetBatch).catch(() => summary?.myTasks ?? []),
+          getProductionBatchTraceability(targetBatch).catch(() => null),
+        ]);
+        setProdTasks(tasks);
+        setSelectedTrace(trace);
+      } else {
+        setProdTasks(summary?.myTasks ?? []);
+      }
+    } catch (err) {
+      setErrMsg(errorText(err, 'Unable to load kitchen production operations.'));
+    } finally {
+      setProdLoading(false);
+    }
+  };
+
+  const handleOpenProductionTab = async () => {
+    setTab('production');
+    await loadMobileProductionData();
+  };
+
+  const handleSyncOfflineQueue = async () => {
+    if (!isOnline) {
+      setErrMsg('Device is offline. Connect to sync pending production actions.');
+      return;
+    }
+    if (offlineQueue.length === 0) return;
+    setSyncingQueue(true);
+    setErrMsg(null);
+    const remaining: MobileProdOfflineAction[] = [];
+    let syncedCount = 0;
+    for (const item of offlineQueue) {
+      try {
+        if (item.kind === 'BATCH_STATUS') {
+          await executeProductionBatchAction(
+            String(item.payload.batchId),
+            item.payload.action as 'START_PREP' | 'START_COOKING' | 'PAUSE' | 'RESUME' | 'READY_FOR_QUALITY' | 'COMPLETE_BATCH',
+            item.payload.actualOutputQty as number | undefined,
+            `${String(item.payload.note || '')} [${item.idempotencyKey}]`.trim(),
+          );
+        } else if (item.kind === 'TASK_UPDATE') {
+          await updateProductionTaskStatus(
+            String(item.payload.taskId),
+            String(item.payload.status),
+            `Synced ${item.idempotencyKey}`,
+          );
+        } else if (item.kind === 'QUALITY_CHECK') {
+          await recordProductionQualityCheck({
+            productionBatchId: String(item.payload.productionBatchId),
+            checkpointName: String(item.payload.checkpointName),
+            expectedValue: String(item.payload.expectedValue || '>= 75 C'),
+            actualValue: String(item.payload.actualValue),
+            measurementUom: String(item.payload.measurementUom || 'C'),
+            passed: Boolean(item.payload.passed),
+            comments: `${String(item.payload.comments || '')} [${item.idempotencyKey}]`.trim(),
+          });
+        } else if (item.kind === 'PICKING_CONFIRM') {
+          await confirmProductionPickingLine(
+            String(item.payload.pickingLineId),
+            Number(item.payload.pickedQty),
+            item.payload.inventoryBatchNumber ? String(item.payload.inventoryBatchNumber) : undefined,
+          );
+        } else if (item.kind === 'BUFFET_REPLENISH') {
+          await triggerBuffetReplenishment({
+            kitchenId: String(item.payload.kitchenId || 'DEFAULT_KITCHEN'),
+            itemName: String(item.payload.itemName),
+            qty: Number(item.payload.qty),
+          });
+        } else if (item.kind === 'EXCEPTION_REPORT') {
+          await reportProductionException({
+            batchId: item.payload.batchId ? String(item.payload.batchId) : undefined,
+            exceptionType: String(item.payload.exceptionType),
+            severity: String(item.payload.severity || 'HIGH'),
+            description: `${String(item.payload.description || '')} [${item.idempotencyKey}]`.trim(),
+          });
+        }
+        syncedCount += 1;
+      } catch (err) {
+        const msg = errorText(err, 'Sync failed');
+        remaining.push({
+          ...item,
+          syncStatus: msg.toLowerCase().includes('conflict') || msg.toLowerCase().includes('version') ? 'CONFLICT' : 'FAILED',
+          error: msg,
+        });
+      }
+    }
+    persistOfflineQueue(remaining);
+    setSyncingQueue(false);
+    setStatusMsg(`Synced ${syncedCount} action(s). ${remaining.length} remaining.`);
+    await loadMobileProductionData();
+  };
+
+  const handleMobileBatchAction = async (
+    batch: SilaCulinaryProductionBatch,
+    action: 'START_PREP' | 'START_COOKING' | 'PAUSE' | 'RESUME' | 'READY_FOR_QUALITY' | 'COMPLETE_BATCH',
+  ) => {
+    setErrMsg(null);
+    const payloadData = {
+      batchId: batch.id,
+      action,
+      actualOutputQty: action === 'COMPLETE_BATCH' ? batch.plannedBatchQty : undefined,
+      note: `Mobile KDS -> ${action}`,
+    };
+    if (!isOnline) {
+      enqueueOfflineAction('BATCH_STATUS', `${batch.batchNumber} -> ${action}`, payloadData);
+      return;
+    }
+    try {
+      await executeProductionBatchAction(batch.id, action, payloadData.actualOutputQty, payloadData.note);
+      setStatusMsg(`Batch ${batch.batchNumber} updated (${action}).`);
+      await loadMobileProductionData(batch.id);
+    } catch (err) {
+      setErrMsg(errorText(err));
+    }
+  };
 
   const handleOpenOpsTab = async () => {
     setTab('analytics');
@@ -648,6 +872,11 @@ const CulinarySuitePreviewScreen: React.FC = () => {
               <button type="button" className={`rs-tab ${tab === 'analytics' ? 'rs-tab--on' : ''}`} onClick={handleOpenOpsTab}>
                 Daily Ops
               </button>
+              {(flags.culinaryPhase4AEnabled ?? true) && (
+                <button type="button" className={`rs-tab ${tab === 'production' ? 'rs-tab--on' : ''}`} onClick={handleOpenProductionTab}>
+                  Production Ops{offlineQueue.length > 0 ? ` (${offlineQueue.length})` : ''}
+                </button>
+              )}
               <button type="button" className={`rs-tab ${tab === 'history' ? 'rs-tab--on' : ''}`} onClick={() => setTab('history')}>
                 History ({draftsLoad.data?.length ?? 0})
               </button>
@@ -2044,6 +2273,555 @@ const CulinarySuitePreviewScreen: React.FC = () => {
                   </>
                 )}
               </section>
+            )}
+
+            {tab === 'production' && (
+              <div data-testid="mobile-culinary-production-ops" style={{ display: 'grid', gap: '0.75rem' }}>
+                <section className="sm-card">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    <div>
+                      <p className="sm-eyebrow">PHASE 4A · SILA STORE KITCHEN OPS</p>
+                      <h2 style={{ margin: '0.15rem 0' }}>Kitchen Production &amp; Execution</h2>
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                      <span
+                        className="sm-meta"
+                        style={{
+                          padding: '0.35rem 0.65rem',
+                          borderRadius: 999,
+                          fontWeight: 700,
+                          background: isOnline ? '#dcfce7' : '#fee2e2',
+                          color: isOnline ? '#166534' : '#991b1b',
+                        }}
+                      >
+                        {isOnline ? 'ONLINE' : 'OFFLINE QUEUE MODE'}
+                      </span>
+                      <button
+                        type="button"
+                        className="sm-btn sm-btn--primary"
+                        style={{ minHeight: 44 }}
+                        disabled={prodLoading}
+                        onClick={() => loadMobileProductionData()}
+                      >
+                        {prodLoading ? 'Refreshing...' : 'Refresh'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {prodSummary && (
+                    <div
+                      className="sm-grid"
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+                        gap: '0.5rem',
+                        marginTop: '0.65rem',
+                      }}
+                    >
+                      <div className="sm-kpi">
+                        <span>My Tasks</span>
+                        <strong>{prodSummary.myTasksCount}</strong>
+                      </div>
+                      <div className="sm-kpi">
+                        <span>Active Batches</span>
+                        <strong>{prodSummary.activeBatchesCount}</strong>
+                      </div>
+                      <div className="sm-kpi">
+                        <span>Picking Pending</span>
+                        <strong>{prodSummary.pendingPickingCount}</strong>
+                      </div>
+                      <div className="sm-kpi">
+                        <span>Quality Pending</span>
+                        <strong>{prodSummary.pendingQualityChecksCount}</strong>
+                      </div>
+                      <div className="sm-kpi">
+                        <span>Exceptions</span>
+                        <strong style={{ color: prodSummary.openExceptionsCount > 0 ? '#dc2626' : '#0f172a' }}>
+                          {prodSummary.openExceptionsCount}
+                        </strong>
+                      </div>
+                    </div>
+                  )}
+                </section>
+
+                <section className="sm-card" data-testid="mobile-prod-offline-queue">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    <div>
+                      <strong>Offline Pending-Action Queue ({offlineQueue.length})</strong>
+                      <div className="sm-meta">
+                        Idempotent offline buffer for status, task, QC &amp; picking updates. Final stock issue postings strictly require verified online sync.
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="sm-btn sm-btn--primary"
+                      style={{ minHeight: 44 }}
+                      disabled={!isOnline || syncingQueue || offlineQueue.length === 0}
+                      onClick={handleSyncOfflineQueue}
+                    >
+                      {syncingQueue ? 'Syncing...' : `Sync Queue (${offlineQueue.length})`}
+                    </button>
+                  </div>
+                  {offlineQueue.length > 0 && (
+                    <ul className="sm-list" style={{ marginTop: '0.5rem' }}>
+                      {offlineQueue.map((q) => (
+                        <li key={q.id} className="sm-row" style={{ padding: '0.4rem 0', gap: '0.5rem' }}>
+                          <div style={{ flex: 1 }}>
+                            <strong>{q.label}</strong>
+                            <div className="sm-meta">
+                              {q.kind} · {q.syncStatus} · <code>{q.idempotencyKey}</code>
+                              {q.error ? ` · ${q.error}` : ''}
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            className="sm-btn"
+                            style={{ minHeight: 40 }}
+                            onClick={() => persistOfflineQueue(offlineQueue.filter((item) => item.id !== q.id))}
+                          >
+                            Drop
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </section>
+
+                <section className="sm-card" data-testid="mobile-prod-kds-batches">
+                  <h3 style={{ margin: '0 0 0.5rem' }}>Digital Production Sheet &amp; KDS Batches ({prodKdsBatches.length})</h3>
+                  {prodKdsBatches.length === 0 ? (
+                    <p className="sm-meta">No active KDS batches found. Release a production order in Cloud Production Studio.</p>
+                  ) : (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '0.6rem' }}>
+                      {prodKdsBatches.map((batch) => {
+                        const isDelayed = new Date(batch.plannedFinishUtc).getTime() < Date.now() && batch.batchStatus !== 'PRODUCTION_COMPLETED';
+                        return (
+                          <div
+                            key={batch.id}
+                            style={{
+                              border: selectedBatchId === batch.id ? '2px solid #2563eb' : '1px solid #cbd5e1',
+                              borderLeft: isDelayed || batch.batchStatus === 'ON_HOLD' ? '5px solid #dc2626' : '5px solid #059669',
+                              borderRadius: '0.65rem',
+                              padding: '0.65rem',
+                              background: '#fff',
+                            }}
+                          >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.4rem' }}>
+                              <div>
+                                <strong style={{ fontSize: '0.95rem' }}>{batch.batchNumber}</strong>
+                                <div className="sm-meta">
+                                  {batch.batchType} · Chef: {batch.assignedChefName || 'Unassigned'} · Kitchen: {batch.kitchenId || 'Main'}
+                                </div>
+                              </div>
+                              <span
+                                style={{
+                                  fontSize: '0.75rem',
+                                  fontWeight: 700,
+                                  padding: '0.2rem 0.5rem',
+                                  borderRadius: 999,
+                                  background: batch.batchStatus === 'ON_HOLD' ? '#fee2e2' : '#e0f2fe',
+                                  color: batch.batchStatus === 'ON_HOLD' ? '#991b1b' : '#075985',
+                                }}
+                              >
+                                {batch.batchStatus}
+                              </span>
+                            </div>
+                            <div className="sm-meta" style={{ marginTop: '0.35rem' }}>
+                              Qty: <strong>{batch.plannedBatchQty} {batch.productionUom}</strong> · Quality: <strong>{batch.qualityStatus}</strong>
+                              {batch.allergenSummary ? ` · Allergens: ${batch.allergenSummary}` : ''}
+                              {isDelayed ? ' · DELAYED' : ''}
+                            </div>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginTop: '0.55rem' }}>
+                              <button
+                                type="button"
+                                className="sm-btn"
+                                style={{ minHeight: 44 }}
+                                onClick={async () => {
+                                  setSelectedBatchId(batch.id);
+                                  const [tasks, tr] = await Promise.all([
+                                    listBatchTasks(batch.id).catch(() => []),
+                                    getProductionBatchTraceability(batch.id).catch(() => null),
+                                  ]);
+                                  setProdTasks(tasks);
+                                  setSelectedTrace(tr);
+                                }}
+                              >
+                                Sheet &amp; QR
+                              </button>
+                              <button
+                                type="button"
+                                className="sm-btn"
+                                style={{ minHeight: 44 }}
+                                onClick={() => handleMobileBatchAction(batch, 'START_PREP')}
+                              >
+                                Start Prep
+                              </button>
+                              <button
+                                type="button"
+                                className="sm-btn"
+                                style={{ minHeight: 44 }}
+                                onClick={() => handleMobileBatchAction(batch, 'START_COOKING')}
+                              >
+                                Cook
+                              </button>
+                              <button
+                                type="button"
+                                className="sm-btn sm-btn--primary"
+                                style={{ minHeight: 44 }}
+                                onClick={() => handleMobileBatchAction(batch, 'COMPLETE_BATCH')}
+                              >
+                                Complete
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </section>
+
+                {selectedTrace && (
+                  <section className="sm-card" data-testid="mobile-prod-qr-traceability">
+                    <h3 style={{ margin: '0 0 0.4rem' }}>Batch Traceability &amp; QR Label ({selectedTrace.batchNumber})</h3>
+                    <div className="sm-meta">
+                      <strong>QR Payload:</strong> <code>{selectedTrace.qrPayloadJson}</code>
+                    </div>
+                    <div className="sm-meta" style={{ marginTop: '0.25rem' }}>
+                      Recipe: <strong>{selectedTrace.recipeName}</strong> (v{selectedTrace.recipeVersion})
+                    </div>
+                    <div className="sm-meta" style={{ marginTop: '0.25rem' }}>
+                      Backward: {selectedTrace.backwardTraceSummary}
+                    </div>
+                    <div className="sm-meta" style={{ marginTop: '0.25rem' }}>
+                      Forward: {selectedTrace.forwardTraceSummary} · Dispatches: {selectedTrace.outletDispatches.length} · QC Results: {selectedTrace.qualityResults.length}
+                    </div>
+                  </section>
+                )}
+
+                <section className="sm-card" data-testid="mobile-prod-tasks">
+                  <h3 style={{ margin: '0 0 0.45rem' }}>Sequenced Production Tasks ({prodTasks.length})</h3>
+                  {prodTasks.slice(0, 8).map((t) => (
+                    <div key={t.id} className="sm-row" style={{ padding: '0.45rem 0', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <div style={{ flex: 1, minWidth: 180 }}>
+                        <strong>#{t.sequenceOrder} {t.taskType}</strong>
+                        <div className="sm-meta">{t.instructions} · {t.status} · {t.plannedDurationMinutes} min</div>
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.4rem' }}>
+                        {t.status === 'PENDING' && (
+                          <button
+                            type="button"
+                            className="sm-btn"
+                            style={{ minHeight: 44 }}
+                            onClick={async () => {
+                              if (!isOnline) {
+                                enqueueOfflineAction('TASK_UPDATE', `Start task #${t.sequenceOrder} ${t.taskType}`, { taskId: t.id, status: 'IN_PROGRESS' });
+                                return;
+                              }
+                              try {
+                                await updateProductionTaskStatus(t.id, 'IN_PROGRESS');
+                                await loadMobileProductionData();
+                              } catch (err) {
+                                setErrMsg(errorText(err));
+                              }
+                            }}
+                          >
+                            Start
+                          </button>
+                        )}
+                        {t.status !== 'COMPLETED' && (
+                          <button
+                            type="button"
+                            className="sm-btn sm-btn--primary"
+                            style={{ minHeight: 44 }}
+                            onClick={async () => {
+                              if (!isOnline) {
+                                enqueueOfflineAction('TASK_UPDATE', `Complete task #${t.sequenceOrder} ${t.taskType}`, { taskId: t.id, status: 'COMPLETED' });
+                                return;
+                              }
+                              try {
+                                await updateProductionTaskStatus(t.id, 'COMPLETED');
+                                await loadMobileProductionData();
+                              } catch (err) {
+                                setErrMsg(errorText(err));
+                              }
+                            }}
+                          >
+                            Complete
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </section>
+
+                <section className="sm-card" data-testid="mobile-prod-picking-issue">
+                  <h3 style={{ margin: '0 0 0.45rem' }}>FEFO Picking &amp; Material Issue ({prodPicks.length})</h3>
+                  <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
+                    <input
+                      className="sm-input"
+                      style={{ flex: 1, minWidth: 180, minHeight: 44 }}
+                      placeholder="Scan Barcode / QR / Batch #"
+                      value={mobScanCode}
+                      onChange={(e) => setMobScanCode(e.target.value)}
+                    />
+                  </div>
+                  {!isOnline && (
+                    <p className="sm-meta" style={{ color: '#991b1b', fontWeight: 600 }}>
+                      Offline guard active: picking can be queued, but final Material Issue stock posting requires a verified online connection.
+                    </p>
+                  )}
+                  {prodPicks.slice(0, 8).map((p) => (
+                    <div key={p.id} className="sm-row" style={{ padding: '0.45rem 0', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <div style={{ flex: 1, minWidth: 180 }}>
+                        <strong>{p.materialName}</strong>
+                        <div className="sm-meta">
+                          Strategy: {p.pickingStrategy} · Batch: <code>{p.inventoryBatchNumber || 'N/A'}</code> · Req: {p.requiredQty}{' '}
+                          {p.inventoryUom} · Picked: {p.pickedQty} · {p.status}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.4rem' }}>
+                        {p.status !== 'CONFIRMED' && (
+                          <button
+                            type="button"
+                            className="sm-btn"
+                            style={{ minHeight: 44 }}
+                            onClick={async () => {
+                              const batchNum = mobScanCode || p.inventoryBatchNumber || undefined;
+                              if (!isOnline) {
+                                enqueueOfflineAction('PICKING_CONFIRM', `Pick ${p.materialName}`, {
+                                  pickingLineId: p.id,
+                                  pickedQty: p.requiredQty,
+                                  inventoryBatchNumber: batchNum,
+                                });
+                                return;
+                              }
+                              try {
+                                await confirmProductionPickingLine(p.id, p.requiredQty, batchNum);
+                                await loadMobileProductionData();
+                              } catch (err) {
+                                setErrMsg(errorText(err));
+                              }
+                            }}
+                          >
+                            Confirm Pick
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className="sm-btn sm-btn--primary"
+                          style={{ minHeight: 44 }}
+                          disabled={!isOnline}
+                          onClick={async () => {
+                            try {
+                              await issueMaterialToProduction({
+                                productionOrderId: p.productionOrderId,
+                                productionBatchId: p.productionBatchId ?? undefined,
+                                fromStoreLocationId: p.storeLocationId || 'MAIN-STORE',
+                                toKitchenLocationId: prodKdsBatches.find((b) => b.id === (p.productionBatchId || selectedBatchId))?.kitchenId || 'MAIN-KITCHEN',
+                                materialCode: p.materialCode,
+                                issueQty: p.pickedQty > 0 ? p.pickedQty : p.requiredQty,
+                                uom: p.inventoryUom,
+                                idempotencyKey: `MOB-ISS-${p.id}`,
+                                comment: `Mobile issue (${p.inventoryBatchNumber || 'FEFO'})`,
+                              });
+                              setStatusMsg(`Issued ${p.materialName} to production.`);
+                              await loadMobileProductionData();
+                            } catch (err) {
+                              setErrMsg(errorText(err));
+                            }
+                          }}
+                        >
+                          Issue Stock
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </section>
+
+                <section className="sm-card" data-testid="mobile-prod-quality-check">
+                  <h3 style={{ margin: '0 0 0.45rem' }}>Food Safety &amp; Quality Checkpoint</h3>
+                  <div className="sm-grid" style={{ display: 'grid', gap: '0.45rem' }}>
+                    <input
+                      className="sm-input"
+                      style={{ minHeight: 44 }}
+                      placeholder="Checkpoint name (e.g. Cooking Core Temp)"
+                      value={mobQcName}
+                      onChange={(e) => setMobQcName(e.target.value)}
+                    />
+                    <input
+                      className="sm-input"
+                      style={{ minHeight: 44 }}
+                      placeholder="Expected threshold (e.g. >= 75 C)"
+                      value={mobQcExpected}
+                      onChange={(e) => setMobQcExpected(e.target.value)}
+                    />
+                    <input
+                      className="sm-input"
+                      style={{ minHeight: 44 }}
+                      placeholder="Measured value / Temp (°C)"
+                      value={mobQcValue}
+                      onChange={(e) => setMobQcValue(e.target.value)}
+                    />
+                    <div style={{ display: 'flex', gap: '0.4rem' }}>
+                      <button
+                        type="button"
+                        className={`sm-btn ${mobQcPassed ? 'sm-btn--primary' : ''}`}
+                        style={{ flex: 1, minHeight: 44 }}
+                        onClick={() => setMobQcPassed(true)}
+                      >
+                        PASS
+                      </button>
+                      <button
+                        type="button"
+                        className={`sm-btn ${!mobQcPassed ? 'sm-btn--primary' : ''}`}
+                        style={{ flex: 1, minHeight: 44, background: !mobQcPassed ? '#dc2626' : undefined, color: !mobQcPassed ? '#fff' : undefined }}
+                        onClick={() => setMobQcPassed(false)}
+                      >
+                        FAIL (Hold Batch)
+                      </button>
+                    </div>
+                    <input
+                      className="sm-input"
+                      style={{ minHeight: 44 }}
+                      placeholder="Inspector comments / evidence note"
+                      value={mobQcNotes}
+                      onChange={(e) => setMobQcNotes(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="sm-btn sm-btn--primary"
+                      style={{ minHeight: 44 }}
+                      disabled={!selectedBatchId || !mobQcName.trim()}
+                      onClick={async () => {
+                        const qcPayload = {
+                          productionBatchId: selectedBatchId,
+                          checkpointName: mobQcName.trim(),
+                          expectedValue: mobQcExpected.trim() || '>= 75 C',
+                          actualValue: mobQcValue,
+                          measurementUom: 'C',
+                          passed: mobQcPassed,
+                          comments: mobQcNotes,
+                        };
+                        if (!isOnline) {
+                          enqueueOfflineAction('QUALITY_CHECK', `QC ${mobQcPassed ? 'PASS' : 'FAIL'} (${mobQcValue})`, qcPayload);
+                          return;
+                        }
+                        try {
+                          const res = await recordProductionQualityCheck(qcPayload);
+                          setStatusMsg(
+                            !res.passed
+                              ? 'Mandatory quality checkpoint FAILED — batch placed ON HOLD for supervisor corrective action.'
+                              : 'Quality checkpoint recorded as PASS.',
+                          );
+                          setMobQcNotes('');
+                          await loadMobileProductionData(selectedBatchId);
+                        } catch (err) {
+                          setErrMsg(errorText(err));
+                        }
+                      }}
+                    >
+                      Submit Quality Check
+                    </button>
+                  </div>
+                </section>
+
+                <section className="sm-card" data-testid="mobile-prod-buffet-exceptions">
+                  <h3 style={{ margin: '0 0 0.45rem' }}>Buffet Replenishment &amp; Exceptions ({prodExceptions.length})</h3>
+                  <div style={{ display: 'grid', gap: '0.45rem', marginBottom: '0.65rem' }}>
+                    <input
+                      className="sm-input"
+                      style={{ minHeight: 44 }}
+                      placeholder="Buffet item / recipe name"
+                      value={mobBuffetRecipe}
+                      onChange={(e) => setMobBuffetRecipe(e.target.value)}
+                    />
+                    <div style={{ display: 'flex', gap: '0.4rem' }}>
+                      <input
+                        className="sm-input"
+                        type="number"
+                        style={{ width: 100, minHeight: 44 }}
+                        value={mobBuffetPortions}
+                        onChange={(e) => setMobBuffetPortions(Number(e.target.value))}
+                      />
+                      <button
+                        type="button"
+                        className="sm-btn sm-btn--primary"
+                        style={{ flex: 1, minHeight: 44 }}
+                        disabled={!mobBuffetRecipe.trim()}
+                        onClick={async () => {
+                          const kitchenId = prodKdsBatches[0]?.kitchenId || 'MAIN-KITCHEN';
+                          const payloadData = {
+                            kitchenId,
+                            itemName: mobBuffetRecipe.trim(),
+                            qty: Math.max(1, mobBuffetPortions),
+                          };
+                          if (!isOnline) {
+                            enqueueOfflineAction('BUFFET_REPLENISH', `Buffet replenish ${payloadData.itemName}`, payloadData);
+                            setMobBuffetRecipe('');
+                            return;
+                          }
+                          try {
+                            await triggerBuffetReplenishment(payloadData);
+                            setStatusMsg(`Requested replenishment for ${payloadData.itemName}.`);
+                            setMobBuffetRecipe('');
+                            await loadMobileProductionData();
+                          } catch (err) {
+                            setErrMsg(errorText(err));
+                          }
+                        }}
+                      >
+                        Request Replenishment
+                      </button>
+                    </div>
+                  </div>
+
+                  <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '0.6rem', display: 'grid', gap: '0.45rem' }}>
+                    <select className="sm-input" style={{ minHeight: 44 }} value={mobExcType} onChange={(e) => setMobExcType(e.target.value)}>
+                      <option value="INGREDIENT_SHORTAGE">Ingredient Unavailable / Shortage</option>
+                      <option value="EQUIPMENT_BREAKDOWN">Equipment Breakdown</option>
+                      <option value="STAFF_UNAVAILABLE">Staff Unavailable</option>
+                      <option value="QUALITY_FAIL">Quality Checkpoint Failure</option>
+                      <option value="PRODUCTION_DELAY">Production Delay</option>
+                    </select>
+                    <input
+                      className="sm-input"
+                      style={{ minHeight: 44 }}
+                      placeholder="Exception summary"
+                      value={mobExcTitle}
+                      onChange={(e) => setMobExcTitle(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="sm-btn"
+                      style={{ minHeight: 44 }}
+                      disabled={!mobExcTitle.trim()}
+                      onClick={async () => {
+                        const excPayload = {
+                          batchId: selectedBatchId || undefined,
+                          exceptionType: mobExcType,
+                          severity: 'HIGH',
+                          description: mobExcTitle.trim(),
+                        };
+                        if (!isOnline) {
+                          enqueueOfflineAction('EXCEPTION_REPORT', excPayload.description, excPayload);
+                          setMobExcTitle('');
+                          return;
+                        }
+                        try {
+                          await reportProductionException(excPayload);
+                          setStatusMsg(`Reported exception: ${excPayload.description}`);
+                          setMobExcTitle('');
+                          await loadMobileProductionData();
+                        } catch (err) {
+                          setErrMsg(errorText(err));
+                        }
+                      }}
+                    >
+                      Report Production Exception
+                    </button>
+                  </div>
+                </section>
+              </div>
             )}
 
             {tab === 'history' && (
