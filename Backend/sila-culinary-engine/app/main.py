@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, Response, UploadFile
 from pydantic import BaseModel
 from app.agents.recipe_agent import RecipeIntelligenceAgent
 from app.engines.documents import extract_recipe_document, validate_and_prepare_dish_image
@@ -127,6 +127,30 @@ from app.schemas.production_engine import (
     CentralKitchenAllocateResponse,
     ProductionScheduleRequest,
     ProductionScheduleResponse,
+)
+from app.engines.reconciliation_engine import (
+    compute_cost_variance_bridge,
+    compute_event_profit_bridge,
+    compute_material_reconciliation,
+    compute_portion_variance,
+    compute_yield_variance,
+    export_reconciliation_workbook,
+    investigate_variances,
+)
+from app.schemas.reconciliation_engine import (
+    CostVarianceBridgeRequest,
+    CostVarianceBridgeResponse,
+    EventProfitBridgeRequest,
+    EventProfitBridgeResponse,
+    MaterialReconciliationRequest,
+    MaterialReconciliationResponse,
+    PortionSampleRequest,
+    PortionSampleResponse,
+    ReconWorkbookExportRequest,
+    VarianceInvestigationRequest,
+    VarianceInvestigationResponse,
+    YieldVarianceRequest,
+    YieldVarianceResponse,
 )
 from app.schemas.analytics_engine import (
     BuffetOptimizeRequest,
@@ -609,6 +633,52 @@ def post_production_schedule(req: ProductionScheduleRequest) -> ProductionSchedu
 @app.post("/v1/production/central-kitchen-allocate", response_model=CentralKitchenAllocateResponse)
 def post_production_central_kitchen_allocate(req: CentralKitchenAllocateRequest) -> CentralKitchenAllocateResponse:
     return allocate_central_kitchen_batch(req)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 4B — Actual Consumption, Reconciliation, Cost Variance, Bridges & AI Investigation
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@app.post("/v1/reconciliation/materials", response_model=MaterialReconciliationResponse)
+def post_reconciliation_materials(req: MaterialReconciliationRequest) -> MaterialReconciliationResponse:
+    return compute_material_reconciliation(req)
+
+
+@app.post("/v1/reconciliation/yield-variance", response_model=YieldVarianceResponse)
+def post_reconciliation_yield_variance(req: YieldVarianceRequest) -> YieldVarianceResponse:
+    return compute_yield_variance(req)
+
+
+@app.post("/v1/reconciliation/portion-variance", response_model=PortionSampleResponse)
+def post_reconciliation_portion_variance(req: PortionSampleRequest) -> PortionSampleResponse:
+    return compute_portion_variance(req)
+
+
+@app.post("/v1/reconciliation/cost-bridge", response_model=CostVarianceBridgeResponse)
+def post_reconciliation_cost_bridge(req: CostVarianceBridgeRequest) -> CostVarianceBridgeResponse:
+    return compute_cost_variance_bridge(req)
+
+
+@app.post("/v1/reconciliation/event-profit-bridge", response_model=EventProfitBridgeResponse)
+def post_reconciliation_event_profit_bridge(req: EventProfitBridgeRequest) -> EventProfitBridgeResponse:
+    return compute_event_profit_bridge(req)
+
+
+@app.post("/v1/reconciliation/investigate", response_model=VarianceInvestigationResponse)
+def post_reconciliation_investigate(req: VarianceInvestigationRequest) -> VarianceInvestigationResponse:
+    return investigate_variances(req)
+
+
+@app.post("/v1/reconciliation/export-workbook")
+def post_reconciliation_export_workbook(req: ReconWorkbookExportRequest) -> Response:
+    content = export_reconciliation_workbook(req)
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="sila-phase4b-reconciliation-reports.xlsx"'},
+    )
+
 
 
 

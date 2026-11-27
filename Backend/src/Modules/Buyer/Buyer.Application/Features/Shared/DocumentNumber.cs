@@ -43,6 +43,18 @@ namespace Buyer.Application.Features.Shared
         public const string PRODUCTION_ORDER = "PRD-ORD";
         public const string PRODUCTION_EXCEPTION = "PRD-EXC";
         public const string PRODUCTION_DISPATCH = "PRD-DSP";
+        public const string RECONCILIATION = "REC";
+        public const string CONSUMPTION = "CNS";
+        public const string ADDITIONAL_MATERIAL_REQUEST = "AMR";
+        public const string MATERIAL_RETURN = "MRT";
+        public const string ISSUE_REVERSAL = "MIR";
+        public const string PRODUCTION_WASTE = "WST";
+        public const string FOOD_LEFTOVER = "LFT";
+        public const string WASTE_DISPOSAL = "DSP";
+        public const string OUTPUT_CONFIRMATION = "POC";
+        public const string PRODUCTION_SETTLEMENT = "STL";
+        public const string EVENT_CLOSURE = "ECL";
+        public const string HISTORICAL_LEARNING = "HLS";
 
         private const int SEED_CANDIDATES = 50;
 
@@ -139,6 +151,18 @@ namespace Buyer.Application.Features.Shared
                 PRODUCTION_ORDER => repository.SilaCulinaryProductionOrder.FindByCondition(x => x.BuyerId == buyerId).Select(x => x.OrderNumber),
                 PRODUCTION_EXCEPTION => repository.SilaCulinaryProductionException.FindByCondition(x => x.BuyerId == buyerId).Select(x => x.ExceptionCode),
                 PRODUCTION_DISPATCH => repository.SilaCulinaryProductionDispatch.FindByCondition(x => x.BuyerId == buyerId).Select(x => x.DispatchNumber),
+                RECONCILIATION => repository.SilaCulinaryProductionReconciliation.FindByCondition(x => x.BuyerId == buyerId).Select(x => x.ReconciliationNumber),
+                CONSUMPTION => repository.SilaCulinaryProductionConsumption.FindByCondition(x => x.BuyerId == buyerId).Select(x => x.ConsumptionNumber),
+                ADDITIONAL_MATERIAL_REQUEST => repository.SilaCulinaryAdditionalMaterialRequest.FindByCondition(x => x.BuyerId == buyerId).Select(x => x.RequestNumber),
+                MATERIAL_RETURN => repository.SilaCulinaryMaterialReturn.FindByCondition(x => x.BuyerId == buyerId).Select(x => x.ReturnNumber),
+                ISSUE_REVERSAL => repository.SilaCulinaryMaterialIssueReversal.FindByCondition(x => x.BuyerId == buyerId).Select(x => x.ReversalNumber),
+                PRODUCTION_WASTE => repository.SilaCulinaryWasteEvent.FindByCondition(x => x.BuyerId == buyerId).Select(x => x.WasteCode),
+                FOOD_LEFTOVER => repository.SilaCulinaryFoodLeftover.FindByCondition(x => x.BuyerId == buyerId).Select(x => x.LeftoverNumber),
+                WASTE_DISPOSAL => repository.SilaCulinaryWasteDisposal.FindByCondition(x => x.BuyerId == buyerId).Select(x => x.DisposalNumber),
+                OUTPUT_CONFIRMATION => repository.SilaCulinaryProductionOutputConfirmation.FindByCondition(x => x.BuyerId == buyerId).Select(x => x.ConfirmationNumber),
+                PRODUCTION_SETTLEMENT => repository.SilaCulinaryProductionReconciliation.FindByCondition(x => x.BuyerId == buyerId).Select(x => x.ReconciliationNumber),
+                EVENT_CLOSURE => repository.SilaCulinaryEventClosure.FindByCondition(x => x.BuyerId == buyerId).Select(x => x.ClosureNumber),
+                HISTORICAL_LEARNING => repository.SilaCulinaryHistoricalLearningSnapshot.FindByCondition(x => x.BuyerId == buyerId).Select(x => x.SnapshotNumber),
                 _ => throw new ArgumentOutOfRangeException(nameof(prefix), prefix, "Unknown SILA document number prefix.")
             };
 

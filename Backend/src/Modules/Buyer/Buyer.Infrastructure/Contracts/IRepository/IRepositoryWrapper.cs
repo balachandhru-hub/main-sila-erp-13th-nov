@@ -206,6 +206,25 @@ namespace Buyer.Infrastructure.Contracts.IRepository
         ISilaCulinaryProductionExceptionRepository SilaCulinaryProductionException { get; }
         ISilaCulinaryProductionDispatchRepository SilaCulinaryProductionDispatch { get; }
         ISilaCulinaryProductionAuditRepository SilaCulinaryProductionAudit { get; }
+        ISilaCulinaryReconciliationConfigRepository SilaCulinaryReconciliationConfig { get; }
+        ISilaCulinaryProductionConsumptionRepository SilaCulinaryProductionConsumption { get; }
+        ISilaCulinaryAdditionalMaterialRequestRepository SilaCulinaryAdditionalMaterialRequest { get; }
+        ISilaCulinaryMaterialReturnRepository SilaCulinaryMaterialReturn { get; }
+        ISilaCulinaryMaterialIssueReversalRepository SilaCulinaryMaterialIssueReversal { get; }
+        ISilaCulinaryWasteEventRepository SilaCulinaryWasteEvent { get; }
+        ISilaCulinaryFoodLeftoverRepository SilaCulinaryFoodLeftover { get; }
+        ISilaCulinaryWasteDisposalRepository SilaCulinaryWasteDisposal { get; }
+        ISilaCulinaryProductionOutputConfirmationRepository SilaCulinaryProductionOutputConfirmation { get; }
+        ISilaCulinaryPortionSampleRepository SilaCulinaryPortionSample { get; }
+        ISilaCulinaryProductionReconciliationRepository SilaCulinaryProductionReconciliation { get; }
+        ISilaCulinaryProductionReconciliationLineRepository SilaCulinaryProductionReconciliationLine { get; }
+        ISilaCulinaryLaborAllocationRepository SilaCulinaryLaborAllocation { get; }
+        ISilaCulinaryCentralKitchenAllocationRepository SilaCulinaryCentralKitchenAllocation { get; }
+        ISilaCulinaryBuffetReconciliationRepository SilaCulinaryBuffetReconciliation { get; }
+        ISilaCulinaryEventClosureRepository SilaCulinaryEventClosure { get; }
+        ISilaCulinaryErpReconciliationRefRepository SilaCulinaryErpReconciliationRef { get; }
+        ISilaCulinaryHistoricalLearningSnapshotRepository SilaCulinaryHistoricalLearningSnapshot { get; }
+        ISilaCulinaryReconciliationAuditRepository SilaCulinaryReconciliationAudit { get; }
         bool Save();
         Task<bool> SaveAsync();
     }

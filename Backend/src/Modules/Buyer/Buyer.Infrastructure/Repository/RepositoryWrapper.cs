@@ -143,6 +143,25 @@ namespace Buyer.Infrastructure.Repository
         private ISilaCulinaryProductionExceptionRepository? _silaCulinaryProductionException;
         private ISilaCulinaryProductionDispatchRepository? _silaCulinaryProductionDispatch;
         private ISilaCulinaryProductionAuditRepository? _silaCulinaryProductionAudit;
+        private ISilaCulinaryReconciliationConfigRepository? _silaCulinaryReconciliationConfig;
+        private ISilaCulinaryProductionConsumptionRepository? _silaCulinaryProductionConsumption;
+        private ISilaCulinaryAdditionalMaterialRequestRepository? _silaCulinaryAdditionalMaterialRequest;
+        private ISilaCulinaryMaterialReturnRepository? _silaCulinaryMaterialReturn;
+        private ISilaCulinaryMaterialIssueReversalRepository? _silaCulinaryMaterialIssueReversal;
+        private ISilaCulinaryWasteEventRepository? _silaCulinaryWasteEvent;
+        private ISilaCulinaryFoodLeftoverRepository? _silaCulinaryFoodLeftover;
+        private ISilaCulinaryWasteDisposalRepository? _silaCulinaryWasteDisposal;
+        private ISilaCulinaryProductionOutputConfirmationRepository? _silaCulinaryProductionOutputConfirmation;
+        private ISilaCulinaryPortionSampleRepository? _silaCulinaryPortionSample;
+        private ISilaCulinaryProductionReconciliationRepository? _silaCulinaryProductionReconciliation;
+        private ISilaCulinaryProductionReconciliationLineRepository? _silaCulinaryProductionReconciliationLine;
+        private ISilaCulinaryLaborAllocationRepository? _silaCulinaryLaborAllocation;
+        private ISilaCulinaryCentralKitchenAllocationRepository? _silaCulinaryCentralKitchenAllocation;
+        private ISilaCulinaryBuffetReconciliationRepository? _silaCulinaryBuffetReconciliation;
+        private ISilaCulinaryEventClosureRepository? _silaCulinaryEventClosure;
+        private ISilaCulinaryErpReconciliationRefRepository? _silaCulinaryErpReconciliationRef;
+        private ISilaCulinaryHistoricalLearningSnapshotRepository? _silaCulinaryHistoricalLearningSnapshot;
+        private ISilaCulinaryReconciliationAuditRepository? _silaCulinaryReconciliationAudit;
         private IBuyerBusinessProfileRepository _buyerBusinessProfileRepository;
         private IBuyerCategoryRepository _buyerCategoryRepository;
         private IAssetRepository _assetRepository;
@@ -2005,6 +2024,25 @@ namespace Buyer.Infrastructure.Repository
         public ISilaCulinaryProductionExceptionRepository SilaCulinaryProductionException { get => _silaCulinaryProductionException ??= new SilaCulinaryProductionExceptionRepository(_context); }
         public ISilaCulinaryProductionDispatchRepository SilaCulinaryProductionDispatch { get => _silaCulinaryProductionDispatch ??= new SilaCulinaryProductionDispatchRepository(_context); }
         public ISilaCulinaryProductionAuditRepository SilaCulinaryProductionAudit { get => _silaCulinaryProductionAudit ??= new SilaCulinaryProductionAuditRepository(_context); }
+        public ISilaCulinaryReconciliationConfigRepository SilaCulinaryReconciliationConfig { get => _silaCulinaryReconciliationConfig ??= new SilaCulinaryReconciliationConfigRepository(_context); }
+        public ISilaCulinaryProductionConsumptionRepository SilaCulinaryProductionConsumption { get => _silaCulinaryProductionConsumption ??= new SilaCulinaryProductionConsumptionRepository(_context); }
+        public ISilaCulinaryAdditionalMaterialRequestRepository SilaCulinaryAdditionalMaterialRequest { get => _silaCulinaryAdditionalMaterialRequest ??= new SilaCulinaryAdditionalMaterialRequestRepository(_context); }
+        public ISilaCulinaryMaterialReturnRepository SilaCulinaryMaterialReturn { get => _silaCulinaryMaterialReturn ??= new SilaCulinaryMaterialReturnRepository(_context); }
+        public ISilaCulinaryMaterialIssueReversalRepository SilaCulinaryMaterialIssueReversal { get => _silaCulinaryMaterialIssueReversal ??= new SilaCulinaryMaterialIssueReversalRepository(_context); }
+        public ISilaCulinaryWasteEventRepository SilaCulinaryWasteEvent { get => _silaCulinaryWasteEvent ??= new SilaCulinaryWasteEventRepository(_context); }
+        public ISilaCulinaryFoodLeftoverRepository SilaCulinaryFoodLeftover { get => _silaCulinaryFoodLeftover ??= new SilaCulinaryFoodLeftoverRepository(_context); }
+        public ISilaCulinaryWasteDisposalRepository SilaCulinaryWasteDisposal { get => _silaCulinaryWasteDisposal ??= new SilaCulinaryWasteDisposalRepository(_context); }
+        public ISilaCulinaryProductionOutputConfirmationRepository SilaCulinaryProductionOutputConfirmation { get => _silaCulinaryProductionOutputConfirmation ??= new SilaCulinaryProductionOutputConfirmationRepository(_context); }
+        public ISilaCulinaryPortionSampleRepository SilaCulinaryPortionSample { get => _silaCulinaryPortionSample ??= new SilaCulinaryPortionSampleRepository(_context); }
+        public ISilaCulinaryProductionReconciliationRepository SilaCulinaryProductionReconciliation { get => _silaCulinaryProductionReconciliation ??= new SilaCulinaryProductionReconciliationRepository(_context); }
+        public ISilaCulinaryProductionReconciliationLineRepository SilaCulinaryProductionReconciliationLine { get => _silaCulinaryProductionReconciliationLine ??= new SilaCulinaryProductionReconciliationLineRepository(_context); }
+        public ISilaCulinaryLaborAllocationRepository SilaCulinaryLaborAllocation { get => _silaCulinaryLaborAllocation ??= new SilaCulinaryLaborAllocationRepository(_context); }
+        public ISilaCulinaryCentralKitchenAllocationRepository SilaCulinaryCentralKitchenAllocation { get => _silaCulinaryCentralKitchenAllocation ??= new SilaCulinaryCentralKitchenAllocationRepository(_context); }
+        public ISilaCulinaryBuffetReconciliationRepository SilaCulinaryBuffetReconciliation { get => _silaCulinaryBuffetReconciliation ??= new SilaCulinaryBuffetReconciliationRepository(_context); }
+        public ISilaCulinaryEventClosureRepository SilaCulinaryEventClosure { get => _silaCulinaryEventClosure ??= new SilaCulinaryEventClosureRepository(_context); }
+        public ISilaCulinaryErpReconciliationRefRepository SilaCulinaryErpReconciliationRef { get => _silaCulinaryErpReconciliationRef ??= new SilaCulinaryErpReconciliationRefRepository(_context); }
+        public ISilaCulinaryHistoricalLearningSnapshotRepository SilaCulinaryHistoricalLearningSnapshot { get => _silaCulinaryHistoricalLearningSnapshot ??= new SilaCulinaryHistoricalLearningSnapshotRepository(_context); }
+        public ISilaCulinaryReconciliationAuditRepository SilaCulinaryReconciliationAudit { get => _silaCulinaryReconciliationAudit ??= new SilaCulinaryReconciliationAuditRepository(_context); }
 
         public bool Save()
         {

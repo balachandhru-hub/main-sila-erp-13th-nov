@@ -217,6 +217,25 @@ namespace Buyer.Infrastructure.DbContext
         public DbSet<SilaCulinaryProductionException> SilaCulinaryProductionException { get; set; }
         public DbSet<SilaCulinaryProductionDispatch> SilaCulinaryProductionDispatch { get; set; }
         public DbSet<SilaCulinaryProductionAudit> SilaCulinaryProductionAudit { get; set; }
+        public DbSet<SilaCulinaryReconciliationConfig> SilaCulinaryReconciliationConfig { get; set; }
+        public DbSet<SilaCulinaryProductionConsumption> SilaCulinaryProductionConsumption { get; set; }
+        public DbSet<SilaCulinaryAdditionalMaterialRequest> SilaCulinaryAdditionalMaterialRequest { get; set; }
+        public DbSet<SilaCulinaryMaterialReturn> SilaCulinaryMaterialReturn { get; set; }
+        public DbSet<SilaCulinaryMaterialIssueReversal> SilaCulinaryMaterialIssueReversal { get; set; }
+        public DbSet<SilaCulinaryWasteEvent> SilaCulinaryWasteEvent { get; set; }
+        public DbSet<SilaCulinaryFoodLeftover> SilaCulinaryFoodLeftover { get; set; }
+        public DbSet<SilaCulinaryWasteDisposal> SilaCulinaryWasteDisposal { get; set; }
+        public DbSet<SilaCulinaryProductionOutputConfirmation> SilaCulinaryProductionOutputConfirmation { get; set; }
+        public DbSet<SilaCulinaryPortionSample> SilaCulinaryPortionSample { get; set; }
+        public DbSet<SilaCulinaryProductionReconciliation> SilaCulinaryProductionReconciliation { get; set; }
+        public DbSet<SilaCulinaryProductionReconciliationLine> SilaCulinaryProductionReconciliationLine { get; set; }
+        public DbSet<SilaCulinaryLaborAllocation> SilaCulinaryLaborAllocation { get; set; }
+        public DbSet<SilaCulinaryCentralKitchenAllocation> SilaCulinaryCentralKitchenAllocation { get; set; }
+        public DbSet<SilaCulinaryBuffetReconciliation> SilaCulinaryBuffetReconciliation { get; set; }
+        public DbSet<SilaCulinaryEventClosure> SilaCulinaryEventClosure { get; set; }
+        public DbSet<SilaCulinaryErpReconciliationRef> SilaCulinaryErpReconciliationRef { get; set; }
+        public DbSet<SilaCulinaryHistoricalLearningSnapshot> SilaCulinaryHistoricalLearningSnapshot { get; set; }
+        public DbSet<SilaCulinaryReconciliationAudit> SilaCulinaryReconciliationAudit { get; set; }
 
 
         protected override void OnModelCreating(Microsoft.EntityFrameworkCore.ModelBuilder modelBuilder)
@@ -591,6 +610,20 @@ namespace Buyer.Infrastructure.DbContext
             _ = modelBuilder.Entity<SilaCulinaryProductionException>().HasIndex(a => new { a.BuyerId, a.ExceptionCode }).IsUnique();
             _ = modelBuilder.Entity<SilaCulinaryProductionDispatch>().HasIndex(a => new { a.BuyerId, a.DispatchNumber }).IsUnique();
             _ = modelBuilder.Entity<SilaCulinaryProductionAudit>().HasIndex(a => new { a.BuyerId, a.ExecutedAtUtc });
+            _ = modelBuilder.Entity<SilaCulinaryProductionConsumption>().HasIndex(a => new { a.BuyerId, a.ConsumptionNumber }).IsUnique();
+            _ = modelBuilder.Entity<SilaCulinaryProductionConsumption>().HasIndex(a => new { a.BuyerId, a.IdempotencyKey }).IsUnique();
+            _ = modelBuilder.Entity<SilaCulinaryAdditionalMaterialRequest>().HasIndex(a => new { a.BuyerId, a.RequestNumber }).IsUnique();
+            _ = modelBuilder.Entity<SilaCulinaryMaterialReturn>().HasIndex(a => new { a.BuyerId, a.ReturnNumber }).IsUnique();
+            _ = modelBuilder.Entity<SilaCulinaryMaterialIssueReversal>().HasIndex(a => new { a.BuyerId, a.ReversalNumber }).IsUnique();
+            _ = modelBuilder.Entity<SilaCulinaryWasteEvent>().HasIndex(a => new { a.BuyerId, a.WasteCode }).IsUnique();
+            _ = modelBuilder.Entity<SilaCulinaryFoodLeftover>().HasIndex(a => new { a.BuyerId, a.LeftoverNumber }).IsUnique();
+            _ = modelBuilder.Entity<SilaCulinaryWasteDisposal>().HasIndex(a => new { a.BuyerId, a.DisposalNumber }).IsUnique();
+            _ = modelBuilder.Entity<SilaCulinaryProductionOutputConfirmation>().HasIndex(a => new { a.BuyerId, a.ConfirmationNumber }).IsUnique();
+            _ = modelBuilder.Entity<SilaCulinaryProductionReconciliation>().HasIndex(a => new { a.BuyerId, a.ReconciliationNumber }).IsUnique();
+            _ = modelBuilder.Entity<SilaCulinaryEventClosure>().HasIndex(a => new { a.BuyerId, a.ClosureNumber }).IsUnique();
+            _ = modelBuilder.Entity<SilaCulinaryErpReconciliationRef>().HasIndex(a => new { a.BuyerId, a.IdempotencyKey }).IsUnique();
+            _ = modelBuilder.Entity<SilaCulinaryHistoricalLearningSnapshot>().HasIndex(a => new { a.BuyerId, a.SnapshotNumber }).IsUnique();
+            _ = modelBuilder.Entity<SilaCulinaryReconciliationAudit>().HasIndex(a => new { a.BuyerId, a.ExecutedAtUtc });
 
             base.OnModelCreating(modelBuilder);
 
