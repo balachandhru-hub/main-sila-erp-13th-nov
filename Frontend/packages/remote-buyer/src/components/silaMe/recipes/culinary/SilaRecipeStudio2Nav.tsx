@@ -94,11 +94,13 @@ const SilaRecipeStudio2Nav: React.FC<SilaRecipeStudio2NavProps> = ({
     },
     {
       id: "menus",
-      label: "Menu Studio",
-      badge: "Phase 2A Live",
+      label: onNavigateGlobal ? "ME Studio →" : "Menu Studio",
+      badge: "Consolidated",
       badgeTone: "live",
-      routeKind: "menus",
+      routeKind: onNavigateGlobal ? undefined : "menus",
+      globalNavKey: onNavigateGlobal ? "silaMenuStudio" : undefined,
       visible: flags.menuEventPreviewEnabled,
+      tooltip: "Consolidated under Menu Engineering → ME Studio",
     },
     {
       id: "events",

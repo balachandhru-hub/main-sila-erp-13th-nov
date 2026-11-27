@@ -251,6 +251,7 @@ const SilaMeWorkspace: React.FC<SilaMeWorkspaceProps> = ({ navKey, role, permiss
         return <SilaOcrSettings canManage={can.manageMasterData} />;
       case "silaApprovalFlows":
         return <SilaApprovalFlows />;
+      case "silaMenuStudio":
       case "silaMenuDashboard":
       case "silaMenuItems":
       case "silaMenuPlanning":
@@ -268,8 +269,9 @@ const SilaMeWorkspace: React.FC<SilaMeWorkspaceProps> = ({ navKey, role, permiss
         return (
           <SilaMenuEngineeringApp
             navKey={navKey}
-            canManage={can.manageMenuEngineering}
-            canRequestPurchase={can.requestPurchase}
+            permissions={can}
+            canManage={can.manageMenuEngineering || can.editDraftMenu || can.createMenu}
+            canRequestPurchase={can.generateMenuPurchaseRec || can.requestPurchase}
             canManageRecipe={can.manageRecipe}
             onNavigate={onNavigate}
           />

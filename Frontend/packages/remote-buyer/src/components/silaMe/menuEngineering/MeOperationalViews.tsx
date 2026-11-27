@@ -1,0 +1,825 @@
+import React, { useCallback, useEffect, useState } from "react";
+import { Loader, toastService } from "@vosox/shared-ui";
+import {
+  bulkImportMeMenuItems,
+  bulkPriceMeMenuItems,
+  copyMeMenuItem,
+  createMeDraftPurchaseRec,
+  exportMeReport,
+  getMeAiIntelligence,
+  getMeConsumption,
+  getMeCostMargin,
+  getMeDemand,
+  getMeMenuItems,
+  getMeMenuItemVersions,
+  getMeMenuPlans,
+  getMePerformanceMatrix,
+  getMePortions,
+  getMePosMapping,
+  getMePosSales,
+  getMePurchasePlan,
+  getMeSetup,
+  recordMePortionSample,
+  runMeSimulation,
+  saveMeDemandOverride,
+  saveMeMenuItem,
+  saveMePosMapping,
+  saveMeSetup,
+  transitionMeMenuPlan,
+  type AiMenuIntelligenceDto,
+  type ConsumptionVarianceDetailDto,
+  type CostMarginAnalysisDto,
+  type DemandForecastBoard,
+  type MenuEngineeringSetupDto,
+  type MenuItemEnhanced,
+  type MenuPerformanceMatrixDto,
+  type MenuPlanEnhanced,
+  type MenuPurchasePlanDto,
+  type MeStudioPermissionsDto,
+  type PortionPlanRow,
+  type PosMappingWorkbenchDto,
+  type PosSalesExtendedDto,
+  type WhatIfSimulationResult,
+} from "../../../api/silaMe/menuEngineeringStudioApi";
+import { saveMenuEngineering, type MenuFilter, type MenuLookups } from "../../../api/silaMe/silaMenuEngineeringApi";
+
+interface Props {
+  navKey: string;
+  filter: MenuFilter;
+  lookups?: MenuLookups;
+  permissions: MeStudioPermissionsDto;
+  onNavigate: (key: string) => void;
+}
+
+const num = (v?: number | null, d = 2) => (v == null ? "—" : v.toFixed(d));
+const pct = (v?: number | null) => (v == null ? "—" : `${v.toFixed(1)}%`);
+
+const MeOperationalViews: React.FC<Props> = ({ navKey, filter, lookups, permissions, onNavigate }) => {
+  const [loading, setLoading] = useState(true);
+  const [items, setItems] = useState<MenuItemEnhanced[]>([]);
+  const [plans, setPlans] = useState<MenuPlanEnhanced[]>([]);
+  const [portions, setPortions] = useState<PortionPlanRow[]>([]);
+  const [demand, setDemand] = useState<DemandForecastBoard | null>(null);
+  const [posSales, setPosSales] = useState<PosSalesExtendedDto | null>(null);
+  const [posMapping, setPosMapping] = useState<PosMappingWorkbenchDto | null>(null);
+  const [matrix, setMatrix] = useState<MenuPerformanceMatrixDto | null>(null);
+  const [consumption, setConsumption] = useState<ConsumptionVarianceDetailDto | null>(null);
+  const [costMargin, setCostMargin] = useState<CostMarginAnalysisDto | null>(null);
+  const [purchasePlan, setPurchasePlan] = useState<MenuPurchasePlanDto | null>(null);
+  const [aiIntel, setAiIntel] = useState<AiMenuIntelligenceDto | null>(null);
+  const [setup, setSetup] = useState<MenuEngineeringSetupDto | null>(null);
+
+  // Local editor states
+  const [editItem, setEditItem] = useState<Partial<MenuItemEnhanced>>({ menuItemCode: "", name: "", category: "Mains", cuisine: "International", portionUom: "PORTION", defaultPortionQty: 1, sellingPrice: 20, taxRatePercent: 5, status: "ACTIVE", isAvailable: true });
+  const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
+  const [bulkPct, setBulkPct] = useState("5");
+  const [bulkCsv, setBulkCsv] = useState("Code,Name,Category,Cuisine,SellingPrice,PortionUom\nME-BULK-1,Grilled Lamb Rack,Mains,Mediterranean,38.00,PORTION");
+  const [versions, setVersions] = useState<{ id: string; versionNumber: number; status: string; sellingPrice?: number; changeSummary?: string; actionAtUtc: string }[]>([]);
+  const [plannerView, setPlannerView] = useState<"LIST" | "CALENDAR">("CALENDAR");
+  const [sampleInputs, setSampleInputs] = useState<Record<string, string>>({});
+  const [overrideDate, setOverrideDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [overrideQty, setOverrideQty] = useState("220");
+  const [overrideReason, setOverrideReason] = useState("Confirmed hotel group dinner booking");
+  const [posCsv, setPosCsv] = useState("PosCode,Quantity,Amount,BusinessDate\nGRILLED_CHICKEN_LARGE,24,720.00," + new Date().toISOString().slice(0, 10));
+  const [costBasis, setCostBasis] = useState<"FOOD_COST_ONLY" | "VARIABLE_COST">("FOOD_COST_ONLY");
+  const [popThresh, setPopThresh] = useState("0.70");
+  const [simForm, setSimForm] = useState({ scenarioName: "What-If Analysis", expectedCovers: "300", ingredientPriceChangePercent: "10", sellingPriceChangePercent: "0", portionSizeChangePercent: "0", discountPercent: "0" });
+  const [simRes, setSimRes] = useState<WhatIfSimulationResult | null>(null);
+  const [mappingDraft, setMappingDraft] = useState<Record<string, { menuItemId: string; mappingType: string; portionMultiplier: string; comboParentCode: string; modifierCode: string }>>({});
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      switch (navKey) {
+        case "silaMenuItems":
+          setItems(await getMeMenuItems(filter));
+          break;
+        case "silaMenuPlanning":
+          setPlans(await getMeMenuPlans(filter));
+          break;
+        case "silaMenuPortions":
+          setPortions(await getMePortions(filter.menuPlanId, filter.propertyId));
+          break;
+        case "silaMenuDemand":
+          setDemand(await getMeDemand(filter));
+          break;
+        case "silaMenuPosSales":
+          setPosSales(await getMePosSales(filter));
+          break;
+        case "silaMenuPosMapping":
+          setPosMapping(await getMePosMapping(filter));
+          setItems(await getMeMenuItems({}));
+          break;
+        case "silaMenuPerformance":
+          setMatrix(await getMePerformanceMatrix(filter, costBasis, Number(popThresh) || 0.7));
+          break;
+        case "silaMenuConsumption":
+          setConsumption(await getMeConsumption(filter));
+          break;
+        case "silaMenuCost":
+          setCostMargin(await getMeCostMargin(filter));
+          break;
+        case "silaMenuRecommendations":
+          setPurchasePlan(await getMePurchasePlan(filter));
+          break;
+        case "silaMenuIntelligence":
+          setAiIntel(await getMeAiIntelligence(filter.menuPlanId, filter.propertyId));
+          break;
+        case "silaMenuWhatIf":
+          setPlans(await getMeMenuPlans({}));
+          break;
+        case "silaMenuSetup":
+          setSetup(await getMeSetup(filter.propertyId));
+          break;
+      }
+    } catch (e) {
+      toastService.error(e instanceof Error ? e.message : "Could not load view.");
+    } finally {
+      setLoading(false);
+    }
+  }, [navKey, filter, costBasis, popThresh]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  if (loading) return <Loader />;
+
+  const viewCost = permissions.viewMenuCost;
+  const viewMargin = permissions.viewMenuMargin;
+
+  // 1. MENU ITEMS
+  if (navKey === "silaMenuItems") {
+    return (
+      <div className="sme-list">
+        {permissions.manageMenuItems && (
+          <div className="sme-panel">
+            <div className="sme-panel__header">
+              <h2 className="sme-panel__title">Menu Item Commercial Master</h2>
+              <div style={{ display: "flex", gap: "0.4rem" }}>
+                <button
+                  type="button"
+                  className="sila-btn sila-btn--secondary"
+                  onClick={async () => {
+                    const exp = await exportMeReport("MENU_ITEM_MASTER", "EXCEL", filter);
+                    const blob = new Blob([exp.textContent ?? ""], { type: exp.mimeType });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = exp.fileName;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                >
+                  Export Excel
+                </button>
+              </div>
+            </div>
+            <div className="sme-form">
+              <label className="sila-field"><span>Code</span><input className="sila-input" value={editItem.menuItemCode ?? ""} onChange={(e) => setEditItem({ ...editItem, menuItemCode: e.target.value })} /></label>
+              <label className="sila-field"><span>Name</span><input className="sila-input" value={editItem.name ?? ""} onChange={(e) => setEditItem({ ...editItem, name: e.target.value })} /></label>
+              <label className="sila-field"><span>Category</span><input className="sila-input" value={editItem.category ?? ""} onChange={(e) => setEditItem({ ...editItem, category: e.target.value })} /></label>
+              <label className="sila-field"><span>Cuisine</span><input className="sila-input" value={editItem.cuisine ?? ""} onChange={(e) => setEditItem({ ...editItem, cuisine: e.target.value })} /></label>
+              <label className="sila-field">
+                <span>Linked Recipe</span>
+                <select className="sila-input" value={editItem.linkedRecipeId ?? ""} onChange={(e) => setEditItem({ ...editItem, linkedRecipeId: e.target.value || null })}>
+                  <option value="">— Select Approved Recipe —</option>
+                  {(lookups?.recipes ?? []).map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+                </select>
+              </label>
+              <label className="sila-field"><span>Default Portion</span><input className="sila-input" type="number" step="0.1" value={editItem.defaultPortionQty ?? 1} onChange={(e) => setEditItem({ ...editItem, defaultPortionQty: Number(e.target.value) || 1 })} /></label>
+              <label className="sila-field"><span>Selling Price</span><input className="sila-input" type="number" step="0.5" value={editItem.sellingPrice ?? 0} onChange={(e) => setEditItem({ ...editItem, sellingPrice: Number(e.target.value) || 0 })} /></label>
+              <label className="sila-field"><span>Tax %</span><input className="sila-input" type="number" step="0.5" value={editItem.taxRatePercent ?? 0} onChange={(e) => setEditItem({ ...editItem, taxRatePercent: Number(e.target.value) || 0 })} /></label>
+              <label className="sila-field"><span>Dietary</span><input className="sila-input" value={editItem.dietaryTags ?? ""} onChange={(e) => setEditItem({ ...editItem, dietaryTags: e.target.value })} /></label>
+              <label className="sila-field"><span>Allergens</span><input className="sila-input" value={editItem.allergenNotes ?? ""} onChange={(e) => setEditItem({ ...editItem, allergenNotes: e.target.value })} /></label>
+            </div>
+            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+              <button
+                type="button"
+                className="sila-btn sila-btn--primary"
+                onClick={async () => {
+                  await saveMeMenuItem(editItem);
+                  toastService.success("Menu item saved.");
+                  await load();
+                }}
+              >
+                Save Menu Item
+              </button>
+              <input className="sila-input" style={{ width: "6rem" }} value={bulkPct} onChange={(e) => setBulkPct(e.target.value)} />
+              <button
+                type="button"
+                className="sila-btn sila-btn--secondary"
+                disabled={selectedItemIds.length === 0}
+                onClick={async () => {
+                  const n = await bulkPriceMeMenuItems({ menuItemIds: selectedItemIds, percentageChange: Number(bulkPct) || 0, reason: "Bulk Menu Item price update" });
+                  toastService.success(`Updated price on ${n} menu item(s).`);
+                  await load();
+                }}
+              >
+                Bulk Price Δ % ({selectedItemIds.length})
+              </button>
+            </div>
+            <div className="sme-row">
+              <textarea className="sila-input" rows={2} style={{ flex: 1 }} value={bulkCsv} onChange={(e) => setBulkCsv(e.target.value)} />
+              <button type="button" className="sila-btn sila-btn--secondary" onClick={async () => { const c = await bulkImportMeMenuItems(bulkCsv); toastService.success(`Imported ${c} items.`); await load(); }}>
+                Bulk Upload CSV
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="sme-panel">
+          <table className="sila-table">
+            <thead>
+              <tr><th>Select</th><th>Code</th><th>Dish</th><th>Category</th><th>Recipe</th><th>Net Price</th>{viewCost && <th>Cost</th>}{viewCost && <th>FC %</th>}{viewMargin && <th>Margin</th>}<th>Status</th><th>Actions</th></tr>
+            </thead>
+            <tbody>
+              {items.map((it) => (
+                <tr key={it.id}>
+                  <td><input type="checkbox" checked={selectedItemIds.includes(it.id!)} onChange={(e) => setSelectedItemIds((p) => (e.target.checked ? [...p, it.id!] : p.filter((x) => x !== it.id)))} /></td>
+                  <td>{it.menuItemCode}</td>
+                  <td><strong>{it.name}</strong><div className="sme-muted">{it.cuisine} • {it.dietaryTags || "Standard"}</div></td>
+                  <td>{it.category}</td>
+                  <td>{it.linkedRecipeName || "Unlinked"}</td>
+                  <td>{num(it.netSellingPrice ?? it.sellingPrice)}</td>
+                  {viewCost && <td>{num(it.costPerPortion)}</td>}
+                  {viewCost && <td>{pct(it.foodCostPercent)}</td>}
+                  {viewMargin && <td>{num(it.contributionMargin)}</td>}
+                  <td><span className="sme-chip">{it.approvalStatus} v{it.versionNumber}</span></td>
+                  <td style={{ display: "flex", gap: "0.3rem", flexWrap: "wrap" }}>
+                    <button type="button" className="sila-btn sila-btn--secondary" onClick={() => setEditItem(it)}>Edit</button>
+                    {permissions.manageMenuItems && (
+                      <button type="button" className="sila-btn sila-btn--secondary" onClick={async () => { await copyMeMenuItem(it.id!); toastService.success("Copied item."); await load(); }}>Copy</button>
+                    )}
+                    <button type="button" className="sila-btn sila-btn--secondary" onClick={async () => setVersions(await getMeMenuItemVersions(it.id!))}>History</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {versions.length > 0 && (
+            <div className="sme-kpi-box" style={{ marginTop: "0.5rem" }}>
+              <strong>Version History</strong>
+              {versions.map((v) => <div key={v.id} className="sme-muted">v{v.versionNumber} • {v.status} • Price {num(v.sellingPrice)} • {v.changeSummary}</div>)}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // 2. MENU PLANNING
+  if (navKey === "silaMenuPlanning") {
+    return (
+      <div className="sme-panel">
+        <div className="sme-panel__header">
+          <h2 className="sme-panel__title">Menu Planning &amp; Calendar ({plans.length} Plans)</h2>
+          <div style={{ display: "flex", gap: "0.4rem" }}>
+            <button type="button" className="sila-btn sila-btn--secondary" onClick={() => setPlannerView(plannerView === "CALENDAR" ? "LIST" : "CALENDAR")}>
+              {plannerView === "CALENDAR" ? "List View" : "Calendar View"}
+            </button>
+            <button type="button" className="sila-btn sila-btn--primary" onClick={() => onNavigate("silaMenuStudio")}>Open in ME Studio</button>
+          </div>
+        </div>
+        {plannerView === "CALENDAR" ? (
+          <div className="sme-calendar">
+            {plans.map((p) => (
+              <div key={p.id} className="sme-cal-day">
+                <div className="sme-muted">{p.businessDate.slice(0, 10)} • {p.mealPeriod}</div>
+                <strong>{p.name}</strong>
+                <div className="sme-muted">{p.serviceFormat} • {p.expectedCovers ?? p.expectedGuests} covers</div>
+                <span className="sme-chip">{p.status} v{p.versionNumber}</span>
+                {p.status === "APPROVED" && permissions.publishMenu && (
+                  <button type="button" className="sila-btn sila-btn--secondary" onClick={async () => { await transitionMeMenuPlan(p.id, "PUBLISHED", "Published from Menu Planner", true); toastService.success("Published & authorized production handoff."); await load(); }}>
+                    Publish
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <table className="sila-table">
+            <thead><tr><th>Plan</th><th>Type</th><th>Meal Period</th><th>Date</th><th>Covers</th><th>Dishes</th><th>Status</th></tr></thead>
+            <tbody>
+              {plans.map((p) => (
+                <tr key={p.id}>
+                  <td><strong>{p.name}</strong></td>
+                  <td>{p.menuType}</td>
+                  <td>{p.mealPeriod}</td>
+                  <td>{p.businessDate.slice(0, 10)}</td>
+                  <td>{p.expectedCovers ?? p.expectedGuests}</td>
+                  <td>{p.lines.length}</td>
+                  <td>{p.status} v{p.versionNumber}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    );
+  }
+
+  // 3. PORTION PLANNING
+  if (navKey === "silaMenuPortions") {
+    return (
+      <div className="sme-panel">
+        <div className="sme-panel__header">
+          <h2 className="sme-panel__title">Portion Planning &amp; Buffet Sampling</h2>
+          <span className="sme-muted">Expected Portions = Covers × Participation Rate × Servings/Guest</span>
+        </div>
+        <table className="sila-table">
+          <thead>
+            <tr><th>Plan / Dish</th><th>Format</th><th>Covers</th><th>Part.</th><th>Planned Portion</th><th>Exp. Portions</th><th>Usable Output</th><th>Yield %</th><th>Sampled</th><th>Variance</th><th>Record Sample</th></tr>
+          </thead>
+          <tbody>
+            {portions.map((r) => (
+              <tr key={r.menuPlanLineId}>
+                <td><strong>{r.menuItemName}</strong><div className="sme-muted">{r.planName}</div></td>
+                <td>{r.serviceFormat}</td>
+                <td>{r.expectedCovers}</td>
+                <td>{pct(r.participationRate * 100)}</td>
+                <td>{r.plannedPortion} {r.portionUom}</td>
+                <td>{r.expectedPortions}</td>
+                <td>{r.requiredUsableOutput} {r.portionUom}</td>
+                <td>{pct(r.recipeYieldPercent)}</td>
+                <td>{r.sampledActualPortion ?? "—"}</td>
+                <td><span className={`sme-chip ${r.varianceStatus === "ON_TARGET" ? "sme-chip--ok" : "sme-chip--warn"}`}>{r.varianceStatus}</span></td>
+                <td style={{ display: "flex", gap: "0.3rem" }}>
+                  <input className="sila-input" style={{ width: "5rem" }} type="number" step="0.1" placeholder={String(r.plannedPortion)} value={sampleInputs[r.menuPlanLineId] ?? ""} onChange={(e) => setSampleInputs({ ...sampleInputs, [r.menuPlanLineId]: e.target.value })} />
+                  {permissions.managePortionPlans && (
+                    <button
+                      type="button"
+                      className="sila-btn sila-btn--secondary"
+                      onClick={async () => {
+                        const val = Number(sampleInputs[r.menuPlanLineId]);
+                        if (!val) return;
+                        await recordMePortionSample(r.menuPlanLineId, val, "Kitchen portion sampling");
+                        toastService.success("Recorded portion sample.");
+                        await load();
+                      }}
+                    >
+                      Save
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  // 4. DEMAND PLANNING
+  if (navKey === "silaMenuDemand" && demand) {
+    return (
+      <div className="sme-list">
+        {demand.coldStartLimited && (
+          <div className="sme-panel" style={{ background: "#fffbeb", borderColor: "#fde68a" }}>
+            <strong>Cold-Start Advisory:</strong> {demand.coldStartMessage}
+          </div>
+        )}
+        {permissions.manageDemandPlans && (
+          <div className="sme-panel">
+            <h3 className="sme-panel__title">Manual Forecast Override (Audited)</h3>
+            <div className="sme-form">
+              <label className="sila-field"><span>Date</span><input className="sila-input" type="date" value={overrideDate} onChange={(e) => setOverrideDate(e.target.value)} /></label>
+              <label className="sila-field"><span>Override Covers</span><input className="sila-input" type="number" value={overrideQty} onChange={(e) => setOverrideQty(e.target.value)} /></label>
+              <label className="sila-field"><span>Audit Reason</span><input className="sila-input" value={overrideReason} onChange={(e) => setOverrideReason(e.target.value)} /></label>
+            </div>
+            <div>
+              <button type="button" className="sila-btn sila-btn--primary" onClick={async () => { await saveMeDemandOverride({ businessDate: overrideDate, overrideQty: Number(overrideQty) || 100, reason: overrideReason }); toastService.success("Forecast override saved."); await load(); }}>
+                Save Audited Override
+              </button>
+            </div>
+          </div>
+        )}
+        <div className="sme-panel">
+          <table className="sila-table">
+            <thead>
+              <tr><th>Date</th><th>Occ %</th><th>Historical</th><th>Baseline</th><th>AI Adj.</th><th>Confirmed (Deduped)</th><th>Recommended</th><th>Range</th><th>Override</th></tr>
+            </thead>
+            <tbody>
+              {demand.rows.map((r) => (
+                <tr key={r.businessDate}>
+                  <td>{r.businessDate.slice(0, 10)}</td>
+                  <td>{pct(r.occupancyPercent)}</td>
+                  <td>{r.historicalActualDemand}</td>
+                  <td>{r.baselineForecast}</td>
+                  <td>{r.aiAdjustedForecast}</td>
+                  <td>{r.confirmedDemandDeduped}</td>
+                  <td><strong>{r.recommendedDemand}</strong></td>
+                  <td>{r.lowerRange} – {r.upperRange}</td>
+                  <td>{r.manualOverrideQty != null ? `${r.manualOverrideQty} (${r.overrideReason})` : "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
+
+  // 5. POS SALES
+  if (navKey === "silaMenuPosSales" && posSales) {
+    return (
+      <div className="sme-list">
+        <div className="sme-panel">
+          <div className="sme-panel__header">
+            <h2 className="sme-panel__title">POS Sales &amp; Synchronization</h2>
+            <div style={{ display: "flex", gap: "0.4rem" }}>
+              <button type="button" className="sila-btn sila-btn--secondary" onClick={async () => { await saveMenuEngineering({ action: "sync-pos" }); toastService.success("POS sync triggered."); await load(); }}>Sync POS</button>
+            </div>
+          </div>
+          <div className="sme-grid">
+            <div className="sme-kpi-box"><div className="sme-kpi-box__label">Qty Sold</div><div className="sme-kpi-box__val">{posSales.qtySold}</div></div>
+            <div className="sme-kpi-box"><div className="sme-kpi-box__label">Gross Sales</div><div className="sme-kpi-box__val">{num(posSales.grossRevenue)}</div></div>
+            <div className="sme-kpi-box"><div className="sme-kpi-box__label">Discounts / Tax</div><div className="sme-kpi-box__val">{num(posSales.discountTotal)} / {num(posSales.taxTotal)}</div></div>
+            <div className="sme-kpi-box"><div className="sme-kpi-box__label">Net Revenue</div><div className="sme-kpi-box__val">{num(posSales.netRevenue)}</div></div>
+            <div className="sme-kpi-box"><div className="sme-kpi-box__label">Unmapped Lines</div><div className="sme-kpi-box__val">{posSales.unmappedCount}</div></div>
+          </div>
+          <div className="sme-row">
+            <textarea className="sila-input" rows={2} style={{ flex: 1 }} value={posCsv} onChange={(e) => setPosCsv(e.target.value)} />
+            <button type="button" className="sila-btn sila-btn--primary" onClick={async () => { await saveMenuEngineering({ action: "import-pos-csv", csvContent: posCsv }); toastService.success("POS CSV imported."); await load(); }}>
+              Import POS File
+            </button>
+          </div>
+        </div>
+        <div className="sme-panel">
+          <table className="sila-table">
+            <thead><tr><th>Txn ID</th><th>Date</th><th>POS Code</th><th>Menu Item</th><th>Qty</th><th>Gross</th><th>Net Rev</th><th>Flags</th><th>Status</th></tr></thead>
+            <tbody>
+              {posSales.rows.map((r) => (
+                <tr key={r.id}>
+                  <td>{r.sourceTransactionId}</td>
+                  <td>{r.businessDate.slice(0, 10)}</td>
+                  <td><strong>{r.posCode}</strong></td>
+                  <td>{r.menuItemName || "Unmapped"}</td>
+                  <td>{r.quantity}</td>
+                  <td>{num(r.grossSellingPrice)}</td>
+                  <td>{num(r.netRevenue)}</td>
+                  <td>{[r.isVoid && "VOID", r.isRefund && "REFUND", r.isComplimentary && "COMP", r.comboReference && `COMBO:${r.comboReference}`, r.modifierCode && `MOD:${r.modifierCode}`].filter(Boolean).join(", ") || "SALE"}</td>
+                  <td><span className={`sme-chip ${r.status === "UNMAPPED" ? "sme-chip--warn" : "sme-chip--ok"}`}>{r.status}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
+
+  // 6. POS MAPPING
+  if (navKey === "silaMenuPosMapping" && posMapping) {
+    return (
+      <div className="sme-list">
+        <div className="sme-panel">
+          <div className="sme-panel__header">
+            <h2 className="sme-panel__title">POS Mapping Workbench (Mapped: {posMapping.mappedCount} • Unmapped: {posMapping.unmappedCount} • Combos: {posMapping.comboCount})</h2>
+          </div>
+          <div className="sme-muted">Supports 1-to-1, multi-POS, combo parent/component double-count prevention, modifier recipes, and UOM multipliers.</div>
+          <table className="sila-table">
+            <thead><tr><th>POS Code</th><th>Type</th><th>Multiplier</th><th>Combo Parent / Modifier</th><th>Target Menu Item</th><th>Status / Action</th></tr></thead>
+            <tbody>
+              {posMapping.mappings.map((m) => {
+                const d = mappingDraft[m.posCode] ?? {
+                  menuItemId: m.menuItemId || m.suggestedMenuItemId || "",
+                  mappingType: m.mappingType || "ONE_TO_ONE",
+                  portionMultiplier: String(m.portionMultiplier || 1),
+                  comboParentCode: m.comboParentCode || "",
+                  modifierCode: m.modifierCode || "",
+                };
+                return (
+                  <tr key={m.posCode}>
+                    <td><strong>{m.posCode}</strong><div className="sme-muted">{m.posDescription}</div></td>
+                    <td>
+                      <select className="sila-input" value={d.mappingType} onChange={(e) => setMappingDraft({ ...mappingDraft, [m.posCode]: { ...d, mappingType: e.target.value } })}>
+                        <option value="ONE_TO_ONE">One-to-One</option>
+                        <option value="MULTI_POS">Multi-POS</option>
+                        <option value="COMBO">Combo Parent</option>
+                        <option value="COMBO_COMPONENT">Combo Component</option>
+                        <option value="MODIFIER">Modifier</option>
+                        <option value="SIZE_VARIATION">Size Variation</option>
+                      </select>
+                    </td>
+                    <td><input className="sila-input" style={{ width: "4.5rem" }} type="number" step="0.1" value={d.portionMultiplier} onChange={(e) => setMappingDraft({ ...mappingDraft, [m.posCode]: { ...d, portionMultiplier: e.target.value } })} /></td>
+                    <td><input className="sila-input" placeholder="Combo/Mod…" value={d.comboParentCode || d.modifierCode} onChange={(e) => setMappingDraft({ ...mappingDraft, [m.posCode]: { ...d, comboParentCode: e.target.value } })} /></td>
+                    <td>
+                      <select className="sila-input" value={d.menuItemId} onChange={(e) => setMappingDraft({ ...mappingDraft, [m.posCode]: { ...d, menuItemId: e.target.value } })}>
+                        <option value="">— Select Menu Item —</option>
+                        {items.map((it) => <option key={it.id} value={it.id}>{it.name}</option>)}
+                      </select>
+                    </td>
+                    <td>
+                      {permissions.managePosMapping && (
+                        <button
+                          type="button"
+                          className="sila-btn sila-btn--primary"
+                          onClick={async () => {
+                            if (!d.menuItemId) return toastService.error("Select a Menu Item first.");
+                            await saveMePosMapping({
+                              id: m.id === "00000000-0000-0000-0000-000000000000" ? undefined : m.id,
+                              posCode: m.posCode,
+                              menuItemId: d.menuItemId,
+                              mappingType: d.mappingType,
+                              portionMultiplier: Number(d.portionMultiplier) || 1,
+                              comboParentCode: d.comboParentCode || undefined,
+                              isComboComponent: d.mappingType === "COMBO_COMPONENT",
+                              excludeComponentDoubleCount: d.mappingType === "COMBO_COMPONENT",
+                              approveMapping: true,
+                            });
+                            toastService.success(`Approved mapping for ${m.posCode}.`);
+                            await load();
+                          }}
+                        >
+                          Approve Mapping
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
+
+  // 7. MENU PERFORMANCE & 4-QUADRANT MATRIX
+  if (navKey === "silaMenuPerformance" && matrix) {
+    return (
+      <div className="sme-list">
+        <div className="sme-panel">
+          <div className="sme-panel__header">
+            <h2 className="sme-panel__title">Menu Performance &amp; Engineering Matrix</h2>
+            <div style={{ display: "flex", gap: "0.5rem" }}>
+              <select className="sila-input" value={costBasis} onChange={(e) => setCostBasis(e.target.value as "FOOD_COST_ONLY" | "VARIABLE_COST")}>
+                <option value="FOOD_COST_ONLY">Food-Cost-Only Basis</option>
+                <option value="VARIABLE_COST">Configured Variable-Cost Basis</option>
+              </select>
+              <input className="sila-input" style={{ width: "5.5rem" }} value={popThresh} onChange={(e) => setPopThresh(e.target.value)} title="Popularity threshold factor (default 0.70)" />
+            </div>
+          </div>
+          <div className="sme-quadrant-grid">
+            <div className="sme-quadrant sme-quadrant--star"><strong>STARS ({matrix.stars})</strong><div className="sme-muted">High Popularity &amp; High CM</div></div>
+            <div className="sme-quadrant sme-quadrant--plow"><strong>PLOWHORSES ({matrix.plowhorses})</strong><div className="sme-muted">High Popularity &amp; Low CM</div></div>
+            <div className="sme-quadrant sme-quadrant--puzzle"><strong>PUZZLES ({matrix.puzzles})</strong><div className="sme-muted">Low Popularity &amp; High CM</div></div>
+            <div className="sme-quadrant sme-quadrant--dog"><strong>DOGS ({matrix.dogs})</strong><div className="sme-muted">Low Popularity &amp; Low CM</div></div>
+          </div>
+          <table className="sila-table">
+            <thead><tr><th>Dish</th><th>Category</th><th>Qty Sold</th><th>Net Rev</th><th>Mix %</th>{viewCost && <th>Cost/Portion</th>}{viewMargin && <th>Unit CM</th>}<th>Quadrant</th><th>Action</th></tr></thead>
+            <tbody>
+              {matrix.rows.map((r) => (
+                <tr key={r.menuItemId}>
+                  <td><strong>{r.name}</strong></td>
+                  <td>{r.category}</td>
+                  <td>{r.qtySold}</td>
+                  <td>{num(r.revenue)}</td>
+                  <td>{pct(r.mixPercent)}</td>
+                  {viewCost && <td>{num(r.costPerPortion)}</td>}
+                  {viewMargin && <td>{num(r.contributionMargin)}</td>}
+                  <td><span className="sme-chip">{r.classification}</span></td>
+                  <td className="sme-muted">{r.recommendedAction}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {matrix.excludedRows.length > 0 && (
+            <div className="sme-kpi-box">
+              <strong>Excluded Items ({matrix.excludedCount}) — Not Misclassified as Dogs</strong>
+              {matrix.excludedRows.map((x) => <div key={x.menuItemId} className="sme-muted">• {x.name}: {x.exclusionReason}</div>)}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // 8. CONSUMPTION ANALYSIS
+  if (navKey === "silaMenuConsumption" && consumption) {
+    return (
+      <div className="sme-panel">
+        <div className="sme-panel__header">
+          <h2 className="sme-panel__title">Consumption Analysis (Theoretical vs Actual &amp; Waste)</h2>
+          <span className="sme-chip sme-chip--ok">Double-Counting Prevented</span>
+        </div>
+        <div className="sme-grid">
+          <div className="sme-kpi-box"><div className="sme-kpi-box__label">Theoretical</div><div className="sme-kpi-box__val">{consumption.theoretical.toFixed(2)}</div></div>
+          <div className="sme-kpi-box"><div className="sme-kpi-box__label">Actual</div><div className="sme-kpi-box__val">{consumption.actual.toFixed(2)}</div></div>
+          <div className="sme-kpi-box"><div className="sme-kpi-box__label">Yield Loss</div><div className="sme-kpi-box__val">{consumption.expectedYieldLoss.toFixed(2)}</div></div>
+          <div className="sme-kpi-box"><div className="sme-kpi-box__label">Recorded Waste</div><div className="sme-kpi-box__val">{consumption.recordedWaste.toFixed(2)}</div></div>
+          <div className="sme-kpi-box"><div className="sme-kpi-box__label">Unexplained Var</div><div className="sme-kpi-box__val">{consumption.unexplainedVariance.toFixed(2)}</div></div>
+        </div>
+        <table className="sila-table">
+          <thead><tr><th>Ingredient</th><th>UOM</th><th>Theoretical</th><th>Actual</th><th>Yield Loss</th><th>Waste</th><th>Unexplained</th></tr></thead>
+          <tbody>
+            {consumption.rows.map((r) => (
+              <tr key={r.materialId}>
+                <td><strong>{r.materialName}</strong></td>
+                <td>{r.uom}</td>
+                <td>{r.theoreticalQty}</td>
+                <td>{r.actualQty}</td>
+                <td>{r.expectedYieldLossQty}</td>
+                <td>{r.recordedWasteQty}</td>
+                <td><strong>{r.unexplainedVarianceQty}</strong></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  // 9. COST & MARGIN ANALYSIS
+  if (navKey === "silaMenuCost" && costMargin) {
+    return (
+      <div className="sme-list">
+        <div className="sme-panel">
+          <h2 className="sme-panel__title">Cost &amp; Margin Analysis</h2>
+          <div className="sme-grid">
+            <div className="sme-kpi-box"><div className="sme-kpi-box__label">Total Revenue</div><div className="sme-kpi-box__val">{num(costMargin.totalRevenue)}</div></div>
+            {viewCost && <div className="sme-kpi-box"><div className="sme-kpi-box__label">Total Food Cost</div><div className="sme-kpi-box__val">{num(costMargin.totalFoodCost)}</div></div>}
+            {viewCost && <div className="sme-kpi-box"><div className="sme-kpi-box__label">Food Cost %</div><div className="sme-kpi-box__val">{pct(costMargin.overallFoodCostPercent)}</div></div>}
+            {viewMargin && <div className="sme-kpi-box"><div className="sme-kpi-box__label">Contribution Margin</div><div className="sme-kpi-box__val">{num(costMargin.totalContributionMargin)}</div></div>}
+          </div>
+          {costMargin.marginAlerts.map((a, i) => (
+            <div key={i} className="sme-kpi-box" style={{ background: "#fef2f2", borderColor: "#fecaca" }}>
+              <strong>{a.title}</strong> — <span className="sme-muted">{a.recommendedAction}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // 10. PURCHASE RECOMMENDATIONS
+  if (navKey === "silaMenuRecommendations" && purchasePlan) {
+    return (
+      <div className="sme-panel">
+        <div className="sme-panel__header">
+          <h2 className="sme-panel__title">Menu Purchase Recommendations (Time-Phased)</h2>
+          {permissions.generatePurchaseRecommendation && (
+            <button type="button" className="sila-btn sila-btn--primary" onClick={async () => { const r = await createMeDraftPurchaseRec(filter); toastService.success(`Draft purchase plan ready (${r.items.length} line(s)). PO transmission disabled.`); }}>
+              Create Draft Purchase Rec
+            </button>
+          )}
+        </div>
+        <div className="sme-muted">Supply arriving after the menu required date is excluded from eligible incoming supply. POs are never auto-transmitted.</div>
+        <table className="sila-table">
+          <thead><tr><th>Ingredient</th><th>Req Date</th><th>Gross Need</th><th>Eligible Avail</th><th>On-Time PO</th><th>Late PO (Excl)</th><th>Shortage</th><th>Rec. Buy</th></tr></thead>
+          <tbody>
+            {purchasePlan.rows.map((r, i) => (
+              <tr key={i}>
+                <td><strong>{r.materialName}</strong></td>
+                <td>{r.requiredDate?.slice(0, 10) || "—"}</td>
+                <td>{r.requirement} {r.uom}</td>
+                <td>{r.eligibleAvailable}</td>
+                <td>{r.eligibleIncomingOnTime}</td>
+                <td>{r.lateOpenPoExcluded}</td>
+                <td><strong>{r.shortage}</strong></td>
+                <td>{r.recommendedPurchaseQty}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  // 11. AI MENU INTELLIGENCE
+  if (navKey === "silaMenuIntelligence" && aiIntel) {
+    return (
+      <div className="sme-list">
+        <div className="sme-panel">
+          <div className="sme-panel__header">
+            <h2 className="sme-panel__title">AI Menu Intelligence</h2>
+            <span className={`sme-chip ${aiIntel.aiProviderAvailable ? "sme-chip--ok" : "sme-chip--warn"}`}>{aiIntel.providerMode}</span>
+          </div>
+          {aiIntel.fallbackNotice && <div className="sme-muted">{aiIntel.fallbackNotice}</div>}
+          {aiIntel.recommendations.map((r, i) => (
+            <div key={i} className="sme-kpi-box">
+              <strong>{r.strategy}</strong>: {r.recommendation}
+              <div className="sme-muted">Evidence: {r.supportingEvidence} • Data Quality: {r.dataQuality} • Confidence: {(r.confidence * 100).toFixed(0)}%</div>
+              <div className="sme-muted">Allergens: {r.allergenImpact ?? "Unchanged"} • Approval: {r.requiresApproval ? "Required before live change" : "Optional"}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // 12. WHAT-IF SIMULATION
+  if (navKey === "silaMenuWhatIf") {
+    return (
+      <div className="sme-panel">
+        <h2 className="sme-panel__title">What-If Simulation Workbench</h2>
+        <div className="sme-form">
+          <label className="sila-field"><span>Scenario Name</span><input className="sila-input" value={simForm.scenarioName} onChange={(e) => setSimForm({ ...simForm, scenarioName: e.target.value })} /></label>
+          <label className="sila-field"><span>Expected Covers</span><input className="sila-input" type="number" value={simForm.expectedCovers} onChange={(e) => setSimForm({ ...simForm, expectedCovers: e.target.value })} /></label>
+          <label className="sila-field"><span>Ingredient Price Δ %</span><input className="sila-input" type="number" value={simForm.ingredientPriceChangePercent} onChange={(e) => setSimForm({ ...simForm, ingredientPriceChangePercent: e.target.value })} /></label>
+          <label className="sila-field"><span>Selling Price Δ %</span><input className="sila-input" type="number" value={simForm.sellingPriceChangePercent} onChange={(e) => setSimForm({ ...simForm, sellingPriceChangePercent: e.target.value })} /></label>
+          <label className="sila-field"><span>Portion Size Δ %</span><input className="sila-input" type="number" value={simForm.portionSizeChangePercent} onChange={(e) => setSimForm({ ...simForm, portionSizeChangePercent: e.target.value })} /></label>
+          <label className="sila-field"><span>Discount %</span><input className="sila-input" type="number" value={simForm.discountPercent} onChange={(e) => setSimForm({ ...simForm, discountPercent: e.target.value })} /></label>
+        </div>
+        <div style={{ display: "flex", gap: "0.5rem" }}>
+          <button
+            type="button"
+            className="sila-btn sila-btn--primary"
+            onClick={async () => {
+              const res = await runMeSimulation({
+                menuPlanId: plans[0]?.id,
+                scenarioName: simForm.scenarioName,
+                expectedCovers: Number(simForm.expectedCovers) || 300,
+                ingredientPriceChangePercent: Number(simForm.ingredientPriceChangePercent) || 0,
+                sellingPriceChangePercent: Number(simForm.sellingPriceChangePercent) || 0,
+                portionSizeChangePercent: Number(simForm.portionSizeChangePercent) || 0,
+                discountPercent: Number(simForm.discountPercent) || 0,
+                saveScenario: false,
+              });
+              setSimRes(res);
+            }}
+          >
+            Simulate (Live Data Untouched)
+          </button>
+          <button
+            type="button"
+            className="sila-btn sila-btn--secondary"
+            onClick={async () => {
+              const res = await runMeSimulation({
+                menuPlanId: plans[0]?.id,
+                scenarioName: simForm.scenarioName,
+                expectedCovers: Number(simForm.expectedCovers) || 300,
+                ingredientPriceChangePercent: Number(simForm.ingredientPriceChangePercent) || 0,
+                sellingPriceChangePercent: Number(simForm.sellingPriceChangePercent) || 0,
+                portionSizeChangePercent: Number(simForm.portionSizeChangePercent) || 0,
+                discountPercent: Number(simForm.discountPercent) || 0,
+                saveScenario: true,
+              });
+              setSimRes(res);
+              toastService.success("Scenario saved.");
+            }}
+          >
+            Save Scenario
+          </button>
+        </div>
+        {simRes && (
+          <div className="sme-kpi-box">
+            <div className="sme-muted">{simRes.demandAssumptionDisclosure}</div>
+            <div className="sme-grid" style={{ marginTop: "0.5rem" }}>
+              {viewCost && <div>Cost: {num(simRes.baselineCost)} → <strong>{num(simRes.foodCost)}</strong> ({simRes.costVariancePct}%)</div>}
+              <div>Revenue: {num(simRes.baselineRevenue)} → <strong>{num(simRes.revenue)}</strong> ({simRes.revenueVariancePct}%)</div>
+              {viewMargin && <div>Margin: {num(simRes.baselineMargin)} → <strong>{num(simRes.contributionMargin)}</strong> ({simRes.marginVariancePct}%)</div>}
+              <div>Requirement: {simRes.ingredientRequirement} • Shortage: {simRes.shortage}</div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // 13. SETUP (Sections A–H)
+  if (navKey === "silaMenuSetup" && setup) {
+    return (
+      <div className="sme-panel">
+        <div className="sme-panel__header">
+          <h2 className="sme-panel__title">Menu Engineering Setup (Config v{setup.configVersion})</h2>
+          {permissions.manageMenuSetup && (
+            <button type="button" className="sila-btn sila-btn--primary" onClick={async () => { const saved = await saveMeSetup(setup); setSetup(saved); toastService.success(`Saved setup v${saved.configVersion}`); }}>
+              Save Configuration
+            </button>
+          )}
+        </div>
+        <div className="sme-form">
+          <label className="sila-field"><span>A. Feature Enabled</span><input type="checkbox" checked={setup.menuEngineeringEnabled} onChange={(e) => setSetup({ ...setup, menuEngineeringEnabled: e.target.checked })} /></label>
+          <label className="sila-field"><span>A. ME Studio Enabled</span><input type="checkbox" checked={setup.meStudioEnabled} onChange={(e) => setSetup({ ...setup, meStudioEnabled: e.target.checked })} /></label>
+          <label className="sila-field"><span>B. Costing Method</span><input className="sila-input" value={setup.costingMethod} onChange={(e) => setSetup({ ...setup, costingMethod: e.target.value })} /></label>
+          <label className="sila-field"><span>B. Target Food Cost %</span><input className="sila-input" type="number" step="0.01" value={setup.targetFoodCostPercent} onChange={(e) => setSetup({ ...setup, targetFoodCostPercent: Number(e.target.value) })} /></label>
+          <label className="sila-field"><span>B. Currency / Tax</span><input className="sila-input" value={`${setup.defaultCurrency} (${setup.taxTreatment})`} onChange={(e) => setSetup({ ...setup, defaultCurrency: e.target.value.split(" ")[0] })} /></label>
+          <label className="sila-field"><span>C. Portion Variance %</span><input className="sila-input" type="number" value={setup.portionVarianceThresholdPercent} onChange={(e) => setSetup({ ...setup, portionVarianceThresholdPercent: Number(e.target.value) })} /></label>
+          <label className="sila-field"><span>D. Forecast Horizon (Days)</span><input className="sila-input" type="number" value={setup.forecastHorizonDays} onChange={(e) => setSetup({ ...setup, forecastHorizonDays: Number(e.target.value) })} /></label>
+          <label className="sila-field"><span>E. Popularity Threshold</span><input className="sila-input" type="number" step="0.05" value={setup.popularityThreshold} onChange={(e) => setSetup({ ...setup, popularityThreshold: Number(e.target.value) })} /></label>
+          <label className="sila-field"><span>E. Profitability Basis</span>
+            <select className="sila-input" value={setup.profitabilityBasis} onChange={(e) => setSetup({ ...setup, profitabilityBasis: e.target.value })}>
+              <option value="FOOD_COST_ONLY">Food Cost Only</option>
+              <option value="VARIABLE_COST">Configured Variable Cost</option>
+            </select>
+          </label>
+          <label className="sila-field"><span>F. POS Sync Cron</span><input className="sila-input" value={setup.posSyncScheduleCron} onChange={(e) => setSetup({ ...setup, posSyncScheduleCron: e.target.value })} /></label>
+          <label className="sila-field"><span>G. AI Confidence Threshold</span><input className="sila-input" type="number" step="0.05" value={setup.aiConfidenceThreshold} onChange={(e) => setSetup({ ...setup, aiConfidenceThreshold: Number(e.target.value) })} /></label>
+          <label className="sila-field"><span>H. Require Approval on Publish</span><input type="checkbox" checked={setup.requireApprovalOnPublish} onChange={(e) => setSetup({ ...setup, requireApprovalOnPublish: e.target.checked })} /></label>
+        </div>
+        {setup.history.length > 0 && (
+          <div className="sme-kpi-box">
+            <strong>Configuration History</strong>
+            {setup.history.slice(0, 5).map((h) => <div key={h.id} className="sme-muted">v{h.configVersion} • {h.changeSummary} ({new Date(h.changedAtUtc).toLocaleString()})</div>)}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return null;
+};
+
+export default MeOperationalViews;
