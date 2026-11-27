@@ -82,10 +82,18 @@ assert.match(aiSetupSrc, /claudeKeyMasked/);
 assert.match(aiSetupSrc, /allowExternalAi/);
 assert.match(aiSetupSrc, /culinary-ai-usage-dashboard/);
 
-// 5. Verify SilaRecipes mounts SilaRecipeStudio2Workspaces without breaking existing guards
+// 5. Verify SilaRecipes mounts SilaRecipeStudio2Workspaces without breaking existing guards,
+// and exposes the clickable RECIPE STUDIO 2.0 · CULINARY INTELLIGENCE flexi ribbon next to SILA Recipe Studio
 const recipesSrc = read("../SilaRecipes.tsx");
 assert.match(recipesSrc, /SilaRecipeStudio2Workspaces/);
 assert.match(recipesSrc, /getCulinaryAiStatus/);
+assert.match(recipesSrc, /culinary-flexi-ribbon/);
+assert.match(recipesSrc, /RECIPE STUDIO 2\.0 · CULINARY INTELLIGENCE/);
+assert.match(recipesSrc, /showCulinaryOptions/);
+assert.match(recipesSrc, /showOptions=\{showCulinaryOptions\}/);
 assert.doesNotMatch(recipesSrc, /Culinary catalog/);
+
+const wsRouterSrc = read("SilaRecipeStudio2Workspaces.tsx");
+assert.match(wsRouterSrc, /showOptions\s*=\s*true/);
 
 console.log("culinarySuite2.test.ts: ok");
