@@ -204,6 +204,52 @@ from app.schemas.recipe_ai import (
     RegenerateSectionHttpRequest,
     StructuredRecipePayload,
 )
+from app.engines.me_digital_twin import analyze_twin_dependency_graph, compute_historical_similarity
+from app.engines.me_optimization import (
+    optimize_inventory_driven_menu,
+    optimize_menu_multi_objective,
+    optimize_menu_pricing,
+)
+from app.engines.me_forecast_waste import (
+    forecast_hierarchical_demand,
+    predict_cold_start_item,
+    predict_food_waste,
+    predict_ingredient_prices,
+)
+from app.engines.me_simulation_risk import (
+    evaluate_substitution_cascade,
+    run_monte_carlo_simulation,
+    run_sensitivity_analysis,
+    run_stress_tests,
+)
+from app.schemas.me_twin_opt import (
+    ColdStartPredictRequest,
+    ColdStartPredictResponse,
+    HierarchicalForecastRequest,
+    HierarchicalForecastResponse,
+    HistoricalSimilarityRequest,
+    HistoricalSimilarityResponse,
+    InventoryMenuOptimizeRequest,
+    InventoryMenuOptimizeResponse,
+    MeMultiObjectiveOptimizeRequest,
+    MeMultiObjectiveOptimizeResponse,
+    MonteCarloInput,
+    MonteCarloResponse,
+    PricePredictRequest,
+    PricePredictResponse,
+    PricingOptimizeRequest,
+    PricingOptimizeResponse,
+    SensitivityRequest,
+    SensitivityResponse,
+    StressTestRequest,
+    StressTestResponse,
+    SubstitutionCascadeRequest,
+    SubstitutionCascadeResponse,
+    TwinDependencyGraphRequest,
+    TwinDependencyGraphResponse,
+    WastePredictRequest,
+    WastePredictResponse,
+)
 
 app = FastAPI(
     title="SILA Culinary Intelligence Engine",
@@ -719,6 +765,77 @@ def post_me_ai_backtest_forecast(req: MeBacktestForecastRequest) -> MeBacktestFo
 @app.post("/v1/me-ai/suggest-pos-mapping", response_model=MePosMappingSuggestResponse)
 def post_me_ai_suggest_pos_mapping(req: MePosMappingSuggestRequest) -> MePosMappingSuggestResponse:
     return suggest_pos_mappings_ai(req)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase ME.3 — Digital Twin, Multi-Objective CP-SAT, Hierarchical Forecast & Risk
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@app.post("/v1/me-twin/dependency-graph", response_model=TwinDependencyGraphResponse)
+def post_me_twin_dependency_graph(req: TwinDependencyGraphRequest) -> TwinDependencyGraphResponse:
+    return analyze_twin_dependency_graph(req)
+
+
+@app.post("/v1/me-twin/optimize-multi-objective", response_model=MeMultiObjectiveOptimizeResponse)
+def post_me_twin_optimize_multi_objective(req: MeMultiObjectiveOptimizeRequest) -> MeMultiObjectiveOptimizeResponse:
+    return optimize_menu_multi_objective(req)
+
+
+@app.post("/v1/me-twin/optimize-inventory-menu", response_model=InventoryMenuOptimizeResponse)
+def post_me_twin_optimize_inventory_menu(req: InventoryMenuOptimizeRequest) -> InventoryMenuOptimizeResponse:
+    return optimize_inventory_driven_menu(req)
+
+
+@app.post("/v1/me-twin/optimize-pricing", response_model=PricingOptimizeResponse)
+def post_me_twin_optimize_pricing(req: PricingOptimizeRequest) -> PricingOptimizeResponse:
+    return optimize_menu_pricing(req)
+
+
+@app.post("/v1/me-twin/forecast-hierarchical", response_model=HierarchicalForecastResponse)
+def post_me_twin_forecast_hierarchical(req: HierarchicalForecastRequest) -> HierarchicalForecastResponse:
+    return forecast_hierarchical_demand(req)
+
+
+@app.post("/v1/me-twin/predict-cold-start", response_model=ColdStartPredictResponse)
+def post_me_twin_predict_cold_start(req: ColdStartPredictRequest) -> ColdStartPredictResponse:
+    return predict_cold_start_item(req)
+
+
+@app.post("/v1/me-twin/predict-waste", response_model=WastePredictResponse)
+def post_me_twin_predict_waste(req: WastePredictRequest) -> WastePredictResponse:
+    return predict_food_waste(req)
+
+
+@app.post("/v1/me-twin/predict-prices", response_model=PricePredictResponse)
+def post_me_twin_predict_prices(req: PricePredictRequest) -> PricePredictResponse:
+    return predict_ingredient_prices(req)
+
+
+@app.post("/v1/me-twin/simulate-monte-carlo", response_model=MonteCarloResponse)
+def post_me_twin_simulate_monte_carlo(req: MonteCarloInput) -> MonteCarloResponse:
+    return run_monte_carlo_simulation(req)
+
+
+@app.post("/v1/me-twin/sensitivity", response_model=SensitivityResponse)
+def post_me_twin_sensitivity(req: SensitivityRequest) -> SensitivityResponse:
+    return run_sensitivity_analysis(req)
+
+
+@app.post("/v1/me-twin/stress-test", response_model=StressTestResponse)
+def post_me_twin_stress_test(req: StressTestRequest) -> StressTestResponse:
+    return run_stress_tests(req)
+
+
+@app.post("/v1/me-twin/substitution-cascade", response_model=SubstitutionCascadeResponse)
+def post_me_twin_substitution_cascade(req: SubstitutionCascadeRequest) -> SubstitutionCascadeResponse:
+    return evaluate_substitution_cascade(req)
+
+
+@app.post("/v1/me-twin/historical-similarity", response_model=HistoricalSimilarityResponse)
+def post_me_twin_historical_similarity(req: HistoricalSimilarityRequest) -> HistoricalSimilarityResponse:
+    return compute_historical_similarity(req)
+
 
 
 
