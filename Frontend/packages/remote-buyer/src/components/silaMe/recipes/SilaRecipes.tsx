@@ -85,7 +85,6 @@ import {
   StudioCover,
 } from "./recipeStudioVisuals";
 import {
-  StudioActionBar,
   StudioDrawer,
   StudioFilterBar,
   StudioHeroPanel,
@@ -493,22 +492,18 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({
             }
             onClick={toggleOverview}
           />
-        </>
-      }
-      actions={
-        <StudioActionBar ariaLabel="Recipe Studio primary actions">
           <button
             type="button"
-            className="sila-studio-btn sila-studio-btn--primary"
+            className="sila-studio-overview-btn sila-recipe-new-icon"
             onClick={goNew}
             disabled={!canManage}
-            title={canManage ? undefined : "Requires MANAGE_SILA_RECIPE permission"}
+            title={canManage ? "New Recipe" : "Requires MANAGE_SILA_RECIPE permission"}
+            aria-label="New Recipe"
             data-testid="recipe-new-btn"
           >
-            <Plus size={15} strokeWidth={2.1} aria-hidden="true" />
-            <span>New Recipe</span>
+            <Plus size={24} strokeWidth={2.2} aria-hidden="true" />
           </button>
-        </StudioActionBar>
+        </>
       }
     />
   );

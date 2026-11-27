@@ -195,6 +195,27 @@
   outline-offset: 2px;
 }
 
+.sila-studio-overview-btn.sila-recipe-new-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: var(--sila-studio-blue);
+  border-color: var(--sila-studio-blue);
+  color: #ffffff;
+  box-shadow: 0 3px 10px rgba(8, 123, 181, 0.28);
+}
+
+.sila-studio-overview-btn.sila-recipe-new-icon:hover:not(:disabled) {
+  background: #066a9e;
+  border-color: #066a9e;
+}
+
+.sila-studio-overview-btn.sila-recipe-new-icon:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
 /* Culinary Intelligence / AI Toggle adjacent to hero title */
 .sila-studio-intel-toggle {
   display: inline-flex;
