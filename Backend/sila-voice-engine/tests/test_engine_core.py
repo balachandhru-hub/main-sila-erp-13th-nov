@@ -260,6 +260,53 @@ async def test_menu_engineering_voice_intents_and_agent():
     v4 = await agent.handle("MENU_SMALLER_BATCH_PREP", {"transcript": "Which dishes should we prepare in smaller batches?"}, {})
     assert v4["ok"] and "smaller batches" in v4["spoken"].lower()
 
+    # Phase ME.4 Section 40 SILA Voice proactive intelligence commands
+    for phrase, expected in [
+        ("What are today's major culinary risks?", "MENU_TODAY_RISKS"),
+        ("Which menus require my attention?", "MENU_ATTENTION_REQUIRED"),
+        ("Why is breakfast food cost increasing?", "MENU_FOOD_COST_DRIVER"),
+        ("Show recommendations awaiting approval.", "MENU_PENDING_APPROVALS"),
+        ("Prepare a corrective action plan.", "MENU_PREPARE_ACTION_PLAN"),
+        ("Optimize tomorrow's buffet.", "MENU_OPTIMIZE_BUFFET"),
+        ("Show savings realized this month.", "MENU_REALIZED_SAVINGS"),
+        ("Explain the supplier delivery risk.", "MENU_SUPPLIER_DELIVERY_RISK"),
+    ]:
+        res = await llm.interpret(transcript=phrase, session_state={}, allowed_intents=[expected])
+        assert res.intent == expected
+        assert res.agent_id == "MENU_ENGINEERING_AGENT"
+
+    reg.register(
+        ToolSpec("GetAutonomousControlTower", "ct"),
+        lambda a, c: _async_val({
+            "ok": True,
+            "data": {
+                "criticalRisks": [{"title": "Supplier Tomato Delay", "summary": "Tomato price rose 15%"}],
+                "estimatedFinancialExposure": 1240.0,
+                "pendingApprovalsCount": 3,
+                "validatedRealizedSavings": 4850.0,
+                "potentialSavings": 1900.0,
+                "integrations": [{"integrationKey": "SUPPLIER", "status": "DEGRADED"}],
+            },
+        }),
+    )
+    reg.register(
+        ToolSpec("PublishAutonomousEvent", "pub"),
+        lambda a, c: _async_val({"ok": True, "data": {"processedCount": 1}}),
+    )
+
+    p1 = await agent.handle("MENU_TODAY_RISKS", {"transcript": "What are today's major culinary risks?"}, {})
+    assert p1["ok"] and "Supplier Tomato Delay" in p1["spoken"]
+    p2 = await agent.handle("MENU_PENDING_APPROVALS", {"transcript": "Show recommendations awaiting approval."}, {})
+    assert p2["ok"] and "3" in p2["spoken"] and "cannot auto-approve" in p2["spoken"].lower()
+    p3 = await agent.handle("MENU_PREPARE_ACTION_PLAN", {"transcript": "Prepare a corrective action plan."}, {})
+    assert p3["ok"] and p3.get("requiresConfirmation") is True
+    p4 = await agent.handle("MENU_PREPARE_ACTION_PLAN", {"transcript": "yes, confirm prepare a corrective action plan"}, {})
+    assert p4["ok"] and "approval" in p4["spoken"].lower()
+    p5 = await agent.handle("MENU_REALIZED_SAVINGS", {"transcript": "Show savings realized this month."}, {})
+    assert p5["ok"] and "4850.00" in p5["spoken"]
+    p6 = await agent.handle("MENU_SUPPLIER_DELIVERY_RISK", {"transcript": "Explain the supplier delivery risk."}, {})
+    assert p6["ok"] and "supplier risk" in p6["spoken"].lower()
+
 
 async def _async_val(val):
     return val

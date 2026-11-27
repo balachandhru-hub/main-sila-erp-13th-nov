@@ -196,4 +196,108 @@ class MenuEngineeringAgent:
                 spoken = "No high-leftover dishes require smaller-batch splitting right now."
             return {"ok": True, "intent": intent, "results": [res], "spoken": spoken, "data": data}
 
+        if intent == "MENU_TODAY_RISKS":
+            res = await self.tools.invoke("GetAutonomousControlTower", {}, ctx)
+            if not res.get("ok"):
+                return {"ok": False, "intent": intent, "results": [res], "spoken": "Could not retrieve today's culinary risks."}
+            data = res.get("data") or {}
+            risks = data.get("criticalRisks") or []
+            exposure = float(data.get("estimatedFinancialExposure") or 0)
+            if risks:
+                top_titles = ", ".join(r.get("title") or r.get("code") or "Risk" for r in risks[:3])
+                spoken = f"Found {len(risks)} major culinary risks (estimated exposure {exposure:.2f}): {top_titles}."
+            else:
+                spoken = "No critical culinary risks detected right now."
+            return {"ok": True, "intent": intent, "results": [res], "spoken": spoken, "data": data}
+
+        if intent == "MENU_ATTENTION_REQUIRED":
+            res = await self.tools.invoke("GetMenuCostMargin", {}, ctx)
+            if not res.get("ok"):
+                return {"ok": False, "intent": intent, "results": [res], "spoken": "Could not evaluate menu attention status."}
+            data = res.get("data") or {}
+            items = [i for i in (data.get("items") or []) if float(i.get("foodCostPercentage") or 0) > 35]
+            if items:
+                names = ", ".join(i.get("itemName", "Menu Item") for i in items[:4])
+                spoken = f"{len(items)} items require attention due to elevated food cost: {names}."
+            else:
+                spoken = "All active menu items are currently within configured food cost thresholds."
+            return {"ok": True, "intent": intent, "results": [res], "spoken": spoken, "data": data}
+
+        if intent == "MENU_FOOD_COST_DRIVER":
+            ct = await self.tools.invoke("GetAutonomousControlTower", {}, ctx)
+            anom = await self.tools.invoke("GetMenuConsumptionAnomalies", {}, ctx)
+            ct_data = (ct.get("data") or {}) if ct.get("ok") else {}
+            anom_data = (anom.get("data") or {}) if anom.get("ok") else {}
+            risks = ct_data.get("criticalRisks") or []
+            causes = anom_data.get("topRootCauses") or anom_data.get("anomalies") or []
+            parts = []
+            if risks:
+                parts.append(risks[0].get("summary") or risks[0].get("title") or "Price variance risk detected")
+            if causes:
+                first_cause = causes[0] if isinstance(causes[0], str) else (causes[0].get("rootCause") or causes[0].get("materialName") or "consumption variance")
+                parts.append(f"Consumption driver: {first_cause}")
+            spoken = "; ".join(parts) if parts else "Food cost changes are driven by ingredient price updates and portion consumption variance."
+            return {"ok": True, "intent": intent, "results": [ct, anom], "spoken": spoken, "data": {"controlTower": ct_data, "anomalies": anom_data}}
+
+        if intent == "MENU_PENDING_APPROVALS":
+            res = await self.tools.invoke("GetAutonomousControlTower", {}, ctx)
+            if not res.get("ok"):
+                return {"ok": False, "intent": intent, "results": [res], "spoken": "Could not check pending approvals."}
+            data = res.get("data") or {}
+            pending = data.get("pendingApprovalsCount") or len(data.get("pendingApprovals") or [])
+            spoken = f"There are {pending} recommendations or action items awaiting authorized approval. Voice commands cannot auto-approve financial changes."
+            return {"ok": True, "intent": intent, "results": [res], "spoken": spoken, "data": data}
+
+        if intent == "MENU_PREPARE_ACTION_PLAN":
+            confirmed = bool(payload.get("confirmed") or _CONFIRM_WORDS_RE.search(transcript))
+            if not confirmed:
+                return {
+                    "ok": True,
+                    "intent": intent,
+                    "results": [],
+                    "requiresConfirmation": True,
+                    "spoken": "Preparing a corrective business action plan creates a controlled draft for review and approval. Please confirm if you want me to generate it now.",
+                }
+            res = await self.tools.invoke("PublishAutonomousEvent", {"eventType": "ForecastDeviationDetected", "objectLabel": "Voice Corrective Action Plan"}, ctx)
+            if not res.get("ok"):
+                return {"ok": False, "intent": intent, "results": [res], "spoken": "Could not generate corrective action plan. Check RBAC permissions."}
+            data = res.get("data") or {}
+            spoken = "Generated consolidated corrective business action plan. High-risk steps still require explicit RBAC approval before execution."
+            return {"ok": True, "intent": intent, "results": [res], "spoken": spoken, "data": data}
+
+        if intent == "MENU_OPTIMIZE_BUFFET":
+            confirmed = bool(payload.get("confirmed") or _CONFIRM_WORDS_RE.search(transcript))
+            res = await self.tools.invoke("RunMeStudioObjective", {"objective": transcript, "confirmation": confirmed}, ctx)
+            if not res.get("ok"):
+                return {"ok": False, "intent": intent, "results": [res], "spoken": "Could not optimize tomorrow's buffet. Check permissions."}
+            data = res.get("data") or {}
+            spoken = data.get("explanation") or "Tomorrow's buffet optimization scenario generated."
+            if not confirmed:
+                spoken += " Draft changes require explicit confirmation and approval before publishing."
+            return {"ok": True, "intent": intent, "results": [res], "spoken": spoken, "data": data}
+
+        if intent == "MENU_REALIZED_SAVINGS":
+            res = await self.tools.invoke("GetAutonomousControlTower", {}, ctx)
+            if not res.get("ok"):
+                return {"ok": False, "intent": intent, "results": [res], "spoken": "Could not retrieve realized savings."}
+            data = res.get("data") or {}
+            realized = float(data.get("validatedRealizedSavings") or 0)
+            potential = float(data.get("potentialSavings") or 0)
+            spoken = f"Validated realized savings stand at {realized:.2f}, with {potential:.2f} in additional potential savings under evaluation."
+            return {"ok": True, "intent": intent, "results": [res], "spoken": spoken, "data": data}
+
+        if intent == "MENU_SUPPLIER_DELIVERY_RISK":
+            res = await self.tools.invoke("GetAutonomousControlTower", {}, ctx)
+            if not res.get("ok"):
+                return {"ok": False, "intent": intent, "results": [res], "spoken": "Could not check supplier delivery risks."}
+            data = res.get("data") or {}
+            integrations = data.get("integrations") or []
+            degraded = [i for i in integrations if (i.get("status") or "").upper() in ("DEGRADED", "UNHEALTHY", "DELAYED")]
+            risks = [r for r in (data.get("criticalRisks") or []) if "supplier" in (r.get("title") or r.get("summary") or "").lower() or "delivery" in (r.get("title") or "").lower()]
+            if risks or degraded:
+                spoken = f"Detected {len(risks)} supplier risk items and {len(degraded)} degraded integration feeds requiring procurement review."
+            else:
+                spoken = "No active supplier delivery delay risks are currently flagged in the Control Tower."
+            return {"ok": True, "intent": intent, "results": [res], "spoken": spoken, "data": data}
+
         return {"ok": True, "intent": intent, "results": [], "spoken": payload.get("spoken_reply") or "Ready for Menu Engineering commands."}

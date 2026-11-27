@@ -91,6 +91,62 @@ class RulesLlm:
             )
         if _CANCEL.search(lower):
             return LlmTurnResult(intent="CANCEL", spoken_reply="Cancelling this conversation.", agent_id=agent)
+        if re.search(r"\b(major culinary risks?|today'?s.*risks?)\b", lower):
+            return LlmTurnResult(
+                intent="MENU_TODAY_RISKS",
+                spoken_reply="Fetching today's major culinary and operational risks from the Control Tower.",
+                agent_id="MENU_ENGINEERING_AGENT",
+                structured={"transcript": text},
+            )
+        if re.search(r"\b(which menus?|menus? require)\b.*\b(attention|review)\b", lower):
+            return LlmTurnResult(
+                intent="MENU_ATTENTION_REQUIRED",
+                spoken_reply="Checking menus requiring immediate attention.",
+                agent_id="MENU_ENGINEERING_AGENT",
+                structured={"transcript": text},
+            )
+        if re.search(r"\bwhy\b.*\bfood cost\b.*\b(increasing|rising|high)\b", lower):
+            return LlmTurnResult(
+                intent="MENU_FOOD_COST_DRIVER",
+                spoken_reply="Investigating root causes behind food cost increase.",
+                agent_id="MENU_ENGINEERING_AGENT",
+                structured={"transcript": text},
+            )
+        if re.search(r"\b(awaiting approval|pending approvals?|recommendations? awaiting)\b", lower):
+            return LlmTurnResult(
+                intent="MENU_PENDING_APPROVALS",
+                spoken_reply="Checking recommendations and action items awaiting approval.",
+                agent_id="MENU_ENGINEERING_AGENT",
+                structured={"transcript": text},
+            )
+        if re.search(r"\b(prepare|create)\b.*\bcorrective action plan\b", lower):
+            return LlmTurnResult(
+                intent="MENU_PREPARE_ACTION_PLAN",
+                spoken_reply="Preparing a consolidated corrective action plan draft.",
+                agent_id="MENU_ENGINEERING_AGENT",
+                structured={"transcript": text},
+            )
+        if re.search(r"\boptimize\b.*\btomorrow'?s?\s+buffet\b", lower):
+            return LlmTurnResult(
+                intent="MENU_OPTIMIZE_BUFFET",
+                spoken_reply="Optimizing tomorrow's buffet draft in ME Studio.",
+                agent_id="MENU_ENGINEERING_AGENT",
+                structured={"transcript": text},
+            )
+        if re.search(r"\b(savings realized|realized savings|savings this month)\b", lower):
+            return LlmTurnResult(
+                intent="MENU_REALIZED_SAVINGS",
+                spoken_reply="Retrieving validated realized financial savings.",
+                agent_id="MENU_ENGINEERING_AGENT",
+                structured={"transcript": text},
+            )
+        if re.search(r"\b(supplier delivery risk|delivery delay risk|explain.*supplier)\b", lower):
+            return LlmTurnResult(
+                intent="MENU_SUPPLIER_DELIVERY_RISK",
+                spoken_reply="Inspecting supplier delivery delay risks and mitigation options.",
+                agent_id="MENU_ENGINEERING_AGENT",
+                structured={"transcript": text},
+            )
         if re.search(r"\b(how much|need tomorrow|ingredient requirement for)\b", lower):
             return LlmTurnResult(
                 intent="MENU_INGREDIENT_DEMAND_TOMORROW",

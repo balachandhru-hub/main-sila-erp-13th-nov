@@ -129,6 +129,14 @@ class SilaBuyerTools:
             ToolSpec("GetTwinWasteRecommendations", "Retrieve Digital Twin food waste and smaller-batch prep recommendations", "ViewMeStudio"),
             self.get_twin_waste_recommendations,
         )
+        registry.register(
+            ToolSpec("GetAutonomousControlTower", "Retrieve autonomous control tower risks, action plans, pending approvals, and realized savings", "ViewMeStudio"),
+            self.get_autonomous_control_tower,
+        )
+        registry.register(
+            ToolSpec("PublishAutonomousEvent", "Publish a normalized business event to generate or inspect a corrective action plan", "UseAiMenuIntelligence"),
+            self.publish_autonomous_event,
+        )
 
     async def get_current_user_context(self, args: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
         return {
@@ -279,3 +287,22 @@ class SilaBuyerTools:
     async def get_twin_waste_recommendations(self, args: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
         qs = f"?propertyId={ctx['propertyId']}" if ctx.get("propertyId") else ""
         return await self._request("GET", f"/api/v1/buyer/sila/me-studio/twin/predict/waste{qs}", ctx)
+
+    async def get_autonomous_control_tower(self, args: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
+        qs = f"?propertyId={ctx['propertyId']}" if ctx.get("propertyId") else ""
+        return await self._request("GET", f"/api/v1/buyer/sila/me-studio/autonomous/control-tower{qs}", ctx)
+
+    async def publish_autonomous_event(self, args: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
+        payload = {
+            "propertyId": ctx.get("propertyId"),
+            "eventType": args.get("eventType") or "ForecastDeviationDetected",
+            "sourceSystem": "SILA_VOICE",
+            "objectLabel": args.get("objectLabel") or "Voice Corrective Action Plan Request",
+            "materialityScore": float(args.get("materialityScore") or 15.0),
+            "payload": args.get("payload") or {},
+        }
+        pub = await self._request("POST", "/api/v1/buyer/sila/me-studio/autonomous/events", ctx, payload)
+        if not pub.get("ok"):
+            return pub
+        qs = f"?propertyId={ctx['propertyId']}" if ctx.get("propertyId") else ""
+        return await self._request("POST", f"/api/v1/buyer/sila/me-studio/autonomous/events/process{qs}", ctx, {})
