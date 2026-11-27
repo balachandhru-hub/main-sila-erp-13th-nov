@@ -903,9 +903,9 @@
 }
 
 .sila-studio-item-card--compact .sila-studio-item-card__media--thumb .rstudio-cover__art {
-  width: 1.4rem;
-  height: 1.4rem;
-  align-self: center;
+  width: 100%;
+  height: 100%;
+  align-self: stretch;
 }
 
 .sila-studio-item-card--compact .sila-studio-item-card__media--thumb .rstudio-cover__caption { display: none; }
