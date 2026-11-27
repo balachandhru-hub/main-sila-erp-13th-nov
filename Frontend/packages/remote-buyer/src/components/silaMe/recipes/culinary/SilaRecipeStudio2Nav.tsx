@@ -117,8 +117,8 @@ const SilaRecipeStudio2Nav: React.FC<SilaRecipeStudio2NavProps> = ({
     {
       id: "procurement",
       label: "Event Procurement",
-      badge: "Phase 2C Preview",
-      badgeTone: "planned",
+      badge: "Phase 2C Live",
+      badgeTone: "live",
       routeKind: "procurement",
       visible: flags.menuEventPreviewEnabled,
     },

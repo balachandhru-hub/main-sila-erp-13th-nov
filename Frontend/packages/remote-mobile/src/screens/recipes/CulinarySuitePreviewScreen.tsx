@@ -69,6 +69,16 @@ import {
   type SilaCulinaryMrpRunSummary,
   type SilaCulinaryMrpSimulationResult,
 } from '../../../../remote-buyer/src/api/silaMe/silaCulinaryMrpApi';
+import {
+  createProcurementItoDraft,
+  createProcurementPoDraft,
+  decideProcurementPlanApproval,
+  getProcurementPlan,
+  listProcurementPlans,
+  submitProcurementPlanForApproval,
+  type SilaCulinaryProcurementPlanDetail,
+  type SilaCulinaryProcurementPlanSummary,
+} from '../../../../remote-buyer/src/api/silaMe/silaCulinaryProcurementApi';
 import { scaleDraftLocally } from '../../../../remote-buyer/src/components/silaMe/recipes/culinary/culinaryRecipePlannerHelpers';
 import {
   calculateRecipeScaling,
@@ -81,7 +91,7 @@ import { useGo } from '../../navigation';
 import { errorText, useLoad } from '../../useLoad';
 import './recipeStudio.css';
 
-type MobileTab = 'generate' | 'draft' | 'materials' | 'lifecycle' | 'events' | 'mrp' | 'history' | 'demo';
+type MobileTab = 'generate' | 'draft' | 'materials' | 'lifecycle' | 'events' | 'mrp' | 'procurement' | 'history' | 'demo';
 
 /**
  * Phase 1A + Phase 1B Mobile Culinary Intelligence — responsive chef AI recipe generation,
@@ -160,6 +170,29 @@ const CulinarySuitePreviewScreen: React.FC = () => {
   const [mrpGuestScalePct, setMrpGuestScalePct] = useState(100);
   const [mrpBufferPct, setMrpBufferPct] = useState(0);
   const [mrpSimResult, setMrpSimResult] = useState<SilaCulinaryMrpSimulationResult | null>(null);
+
+  // Phase 2C Mobile Event Procurement state (chef-friendly, cost-permission gated, zero auto-postings)
+  const [mobileProcPlans, setMobileProcPlans] = useState<SilaCulinaryProcurementPlanSummary[]>([]);
+  const [activeMobileProc, setActiveMobileProc] = useState<SilaCulinaryProcurementPlanDetail | null>(null);
+  const [procLoading, setProcLoading] = useState(false);
+  const [procShortagesOnly, setProcShortagesOnly] = useState(false);
+
+  const handleOpenProcurementTab = async () => {
+    setTab('procurement');
+    setProcLoading(true);
+    try {
+      const list = await listProcurementPlans({ includeSimulations: true });
+      setMobileProcPlans(list);
+      const target = activeMobileProc ? list.find((p) => p.id === activeMobileProc.summary.id) ?? list[0] : list[0];
+      if (target) {
+        setActiveMobileProc(await getProcurementPlan(target.id));
+      }
+    } catch (err) {
+      setErrMsg(errorText(err));
+    } finally {
+      setProcLoading(false);
+    }
+  };
 
   const handleOpenMrpTab = async () => {
     setTab('mrp');
@@ -539,6 +572,9 @@ const CulinarySuitePreviewScreen: React.FC = () => {
               </button>
               <button type="button" className={`rs-tab ${tab === 'mrp' ? 'rs-tab--on' : ''}`} onClick={handleOpenMrpTab}>
                 Event MRP{mobileMrpRuns.length > 0 ? ` (${mobileMrpRuns.length})` : ''}
+              </button>
+              <button type="button" className={`rs-tab ${tab === 'procurement' ? 'rs-tab--on' : ''}`} onClick={handleOpenProcurementTab}>
+                Procurement{mobileProcPlans.length > 0 ? ` (${mobileProcPlans.length})` : ''}
               </button>
               <button type="button" className={`rs-tab ${tab === 'history' ? 'rs-tab--on' : ''}`} onClick={() => setTab('history')}>
                 History ({draftsLoad.data?.length ?? 0})
@@ -1480,6 +1516,147 @@ const CulinarySuitePreviewScreen: React.FC = () => {
                               }}
                             >
                               Approve MRP
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </section>
+            )}
+
+            {tab === 'procurement' && (
+              <section className="sm-card" data-testid="mobile-p2c-procurement">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                  <h2 style={{ margin: 0 }}>Event Material Readiness &amp; Procurement</h2>
+                  <button type="button" className="sm-btn" onClick={handleOpenProcurementTab}>Refresh</button>
+                </div>
+                {procLoading ? (
+                  <p className="sm-meta">Loading procurement readiness...</p>
+                ) : mobileProcPlans.length === 0 ? (
+                  <p className="sm-meta">No event procurement plans yet. Create one from an approved Event MRP in Cloud Recipe Studio.</p>
+                ) : (
+                  <>
+                    <div className="sm-field" style={{ marginBottom: '0.5rem' }}>
+                      <label htmlFor="m-p2c-plan">Procurement Plan</label>
+                      <select
+                        id="m-p2c-plan"
+                        value={activeMobileProc?.summary.id ?? ''}
+                        onChange={async (e) => {
+                          if (!e.target.value) return;
+                          setProcLoading(true);
+                          try {
+                            setActiveMobileProc(await getProcurementPlan(e.target.value));
+                          } finally {
+                            setProcLoading(false);
+                          }
+                        }}
+                      >
+                        {mobileProcPlans.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.planCode} · {p.name} ({p.status})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    {activeMobileProc && (
+                      <div style={{ display: 'grid', gap: '0.55rem' }}>
+                        <div className="sm-meta">
+                          <strong>{activeMobileProc.summary.primaryEventName || activeMobileProc.summary.name}</strong> ·{' '}
+                          Physical Ready: <strong>{activeMobileProc.summary.physicalReadinessPercent}%</strong> ·{' '}
+                          Projected Ready: <strong>{activeMobileProc.summary.projectedReadinessPercent}%</strong> ·{' '}
+                          Shortages: <strong>{activeMobileProc.summary.criticalShortageCount}</strong>
+                        </div>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem' }}>
+                          <input type="checkbox" checked={procShortagesOnly} onChange={(e) => setProcShortagesOnly(e.target.checked)} />
+                          Show shortage &amp; delivery-risk items only
+                        </label>
+                        <ul className="sm-list">
+                          {activeMobileProc.lines
+                            .filter((l) => !procShortagesOnly || l.netUncoveredQty > 0 || !l.isDeliveryFeasible)
+                            .map((l) => (
+                              <li key={l.id} style={{ padding: '0.45rem 0', borderBottom: '1px solid #e2e8f0' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem' }}>
+                                  <div>
+                                    <strong>{l.materialDescription}</strong>
+                                    <div className="sm-meta">
+                                      Req {l.grossRequirementQty} {l.baseUom} · Res {l.activeEventReservationQty} · Inc PO {l.incomingPoAllocatedQty} · Prop ITO {l.proposedItoQty} · Gap {l.netUncoveredQty}
+                                    </div>
+                                    <div className="sm-meta">
+                                      Status: <strong>{l.readinessStatus}</strong>
+                                      {activeMobileProc.costsVisible && l.recommendedSupplierName
+                                        ? ` · Supplier: ${l.recommendedSupplierName}`
+                                        : ''}
+                                    </div>
+                                  </div>
+                                  <div className="sm-actions">
+                                    {l.proposedItoQty > 0 && l.itoCandidates[0]?.samePlant311Eligible && l.destinationLocationId && (
+                                      <button
+                                        type="button"
+                                        className="sm-btn"
+                                        onClick={async () => {
+                                          await createProcurementItoDraft(activeMobileProc.summary.id, {
+                                            procurementLineId: l.id,
+                                            fromLocationId: l.itoCandidates[0].sourceLocationId,
+                                            toLocationId: l.destinationLocationId!,
+                                            quantity: l.proposedItoQty,
+                                            idempotencyKey: `mob-ito-${l.id}`,
+                                          });
+                                          setActiveMobileProc(await getProcurementPlan(activeMobileProc.summary.id));
+                                          setStatusMsg(`ITO draft requested for ${l.materialDescription}.`);
+                                        }}
+                                      >
+                                        ITO Draft
+                                      </button>
+                                    )}
+                                    {l.recommendedPurchaseQty > 0 && l.recommendedSupplierId && (
+                                      <button
+                                        type="button"
+                                        className="sm-btn"
+                                        onClick={async () => {
+                                          await createProcurementPoDraft(activeMobileProc.summary.id, {
+                                            procurementLineIds: [l.id],
+                                            supplierId: l.recommendedSupplierId!,
+                                            idempotencyKey: `mob-po-${l.id}`,
+                                          });
+                                          setActiveMobileProc(await getProcurementPlan(activeMobileProc.summary.id));
+                                          setStatusMsg(`PO draft created for ${l.materialDescription} (pending approval).`);
+                                        }}
+                                      >
+                                        PO Draft
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              </li>
+                            ))}
+                        </ul>
+                        <div className="sm-actions">
+                          {activeMobileProc.summary.status === 'DRAFT' && (
+                            <button
+                              type="button"
+                              className="sm-btn sm-btn--primary"
+                              onClick={async () => {
+                                const updated = await submitProcurementPlanForApproval(activeMobileProc.summary.id);
+                                setActiveMobileProc(updated);
+                                setStatusMsg(`Submitted ${updated.summary.planCode} for approval.`);
+                              }}
+                            >
+                              Submit Procurement Approval
+                            </button>
+                          )}
+                          {activeMobileProc.summary.status === 'PENDING_APPROVAL' && (
+                            <button
+                              type="button"
+                              className="sm-btn sm-btn--primary"
+                              onClick={async () => {
+                                const updated = await decideProcurementPlanApproval(activeMobileProc.summary.id, 'APPROVE', 'Approved via Mobile');
+                                setActiveMobileProc(updated);
+                                setStatusMsg(`Approved ${updated.summary.planCode}.`);
+                              }}
+                            >
+                              Approve Plan
                             </button>
                           )}
                         </div>

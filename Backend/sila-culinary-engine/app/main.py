@@ -16,6 +16,11 @@ from app.engines.menu_planner import (
 )
 from app.engines.mrp import EventMrpRequest, EventMrpResult, calculate_event_mrp
 from app.engines.mrp_advanced import analyze_mrp_with_ai, explode_mrp, optimize_mrp_batches
+from app.engines.procurement_advanced import (
+    analyze_procurement_with_ai,
+    compute_procurement_plan,
+    optimize_procurement_milp,
+)
 from app.engines.normalization import convert_physical_quantity, normalize_ingredient_text
 from app.engines.pnl import EventPnlRequest, EventPnlResult, calculate_event_pnl
 from app.engines.recipe_costing import calculate_recipe_costing, optimize_recipe_costing
@@ -71,6 +76,14 @@ from app.schemas.mrp_engine import (
     MrpExplodeResponse,
     MrpOptimizeRequest,
     MrpOptimizeResponse,
+)
+from app.schemas.procurement_engine import (
+    ProcurementAiAnalyzeRequest,
+    ProcurementAiAnalyzeResponse,
+    ProcurementOptimizeRequest,
+    ProcurementOptimizeResponse,
+    ProcurementPlanRequest,
+    ProcurementPlanResponse,
 )
 from app.schemas.recipe_ai import (
     ExtractedDocumentResult,
@@ -403,5 +416,23 @@ def post_optimize_mrp(req: MrpOptimizeRequest) -> MrpOptimizeResponse:
 @app.post("/v1/mrp/analyze", response_model=MrpAiAnalyzeResponse)
 async def post_analyze_mrp(req: MrpAiAnalyzeRequest) -> MrpAiAnalyzeResponse:
     return await analyze_mrp_with_ai(req)
+
+
+# ==================== PHASE 2C PROCUREMENT INTELLIGENCE ENDPOINTS ====================
+
+
+@app.post("/v1/procurement/plan-coverage", response_model=ProcurementPlanResponse)
+def post_plan_procurement_coverage(req: ProcurementPlanRequest) -> ProcurementPlanResponse:
+    return compute_procurement_plan(req)
+
+
+@app.post("/v1/procurement/optimize", response_model=ProcurementOptimizeResponse)
+def post_optimize_procurement(req: ProcurementOptimizeRequest) -> ProcurementOptimizeResponse:
+    return optimize_procurement_milp(req)
+
+
+@app.post("/v1/procurement/analyze", response_model=ProcurementAiAnalyzeResponse)
+async def post_analyze_procurement(req: ProcurementAiAnalyzeRequest) -> ProcurementAiAnalyzeResponse:
+    return await analyze_procurement_with_ai(req)
 
 
