@@ -320,6 +320,7 @@ namespace Buyer.Domain.Common
                 public const string INTEGRATION_PROCESS_GET_POS_SALE = "GET_POS_SALE";
                 // ---- SILA ME release 2
                 public const string SILA_APPROVAL_TYPE_RECIPE = "RECIPE";
+                public const string SILA_APPROVAL_TYPE_MATERIAL_REQUEST = "MATERIAL_REQUEST";
                 public const string SILA_APPROVAL_TYPE_MATERIAL_PRICE = "MATERIAL_PRICE";
                 public const string SILA_APPROVAL_TYPE_ITO = "ITO";
                 public const string SILA_APPROVAL_TYPE_INVENTORY = "INVENTORY";
@@ -417,6 +418,35 @@ namespace Buyer.Domain.Common
                 public const string SILA_AUDIT_CULINARY_MAT_SUB_ACCEPTED = "MATERIAL_SUBSTITUTION_ACCEPTED";
                 public const string SILA_AUDIT_CULINARY_MAT_INDEX_START = "MATERIAL_INDEX_BUILD_STARTED";
                 public const string SILA_AUDIT_CULINARY_MAT_INDEX_DONE = "MATERIAL_INDEX_BUILD_COMPLETED";
+
+                // Phase 1C Material Requests, Costing, Approvals, Recipe ID Creation & Publishing
+                public const string SILA_REF_CULINARY_MATERIAL_REQUEST = "CULINARY_MATERIAL_REQUEST";
+                public const string SILA_REF_CULINARY_COSTING = "CULINARY_COSTING_SNAPSHOT";
+                public const string SILA_REF_CULINARY_RECIPE_LIFECYCLE = "CULINARY_RECIPE_LIFECYCLE";
+                public const string SILA_AUDIT_CULINARY_MRQ_PREPARED = "MATERIAL_REQUEST_PREPARED";
+                public const string SILA_AUDIT_CULINARY_MRQ_SUBMITTED = "MATERIAL_REQUEST_SUBMITTED";
+                public const string SILA_AUDIT_CULINARY_MRQ_DUP_CHECK = "MATERIAL_REQUEST_DUPLICATE_REVIEWED";
+                public const string SILA_AUDIT_CULINARY_MRQ_APPROVED = "MATERIAL_REQUEST_APPROVED";
+                public const string SILA_AUDIT_CULINARY_MRQ_REJECTED = "MATERIAL_REQUEST_REJECTED";
+                public const string SILA_AUDIT_CULINARY_MRQ_RETURNED = "MATERIAL_REQUEST_RETURNED";
+                public const string SILA_AUDIT_CULINARY_MRQ_EXEC_STARTED = "MATERIAL_CREATION_REQUESTED";
+                public const string SILA_AUDIT_CULINARY_MRQ_CREATED = "MATERIAL_CREATION_COMPLETED";
+                public const string SILA_AUDIT_CULINARY_MRQ_EXEC_FAILED = "MATERIAL_CREATION_FAILED";
+                public const string SILA_AUDIT_CULINARY_MRQ_UNKNOWN = "MATERIAL_OUTCOME_UNKNOWN";
+                public const string SILA_AUDIT_CULINARY_MRQ_SYNCED = "MATERIAL_SYNCHRONIZATION_COMPLETED";
+                public const string SILA_AUDIT_CULINARY_MAPPING_REFRESHED = "RECIPE_MATERIAL_MAPPING_REFRESHED";
+                public const string SILA_AUDIT_CULINARY_COST_CALC = "RECIPE_COSTING_CALCULATED";
+                public const string SILA_AUDIT_CULINARY_COST_SNAPSHOT = "COSTING_SNAPSHOT_SAVED";
+                public const string SILA_AUDIT_CULINARY_COST_SCENARIO = "COSTING_SCENARIO_CREATED";
+                public const string SILA_AUDIT_CULINARY_RECOSTING = "RECIPE_RECOSTING_COMPLETED";
+                public const string SILA_AUDIT_CULINARY_RCP_SUBMITTED = "RECIPE_SUBMITTED_FOR_APPROVAL";
+                public const string SILA_AUDIT_CULINARY_RCP_APPROVED = "RECIPE_APPROVED";
+                public const string SILA_AUDIT_CULINARY_RCP_REJECTED = "RECIPE_REJECTED";
+                public const string SILA_AUDIT_CULINARY_RCP_ID_CREATED = "PRODUCTION_RECIPE_ID_CREATED";
+                public const string SILA_AUDIT_CULINARY_RCP_IMG_ASSIGNED = "RECIPE_IMAGE_ASSIGNED";
+                public const string SILA_AUDIT_CULINARY_RCP_PUBLISHED = "RECIPE_PUBLISHED";
+                public const string SILA_AUDIT_CULINARY_RCP_PUB_FAILED = "RECIPE_PUBLISHING_FAILED";
+                public const string SILA_AUDIT_CULINARY_RCP_REV_CREATED = "RECIPE_REVISION_CREATED";
                 public const string SILA_AUDIT_CULINARY_MAT_INDEX_FAIL = "MATERIAL_INDEX_BUILD_FAILED";
                 public const string HTTP_CLIENT_CULINARY_AI = "sila-culinary-ai";
                 public const string HTTP_CLIENT_CULINARY_ENGINE = "sila-culinary-engine";

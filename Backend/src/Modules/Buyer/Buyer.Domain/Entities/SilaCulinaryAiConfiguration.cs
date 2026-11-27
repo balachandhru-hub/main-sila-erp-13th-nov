@@ -83,6 +83,9 @@ namespace Buyer.Domain.Entities
         /// <summary>JSON object storing Phase 1B Material Intelligence thresholds, models, and review policies.</summary>
         public string? MaterialConfigJson { get; set; }
 
+        /// <summary>JSON object storing Phase 1C Costing Source Hierarchy, Target Food Cost %, Tax Policy, and Material Request approval policy.</summary>
+        public string? CostingConfigJson { get; set; }
+
         [MaxLength(30)]
         public string? LastTestProvider { get; set; }
 

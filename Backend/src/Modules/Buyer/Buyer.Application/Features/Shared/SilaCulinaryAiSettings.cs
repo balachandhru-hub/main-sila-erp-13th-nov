@@ -179,6 +179,35 @@ namespace Buyer.Application.Features.Shared
             return JsonSerializer.Serialize(value, JsonOptions);
         }
 
+        public static SilaCulinaryCostingConfigDto ParseCostingConfig(string? json)
+        {
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                return new SilaCulinaryCostingConfigDto();
+            }
+            try
+            {
+                return JsonSerializer.Deserialize<SilaCulinaryCostingConfigDto>(json, JsonOptions)
+                    ?? new SilaCulinaryCostingConfigDto();
+            }
+            catch
+            {
+                return new SilaCulinaryCostingConfigDto();
+            }
+        }
+
+        public static string SerializeCostingConfig(SilaCulinaryCostingConfigDto? cfg)
+        {
+            SilaCulinaryCostingConfigDto value = cfg ?? new SilaCulinaryCostingConfigDto();
+            value.DefaultTargetFoodCostPercent = Math.Clamp(value.DefaultTargetFoodCostPercent, 1.0m, 95.0m);
+            value.MaxSubRecipeDepth = Math.Clamp(value.MaxSubRecipeDepth, 1, 10);
+            if (value.CostSourceHierarchy == null || value.CostSourceHierarchy.Count == 0)
+            {
+                value.CostSourceHierarchy = new SilaCulinaryCostingConfigDto().CostSourceHierarchy;
+            }
+            return JsonSerializer.Serialize(value, JsonOptions);
+        }
+
         public static Dictionary<string, string> ParseTaskRouting(string? json)
         {
             if (string.IsNullOrWhiteSpace(json))
@@ -258,6 +287,7 @@ namespace Buyer.Application.Features.Shared
             TaskRoutingJson = SerializeTaskRouting(null),
             FeatureFlagsJson = SerializeFeatureFlags(null),
             MaterialConfigJson = SerializeMaterialConfig(null),
+            CostingConfigJson = SerializeCostingConfig(null),
         };
 
         public static SilaCulinaryAiConfigDto ToDto(
@@ -327,6 +357,7 @@ namespace Buyer.Application.Features.Shared
                 TaskRouting = ParseTaskRouting(cfg.TaskRoutingJson),
                 FeatureFlags = ParseFeatureFlags(cfg.FeatureFlagsJson),
                 MaterialConfig = ParseMaterialConfig(cfg.MaterialConfigJson),
+                CostingConfig = ParseCostingConfig(cfg.CostingConfigJson),
                 LastTestProvider = cfg.LastTestProvider,
                 LastTestStatus = cfg.LastTestStatus,
                 LastTestMessage = cfg.LastTestMessage,

@@ -85,8 +85,8 @@ const SilaRecipeStudio2Nav: React.FC<SilaRecipeStudio2NavProps> = ({
     {
       id: "material-requests",
       label: "Material Requests",
-      badge: "Phase 1C Preview",
-      badgeTone: "planned",
+      badge: "Phase 1C Live",
+      badgeTone: "live",
       routeKind: "material-requests",
       visible: flags.materialIntelligencePreviewEnabled,
     },
@@ -133,8 +133,8 @@ const SilaRecipeStudio2Nav: React.FC<SilaRecipeStudio2NavProps> = ({
     {
       id: "food-cost",
       label: "Food Cost Studio",
-      badge: "Phase 3A Preview",
-      badgeTone: "planned",
+      badge: "Phase 1C Live",
+      badgeTone: "live",
       routeKind: "food-cost",
       visible: flags.menuEventPreviewEnabled,
     },

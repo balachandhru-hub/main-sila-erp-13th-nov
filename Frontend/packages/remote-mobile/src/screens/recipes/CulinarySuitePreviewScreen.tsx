@@ -32,6 +32,20 @@ import {
   type SilaCulinaryMaterialWorkspace,
   type SilaCulinarySubstitutionResponse,
 } from '../../../../remote-buyer/src/api/silaMe/silaCulinaryMaterialsApi';
+import {
+  assignProductionRecipeImage,
+  calculateDraftCosting,
+  createMaterialRequest,
+  getApprovalPackage,
+  getRecipeReadiness,
+  listMaterialRequests,
+  submitMaterialRequest,
+  submitRecipeForApproval,
+  type SilaCulinaryApprovalPackage,
+  type SilaCulinaryCostingResult,
+  type SilaCulinaryMaterialRequest,
+  type SilaCulinaryRecipeReadiness,
+} from '../../../../remote-buyer/src/api/silaMe/silaCulinaryLifecycleApi';
 import { scaleDraftLocally } from '../../../../remote-buyer/src/components/silaMe/recipes/culinary/culinaryRecipePlannerHelpers';
 import {
   calculateRecipeScaling,
@@ -44,7 +58,7 @@ import { useGo } from '../../navigation';
 import { errorText, useLoad } from '../../useLoad';
 import './recipeStudio.css';
 
-type MobileTab = 'generate' | 'draft' | 'materials' | 'history' | 'demo';
+type MobileTab = 'generate' | 'draft' | 'materials' | 'lifecycle' | 'history' | 'demo';
 
 /**
  * Phase 1A + Phase 1B Mobile Culinary Intelligence — responsive chef AI recipe generation,
@@ -92,6 +106,15 @@ const CulinarySuitePreviewScreen: React.FC = () => {
   const [matSubs, setMatSubs] = useState<SilaCulinarySubstitutionResponse | null>(null);
   const [reqDraftDesc, setReqDraftDesc] = useState('');
   const [reqDraftReason, setReqDraftReason] = useState('');
+
+  // Phase 1C Mobile Costing, Requests & Lifecycle state
+  const [mobileMrqs, setMobileMrqs] = useState<SilaCulinaryMaterialRequest[]>([]);
+  const [mobileCosting, setMobileCosting] = useState<SilaCulinaryCostingResult | null>(null);
+  const [mobileReadiness, setMobileReadiness] = useState<SilaCulinaryRecipeReadiness | null>(null);
+  const [mobilePkg, setMobilePkg] = useState<SilaCulinaryApprovalPackage | null>(null);
+  const [mobileSellingPrice, setMobileSellingPrice] = useState('65');
+  const [mobileCostServings, setMobileCostServings] = useState('10');
+  const [lifecycleLoading, setLifecycleLoading] = useState(false);
 
   // Phase 0 Demo fallback tab state
   const [demoServings, setDemoServings] = useState(10);
@@ -285,6 +308,50 @@ const CulinarySuitePreviewScreen: React.FC = () => {
     }
   };
 
+  const loadMobileLifecycle = async (draftId: string, srvOverride?: number, priceOverride?: number) => {
+    setErrMsg(null);
+    setLifecycleLoading(true);
+    try {
+      const [mrqs, rd, pkg, cst] = await Promise.all([
+        listMaterialRequests({}),
+        getRecipeReadiness(draftId),
+        getApprovalPackage(draftId),
+        calculateDraftCosting(draftId, {
+          servings: srvOverride,
+          sellingPricePerPortion: priceOverride,
+        }).catch(() => null),
+      ]);
+      setMobileMrqs(mrqs);
+      setMobileReadiness(rd);
+      setMobilePkg(pkg);
+      setMobileCosting(cst);
+      if (cst) {
+        setMobileCostServings(String(cst.servings));
+      }
+    } catch (caught) {
+      setErrMsg(errorText(caught, 'Unable to load Phase 1C costing & readiness.'));
+    } finally {
+      setLifecycleLoading(false);
+    }
+  };
+
+  const handleOpenLifecycleTab = async () => {
+    setTab('lifecycle');
+    if (activeDraft) {
+      await loadMobileLifecycle(activeDraft.id);
+    } else {
+      setLifecycleLoading(true);
+      try {
+        const mrqs = await listMaterialRequests({});
+        setMobileMrqs(mrqs);
+      } catch {
+        // ignore
+      } finally {
+        setLifecycleLoading(false);
+      }
+    }
+  };
+
   const handleMobileMatchAll = async () => {
     if (!activeDraft) return;
     setErrMsg(null);
@@ -379,6 +446,9 @@ const CulinarySuitePreviewScreen: React.FC = () => {
               </button>
               <button type="button" className={`rs-tab ${tab === 'materials' ? 'rs-tab--on' : ''}`} onClick={handleOpenMaterialsTab}>
                 Materials{matWs ? ` (${matWs.kpis.confirmedMappings}/${matWs.kpis.totalIngredients})` : ''}
+              </button>
+              <button type="button" className={`rs-tab ${tab === 'lifecycle' ? 'rs-tab--on' : ''}`} onClick={handleOpenLifecycleTab}>
+                Cost &amp; Publish
               </button>
               <button type="button" className={`rs-tab ${tab === 'history' ? 'rs-tab--on' : ''}`} onClick={() => setTab('history')}>
                 History ({draftsLoad.data?.length ?? 0})
@@ -847,6 +917,191 @@ const CulinarySuitePreviewScreen: React.FC = () => {
                         </section>
                       );
                     })}
+                  </>
+                )}
+              </>
+            )}
+
+            {tab === 'lifecycle' && (
+              <>
+                {lifecycleLoading ? (
+                  <section className="sm-card"><p className="sm-meta">Loading Phase 1C Costing, Requests &amp; Readiness...</p></section>
+                ) : (
+                  <>
+                    {activeDraft && mobileReadiness && (
+                      <section className="sm-card" data-testid="mobile-p1c-readiness">
+                        <p className="sm-eyebrow">PHASE 1C · READINESS &amp; APPROVAL</p>
+                        <h2 style={{ margin: '0.25rem 0' }}>{activeDraft.recipeName}</h2>
+                        <p className="sm-meta">
+                          Readiness: <strong>{mobileReadiness.passedCount}/{mobileReadiness.checks.length} passed</strong> ·
+                          Blocking: <strong>{mobileReadiness.blockingCount}</strong> ·
+                          Status: <strong>{mobilePkg?.lifecycle.lifecycleStatus ?? 'DRAFT'}</strong>
+                        </p>
+                        {mobilePkg?.lifecycle.productionRecipeCode && (
+                          <p className="sm-meta">
+                            Production Recipe ID: <code>{mobilePkg.lifecycle.productionRecipeCode}</code> (v{mobilePkg.lifecycle.productionRecipeVersion})
+                          </p>
+                        )}
+                        <div className="sm-actions" style={{ marginTop: '0.5rem' }}>
+                          {mobilePkg?.lifecycle.lifecycleStatus === 'DRAFT' && (
+                            <button
+                              type="button"
+                              className="sm-btn sm-btn--primary"
+                              onClick={async () => {
+                                try {
+                                  await submitRecipeForApproval(activeDraft.id, 'Submitted from SILA Mobile');
+                                  setStatusMsg('Submitted recipe for approval.');
+                                  await loadMobileLifecycle(activeDraft.id);
+                                } catch (caught) {
+                                  setErrMsg(errorText(caught, 'Submission failed.'));
+                                }
+                              }}
+                            >
+                              Submit for Approval
+                            </button>
+                          )}
+                          {mobilePkg?.lifecycle.productionRecipeId && (
+                            <label className="sm-btn" style={{ cursor: 'pointer' }}>
+                              Capture Dish Photo
+                              <input
+                                type="file"
+                                accept="image/jpeg,image/png,image/webp"
+                                capture="environment"
+                                hidden
+                                onChange={async (ev) => {
+                                  const f = ev.target.files?.[0];
+                                  if (!f) return;
+                                  try {
+                                    await assignProductionRecipeImage(activeDraft.id, f, 'CHEF_PHOTOGRAPH');
+                                    setStatusMsg('Assigned photograph to Production Recipe ID.');
+                                    await loadMobileLifecycle(activeDraft.id);
+                                  } catch (caught) {
+                                    setErrMsg(errorText(caught, 'Photo upload failed.'));
+                                  }
+                                }}
+                              />
+                            </label>
+                          )}
+                          {mobilePkg?.lifecycle.lifecycleStatus === 'PUBLISHED' && (
+                            <button type="button" className="sm-btn sm-btn--primary" onClick={() => go('recipes/catalog')}>
+                              Open Published Recipe
+                            </button>
+                          )}
+                        </div>
+                      </section>
+                    )}
+
+                    {activeDraft && mobileCosting && (
+                      <section className="sm-card" data-testid="mobile-p1c-costing">
+                        <p className="sm-eyebrow">COSTING SUMMARY ({mobileCosting.currency})</p>
+                        {mobileCosting.canViewCostDetail === false ? (
+                          <p className="sm-meta">Cost detail visibility is restricted for your role.</p>
+                        ) : (
+                          <>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginTop: '0.4rem' }}>
+                          <div className="sm-field">
+                            <label htmlFor="m-p1c-srv">Servings</label>
+                            <input
+                              id="m-p1c-srv"
+                              type="number"
+                              min={1}
+                              value={mobileCostServings}
+                              onChange={(e) => setMobileCostServings(e.target.value)}
+                            />
+                          </div>
+                          <div className="sm-field">
+                            <label htmlFor="m-p1c-price">Selling Price</label>
+                            <input
+                              id="m-p1c-price"
+                              type="number"
+                              step="0.5"
+                              value={mobileSellingPrice}
+                              onChange={(e) => setMobileSellingPrice(e.target.value)}
+                            />
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          className="sm-btn"
+                          style={{ marginTop: '0.4rem' }}
+                          onClick={() =>
+                            loadMobileLifecycle(
+                              activeDraft.id,
+                              Math.max(1, Number(mobileCostServings) || 10),
+                              Number(mobileSellingPrice) || undefined,
+                            )
+                          }
+                        >
+                          Recalculate Cost
+                        </button>
+                        <div className="sm-meta" style={{ marginTop: '0.5rem', lineHeight: 1.7 }}>
+                          <div>
+                            Total Cost: <strong>{mobileCosting.currency} {mobileCosting.totalIngredientCost.toFixed(2)}</strong> ·
+                            Per Portion: <strong>{mobileCosting.currency} {mobileCosting.ingredientCostPerPortion.toFixed(2)}</strong>
+                          </div>
+                          <div>
+                            Food Cost %: <strong>{mobileCosting.foodCostPercent != null ? `${mobileCosting.foodCostPercent.toFixed(1)}%` : 'N/A'}</strong> ·
+                            Completeness: <strong>{mobileCosting.costCompleteness}</strong>
+                          </div>
+                        </div>
+                          </>
+                        )}
+                      </section>
+                    )}
+
+                    <section className="sm-card" data-testid="mobile-p1c-requests">
+                      <p className="sm-eyebrow">MATERIAL REQUESTS ({mobileMrqs.length})</p>
+                      {activeDraft && matWs && matWs.lines.some((l) => l.mappingStatus === 'MISSING' || l.mappingStatus === 'UNMATCHED') && (
+                        <button
+                          type="button"
+                          className="sm-btn sm-btn--primary"
+                          style={{ marginBottom: '0.5rem' }}
+                          onClick={async () => {
+                            const missing = matWs.lines.find((l) => l.mappingStatus === 'MISSING' || l.mappingStatus === 'UNMATCHED');
+                            if (!missing) return;
+                            try {
+                              const created = await createMaterialRequest({
+                                requestType: missing.recommendedRequestType ?? 'NEW_MATERIAL',
+                                proposedDescription: missing.originalDescription.toUpperCase(),
+                                baseUom: missing.recipeUom,
+                                businessJustification: 'Requested from SILA Mobile',
+                                links: [
+                                  {
+                                    draftId: activeDraft.id,
+                                    ingredientTempRef: missing.ingredientTempRef,
+                                    ingredientDescription: missing.originalDescription,
+                                    requiredQuantity: missing.requiredQuantity,
+                                    recipeUom: missing.recipeUom,
+                                  },
+                                ],
+                              });
+                              await submitMaterialRequest(created.id);
+                              setStatusMsg(`Submitted ${created.requestReference} for approval.`);
+                              await loadMobileLifecycle(activeDraft.id);
+                            } catch (caught) {
+                              setErrMsg(errorText(caught, 'Material request failed.'));
+                            }
+                          }}
+                        >
+                          Prepare &amp; Submit Missing Material Request
+                        </button>
+                      )}
+                      {mobileMrqs.length === 0 ? (
+                        <p className="sm-meta">No material requests for this tenant yet.</p>
+                      ) : (
+                        <ul className="sm-list">
+                          {mobileMrqs.slice(0, 8).map((r) => (
+                            <li key={r.id} className="sm-row" style={{ padding: '0.35rem 0' }}>
+                              <div>
+                                <code>{r.requestReference}</code> {r.proposedDescription}
+                                <div className="sm-meta">{r.requestType} · {r.resultingMaterialCode ?? 'Pending'}</div>
+                              </div>
+                              <strong>{r.status}</strong>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </section>
                   </>
                 )}
               </>

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -12,6 +12,16 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { toastService } from "@vosox/shared-ui";
+import {
+  listCulinaryRecipeDrafts,
+  type CulinaryRecipeDraftSummary,
+} from "../../../../api/silaMe/silaCulinaryRecipesApi";
+import {
+  exportLifecycleReport,
+  exportMaterialRequestsReport,
+} from "../../../../api/silaMe/silaCulinaryLifecycleApi";
+import { triggerBlobDownload } from "./culinaryRecipePlannerHelpers";
 import "./CulinarySuite.css";
 
 interface Props {
@@ -58,6 +68,51 @@ const EVENT_REPORTS = [
 ];
 
 const CulinaryProductionAnalyticsReportWorkspaces: React.FC<Props> = ({ mode }) => {
+  const [drafts, setDrafts] = useState<CulinaryRecipeDraftSummary[]>([]);
+  const [reportDraftId, setReportDraftId] = useState("");
+  const [reportType, setReportType] = useState("COSTING");
+  const [exporting, setExporting] = useState(false);
+
+  useEffect(() => {
+    if (mode !== "reports") return;
+    listCulinaryRecipeDrafts()
+      .then((list) => {
+        setDrafts(list);
+        if (list.length > 0 && !reportDraftId) setReportDraftId(list[0].id);
+      })
+      .catch(() => {});
+  }, [mode]);
+
+  const handleExportRecipeReport = async (format: "XLSX" | "CSV" | "PDF") => {
+    if (!reportDraftId) {
+      toastService.warning("Select a recipe draft first.");
+      return;
+    }
+    setExporting(true);
+    try {
+      const { blob, fileName } = await exportLifecycleReport(reportDraftId, reportType, format);
+      triggerBlobDownload(blob, fileName);
+      toastService.success(`Exported ${fileName}`);
+    } catch (err: unknown) {
+      toastService.error(err instanceof Error ? err.message : "Export failed.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleExportMrqReport = async (format: "XLSX" | "CSV" | "PDF") => {
+    setExporting(true);
+    try {
+      const { blob, fileName } = await exportMaterialRequestsReport(format);
+      triggerBlobDownload(blob, fileName);
+      toastService.success(`Exported ${fileName}`);
+    } catch (err: unknown) {
+      toastService.error(err instanceof Error ? err.message : "Export failed.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   if (mode === "production") {
     return (
       <div className="cs2-shell" data-testid="culinary-production-workspace">
@@ -195,20 +250,71 @@ const CulinaryProductionAnalyticsReportWorkspaces: React.FC<Props> = ({ mode }) 
     <div className="cs2-shell" data-testid="culinary-reports-workspace">
       <div className="cs2-header">
         <div>
-          <h2 className="cs2-title">Report Studio Preview (§65–§67)</h2>
+          <h2 className="cs2-title">Recipe Report Studio (Phase 1C Live Exports)</h2>
           <p className="cs2-subtitle">
-            Complete catalog of 17 Recipe Reports and 23 Event Reports supporting authorized tenant filters,
-            Excel/PDF export, print, approval attachments, and planning snapshot references.
+            Generate formula-injection-safe Excel, CSV, and PDF reports for Recipe Costing, Readiness, Approval Packages,
+            Material Creation Requests, and Phase 1C Lifecycle. Event Reports activate in Phase 2A–3B.
           </p>
         </div>
-        <span className="cs2-badge cs2-badge--planned">Report Generation Activates Phase 3B</span>
+        <span className="cs2-badge cs2-badge--live">Phase 1C Recipe Reports Live</span>
       </div>
+
+      <section className="cs2-card">
+        <div className="cs2-card__head">
+          <h3 className="cs2-card__title">Export Live Phase 1C Recipe &amp; Material Reports</h3>
+        </div>
+        <div className="cs2-form-grid">
+          <div className="sila-field">
+            <label className="sila-label">Recipe Draft</label>
+            <select className="sila-select" value={reportDraftId} onChange={(e) => setReportDraftId(e.target.value)}>
+              {drafts.length === 0 ? (
+                <option value="">No recipe drafts found</option>
+              ) : (
+                drafts.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.draftReference} — {d.recipeName}
+                  </option>
+                ))
+              )}
+            </select>
+          </div>
+          <div className="sila-field">
+            <label className="sila-label">Recipe Report Type</label>
+            <select className="sila-select" value={reportType} onChange={(e) => setReportType(e.target.value)}>
+              <option value="COSTING">Detailed Recipe Costing</option>
+              <option value="READINESS">Recipe Readiness Report</option>
+              <option value="APPROVAL_PACKAGE">Recipe Approval Package</option>
+              <option value="STANDARD_CARD">Standard Recipe Card</option>
+              <option value="VERSION_COMPARISON">Recipe Version Comparison</option>
+            </select>
+          </div>
+          <div className="sila-field" style={{ display: "flex", alignItems: "flex-end", gap: 6 }}>
+            <button type="button" className="sila-btn sila-btn--sm sila-btn--primary" disabled={exporting || !reportDraftId} onClick={() => handleExportRecipeReport("XLSX")}>
+              Export Excel
+            </button>
+            <button type="button" className="sila-btn sila-btn--sm sila-btn--secondary" disabled={exporting || !reportDraftId} onClick={() => handleExportRecipeReport("CSV")}>
+              CSV
+            </button>
+            <button type="button" className="sila-btn sila-btn--sm sila-btn--secondary" disabled={exporting || !reportDraftId} onClick={() => handleExportRecipeReport("PDF")}>
+              PDF
+            </button>
+          </div>
+          <div className="sila-field" style={{ display: "flex", alignItems: "flex-end", gap: 6 }}>
+            <button type="button" className="sila-btn sila-btn--sm sila-btn--secondary" disabled={exporting} onClick={() => handleExportMrqReport("XLSX")}>
+              Export Material Requests (Excel)
+            </button>
+            <button type="button" className="sila-btn sila-btn--sm sila-btn--secondary" disabled={exporting} onClick={() => handleExportMrqReport("PDF")}>
+              PDF
+            </button>
+          </div>
+        </div>
+      </section>
 
       <div className="cs2-grid-2">
         <section className="cs2-card">
           <div className="cs2-card__head">
             <h3 className="cs2-card__title">Recipe Intelligence Reports (17)</h3>
-            <span className="cs2-badge cs2-badge--indigo">Excel / PDF / Print (Phase 3B)</span>
+            <span className="cs2-badge cs2-badge--live">Excel / CSV / PDF</span>
           </div>
           <ul style={{ margin: 0, paddingLeft: 18, lineHeight: 1.75, fontSize: 13 }}>
             {RECIPE_REPORTS.map((r) => (
