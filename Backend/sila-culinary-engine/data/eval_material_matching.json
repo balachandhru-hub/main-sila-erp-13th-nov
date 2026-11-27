@@ -1,0 +1,50 @@
+{
+  "dataset_name": "sila_phase1b_isolated_culinary_eval_v1",
+  "materials": [
+    {"material_id": "m-001", "material_code": "00001045", "description": "Chicken Breast Boneless Fresh", "category": "PROTEIN_POULTRY", "base_uom": "KG", "order_uom": "CASE", "pack_size": "5", "pack_uom": "KG", "is_active": true, "plant_eligible": true, "purchasing_eligible": true, "uom_conversions": [{"from_uom": "CASE", "to_uom": "KG", "factor": "5"}]},
+    {"material_id": "m-002", "material_code": "00001046", "description": "Chicken Whole Frozen 1.2kg", "category": "PROTEIN_POULTRY", "base_uom": "KG", "is_active": true, "plant_eligible": true, "purchasing_eligible": true},
+    {"material_id": "m-003", "material_code": "00002010", "description": "Butter Unsalted Dairy 82% Fat", "brand": "Lurpak", "category": "DAIRY", "base_uom": "KG", "order_uom": "CASE", "pack_size": "0.5", "pack_uom": "KG", "is_active": true, "plant_eligible": true, "purchasing_eligible": true, "allergen_info": ["DAIRY"]},
+    {"material_id": "m-004", "material_code": "00002011", "description": "Butter Salted Dairy 80% Fat", "brand": "Anchor", "category": "DAIRY", "base_uom": "KG", "is_active": true, "plant_eligible": true, "purchasing_eligible": true, "allergen_info": ["DAIRY"]},
+    {"material_id": "m-005", "material_code": "00002020", "description": "Cooking Cream 35% Fat", "category": "DAIRY", "base_uom": "L", "order_uom": "CASE", "pack_size": "1", "pack_uom": "L", "is_active": true, "plant_eligible": true, "purchasing_eligible": true, "allergen_info": ["DAIRY"]},
+    {"material_id": "m-006", "material_code": "00002021", "description": "Fresh Dairy Cream 35% Fat", "category": "DAIRY", "base_uom": "L", "is_active": true, "plant_eligible": true, "purchasing_eligible": true, "allergen_info": ["DAIRY"]},
+    {"material_id": "m-007", "material_code": "00002022", "description": "Whipping Cream UHT 35%", "category": "DAIRY", "base_uom": "L", "is_active": true, "plant_eligible": true, "purchasing_eligible": true, "allergen_info": ["DAIRY"]},
+    {"material_id": "m-008", "material_code": "00002035", "description": "Parmesan Cheese Grated", "category": "DAIRY", "base_uom": "KG", "is_active": true, "plant_eligible": true, "purchasing_eligible": true, "allergen_info": ["DAIRY"]},
+    {"material_id": "m-009", "material_code": "00003001", "description": "Eggplant Fresh", "category": "PRODUCE", "base_uom": "KG", "is_active": true, "plant_eligible": true, "purchasing_eligible": true},
+    {"material_id": "m-010", "material_code": "00003002", "description": "Cilantro Fresh Bunch", "category": "HERBS_SPICES", "base_uom": "BUNCH", "is_active": true, "plant_eligible": true, "purchasing_eligible": true},
+    {"material_id": "m-011", "material_code": "00003003", "description": "Bell Pepper Red Fresh", "category": "PRODUCE", "base_uom": "KG", "is_active": true, "plant_eligible": true, "purchasing_eligible": true},
+    {"material_id": "m-012", "material_code": "00003004", "description": "Chickpeas Dried Bulk", "category": "DRY_GOODS", "base_uom": "KG", "is_active": true, "plant_eligible": true, "purchasing_eligible": true},
+    {"material_id": "m-013", "material_code": "00004010", "description": "Extra Virgin Olive Oil", "category": "OILS_FATS", "base_uom": "L", "order_uom": "BTL", "is_active": true, "plant_eligible": true, "purchasing_eligible": true, "uom_conversions": [{"from_uom": "BTL", "to_uom": "ML", "factor": "750"}]},
+    {"material_id": "m-014", "material_code": "00004020", "description": "Tomato Paste Concentrate", "category": "PRODUCE", "base_uom": "KG", "is_active": true, "plant_eligible": true, "purchasing_eligible": true},
+    {"material_id": "m-015", "material_code": "00004021", "description": "Tomato Puree Smooth", "category": "PRODUCE", "base_uom": "KG", "is_active": true, "plant_eligible": true, "purchasing_eligible": true},
+    {"material_id": "m-016", "material_code": "00005001", "description": "Fresh Dill Herb", "category": "HERBS_SPICES", "base_uom": "KG", "is_active": true, "plant_eligible": false, "purchasing_eligible": true},
+    {"material_id": "m-017", "material_code": "00005002", "description": "Saffron Threads Grade A", "category": "HERBS_SPICES", "base_uom": "G", "is_active": false, "plant_eligible": true, "purchasing_eligible": true},
+    {"material_id": "m-018", "material_code": "00006001", "description": "Atlantic Salmon Fillet Fresh", "category": "PROTEIN_SEAFOOD", "base_uom": "KG", "is_active": true, "plant_eligible": true, "purchasing_eligible": true, "allergen_info": ["FISH"]},
+    {"material_id": "m-019", "material_code": "00006002", "description": "Atlantic Salmon Smoked Sliced", "category": "PROTEIN_SEAFOOD", "base_uom": "KG", "is_active": true, "plant_eligible": true, "purchasing_eligible": true, "allergen_info": ["FISH"]},
+    {"material_id": "m-020", "material_code": "00007001", "description": "Sea Salt Fine", "category": "HERBS_SPICES", "base_uom": "KG", "is_active": true, "plant_eligible": true, "purchasing_eligible": true},
+    {"material_id": "m-021", "material_code": "00007002", "description": "Sea Salt Fine", "category": "HERBS_SPICES", "base_uom": "KG", "is_active": true, "plant_eligible": true, "purchasing_eligible": true}
+  ],
+  "aliases": [
+    {"alias_id": "a-1", "alias_text": "Aubergine", "material_id": "m-009", "material_code": "00003001", "approval_status": "APPROVED"},
+    {"alias_id": "a-2", "alias_text": "Coriander Leaves", "material_id": "m-010", "material_code": "00003002", "approval_status": "APPROVED"}
+  ],
+  "cases": [
+    {"name": "exact_code_leading_zeros", "ingredient": {"temp_ref": "t1", "description": "Chicken Breast Boneless", "explicit_material_code": "00001045", "quantity": "2", "recipe_uom": "KG"}, "expected_code": "00001045", "expected_status": "EXACT_MATCH"},
+    {"name": "exact_desc_chicken", "ingredient": {"temp_ref": "t2", "description": "Boneless Chicken Breast", "quantity": "1500", "recipe_uom": "G"}, "expected_code": "00001045", "expected_top_k": true},
+    {"name": "abbrev_bl_chicken", "ingredient": {"temp_ref": "t3", "description": "Chicken Breast B/L Fresh", "quantity": "1", "recipe_uom": "KG"}, "expected_code": "00001045", "expected_top_k": true},
+    {"name": "fuzzy_typo_parmesan", "ingredient": {"temp_ref": "t4", "description": "Parmesan Chese", "quantity": "200", "recipe_uom": "G"}, "expected_code": "00002035", "expected_top_k": true},
+    {"name": "alias_aubergine", "ingredient": {"temp_ref": "t5", "description": "Aubergine", "quantity": "1", "recipe_uom": "KG"}, "expected_code": "00003001", "expected_status": "VERIFIED_ALIAS_MATCH"},
+    {"name": "alias_coriander", "ingredient": {"temp_ref": "t6", "description": "Coriander Leaves", "quantity": "2", "recipe_uom": "BUNCH"}, "expected_code": "00003002", "expected_status": "VERIFIED_ALIAS_MATCH"},
+    {"name": "semantic_capsicum", "ingredient": {"temp_ref": "t7", "description": "Red Capsicum", "quantity": "500", "recipe_uom": "G"}, "expected_code": "00003003", "expected_top_k": true},
+    {"name": "semantic_garbanzo", "ingredient": {"temp_ref": "t8", "description": "Garbanzo Beans", "quantity": "1", "recipe_uom": "KG"}, "expected_code": "00003004", "expected_top_k": true},
+    {"name": "multilingual_poulet", "ingredient": {"temp_ref": "t9", "description": "Poulet sans os", "quantity": "1", "recipe_uom": "KG"}, "expected_code": "00001045", "expected_top_k": true},
+    {"name": "salted_vs_unsalted_butter", "ingredient": {"temp_ref": "t10", "description": "Fresh unsalted dairy butter, 82% fat", "quantity": "1.25", "recipe_uom": "KG"}, "expected_code": "00002010", "forbidden_top_code": "00002011"},
+    {"name": "fresh_vs_smoked_salmon", "ingredient": {"temp_ref": "t11", "description": "Fresh Atlantic Salmon Fillet", "quantity": "1.8", "recipe_uom": "KG"}, "expected_code": "00006001", "forbidden_top_code": "00006002"},
+    {"name": "tomato_paste_not_puree", "ingredient": {"temp_ref": "t12", "description": "Tomato Paste", "quantity": "0.5", "recipe_uom": "KG"}, "expected_code": "00004020", "forbidden_top_code": "00004021"},
+    {"name": "ambiguous_cream", "ingredient": {"temp_ref": "t13", "description": "Fresh Cream 35%", "quantity": "500", "recipe_uom": "ML"}, "expected_code": "00002021", "expected_top_k": true},
+    {"name": "duplicate_exact_sea_salt", "ingredient": {"temp_ref": "t14", "description": "Sea Salt Fine", "quantity": "0.1", "recipe_uom": "KG"}, "expected_status": "MULTIPLE_CANDIDATES"},
+    {"name": "uom_conflict_mass_to_vol", "ingredient": {"temp_ref": "t15", "description": "Extra Virgin Olive Oil", "quantity": "2", "recipe_uom": "KG"}, "expected_status": "UOM_CONFLICT"},
+    {"name": "missing_material_kasuri_methi", "ingredient": {"temp_ref": "t16", "description": "Kasuri Methi", "quantity": "50", "recipe_uom": "G"}, "expected_missing": true},
+    {"name": "plant_ineligible_dill", "ingredient": {"temp_ref": "t17", "description": "Fresh Dill Herb", "quantity": "100", "recipe_uom": "G"}, "expected_status": "MATERIAL_INELIGIBLE", "expected_classification": "NOT_EXTENDED_TO_PLANT"},
+    {"name": "inactive_saffron", "ingredient": {"temp_ref": "t18", "description": "Saffron Threads Grade A", "quantity": "5", "recipe_uom": "G"}, "expected_status": "MATERIAL_INELIGIBLE", "expected_classification": "MATERIAL_INACTIVE"}
+  ]
+}

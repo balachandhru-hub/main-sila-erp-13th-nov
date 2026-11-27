@@ -1,0 +1,11 @@
+{
+  "tenant_id": "tenant-1",
+  "status": "READY",
+  "indexed_material_count": 3,
+  "active_material_count": 2,
+  "embedding_model": "BAAI/bge-small-en-v1.5",
+  "reranking_model": "Xenova/ms-marco-MiniLM-L-6-v2",
+  "semantic_backend": "TFIDF_CHAR_TRIGRAM",
+  "last_build_utc": "2026-11-27T09:49:56.167258+00:00",
+  "build_duration_ms": 1.41
+}
