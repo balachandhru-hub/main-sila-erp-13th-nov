@@ -42,19 +42,41 @@ import {
   type WhatIfSimulationResult,
 } from "../../../api/silaMe/menuEngineeringStudioApi";
 import { saveMenuEngineering, type MenuFilter, type MenuLookups } from "../../../api/silaMe/silaMenuEngineeringApi";
+import type { AiOperatingMode } from "../../../api/silaMe/menuEngineeringAiApi";
+import {
+  AiCockpitFullPanel,
+  ConsumptionRootCauseAiPanel,
+  CostShockAndPricingAiPanel,
+  DemandBacktestAiPanel,
+  MenuItemAiAssistantPanel,
+  MenuPlanningAiPanel,
+  NlWhatIfAiPanel,
+  PortionOptimizationAiPanel,
+  PosMappingAiQueuePanel,
+  PosSalesAiPanel,
+  SetupWizardAiPanel,
+} from "./ai/MeScreenAiPanels";
 
 interface Props {
   navKey: string;
   filter: MenuFilter;
   lookups?: MenuLookups;
   permissions: MeStudioPermissionsDto;
+  operatingMode?: AiOperatingMode;
   onNavigate: (key: string) => void;
 }
 
 const num = (v?: number | null, d = 2) => (v == null ? "—" : v.toFixed(d));
 const pct = (v?: number | null) => (v == null ? "—" : `${v.toFixed(1)}%`);
 
-const MeOperationalViews: React.FC<Props> = ({ navKey, filter, lookups, permissions, onNavigate }) => {
+const MeOperationalViews: React.FC<Props> = ({
+  navKey,
+  filter,
+  lookups,
+  permissions,
+  operatingMode = "AI_ASSISTED",
+  onNavigate,
+}) => {
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<MenuItemEnhanced[]>([]);
   const [plans, setPlans] = useState<MenuPlanEnhanced[]>([]);
@@ -152,6 +174,22 @@ const MeOperationalViews: React.FC<Props> = ({ navKey, filter, lookups, permissi
   if (navKey === "silaMenuItems") {
     return (
       <div className="sme-list">
+        {operatingMode !== "MANUAL" && permissions.useAiMenuIntelligence && (
+          <MenuItemAiAssistantPanel
+            dishName={editItem.name || ""}
+            sellingPrice={editItem.sellingPrice ?? undefined}
+            onApplySuggestion={(patch) =>
+              setEditItem((prev) => ({
+                ...prev,
+                category: patch.category || prev.category,
+                cuisine: patch.cuisine || prev.cuisine,
+                description: patch.description || prev.description,
+                sellingPrice: patch.sellingPrice ?? prev.sellingPrice,
+                allergenNotes: patch.allergenNotes || prev.allergenNotes,
+              }))
+            }
+          />
+        )}
         {permissions.manageMenuItems && (
           <div className="sme-panel">
             <div className="sme-panel__header">
@@ -271,7 +309,11 @@ const MeOperationalViews: React.FC<Props> = ({ navKey, filter, lookups, permissi
   // 2. MENU PLANNING
   if (navKey === "silaMenuPlanning") {
     return (
-      <div className="sme-panel">
+      <div className="sme-list">
+        {operatingMode !== "MANUAL" && permissions.useAiMenuIntelligence && (
+          <MenuPlanningAiPanel propertyId={filter.propertyId} />
+        )}
+        <div className="sme-panel">
         <div className="sme-panel__header">
           <h2 className="sme-panel__title">Menu Planning &amp; Calendar ({plans.length} Plans)</h2>
           <div style={{ display: "flex", gap: "0.4rem" }}>
@@ -315,6 +357,7 @@ const MeOperationalViews: React.FC<Props> = ({ navKey, filter, lookups, permissi
             </tbody>
           </table>
         )}
+        </div>
       </div>
     );
   }
@@ -322,7 +365,11 @@ const MeOperationalViews: React.FC<Props> = ({ navKey, filter, lookups, permissi
   // 3. PORTION PLANNING
   if (navKey === "silaMenuPortions") {
     return (
-      <div className="sme-panel">
+      <div className="sme-list">
+        {operatingMode !== "MANUAL" && permissions.useAiMenuIntelligence && (
+          <PortionOptimizationAiPanel propertyId={filter.propertyId} menuPlanId={filter.menuPlanId} />
+        )}
+        <div className="sme-panel">
         <div className="sme-panel__header">
           <h2 className="sme-panel__title">Portion Planning &amp; Buffet Sampling</h2>
           <span className="sme-muted">Expected Portions = Covers × Participation Rate × Servings/Guest</span>
@@ -366,6 +413,7 @@ const MeOperationalViews: React.FC<Props> = ({ navKey, filter, lookups, permissi
             ))}
           </tbody>
         </table>
+        </div>
       </div>
     );
   }
@@ -374,6 +422,9 @@ const MeOperationalViews: React.FC<Props> = ({ navKey, filter, lookups, permissi
   if (navKey === "silaMenuDemand" && demand) {
     return (
       <div className="sme-list">
+        {operatingMode !== "MANUAL" && permissions.useAiMenuIntelligence && (
+          <DemandBacktestAiPanel propertyId={filter.propertyId} outletLocationId={filter.outletLocationId} />
+        )}
         {demand.coldStartLimited && (
           <div className="sme-panel" style={{ background: "#fffbeb", borderColor: "#fde68a" }}>
             <strong>Cold-Start Advisory:</strong> {demand.coldStartMessage}
@@ -424,6 +475,9 @@ const MeOperationalViews: React.FC<Props> = ({ navKey, filter, lookups, permissi
   if (navKey === "silaMenuPosSales" && posSales) {
     return (
       <div className="sme-list">
+        {operatingMode !== "MANUAL" && permissions.useAiMenuIntelligence && (
+          <PosSalesAiPanel propertyId={filter.propertyId} outletLocationId={filter.outletLocationId} />
+        )}
         <div className="sme-panel">
           <div className="sme-panel__header">
             <h2 className="sme-panel__title">POS Sales &amp; Synchronization</h2>
@@ -473,6 +527,9 @@ const MeOperationalViews: React.FC<Props> = ({ navKey, filter, lookups, permissi
   if (navKey === "silaMenuPosMapping" && posMapping) {
     return (
       <div className="sme-list">
+        {operatingMode !== "MANUAL" && permissions.useAiMenuIntelligence && (
+          <PosMappingAiQueuePanel propertyId={filter.propertyId} onApproved={() => void load()} />
+        )}
         <div className="sme-panel">
           <div className="sme-panel__header">
             <h2 className="sme-panel__title">POS Mapping Workbench (Mapped: {posMapping.mappedCount} • Unmapped: {posMapping.unmappedCount} • Combos: {posMapping.comboCount})</h2>
@@ -599,7 +656,11 @@ const MeOperationalViews: React.FC<Props> = ({ navKey, filter, lookups, permissi
   // 8. CONSUMPTION ANALYSIS
   if (navKey === "silaMenuConsumption" && consumption) {
     return (
-      <div className="sme-panel">
+      <div className="sme-list">
+        {operatingMode !== "MANUAL" && permissions.useAiMenuIntelligence && (
+          <ConsumptionRootCauseAiPanel propertyId={filter.propertyId} outletLocationId={filter.outletLocationId} />
+        )}
+        <div className="sme-panel">
         <div className="sme-panel__header">
           <h2 className="sme-panel__title">Consumption Analysis (Theoretical vs Actual &amp; Waste)</h2>
           <span className="sme-chip sme-chip--ok">Double-Counting Prevented</span>
@@ -627,6 +688,7 @@ const MeOperationalViews: React.FC<Props> = ({ navKey, filter, lookups, permissi
             ))}
           </tbody>
         </table>
+        </div>
       </div>
     );
   }
@@ -635,6 +697,9 @@ const MeOperationalViews: React.FC<Props> = ({ navKey, filter, lookups, permissi
   if (navKey === "silaMenuCost" && costMargin) {
     return (
       <div className="sme-list">
+        {operatingMode !== "MANUAL" && permissions.useAiMenuIntelligence && (
+          <CostShockAndPricingAiPanel propertyId={filter.propertyId} />
+        )}
         <div className="sme-panel">
           <h2 className="sme-panel__title">Cost &amp; Margin Analysis</h2>
           <div className="sme-grid">
@@ -691,6 +756,7 @@ const MeOperationalViews: React.FC<Props> = ({ navKey, filter, lookups, permissi
   if (navKey === "silaMenuIntelligence" && aiIntel) {
     return (
       <div className="sme-list">
+        <AiCockpitFullPanel propertyId={filter.propertyId} canApprove={permissions.approveMenu} />
         <div className="sme-panel">
           <div className="sme-panel__header">
             <h2 className="sme-panel__title">AI Menu Intelligence</h2>
@@ -712,7 +778,11 @@ const MeOperationalViews: React.FC<Props> = ({ navKey, filter, lookups, permissi
   // 12. WHAT-IF SIMULATION
   if (navKey === "silaMenuWhatIf") {
     return (
-      <div className="sme-panel">
+      <div className="sme-list">
+        {operatingMode !== "MANUAL" && permissions.runMenuSimulation && (
+          <NlWhatIfAiPanel menuPlanId={plans[0]?.id} propertyId={filter.propertyId} />
+        )}
+        <div className="sme-panel">
         <h2 className="sme-panel__title">What-If Simulation Workbench</h2>
         <div className="sme-form">
           <label className="sila-field"><span>Scenario Name</span><input className="sila-input" value={simForm.scenarioName} onChange={(e) => setSimForm({ ...simForm, scenarioName: e.target.value })} /></label>
@@ -774,6 +844,7 @@ const MeOperationalViews: React.FC<Props> = ({ navKey, filter, lookups, permissi
             </div>
           </div>
         )}
+        </div>
       </div>
     );
   }
@@ -781,7 +852,11 @@ const MeOperationalViews: React.FC<Props> = ({ navKey, filter, lookups, permissi
   // 13. SETUP (Sections A–H)
   if (navKey === "silaMenuSetup" && setup) {
     return (
-      <div className="sme-panel">
+      <div className="sme-list">
+        {operatingMode !== "MANUAL" && permissions.useAiMenuIntelligence && (
+          <SetupWizardAiPanel propertyId={filter.propertyId} />
+        )}
+        <div className="sme-panel">
         <div className="sme-panel__header">
           <h2 className="sme-panel__title">Menu Engineering Setup (Config v{setup.configVersion})</h2>
           {permissions.manageMenuSetup && (
@@ -815,6 +890,7 @@ const MeOperationalViews: React.FC<Props> = ({ navKey, filter, lookups, permissi
             {setup.history.slice(0, 5).map((h) => <div key={h.id} className="sme-muted">v{h.configVersion} • {h.changeSummary} ({new Date(h.changedAtUtc).toLocaleString()})</div>)}
           </div>
         )}
+        </div>
       </div>
     );
   }

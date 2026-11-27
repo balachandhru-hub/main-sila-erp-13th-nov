@@ -9,10 +9,19 @@ import {
   getMePermissions,
   type MeStudioPermissionsDto,
 } from "../../../api/silaMe/menuEngineeringStudioApi";
+import {
+  getMeAiStatus,
+  getMeProactiveAlerts,
+  type AiOperatingMode,
+  type AiOperatingModeStatus,
+  type MeProactiveAlert,
+} from "../../../api/silaMe/menuEngineeringAiApi";
 import type { SilaMePermissions } from "../silaMePermissions";
 import MeStudioWorkspace from "./MeStudioWorkspace";
 import MeOperationalViews from "./MeOperationalViews";
 import MenuReportsPanel from "./MenuReportsPanel";
+import { AiOperatingModeSwitch } from "./ai/AiOperatingModeSwitch";
+import { AiContextualAssistantPanel } from "./ai/AiContextualAssistantPanel";
 import "../silaMeTheme.css";
 import "./SilaMenuEngineering.css";
 
@@ -94,6 +103,11 @@ const SilaMenuEngineeringApp: React.FC<Props> = ({ navKey, permissions, canManag
   const [showReports, setShowReports] = useState(false);
   const [apiPerms, setApiPerms] = useState<MeStudioPermissionsDto | null>(null);
   const [loadingPerms, setLoadingPerms] = useState(true);
+  const [operatingMode, setOperatingMode] = useState<AiOperatingMode>("AI_ASSISTED");
+  const [aiStatus, setAiStatus] = useState<AiOperatingModeStatus | null>(null);
+  const [proactiveAlerts, setProactiveAlerts] = useState<MeProactiveAlert[]>([]);
+  const [activeMenuPlanId, setActiveMenuPlanId] = useState<string | undefined>(undefined);
+  const [activeMenuItemId, setActiveMenuItemId] = useState<string | undefined>(undefined);
 
   const filter = useMemo<MenuFilter>(
     () => ({
@@ -112,11 +126,18 @@ const SilaMenuEngineeringApp: React.FC<Props> = ({ navKey, permissions, canManag
     Promise.all([
       getMePermissions().catch(() => null),
       getMenuEngineering("dashboard", {}).catch(() => null),
+      getMeAiStatus(propertyId || undefined).catch(() => null),
+      getMeProactiveAlerts(propertyId || undefined).catch(() => []),
     ])
-      .then(([p, env]) => {
+      .then(([p, env, aiSt, alerts]) => {
         if (!active) return;
         if (p) setApiPerms(p);
         if (env?.lookups) setLookups(env.lookups);
+        if (aiSt) {
+          setAiStatus(aiSt);
+          setOperatingMode(aiSt.operatingMode || "AI_ASSISTED");
+        }
+        if (Array.isArray(alerts)) setProactiveAlerts(alerts);
       })
       .finally(() => {
         if (active) setLoadingPerms(false);
@@ -124,7 +145,7 @@ const SilaMenuEngineeringApp: React.FC<Props> = ({ navKey, permissions, canManag
     return () => {
       active = false;
     };
-  }, []);
+  }, [propertyId]);
 
   const effectivePerms = useMemo<MeStudioPermissionsDto>(
     () =>
@@ -259,21 +280,68 @@ const SilaMenuEngineeringApp: React.FC<Props> = ({ navKey, permissions, canManag
             Recipe Studio ↗
           </button>
         </div>
+
+        <AiOperatingModeSwitch
+          mode={operatingMode}
+          status={aiStatus}
+          onChangeMode={setOperatingMode}
+        />
       </div>
 
-      {showReports ? (
-        <MenuReportsPanel filter={filter} onClose={() => setShowReports(false)} />
-      ) : isStudio ? (
-        <MeStudioWorkspace propertyId={filter.propertyId} onOpenReports={() => setShowReports(true)} onNavigate={onNavigate} />
-      ) : (
-        <MeOperationalViews
-          navKey={navKey}
-          filter={filter}
-          lookups={lookups}
-          permissions={effectivePerms}
-          onNavigate={onNavigate}
-        />
+      {proactiveAlerts.length > 0 && (
+        <div className="sme-ai-proactive-strip">
+          <div>
+            <strong>{proactiveAlerts.length} Proactive Intelligence Alert{proactiveAlerts.length > 1 ? "s" : ""}:</strong>{" "}
+            {proactiveAlerts[0].title} — {proactiveAlerts[0].summary}
+          </div>
+          <button type="button" className="sila-btn sila-btn--secondary" onClick={() => onNavigate("silaMenuIntelligence")}>
+            Open AI Cockpit
+          </button>
+        </div>
       )}
+
+      <div className="sme-shell-with-ai">
+        <div>
+          {showReports ? (
+            <MenuReportsPanel filter={filter} onClose={() => setShowReports(false)} />
+          ) : isStudio ? (
+            <MeStudioWorkspace
+              propertyId={filter.propertyId}
+              outletLocationId={filter.outletLocationId}
+              operatingMode={operatingMode}
+              onActiveContextChange={(pId, itemId) => {
+                if (pId) setActiveMenuPlanId(pId);
+                if (itemId) setActiveMenuItemId(itemId);
+              }}
+              onOpenReports={() => setShowReports(true)}
+              onNavigate={onNavigate}
+            />
+          ) : (
+            <MeOperationalViews
+              navKey={navKey}
+              filter={filter}
+              lookups={lookups}
+              permissions={effectivePerms}
+              operatingMode={operatingMode}
+              onNavigate={onNavigate}
+            />
+          )}
+        </div>
+
+        <AiContextualAssistantPanel
+          screenKey={navKey}
+          operatingMode={operatingMode}
+          propertyId={filter.propertyId}
+          outletLocationId={filter.outletLocationId}
+          menuPlanId={activeMenuPlanId}
+          menuItemId={activeMenuItemId}
+          onTriggerAction={(target) => {
+            if (target.includes("purchase")) onNavigate("silaMenuRecommendations");
+            else if (target.includes("simulate")) onNavigate("silaMenuWhatIf");
+            else onNavigate("silaMenuIntelligence");
+          }}
+        />
+      </div>
     </div>
   );
 };

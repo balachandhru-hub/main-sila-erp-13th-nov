@@ -22,8 +22,21 @@ import {
   type WhatIfSimulationResult,
 } from "../../../api/silaMe/menuEngineeringStudioApi";
 
+import {
+  runMeContextualAi,
+  runMeNlSimulation,
+  type AiContextualResponse,
+  type AiNlSimulationResult,
+  type AiOperatingMode,
+} from "../../../api/silaMe/menuEngineeringAiApi";
+import { AiMultiAgentCommandBar } from "./ai/AiMultiAgentCommandBar";
+import { AiValueTag } from "./ai/AiSharedWidgets";
+
 interface Props {
   propertyId?: string;
+  outletLocationId?: string;
+  operatingMode?: AiOperatingMode;
+  onActiveContextChange?: (planId?: string, itemId?: string) => void;
   onOpenReports: () => void;
   onNavigate: (key: string) => void;
 }
@@ -56,7 +69,14 @@ const MENU_TYPES = [
 const num = (v?: number | null, d = 2) => (v == null ? "—" : v.toFixed(d));
 const pct = (v?: number | null) => (v == null ? "—" : `${v.toFixed(1)}%`);
 
-const MeStudioWorkspace: React.FC<Props> = ({ propertyId, onOpenReports, onNavigate }) => {
+const MeStudioWorkspace: React.FC<Props> = ({
+  propertyId,
+  outletLocationId,
+  operatingMode = "AI_ASSISTED",
+  onActiveContextChange,
+  onOpenReports,
+  onNavigate,
+}) => {
   const [ws, setWs] = useState<MeStudioWorkspaceDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -112,11 +132,15 @@ const MeStudioWorkspace: React.FC<Props> = ({ propertyId, onOpenReports, onNavig
   const [compareIds, setCompareIds] = useState<string[]>([]);
   const [compareResult, setCompareResult] = useState<ScenarioCompareResultDto | null>(null);
   const [approvalComment, setApprovalComment] = useState("");
+  const [itemAiFeedback, setItemAiFeedback] = useState<{ itemName: string; response: AiContextualResponse } | null>(null);
+  const [nlQuery, setNlQuery] = useState("What happens if salmon cost increases by 20%?");
+  const [nlSimResult, setNlSimResult] = useState<AiNlSimulationResult | null>(null);
   const debounceRef = useRef<number | null>(null);
 
   const hydrateFromPlan = useCallback((p?: MenuPlanEnhanced | null) => {
     if (!p) return;
     setSelectedPlanId(p.id);
+    onActiveContextChange?.(p.id, undefined);
     setDraftName(p.name);
     setDraftType(p.menuType || "A_LA_CARTE");
     setDraftFormat(p.serviceFormat || p.menuType || "A_LA_CARTE");
@@ -349,6 +373,25 @@ const MeStudioWorkspace: React.FC<Props> = ({ propertyId, onOpenReports, onNavig
     }
   };
 
+  const invokeDishAi = async (menuItemId: string, itemName: string, action: string, customPrompt?: string) => {
+    onActiveContextChange?.(selectedPlanId || undefined, menuItemId);
+    try {
+      const res = await runMeContextualAi({
+        screenKey: "silaMenuStudio",
+        action,
+        userPrompt: customPrompt,
+        propertyId,
+        outletLocationId,
+        menuPlanId: selectedPlanId || undefined,
+        menuItemId,
+        operatingMode,
+      });
+      setItemAiFeedback({ itemName, response: res });
+    } catch (e) {
+      toastService.error(e instanceof Error ? e.message : "Dish AI action failed.");
+    }
+  };
+
   if (loading && !ws) return <Loader />;
   if (!ws) return null;
 
@@ -431,6 +474,34 @@ const MeStudioWorkspace: React.FC<Props> = ({ propertyId, onOpenReports, onNavig
           )}
         </div>
       </div>
+
+      {operatingMode !== "MANUAL" && perms.useAiMenuIntelligence && (
+        <AiMultiAgentCommandBar
+          operatingMode={operatingMode}
+          propertyId={propertyId}
+          outletLocationId={outletLocationId}
+          onDraftCreated={(draftId) => {
+            void loadWorkspace(draftId);
+          }}
+        />
+      )}
+
+      {itemAiFeedback && (
+        <div className="sme-panel" style={{ borderColor: "#93c5fd", background: "#f8fbff" }}>
+          <div className="sme-panel__header">
+            <div>
+              <AiValueTag kind={itemAiFeedback.response.valueTag} />{" "}
+              <strong>{itemAiFeedback.itemName}</strong> · {itemAiFeedback.response.agentId}
+            </div>
+            <button type="button" className="sme-ai-mini-btn" onClick={() => setItemAiFeedback(null)}>Close</button>
+          </div>
+          <p className="sme-ai-summary">{itemAiFeedback.response.summary}</p>
+          <p className="sme-ai-explanation">{itemAiFeedback.response.explanation}</p>
+          {itemAiFeedback.response.evidence.length > 0 && (
+            <div className="sme-muted">Evidence: {itemAiFeedback.response.evidence.join(" · ")}</div>
+          )}
+        </div>
+      )}
 
       {/* CREATION DRAWERS: HISTORICAL / AI / BULK IMPORT */}
       {showCreateMode === "HISTORICAL" && (
@@ -692,6 +763,17 @@ const MeStudioWorkspace: React.FC<Props> = ({ propertyId, onOpenReports, onNavig
                             value={l.lineNotes ?? ""}
                             onChange={(e) => setLines((prev) => prev.map((x, i) => (i === idx ? { ...x, lineNotes: e.target.value } : x)))}
                           />
+                          {operatingMode !== "MANUAL" && (
+                            <div className="sme-ai-item-actions">
+                              <button type="button" className="sme-ai-mini-btn" onClick={() => void invokeDishAi(l.menuItemId, l.menuItemName, "Optimize", `Optimize portion for ${l.menuItemName}`)}>Optimize portion</button>
+                              <button type="button" className="sme-ai-mini-btn" onClick={() => void invokeDishAi(l.menuItemId, l.menuItemName, "FindAlternatives", `Suggest alternative for ${l.menuItemName}`)}>Suggest alternative</button>
+                              <button type="button" className="sme-ai-mini-btn" onClick={() => void invokeDishAi(l.menuItemId, l.menuItemName, "ShowSupportingEvidence", `Explain cost of ${l.menuItemName}`)}>Explain cost</button>
+                              <button type="button" className="sme-ai-mini-btn" onClick={() => void invokeDishAi(l.menuItemId, l.menuItemName, "PredictNextPeriod", `Predict popularity of ${l.menuItemName}`)}>Predict popularity</button>
+                              <button type="button" className="sme-ai-mini-btn" onClick={() => void invokeDishAi(l.menuItemId, l.menuItemName, "AnalyzeThis", `Analyze margin of ${l.menuItemName}`)}>Analyze margin</button>
+                              <button type="button" className="sme-ai-mini-btn" onClick={() => void invokeDishAi(l.menuItemId, l.menuItemName, "RecommendImprovements", `Check availability for ${l.menuItemName}`)}>Check availability</button>
+                              <button type="button" className="sme-ai-mini-btn" onClick={() => void invokeDishAi(l.menuItemId, l.menuItemName, "CompareWithHistory", `Compare historical performance of ${l.menuItemName}`)}>Compare history</button>
+                            </div>
+                          )}
                         </div>
                         <label className="sila-field">
                           <span>Portion</span>
@@ -1038,6 +1120,48 @@ const MeStudioWorkspace: React.FC<Props> = ({ propertyId, onOpenReports, onNavig
 
             {activeTab === "WHAT_IF" && (
               <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                {operatingMode !== "MANUAL" && (
+                  <div className="sme-kpi-box" style={{ background: "#f0f7ff" }}>
+                    <div className="sme-row">
+                      <input
+                        className="sila-input"
+                        style={{ flex: 1 }}
+                        value={nlQuery}
+                        onChange={(e) => setNlQuery(e.target.value)}
+                        placeholder="Natural language What-If (e.g. 'What happens if salmon cost increases by 20%?')"
+                      />
+                      <button
+                        type="button"
+                        className="sila-btn sila-btn--primary"
+                        onClick={async () => {
+                          try {
+                            const r = await runMeNlSimulation({
+                              command: nlQuery,
+                              menuPlanId: selectedPlanId || undefined,
+                              propertyId,
+                            });
+                            setNlSimResult(r);
+                          } catch (e) {
+                            toastService.error(e instanceof Error ? e.message : "NL simulation failed.");
+                          }
+                        }}
+                      >
+                        Run NL Simulation
+                      </button>
+                    </div>
+                    {nlSimResult && (
+                      <div style={{ marginTop: "0.5rem" }}>
+                        <AiValueTag kind="SIMULATION" /> <strong>{nlSimResult.parsedIntent}</strong>
+                        <div className="sme-muted">{nlSimResult.sanitizedCommand}</div>
+                        <div className="sme-muted">
+                          Baseline Cost: {num(nlSimResult.simulation.baselineCost)} → Simulated: {num(nlSimResult.simulation.foodCost)} ·{" "}
+                          Margin: {num(nlSimResult.simulation.baselineMargin)} → {num(nlSimResult.simulation.contributionMargin)} ·{" "}
+                          Live Data Modified: {nlSimResult.liveDataMutated ? "Yes" : "No (Read-Only Sandbox)"}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
                 <div className="sme-form">
                   <label className="sila-field"><span>Scenario Name</span><input className="sila-input" value={simReq.scenarioName} onChange={(e) => setSimReq({ ...simReq, scenarioName: e.target.value })} /></label>
                   <label className="sila-field"><span>Guest Count</span><input className="sila-input" type="number" value={simReq.expectedCovers} onChange={(e) => setSimReq({ ...simReq, expectedCovers: e.target.value })} /></label>

@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { getMenuEngineering } from '../../../../remote-buyer/src/api/silaMe/silaMenuEngineeringApi';
 import { getMeMobileSummary } from '../../../../remote-buyer/src/api/silaMe/menuEngineeringStudioApi';
+import { getSilaStoreRoleIntelligence } from '../../../../remote-buyer/src/api/silaMe/menuEngineeringAiApi';
 import ScreenHeader from '../../components/ScreenHeader';
 import StatusBadge from '../../components/StatusBadge';
 import { Empty, ErrorNotice, Loading, OfflineBanner } from '../../components/StateViews';
@@ -11,10 +12,18 @@ import { MENU_VIEWS } from './menuViews';
 
 const today = (): string => new Date().toISOString().slice(0, 10);
 
+const ROLE_PERSONAS: { key: string; label: string }[] = [
+  { key: 'EXECUTIVE_CHEF', label: 'Executive Chef' },
+  { key: 'STOREKEEPER', label: 'Storekeeper' },
+  { key: 'COST_CONTROLLER', label: 'Cost Controller' },
+  { key: 'FB_MANAGER', label: 'F&B Manager' },
+];
+
 const MenuDashboardScreen: React.FC = () => {
   const go = useGo();
   const { can } = useAccess();
   const date = today();
+  const [rolePersona, setRolePersona] = useState('EXECUTIVE_CHEF');
   const { data, loading, error, reload } = useLoad(
     () => getMenuEngineering('dashboard', { dateFrom: date, dateTo: date }),
     can.viewMenuEngineering ? `menu-dash-${date}` : null,
@@ -23,8 +32,13 @@ const MenuDashboardScreen: React.FC = () => {
     () => getMeMobileSummary().catch(() => null),
     can.viewMenuEngineering ? `menu-mobile-summary-${date}` : null,
   );
+  const roleIntel = useLoad(
+    () => getSilaStoreRoleIntelligence(rolePersona).catch(() => null),
+    can.viewMenuEngineering ? `menu-role-intel-${rolePersona}-${date}` : null,
+  );
   const dash = data?.dashboard;
   const summary = mobile.data;
+  const personaData = roleIntel.data;
 
   const routeFor = (kind?: string): string => {
     if (kind === 'RECIPE_MISSING' || kind === 'COST_MISSING') return 'menu/items';
@@ -77,6 +91,54 @@ const MenuDashboardScreen: React.FC = () => {
               Source {dash.occupancySource || 'MANUAL'} · {dash.occupancyFreshness || 'UNAVAILABLE'}
               {summary ? ` · Pending Approvals: ${summary.pendingApprovals.length} · Ingredient Alerts: ${summary.ingredientReadiness.length}` : ''}
             </p>
+
+            {/* Role-Specific AI Intelligence (SILA Store Phase ME.2) */}
+            <section className="sm-section">
+              <h2>Role Intelligence</h2>
+              <div className="sm-grid-2" style={{ marginBottom: '0.5rem' }}>
+                {ROLE_PERSONAS.map((rp) => (
+                  <button
+                    key={rp.key}
+                    type="button"
+                    className={`sm-btn ${rolePersona === rp.key ? 'sm-btn--primary' : ''}`}
+                    onClick={() => setRolePersona(rp.key)}
+                  >
+                    {rp.label}
+                  </button>
+                ))}
+              </div>
+              {personaData && (
+                <ul className="sm-list">
+                  {personaData.highlights.map((h, i) => (
+                    <li key={`hl-${i}`} className="sm-list-btn">
+                      <span className="sm-meta">{h}</span>
+                    </li>
+                  ))}
+                  {personaData.roleAlerts.slice(0, 3).map((al) => (
+                    <li key={al.id}>
+                      <button type="button" className="sm-list-btn" onClick={() => go('menu/intelligence')}>
+                        <span className="sm-row">
+                          <strong>{al.title}</strong>
+                          <StatusBadge status={al.severity} />
+                        </span>
+                        <span className="sm-meta">{al.summary}</span>
+                      </button>
+                    </li>
+                  ))}
+                  {personaData.roleRecommendations.slice(0, 3).map((rec) => (
+                    <li key={rec.id}>
+                      <button type="button" className="sm-list-btn" onClick={() => go('menu/intelligence')}>
+                        <span className="sm-row">
+                          <strong>{rec.title}</strong>
+                          <StatusBadge status={rec.priority} />
+                        </span>
+                        <span className="sm-meta">{rec.proposedChange}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
 
             {/* Operational SILA Store handoffs — reuses existing mobile screens without duplicating */}
             <section className="sm-section">
