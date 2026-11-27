@@ -156,6 +156,9 @@ namespace Buyer.Infrastructure.DbContext
         public DbSet<MenuEngineeringLearningOutcome> MenuEngineeringLearningOutcome { get; set; }
         public DbSet<MenuEngineeringModelEvaluation> MenuEngineeringModelEvaluation { get; set; }
         public DbSet<MenuEngineeringAiFeedback> MenuEngineeringAiFeedback { get; set; }
+        public DbSet<MenuEngineeringTwinSnapshot> MenuEngineeringTwinSnapshot { get; set; }
+        public DbSet<MenuEngineeringTwinSimulationRun> MenuEngineeringTwinSimulationRun { get; set; }
+        public DbSet<MenuEngineeringModelDriftEvent> MenuEngineeringModelDriftEvent { get; set; }
         public DbSet<RecipeLegacyBatch> RecipeLegacyBatch { get; set; }
         public DbSet<RecipeLegacyRecipe> RecipeLegacyRecipe { get; set; }
         public DbSet<RecipeLegacyMaterialMap> RecipeLegacyMaterialMap { get; set; }
@@ -646,6 +649,11 @@ namespace Buyer.Infrastructure.DbContext
             _ = modelBuilder.Entity<MenuEngineeringLearningOutcome>().HasIndex(a => new { a.BuyerId, a.DatasetVersion, a.CapturedAtUtc });
             _ = modelBuilder.Entity<MenuEngineeringModelEvaluation>().HasIndex(a => new { a.BuyerId, a.ModelName, a.EvaluatedAtUtc });
             _ = modelBuilder.Entity<MenuEngineeringAiFeedback>().HasIndex(a => new { a.BuyerId, a.AgentId, a.SubmittedAtUtc });
+            _ = modelBuilder.Entity<MenuEngineeringTwinSnapshot>().HasIndex(a => new { a.BuyerId, a.SnapshotType, a.CapturedAtUtc });
+            _ = modelBuilder.Entity<MenuEngineeringTwinSnapshot>().HasIndex(a => new { a.BuyerId, a.MenuPlanId, a.VersionNumber });
+            _ = modelBuilder.Entity<MenuEngineeringTwinSimulationRun>().HasIndex(a => new { a.BuyerId, a.IdempotencyKey }).IsUnique();
+            _ = modelBuilder.Entity<MenuEngineeringTwinSimulationRun>().HasIndex(a => new { a.BuyerId, a.RunType, a.Status });
+            _ = modelBuilder.Entity<MenuEngineeringModelDriftEvent>().HasIndex(a => new { a.BuyerId, a.ModelName, a.DetectedAtUtc });
 
             base.OnModelCreating(modelBuilder);
 

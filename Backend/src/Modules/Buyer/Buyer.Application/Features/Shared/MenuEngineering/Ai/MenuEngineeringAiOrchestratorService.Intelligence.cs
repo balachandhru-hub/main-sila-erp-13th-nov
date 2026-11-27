@@ -495,26 +495,47 @@ namespace Buyer.Application.Features.Shared.MenuEngineering.Ai
             List<string> highlights = new();
             List<string> quickActions = new();
 
+            MeWastePredictResultDto? wasteSummary = null;
+            MeHierarchicalForecastResultDto? demandSummary = null;
+            if (_twin is not null)
+            {
+                try
+                {
+                    wasteSummary = await _twin.PredictFoodWasteAsync(organizationId, roleId, propertyId, null, ct);
+                    demandSummary = await _twin.ForecastHierarchicalDemandAsync(organizationId, roleId, propertyId, 3, ct);
+                }
+                catch { /* Keep role intelligence resilient */ }
+            }
+
+            int smallerBatchDishes = wasteSummary?.Items.Count(i => i.Recommendations.Any(r => r.Contains("batch", StringComparison.OrdinalIgnoreCase))) ?? 0;
+            decimal tomorrowCovers = demandSummary?.Nodes.FirstOrDefault(n => n.Level == "PROPERTY")?.ReconciledForecast.FirstOrDefault() ?? 0m;
+
             switch (persona)
             {
                 case "STOREKEEPER":
-                    highlights.Add($"{alerts.Count(a => a.TriggerType == "INVENTORY_EXPIRY_RISK")} expiry utilization opportunities available.");
-                    highlights.Add("Review predicted ingredient requirements & shortage buffer before today's shift.");
+                    highlights.Add($"{alerts.Count(a => a.TriggerType == "INVENTORY_EXPIRY_RISK")} expiry utilization opportunities available (FEFO priority).");
+                    highlights.Add(tomorrowCovers > 0m
+                        ? $"Predicted tomorrow demand: {tomorrowCovers:F0} covers — verify ingredient shortage buffer before shift."
+                        : "Review predicted ingredient requirements & shortage buffer before today's shift.");
                     quickActions = new() { "View Predicted Shortages", "Check Expiry Priority Stock", "Review Stock Transfers" };
                     break;
                 case "COST_CONTROLLER":
                     highlights.Add($"{alerts.Count(a => a.TriggerType == "MARGIN_DETERIORATION")} food cost / margin alerts pending review.");
-                    highlights.Add($"{recs.Count(r => r.Status == "NEW" || r.Status == "UNDER_REVIEW")} AI recommendations awaiting approval.");
+                    highlights.Add($"{recs.Count(r => r.Status == "NEW" || r.Status == "UNDER_REVIEW")} AI recommendations & scenario summaries awaiting approval.");
                     quickActions = new() { "Review Margin Risks", "Inspect Consumption Anomalies", "Approve Recommendations" };
                     break;
                 case "FB_MANAGER":
-                    highlights.Add("Menu Engineering Matrix & 7-day backtested demand forecast updated.");
+                    highlights.Add(tomorrowCovers > 0m
+                        ? $"Digital Twin Demand Forecast: {tomorrowCovers:F0} expected guest covers tomorrow; Menu Engineering Matrix updated."
+                        : "Menu Engineering Matrix & 7-day backtested demand forecast updated.");
                     highlights.Add($"{alerts.Count(a => a.TriggerType == "POS_UNMAPPED")} POS mapping exceptions impacting sales intelligence.");
                     quickActions = new() { "Inspect Menu Performance", "View Demand Forecast", "Review Pricing Ranges" };
                     break;
                 default: // EXECUTIVE_CHEF
                     persona = "EXECUTIVE_CHEF";
-                    highlights.Add("Today's service menus & AI portion buffers prepared.");
+                    highlights.Add(smallerBatchDishes > 0
+                        ? $"Waste Twin recommends preparing {smallerBatchDishes} dishes in smaller batches to curb overproduction."
+                        : "Today's service menus & AI portion buffers prepared.");
                     highlights.Add($"{recs.Count(r => r.Priority == "HIGH")} high-priority culinary optimizations ready for review.");
                     quickActions = new() { "Open Today's Menu", "Optimize Portions", "Check Production Readiness" };
                     break;

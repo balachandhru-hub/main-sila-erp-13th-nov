@@ -81,6 +81,29 @@ namespace Buyer.Domain.Entities
         public bool IsPreferred { get; set; }
 
         public Guid? CreatedByUserId { get; set; }
+
+        // Phase ME.3 additive scenario lineage & delta columns
+        public Guid? BaselineSnapshotId { get; set; }
+
+        public int? BaselineSnapshotVersion { get; set; }
+
+        [MaxLength(40)]
+        public string? CalculationVersion { get; set; }
+
+        [MaxLength(40)]
+        public string? ModelVersion { get; set; }
+
+        [MaxLength(40)]
+        public string? SolverStatus { get; set; }
+
+        public int? ParetoRank { get; set; }
+
+        public Guid? ParentScenarioId { get; set; }
+
+        [MaxLength(30)]
+        public string? Status { get; set; } = "ACTIVE";
+
+        public string? DeltaOverridesJson { get; set; }
     }
 
     public class MenuEngineeringApprovalHistory : BaseModel

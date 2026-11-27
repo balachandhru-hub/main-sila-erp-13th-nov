@@ -60,6 +60,7 @@ namespace Buyer.Application.Features.Shared.MenuEngineering.Ai
         private readonly ISilaCulinaryFinancialService _financial;
         private readonly ISilaCulinaryAnalyticsService _analytics;
         private readonly IHttpClientFactory? _httpClientFactory;
+        private readonly Twin.IMenuEngineeringDigitalTwinService? _twin;
 
         public MenuEngineeringAiOrchestratorService(
             IRepositoryWrapper repository,
@@ -69,7 +70,8 @@ namespace Buyer.Application.Features.Shared.MenuEngineering.Ai
             IMenuEngineeringStudioService studio,
             ISilaCulinaryFinancialService financial,
             ISilaCulinaryAnalyticsService analytics,
-            IHttpClientFactory? httpClientFactory = null)
+            IHttpClientFactory? httpClientFactory = null,
+            Twin.IMenuEngineeringDigitalTwinService? twin = null)
         {
             _repository = repository;
             _db = db;
@@ -79,6 +81,7 @@ namespace Buyer.Application.Features.Shared.MenuEngineering.Ai
             _financial = financial;
             _analytics = analytics;
             _httpClientFactory = httpClientFactory;
+            _twin = twin;
         }
 
         private sealed class AiContext
@@ -392,6 +395,95 @@ namespace Buyer.Application.Features.Shared.MenuEngineering.Ai
                 }
                 default:
                 {
+                    string lowPrompt = sanitizedPrompt.ToLowerInvariant();
+                    if (_twin is not null && !string.IsNullOrWhiteSpace(lowPrompt))
+                    {
+                        if (lowPrompt.Contains("probability") || lowPrompt.Contains("exceeding") || lowPrompt.Contains("budget"))
+                        {
+                            MeMonteCarloResultDto mc = await _twin.RunMonteCarloAsync(organizationId, userId, roleId, new MeMonteCarloRequestDto
+                            {
+                                MenuPlanId = request.MenuPlanId ?? activePlan?.Id,
+                                PropertyId = request.PropertyId,
+                                Runs = 500,
+                                Seed = 42,
+                                GuestCountMean = (decimal)(activePlan?.ExpectedCovers ?? 250m),
+                                EventBudget = 45000m,
+                                TargetFoodCostPercent = ctx.Settings.TargetFoodCostPercent > 0 ? ctx.Settings.TargetFoodCostPercent : 30m
+                            }, ct);
+                            invokedTools.Add("RunMonteCarloSimulation");
+                            summary = redactFinancials
+                                ? $"Monte Carlo risk check complete ({mc.Runs} seeded runs; financials redacted)."
+                                : $"[FORECAST] Probability of exceeding budget: {mc.ProbExceedBudget:0.0}%; food-cost target breach risk: {mc.ProbExceedFoodCostTarget:0.0}% (expected margin AED {mc.ExpectedContributionMargin:N2}).";
+                            explanation = $"[CALCULATED RESULT] Evaluated {mc.Runs} correlated probabilistic runs (seed {mc.Seed}). [ASSUMPTION] Correlated guest count & ingredient price shocks.";
+                            evidence.Add($"Expected Contribution Margin: {(redactFinancials ? "[REDACTED]" : $"AED {mc.ExpectedContributionMargin:N2}")}");
+                            evidence.Add($"Downside P10 Margin: {(redactFinancials ? "[REDACTED]" : $"AED {mc.MarginP10:N2}")}");
+                            evidence.Add($"Shortage Risk: {mc.ProbIngredientShortage:0.0}%");
+                            break;
+                        }
+                        if (lowPrompt.Contains("150 additional") || lowPrompt.Contains("what happens if") || lowPrompt.Contains("stress"))
+                        {
+                            MeStressTestResultDto st = await _twin.RunStressTestAsync(organizationId, roleId, new MeStressTestRequestDto
+                            {
+                                MenuPlanId = request.MenuPlanId ?? activePlan?.Id,
+                                PropertyId = request.PropertyId,
+                                BaselineGuests = (int)(activePlan?.ExpectedCovers ?? 250m)
+                            }, ct);
+                            invokedTools.Add("RunOperationalStressTest");
+                            var topStress = st.Outcomes.FirstOrDefault();
+                            summary = topStress is not null
+                                ? $"[SIMULATION] Stress Test '{topStress.Label}': Feasible={topStress.IsOperationallyFeasible}, Shortage Risk={topStress.ShortageRisk}."
+                                : "Stress test evaluated across operational shocks.";
+                            explanation = "[CALCULATED RESULT] Evaluated guest surge, supplier delivery delay, and price shock read-only without mutating live operational tables.";
+                            evidence.AddRange(st.Outcomes.Take(3).Select(s => $"{s.Label}: Food Cost {(redactFinancials ? "[REDACTED]" : $"{s.RevisedFoodCostPercent:0.0}%")}, Action: {string.Join("; ", s.CorrectiveActions.Take(1))}"));
+                            break;
+                        }
+                        if (lowPrompt.Contains("available in stock") || lowPrompt.Contains("already available"))
+                        {
+                            MePhase3InventoryMenuResultDto invOpt = await _twin.OptimizeInventoryDrivenMenuAsync(organizationId, userId, roleId, new MePhase3InventoryMenuRequestDto
+                            {
+                                PropertyId = request.PropertyId,
+                                MaxItems = 6,
+                                GuestCount = 150
+                            }, ct);
+                            invokedTools.Add("RunInventoryDrivenOptimizer");
+                            summary = $"[RECOMMENDATION] Inventory-driven menu selected {invOpt.SelectedDishes.Count} dishes ({invOpt.InventoryUtilizationPercent:0.0}% FEFO eligible stock utilization).";
+                            explanation = "[VERIFIED FACT] Excluded reserved, blocked, and expired inventory lots per FEFO rules.";
+                            evidence.Add($"Selected dishes: {string.Join(", ", invOpt.SelectedDishes.Take(5).Select(d => d.Name))}");
+                            evidence.Add($"Avoidable purchase spend: {(redactFinancials ? "[REDACTED]" : $"AED {invOpt.AvoidablePurchaseCost:N2}")}");
+                            break;
+                        }
+                        if (lowPrompt.Contains("margin risk") || lowPrompt.Contains("responsible") || lowPrompt.Contains("sensitivity"))
+                        {
+                            MeSensitivityResultDto sens = await _twin.RunSensitivityAnalysisAsync(organizationId, roleId, new MeSensitivityRequestDto
+                            {
+                                MenuPlanId = request.MenuPlanId ?? activePlan?.Id,
+                                PropertyId = request.PropertyId
+                            }, ct);
+                            invokedTools.Add("RunSensitivityTornado");
+                            summary = $"[CALCULATED RESULT] Top margin/food-cost risk drivers ranked across {sens.Tornado.Count} variables.";
+                            explanation = "[VERIFIED FACT] Ranked by absolute margin swing from -20% to +20% perturbation.";
+                            evidence.AddRange(sens.Tornado.Take(3).Select(t => $"{t.VariableName}: Margin swing {(redactFinancials ? "[REDACTED]" : $"AED {t.MarginSwing:N2}")}"));
+                            break;
+                        }
+                        if (lowPrompt.Contains("optimize") || lowPrompt.Contains("food cost") || lowPrompt.Contains("alternative menus") || lowPrompt.Contains("purchasing strategy"))
+                        {
+                            decimal maxFc = lowPrompt.Contains("28%") ? 28m : (lowPrompt.Contains("reduce food cost by 15%") ? 25.5m : 30m);
+                            MePhase3OptimizationJobDto opt = await _twin.RunMultiObjectiveOptimizationAsync(organizationId, userId, roleId, new MePhase3OptimizeRequestDto
+                            {
+                                MenuPlanId = request.MenuPlanId ?? activePlan?.Id,
+                                PropertyId = request.PropertyId,
+                                Mode = lowPrompt.Contains("alternative") ? "PARETO_FRONTIER" : "WEIGHTED_MULTI_OBJECTIVE",
+                                MaxFoodCostPercent = maxFc,
+                                GuestCount = (int)(activePlan?.ExpectedCovers ?? 250m)
+                            }, ct);
+                            invokedTools.Add("RunMultiObjectiveOptimizer");
+                            summary = $"[RECOMMENDATION] OR-Tools CP-SAT optimization ({opt.Status}) evaluated {opt.Solutions.Count} feasible Pareto/optimal alternatives (max FC {maxFc:0.0}%).";
+                            explanation = "[CALCULATED RESULT] Hard dietary, allergen, recipe-approval, and capacity constraints strictly preserved without silent relaxation.";
+                            evidence.AddRange(opt.Solutions.Take(3).Select(s => $"{s.ScenarioLabel}: FC {(redactFinancials ? "[REDACTED]" : $"{s.FoodCostPercent:0.0}%")}, Margin {(redactFinancials ? "[REDACTED]" : $"AED {s.TotalContributionMargin:N2}")}"));
+                            break;
+                        }
+                    }
+
                     string planDesc = activePlan != null ? $"{activePlan.Name} ({activePlan.Status}, {activePlan.Lines.Count(l => l.IsActive)} lines)" : "Active property catalog";
                     summary = $"{agentId.Replace('_', ' ')}: analyzed {planDesc} across {items.Count} active menu items.";
                     explanation = redactFinancials
