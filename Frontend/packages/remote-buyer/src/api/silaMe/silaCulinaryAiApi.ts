@@ -92,6 +92,38 @@ export const DEFAULT_CULINARY_MATERIAL_CONFIG: SilaCulinaryMaterialConfig = {
   maxIngredientsPerBulk: 100,
 };
 
+export interface SilaCulinaryCostingConfig {
+  costSourceHierarchy: string[];
+  reportingCurrency: string;
+  taxBasis: string;
+  defaultTargetFoodCostPercent: number;
+  allowManualCostEstimate: boolean;
+  blockPublishOnMissingCost: boolean;
+  autoRecostOnLocalPriceChange: boolean;
+  maxSubRecipeDepth: number;
+  priceRoundingDecimals: number;
+}
+
+export const DEFAULT_CULINARY_COSTING_CONFIG: SilaCulinaryCostingConfig = {
+  costSourceHierarchy: [
+    "OUTLET_PRICE",
+    "CONTRACT_PRICE",
+    "CATALOG_PRICE",
+    "MOVING_AVERAGE_PRICE",
+    "STANDARD_PRICE",
+    "UNIT_COST",
+    "LATEST_PURCHASE_PRICE",
+  ],
+  reportingCurrency: "AED",
+  taxBasis: "TAX_EXCLUSIVE",
+  defaultTargetFoodCostPercent: 28,
+  allowManualCostEstimate: true,
+  blockPublishOnMissingCost: true,
+  autoRecostOnLocalPriceChange: false,
+  maxSubRecipeDepth: 5,
+  priceRoundingDecimals: 2,
+};
+
 export interface SilaCulinaryAiConfig {
   id: string;
   buyerId: string;
@@ -123,6 +155,7 @@ export interface SilaCulinaryAiConfig {
   taskRouting: Record<string, string>;
   featureFlags: SilaCulinaryAiFeatureFlags;
   materialConfig?: SilaCulinaryMaterialConfig;
+  costingConfig?: SilaCulinaryCostingConfig;
   lastTestProvider: string | null;
   lastTestStatus: string | null;
   lastTestMessage: string | null;
@@ -156,6 +189,7 @@ export interface SilaCulinaryAiConfigWrite {
   taskRouting: Record<string, string>;
   featureFlags: SilaCulinaryAiFeatureFlags;
   materialConfig?: SilaCulinaryMaterialConfig;
+  costingConfig?: SilaCulinaryCostingConfig;
 }
 
 export interface SilaCulinaryAiConnectionTestResult {

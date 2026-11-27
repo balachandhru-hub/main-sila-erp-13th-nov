@@ -7,6 +7,8 @@ import SilaRecipeStudio2Nav from "./SilaRecipeStudio2Nav";
 import CulinaryOverviewWorkspace from "./CulinaryOverviewWorkspace";
 import CulinaryRecipePlannerWorkspace from "./CulinaryRecipePlannerWorkspace";
 import CulinaryMaterialIntelligenceWorkspace from "./CulinaryMaterialIntelligenceWorkspace";
+import CulinaryMaterialRequestsWorkspace from "./CulinaryMaterialRequestsWorkspace";
+import CulinaryFoodCostStudioWorkspace from "./CulinaryFoodCostStudioWorkspace";
 import CulinaryMenuEventWorkspaces from "./CulinaryMenuEventWorkspaces";
 import CulinaryMrpSimulatorWorkspace from "./CulinaryMrpSimulatorWorkspace";
 import CulinaryPnlSimulatorWorkspace from "./CulinaryPnlSimulatorWorkspace";
@@ -120,8 +122,7 @@ const SilaRecipeStudio2Workspaces: React.FC<SilaRecipeStudio2WorkspacesProps> = 
         );
       case "material-requests":
         return (
-          <CulinaryMaterialIntelligenceWorkspace
-            mode="material-requests"
+          <CulinaryMaterialRequestsWorkspace
             selectedDraftId={handoverDraftId}
             onSelectDraftId={handleSelectMaterialDraft}
             onOpenWorkspace={onSelectRecipeRoute}
@@ -130,8 +131,15 @@ const SilaRecipeStudio2Workspaces: React.FC<SilaRecipeStudio2WorkspacesProps> = 
       case "menus":
       case "events":
       case "procurement":
-      case "food-cost":
         return <CulinaryMenuEventWorkspaces mode={route.kind} onOpenWorkspace={onSelectRecipeRoute} />;
+      case "food-cost":
+        return (
+          <CulinaryFoodCostStudioWorkspace
+            selectedDraftId={handoverDraftId}
+            onSelectDraftId={handleSelectMaterialDraft}
+            onOpenWorkspace={onSelectRecipeRoute}
+          />
+        );
       case "mrp":
         return <CulinaryMrpSimulatorWorkspace />;
       case "event-pnl":

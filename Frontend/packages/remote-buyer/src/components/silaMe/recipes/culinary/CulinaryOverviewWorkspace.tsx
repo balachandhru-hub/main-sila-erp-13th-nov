@@ -1,5 +1,11 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import type { SilaRecipeDashboard } from "../../../../api/silaMe/silaRecipeToolsApi";
+import {
+  getLifecycleDashboard,
+  getMaterialRequestDashboard,
+  type SilaCulinaryLifecycleDashboard,
+  type SilaCulinaryMaterialRequestDashboard,
+} from "../../../../api/silaMe/silaCulinaryLifecycleApi";
 import type { CulinaryWorkspaceKind } from "../silaRecipeRoutes";
 import "./CulinarySuite.css";
 
@@ -43,6 +49,14 @@ const CulinaryOverviewWorkspace: React.FC<CulinaryOverviewWorkspaceProps> = ({
   const [outletFilter, setOutletFilter] = useState("ALL");
   const [kitchenFilter, setKitchenFilter] = useState("ALL");
   const [eventTypeFilter, setEventTypeFilter] = useState("ALL");
+  const [lifecycleDash, setLifecycleDash] = useState<SilaCulinaryLifecycleDashboard | null>(null);
+  const [mrqDash, setMrqDash] = useState<SilaCulinaryMaterialRequestDashboard | null>(null);
+
+  useEffect(() => {
+    if (demoMode) return;
+    getLifecycleDashboard().then(setLifecycleDash).catch(() => {});
+    getMaterialRequestDashboard().then(setMrqDash).catch(() => {});
+  }, [demoMode]);
 
   return (
     <div className="cs2-shell" data-testid="culinary-overview-workspace">
@@ -158,18 +172,22 @@ const CulinaryOverviewWorkspace: React.FC<CulinaryOverviewWorkspaceProps> = ({
         </div>
         <div className="cs2-kpi cs2-kpi--accent">
           <span className="cs2-kpi__label">AI-Generated Recipes</span>
-          <span className="cs2-kpi__value">{demoMode ? "Demo Preview" : "0"}</span>
-          <span className="cs2-kpi__hint">Activates in Phase 1A</span>
+          <span className="cs2-kpi__value">{demoMode ? "Demo Preview" : (lifecycleDash?.aiRecipeDrafts ?? 0)}</span>
+          <span className="cs2-kpi__hint">
+            {demoMode ? "Illustrative demo" : `Published: ${lifecycleDash?.publishedRecipes ?? 0} · Pending Approval: ${lifecycleDash?.pendingApproval ?? 0}`}
+          </span>
         </div>
         <div className="cs2-kpi cs2-kpi--amber">
           <span className="cs2-kpi__label">Pending Material Mappings</span>
-          <span className="cs2-kpi__value">{demoMode ? DEMO_OVERVIEW_METRICS.pendingMaterialMappings : "0"}</span>
-          <span className="cs2-kpi__hint">Activates in Phase 1B</span>
+          <span className="cs2-kpi__value">{demoMode ? DEMO_OVERVIEW_METRICS.pendingMaterialMappings : (lifecycleDash?.materialMappingPending ?? 0)}</span>
+          <span className="cs2-kpi__hint">Ready for Costing: {lifecycleDash?.readyForCosting ?? 0}</span>
         </div>
         <div className="cs2-kpi cs2-kpi--cyan">
           <span className="cs2-kpi__label">Material Creation Requests</span>
-          <span className="cs2-kpi__value">{demoMode ? DEMO_OVERVIEW_METRICS.materialCreationRequests : "0"}</span>
-          <span className="cs2-kpi__hint">Activates in Phase 1C</span>
+          <span className="cs2-kpi__value">{demoMode ? DEMO_OVERVIEW_METRICS.materialCreationRequests : (mrqDash?.totalRequests ?? 0)}</span>
+          <span className="cs2-kpi__hint">
+            Pending: {mrqDash?.pendingApprovalRequests ?? 0} · Sync: {mrqDash?.synchronizationPendingRequests ?? 0}
+          </span>
         </div>
         <div className="cs2-kpi cs2-kpi--accent">
           <span className="cs2-kpi__label">Upcoming Events</span>
@@ -182,9 +200,15 @@ const CulinaryOverviewWorkspace: React.FC<CulinaryOverviewWorkspaceProps> = ({
           <span className="cs2-kpi__hint">Interactive MRP Demo ready</span>
         </div>
         <div className="cs2-kpi cs2-kpi--emerald">
-          <span className="cs2-kpi__label">Avg Food Cost %</span>
-          <span className="cs2-kpi__value">{demoMode ? DEMO_OVERVIEW_METRICS.avgFoodCostPct : "—"}</span>
-          <span className="cs2-kpi__hint">{demoMode ? "Target: 28.0%" : "Requires Phase 3A costing"}</span>
+          <span className="cs2-kpi__label">Recipes Above FC Target</span>
+          <span className="cs2-kpi__value">
+            {demoMode
+              ? DEMO_OVERVIEW_METRICS.avgFoodCostPct
+              : `${lifecycleDash?.aboveFoodCostTarget ?? 0}`}
+          </span>
+          <span className="cs2-kpi__hint">
+            {demoMode ? "Target: 28.0%" : `Costing Incomplete: ${lifecycleDash?.costingIncomplete ?? 0}`}
+          </span>
         </div>
         <div className="cs2-kpi cs2-kpi--emerald">
           <span className="cs2-kpi__label">Event Contribution Margin</span>

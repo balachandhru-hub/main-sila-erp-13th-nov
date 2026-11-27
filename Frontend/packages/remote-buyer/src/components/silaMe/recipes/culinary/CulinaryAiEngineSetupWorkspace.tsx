@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { EmptyState, Loader, toastService } from "@vosox/shared-ui";
 import {
   CULINARY_TASK_LABELS,
+  DEFAULT_CULINARY_COSTING_CONFIG,
   DEFAULT_CULINARY_FEATURE_FLAGS,
   DEFAULT_CULINARY_MATERIAL_CONFIG,
   getCulinaryAiConfig,
@@ -12,6 +13,7 @@ import {
   type SilaCulinaryAiConfig,
   type SilaCulinaryAiConnectionTestResult,
   type SilaCulinaryAiFeatureFlags,
+  type SilaCulinaryCostingConfig,
   type SilaCulinaryMaterialConfig,
 } from "../../../../api/silaMe/silaCulinaryAiApi";
 import {
@@ -61,6 +63,7 @@ const CulinaryAiEngineSetupWorkspace: React.FC<CulinaryAiEngineSetupWorkspacePro
   const [taskRouting, setTaskRouting] = useState<Record<string, string>>({});
   const [featureFlags, setFeatureFlags] = useState<SilaCulinaryAiFeatureFlags>(DEFAULT_CULINARY_FEATURE_FLAGS);
   const [materialConfig, setMaterialConfig] = useState<SilaCulinaryMaterialConfig>(DEFAULT_CULINARY_MATERIAL_CONFIG);
+  const [costingConfig, setCostingConfig] = useState<SilaCulinaryCostingConfig>(DEFAULT_CULINARY_COSTING_CONFIG);
   const [indexStatus, setIndexStatus] = useState<SilaCulinaryMaterialIndexStatus | null>(null);
   const [indexBusy, setIndexBusy] = useState(false);
 
@@ -91,6 +94,7 @@ const CulinaryAiEngineSetupWorkspace: React.FC<CulinaryAiEngineSetupWorkspacePro
     setTaskRouting(data.taskRouting);
     setFeatureFlags(data.featureFlags);
     setMaterialConfig(data.materialConfig ?? DEFAULT_CULINARY_MATERIAL_CONFIG);
+    setCostingConfig(data.costingConfig ?? DEFAULT_CULINARY_COSTING_CONFIG);
   };
 
   const load = useCallback(async () => {
@@ -144,6 +148,7 @@ const CulinaryAiEngineSetupWorkspace: React.FC<CulinaryAiEngineSetupWorkspacePro
         taskRouting,
         featureFlags,
         materialConfig,
+        costingConfig,
       });
       hydrate(updated);
       onConfigUpdated?.();
@@ -766,6 +771,106 @@ const CulinaryAiEngineSetupWorkspace: React.FC<CulinaryAiEngineSetupWorkspacePro
           </div>
         </section>
       </div>
+
+      {/* Phase 1C Costing Source Policy & Lifecycle Governance */}
+      <section className="cs2-card" data-testid="culinary-costing-policy-setup">
+        <div className="cs2-card__head">
+          <h3 className="cs2-card__title">Phase 1C Costing Policy, Price Sources &amp; Lifecycle Governance</h3>
+          <span className="cs2-badge cs2-badge--live">Deterministic Decimal Engine</span>
+        </div>
+        <div className="cs2-form-grid">
+          <div className="sila-field">
+            <label className="sila-label">Reporting Currency</label>
+            <input
+              className="sila-input"
+              disabled={readOnly}
+              value={costingConfig.reportingCurrency}
+              onChange={(e) => setCostingConfig((p) => ({ ...p, reportingCurrency: e.target.value.toUpperCase() }))}
+            />
+          </div>
+          <div className="sila-field">
+            <label className="sila-label">Default Target Food Cost %</label>
+            <input
+              type="number"
+              step="0.5"
+              min={1}
+              max={99}
+              className="sila-input"
+              disabled={readOnly}
+              value={costingConfig.defaultTargetFoodCostPercent}
+              onChange={(e) => setCostingConfig((p) => ({ ...p, defaultTargetFoodCostPercent: Number(e.target.value) || 28 }))}
+            />
+          </div>
+          <div className="sila-field">
+            <label className="sila-label">Tax Basis</label>
+            <select
+              className="sila-select"
+              disabled={readOnly}
+              value={costingConfig.taxBasis}
+              onChange={(e) => setCostingConfig((p) => ({ ...p, taxBasis: e.target.value }))}
+            >
+              <option value="TAX_EXCLUSIVE">Tax-Exclusive (Recoverable VAT excluded)</option>
+              <option value="TAX_INCLUSIVE">Tax-Inclusive</option>
+            </select>
+          </div>
+          <div className="sila-field">
+            <label className="sila-label">Max Sub-Recipe Depth</label>
+            <input
+              type="number"
+              min={1}
+              max={10}
+              className="sila-input"
+              disabled={readOnly}
+              value={costingConfig.maxSubRecipeDepth}
+              onChange={(e) => setCostingConfig((p) => ({ ...p, maxSubRecipeDepth: Number(e.target.value) || 4 }))}
+            />
+          </div>
+          <div className="sila-field" style={{ gridColumn: "1 / -1" }}>
+            <label className="sila-label">Cost Source Hierarchy (comma-separated)</label>
+            <input
+              className="sila-input"
+              disabled={readOnly}
+              value={costingConfig.costSourceHierarchy.join(", ")}
+              onChange={(e) =>
+                setCostingConfig((p) => ({
+                  ...p,
+                  costSourceHierarchy: e.target.value
+                    .split(",")
+                    .map((s) => s.trim())
+                    .filter(Boolean),
+                }))
+              }
+            />
+          </div>
+          <label className="cs2-checkbox-row">
+            <input
+              type="checkbox"
+              disabled={readOnly}
+              checked={costingConfig.allowManualCostEstimate}
+              onChange={(e) => setCostingConfig((p) => ({ ...p, allowManualCostEstimate: e.target.checked }))}
+            />
+            Allow authorized manual cost estimates when price is missing
+          </label>
+          <label className="cs2-checkbox-row">
+            <input
+              type="checkbox"
+              disabled={readOnly}
+              checked={costingConfig.blockPublishOnMissingCost}
+              onChange={(e) => setCostingConfig((p) => ({ ...p, blockPublishOnMissingCost: e.target.checked }))}
+            />
+            Block recipe publishing when any ingredient price is missing
+          </label>
+          <label className="cs2-checkbox-row">
+            <input
+              type="checkbox"
+              disabled={readOnly}
+              checked={costingConfig.autoRecostOnLocalPriceChange}
+              onChange={(e) => setCostingConfig((p) => ({ ...p, autoRecostOnLocalPriceChange: e.target.checked }))}
+            />
+            Trigger recost review alert on local material price changes
+          </label>
+        </div>
+      </section>
     </form>
   );
 };
