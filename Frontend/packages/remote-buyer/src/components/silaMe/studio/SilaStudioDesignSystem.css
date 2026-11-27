@@ -855,7 +855,7 @@
 
 /* Compact catalogue: passport-size thumbnail (3:4) beside dense recipe details, so more recipes fit on one page. */
 .sila-studio-card-grid.sila-studio-card-grid--compact {
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: 0.5rem;
 }
 @media (max-width: 600px) {
@@ -867,17 +867,17 @@
   align-items: stretch;
   min-height: 0;
   border-radius: 9px;
+  overflow: hidden;
 }
 .sila-studio-item-card.sila-studio-item-card--compact:hover { transform: none; }
 
 .sila-studio-item-card--compact .sila-studio-item-card__media.sila-studio-item-card__media--thumb {
-  flex: 0 0 36px;
-  width: 36px;
-  height: 48px;
-  aspect-ratio: 3 / 4;
-  align-self: flex-start;
-  margin: 0.3rem 0 0.3rem 0.3rem;
-  border-radius: 5px;
+  flex: 0 0 50px;
+  width: 50px;
+  height: auto;
+  align-self: stretch;
+  margin: 0;
+  border-radius: 0;
   background: #f5faff;
 }
 
@@ -887,7 +887,8 @@
   height: 100%;
   min-height: 0;
   aspect-ratio: auto;
-  border-radius: 5px;
+  border-radius: 0;
+  border: 0;
 }
 
 .sila-studio-item-card--compact .sila-studio-item-card__media--thumb .rstudio-picture {
