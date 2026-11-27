@@ -21,6 +21,12 @@ import {
   exportLifecycleReport,
   exportMaterialRequestsReport,
 } from "../../../../api/silaMe/silaCulinaryLifecycleApi";
+import {
+  downloadEventReportResult,
+  exportCulinaryEventReport,
+  listCulinaryEvents,
+  type SilaCulinaryEvent,
+} from "../../../../api/silaMe/silaCulinaryEventMenuApi";
 import { triggerBlobDownload } from "./culinaryRecipePlannerHelpers";
 import "./CulinarySuite.css";
 
@@ -71,6 +77,9 @@ const CulinaryProductionAnalyticsReportWorkspaces: React.FC<Props> = ({ mode }) 
   const [drafts, setDrafts] = useState<CulinaryRecipeDraftSummary[]>([]);
   const [reportDraftId, setReportDraftId] = useState("");
   const [reportType, setReportType] = useState("COSTING");
+  const [eventsList, setEventsList] = useState<SilaCulinaryEvent[]>([]);
+  const [reportEventId, setReportEventId] = useState("");
+  const [eventReportCode, setEventReportCode] = useState("EVENT_SUMMARY");
   const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
@@ -79,6 +88,12 @@ const CulinaryProductionAnalyticsReportWorkspaces: React.FC<Props> = ({ mode }) 
       .then((list) => {
         setDrafts(list);
         if (list.length > 0 && !reportDraftId) setReportDraftId(list[0].id);
+      })
+      .catch(() => {});
+    listCulinaryEvents()
+      .then((list) => {
+        setEventsList(list);
+        if (list.length > 0 && !reportEventId) setReportEventId(list[0].id);
       })
       .catch(() => {});
   }, [mode]);
@@ -305,6 +320,61 @@ const CulinaryProductionAnalyticsReportWorkspaces: React.FC<Props> = ({ mode }) 
             </button>
             <button type="button" className="sila-btn sila-btn--sm sila-btn--secondary" disabled={exporting} onClick={() => handleExportMrqReport("PDF")}>
               PDF
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section className="cs2-card">
+        <div className="cs2-card__head">
+          <h3 className="cs2-card__title">Export Live Phase 2A Event &amp; Menu Reports</h3>
+          <span className="cs2-badge cs2-badge--live">Phase 2A Live</span>
+        </div>
+        <div className="cs2-form-grid">
+          <div className="sila-field">
+            <label className="sila-label">Event</label>
+            <select className="sila-select" value={reportEventId} onChange={(e) => setReportEventId(e.target.value)}>
+              {eventsList.length === 0 ? (
+                <option value="">No events created yet</option>
+              ) : (
+                eventsList.map((ev) => (
+                  <option key={ev.id} value={ev.id}>
+                    {ev.eventCode} — {ev.name} ({ev.status})
+                  </option>
+                ))
+              )}
+            </select>
+          </div>
+          <div className="sila-field">
+            <label className="sila-label">Event Report Type</label>
+            <select className="sila-select" value={eventReportCode} onChange={(e) => setEventReportCode(e.target.value)}>
+              <option value="EVENT_SUMMARY">Event Summary Report</option>
+              <option value="MENU_COSTING">Event Menu &amp; Costing Report</option>
+              <option value="GUEST_PLANNING">Guest Planning Report</option>
+              <option value="ALLERGEN_MATRIX">Event Allergen Matrix</option>
+              <option value="MATERIAL_PREVIEW">Preliminary Material Preview</option>
+              <option value="APPROVAL_PACKAGE">Event Approval Package</option>
+            </select>
+          </div>
+          <div className="sila-field" style={{ display: "flex", alignItems: "flex-end", gap: 6 }}>
+            <button
+              type="button"
+              className="sila-btn sila-btn--sm sila-btn--primary"
+              disabled={exporting || !reportEventId}
+              onClick={async () => {
+                setExporting(true);
+                try {
+                  const res = await exportCulinaryEventReport(reportEventId, eventReportCode);
+                  downloadEventReportResult(res);
+                  toastService.success(`Exported ${res.fileName}`);
+                } catch (err: unknown) {
+                  toastService.error(err instanceof Error ? err.message : "Export failed.");
+                } finally {
+                  setExporting(false);
+                }
+              }}
+            >
+              Export CSV (Formula-Safe)
             </button>
           </div>
         </div>

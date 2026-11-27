@@ -8,6 +8,12 @@ from app.engines.material_eval import run_material_evaluation
 from app.engines.material_index import get_index_manager
 from app.engines.material_matcher import MaterialIntelligenceEngine
 from app.engines.material_request_assist import assist_material_request
+from app.engines.menu_planner import (
+    calculate_event_menu_portions_and_cost,
+    generate_ai_menu,
+    optimize_menu_milp,
+    semantic_search_recipes,
+)
 from app.engines.mrp import EventMrpRequest, EventMrpResult, calculate_event_mrp
 from app.engines.normalization import convert_physical_quantity, normalize_ingredient_text
 from app.engines.pnl import EventPnlRequest, EventPnlResult, calculate_event_pnl
@@ -31,6 +37,16 @@ from app.schemas.costing_ai import (
     MaterialRequestAssistResponse,
     RecipeCostingRequest,
     RecipeCostingResponse,
+)
+from app.schemas.event_menu_ai import (
+    MenuGenerateRequest,
+    MenuGenerateResponse,
+    MenuOptimizeRequest,
+    MenuOptimizeResponse,
+    PortionCalculationRequest,
+    PortionCalculationResponse,
+    SemanticRecipeSearchRequest,
+    SemanticRecipeSearchResponse,
 )
 from app.schemas.material_ai import (
     BulkMaterialMatchRequest,
@@ -337,4 +353,28 @@ def post_calculate_recipe_costing(req: RecipeCostingRequest) -> RecipeCostingRes
 @app.post("/v1/costing/optimize", response_model=CostOptimizationResponse)
 def post_optimize_recipe_costing(req: CostOptimizationRequest) -> CostOptimizationResponse:
     return optimize_recipe_costing(req)
+
+
+# ==================== PHASE 2A MENU STUDIO & EVENT PLANNER ENDPOINTS ====================
+
+
+@app.post("/v1/menus/search", response_model=SemanticRecipeSearchResponse)
+def post_semantic_search_recipes(req: SemanticRecipeSearchRequest) -> SemanticRecipeSearchResponse:
+    return semantic_search_recipes(req)
+
+
+@app.post("/v1/menus/calculate", response_model=PortionCalculationResponse)
+def post_calculate_event_menu(req: PortionCalculationRequest) -> PortionCalculationResponse:
+    return calculate_event_menu_portions_and_cost(req)
+
+
+@app.post("/v1/menus/optimize", response_model=MenuOptimizeResponse)
+def post_optimize_event_menu(req: MenuOptimizeRequest) -> MenuOptimizeResponse:
+    return optimize_menu_milp(req)
+
+
+@app.post("/v1/menus/generate", response_model=MenuGenerateResponse)
+async def post_generate_event_menu(req: MenuGenerateRequest) -> MenuGenerateResponse:
+    return await generate_ai_menu(req)
+
 

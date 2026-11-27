@@ -36,6 +36,9 @@ namespace Buyer.Application.Features.Shared
         public const string MATERIAL_REQUEST = "MRQ";
         public const string STANDALONE_MATERIAL = "MAT";
         public const string COSTING_SNAPSHOT = "CST";
+        public const string EVENT = "EVT";
+        public const string EVENT_TEMPLATE = "ETP";
+        public const string CULINARY_MENU = "MNU";
 
         private const int SEED_CANDIDATES = 50;
 
@@ -125,6 +128,9 @@ namespace Buyer.Application.Features.Shared
                 MATERIAL_REQUEST => repository.SilaCulinaryMaterialRequest.FindByCondition(x => x.BuyerId == buyerId).Select(x => x.RequestReference),
                 STANDALONE_MATERIAL => repository.ItemBuyerMaster.FindByCondition(x => x.BuyerId == buyerId).Select(x => x.MaterialCode),
                 COSTING_SNAPSHOT => repository.SilaCulinaryCostingSnapshot.FindByCondition(x => x.BuyerId == buyerId).Select(x => x.CostingReference),
+                EVENT => repository.SilaCulinaryEvent.FindByCondition(x => x.BuyerId == buyerId).Select(x => x.EventCode),
+                EVENT_TEMPLATE => repository.SilaCulinaryEventTemplate.FindByCondition(x => x.BuyerId == buyerId).Select(x => x.TemplateCode),
+                CULINARY_MENU => repository.SilaCulinaryMenu.FindByCondition(x => x.BuyerId == buyerId).Select(x => x.MenuCode),
                 _ => throw new ArgumentOutOfRangeException(nameof(prefix), prefix, "Unknown SILA document number prefix.")
             };
 

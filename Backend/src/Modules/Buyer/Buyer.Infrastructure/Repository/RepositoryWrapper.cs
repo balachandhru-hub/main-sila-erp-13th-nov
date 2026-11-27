@@ -95,6 +95,12 @@ namespace Buyer.Infrastructure.Repository
         private ISilaCulinaryMaterialRequestHistoryRepository? _silaCulinaryMaterialRequestHistory;
         private ISilaCulinaryCostingSnapshotRepository? _silaCulinaryCostingSnapshot;
         private ISilaCulinaryRecipeLifecycleRepository? _silaCulinaryRecipeLifecycle;
+        private ISilaCulinaryEventRepository? _silaCulinaryEvent;
+        private ISilaCulinaryEventSessionRepository? _silaCulinaryEventSession;
+        private ISilaCulinaryEventTemplateRepository? _silaCulinaryEventTemplate;
+        private ISilaCulinaryMenuRepository? _silaCulinaryMenu;
+        private ISilaCulinaryMenuLineRepository? _silaCulinaryMenuLine;
+        private ISilaCulinaryEventRevisionRepository? _silaCulinaryEventRevision;
         private IBuyerBusinessProfileRepository _buyerBusinessProfileRepository;
         private IBuyerCategoryRepository _buyerCategoryRepository;
         private IAssetRepository _assetRepository;
@@ -1674,6 +1680,60 @@ namespace Buyer.Infrastructure.Repository
             {
                 _silaCulinaryRecipeLifecycle ??= new SilaCulinaryRecipeLifecycleRepository(_context);
                 return _silaCulinaryRecipeLifecycle;
+            }
+        }
+
+        public ISilaCulinaryEventRepository SilaCulinaryEvent
+        {
+            get
+            {
+                _silaCulinaryEvent ??= new SilaCulinaryEventRepository(_context);
+                return _silaCulinaryEvent;
+            }
+        }
+
+        public ISilaCulinaryEventSessionRepository SilaCulinaryEventSession
+        {
+            get
+            {
+                _silaCulinaryEventSession ??= new SilaCulinaryEventSessionRepository(_context);
+                return _silaCulinaryEventSession;
+            }
+        }
+
+        public ISilaCulinaryEventTemplateRepository SilaCulinaryEventTemplate
+        {
+            get
+            {
+                _silaCulinaryEventTemplate ??= new SilaCulinaryEventTemplateRepository(_context);
+                return _silaCulinaryEventTemplate;
+            }
+        }
+
+        public ISilaCulinaryMenuRepository SilaCulinaryMenu
+        {
+            get
+            {
+                _silaCulinaryMenu ??= new SilaCulinaryMenuRepository(_context);
+                return _silaCulinaryMenu;
+            }
+        }
+
+        public ISilaCulinaryMenuLineRepository SilaCulinaryMenuLine
+        {
+            get
+            {
+                _silaCulinaryMenuLine ??= new SilaCulinaryMenuLineRepository(_context);
+                return _silaCulinaryMenuLine;
+            }
+        }
+
+        public ISilaCulinaryEventRevisionRepository SilaCulinaryEventRevision
+        {
+            get
+            {
+                _silaCulinaryEventRevision ??= new SilaCulinaryEventRevisionRepository(_context);
+                return _silaCulinaryEventRevision;
             }
         }
 
