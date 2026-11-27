@@ -7719,6 +7719,10 @@ namespace Buyer.Infrastructure.Migrations
                         .HasColumnType("int")
                         .HasColumnName("max_output_tokens");
 
+                    b.Property<string>("MaterialConfigJson")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("material_config_json");
+
                     b.Property<decimal>("MonthlyCostBudgetUsd")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)")

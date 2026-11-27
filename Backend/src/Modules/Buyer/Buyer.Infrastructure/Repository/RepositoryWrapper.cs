@@ -85,6 +85,11 @@ namespace Buyer.Infrastructure.Repository
         private ISilaCulinaryRecipeDraftRepository? _silaCulinaryRecipeDraft;
         private ISilaCulinaryRecipeRevisionRepository? _silaCulinaryRecipeRevision;
         private ISilaCulinaryAiUsageLogRepository? _silaCulinaryAiUsageLog;
+        private ISilaCulinaryMaterialMappingRepository? _silaCulinaryMaterialMapping;
+        private ISilaCulinaryMaterialMappingHistoryRepository? _silaCulinaryMaterialMappingHistory;
+        private ISilaCulinaryMaterialAliasRepository? _silaCulinaryMaterialAlias;
+        private ISilaCulinaryMaterialFeedbackRepository? _silaCulinaryMaterialFeedback;
+        private ISilaCulinaryMaterialIndexStateRepository? _silaCulinaryMaterialIndexState;
         private IBuyerBusinessProfileRepository _buyerBusinessProfileRepository;
         private IBuyerCategoryRepository _buyerCategoryRepository;
         private IAssetRepository _assetRepository;
@@ -1574,6 +1579,51 @@ namespace Buyer.Infrastructure.Repository
             {
                 _silaCulinaryAiUsageLog ??= new SilaCulinaryAiUsageLogRepository(_context);
                 return _silaCulinaryAiUsageLog;
+            }
+        }
+
+        public ISilaCulinaryMaterialMappingRepository SilaCulinaryMaterialMapping
+        {
+            get
+            {
+                _silaCulinaryMaterialMapping ??= new SilaCulinaryMaterialMappingRepository(_context);
+                return _silaCulinaryMaterialMapping;
+            }
+        }
+
+        public ISilaCulinaryMaterialMappingHistoryRepository SilaCulinaryMaterialMappingHistory
+        {
+            get
+            {
+                _silaCulinaryMaterialMappingHistory ??= new SilaCulinaryMaterialMappingHistoryRepository(_context);
+                return _silaCulinaryMaterialMappingHistory;
+            }
+        }
+
+        public ISilaCulinaryMaterialAliasRepository SilaCulinaryMaterialAlias
+        {
+            get
+            {
+                _silaCulinaryMaterialAlias ??= new SilaCulinaryMaterialAliasRepository(_context);
+                return _silaCulinaryMaterialAlias;
+            }
+        }
+
+        public ISilaCulinaryMaterialFeedbackRepository SilaCulinaryMaterialFeedback
+        {
+            get
+            {
+                _silaCulinaryMaterialFeedback ??= new SilaCulinaryMaterialFeedbackRepository(_context);
+                return _silaCulinaryMaterialFeedback;
+            }
+        }
+
+        public ISilaCulinaryMaterialIndexStateRepository SilaCulinaryMaterialIndexState
+        {
+            get
+            {
+                _silaCulinaryMaterialIndexState ??= new SilaCulinaryMaterialIndexStateRepository(_context);
+                return _silaCulinaryMaterialIndexState;
             }
         }
 

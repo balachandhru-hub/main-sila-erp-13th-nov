@@ -1,4 +1,4 @@
-# SILA Culinary Intelligence Engine — Phase 1A Pinned Stack
+# SILA Culinary Intelligence Engine — Phase 1A + Phase 1B Pinned Stack
 fastapi==0.115.6
 pydantic==2.10.4
 pydantic-settings==2.7.0
@@ -17,3 +17,6 @@ python-docx==1.2.0
 pillow==13.0.0
 google-genai==2.8.0
 anthropic==2.14.0
+faiss-cpu==1.16.0
+scikit-learn==1.9.1
+fastembed==0.9.1

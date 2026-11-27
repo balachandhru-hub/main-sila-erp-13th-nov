@@ -50,6 +50,48 @@ export interface SilaCulinaryAiStatus {
   featureFlags: SilaCulinaryAiFeatureFlags;
 }
 
+export interface SilaCulinaryMaterialConfig {
+  exactMatchingEnabled: boolean;
+  aliasMatchingEnabled: boolean;
+  fuzzyMatchingEnabled: boolean;
+  semanticMatchingEnabled: boolean;
+  advancedRerankingEnabled: boolean;
+  llmAssistedMatchingEnabled: boolean;
+  candidateRetrievalLimit: number;
+  candidateDisplayLimit: number;
+  fuzzyThreshold: number;
+  semanticThreshold: number;
+  autoSuggestThreshold: number;
+  ambiguityGapThreshold: number;
+  mandatoryChefReview: boolean;
+  embeddingModel: string;
+  rerankingModel: string;
+  executionDevice: string;
+  embeddingBatchSize: number;
+  maxIngredientsPerBulk: number;
+}
+
+export const DEFAULT_CULINARY_MATERIAL_CONFIG: SilaCulinaryMaterialConfig = {
+  exactMatchingEnabled: true,
+  aliasMatchingEnabled: true,
+  fuzzyMatchingEnabled: true,
+  semanticMatchingEnabled: true,
+  advancedRerankingEnabled: true,
+  llmAssistedMatchingEnabled: false,
+  candidateRetrievalLimit: 15,
+  candidateDisplayLimit: 5,
+  fuzzyThreshold: 70,
+  semanticThreshold: 0.66,
+  autoSuggestThreshold: 0.72,
+  ambiguityGapThreshold: 0.04,
+  mandatoryChefReview: true,
+  embeddingModel: "BAAI/bge-small-en-v1.5",
+  rerankingModel: "Xenova/ms-marco-MiniLM-L-6-v2",
+  executionDevice: "cpu",
+  embeddingBatchSize: 32,
+  maxIngredientsPerBulk: 100,
+};
+
 export interface SilaCulinaryAiConfig {
   id: string;
   buyerId: string;
@@ -80,6 +122,7 @@ export interface SilaCulinaryAiConfig {
   promptVersion?: string;
   taskRouting: Record<string, string>;
   featureFlags: SilaCulinaryAiFeatureFlags;
+  materialConfig?: SilaCulinaryMaterialConfig;
   lastTestProvider: string | null;
   lastTestStatus: string | null;
   lastTestMessage: string | null;
@@ -112,6 +155,7 @@ export interface SilaCulinaryAiConfigWrite {
   fallbackPolicy: CulinaryAiFallbackPolicy;
   taskRouting: Record<string, string>;
   featureFlags: SilaCulinaryAiFeatureFlags;
+  materialConfig?: SilaCulinaryMaterialConfig;
 }
 
 export interface SilaCulinaryAiConnectionTestResult {

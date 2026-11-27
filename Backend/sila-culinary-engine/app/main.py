@@ -4,6 +4,9 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from pydantic import BaseModel
 from app.agents.recipe_agent import RecipeIntelligenceAgent
 from app.engines.documents import extract_recipe_document, validate_and_prepare_dish_image
+from app.engines.material_eval import run_material_evaluation
+from app.engines.material_index import get_index_manager
+from app.engines.material_matcher import MaterialIntelligenceEngine
 from app.engines.mrp import EventMrpRequest, EventMrpResult, calculate_event_mrp
 from app.engines.normalization import convert_physical_quantity, normalize_ingredient_text
 from app.engines.pnl import EventPnlRequest, EventPnlResult, calculate_event_pnl
@@ -15,9 +18,25 @@ from app.engines.scaling import (
     scale_recipe,
     scale_recipe_v2,
 )
+from app.engines.substitution_engine import SubstitutionEngine
 from app.engines.validation import enrich_and_validate_recipe
 from app.providers.adapters import test_provider_connection
 from app.providers.router import ProviderKind, ProviderPolicy, ProviderUnavailableError
+from app.schemas.material_ai import (
+    BulkMaterialMatchRequest,
+    BulkMaterialMatchResponse,
+    EvaluationMetricsResponse,
+    IndexBuildRequest,
+    IndexStatusResponse,
+    IndexSyncRequest,
+    IngredientMatchResponse,
+    MatchCandidateResult,
+    MaterialMatchRequest,
+    MaterialMatchingConfig,
+    MaterialSearchRequest,
+    SubstitutionSuggestRequest,
+    SubstitutionSuggestResponse,
+)
 from app.schemas.recipe_ai import (
     ExtractedDocumentResult,
     GeneratedRecipeResponse,
@@ -31,11 +50,14 @@ from app.schemas.recipe_ai import (
 
 app = FastAPI(
     title="SILA Culinary Intelligence Engine",
-    version="1.0.0-phase1a",
-    description="Isolated culinary deterministic math, document/image interpretation, and AI recipe generation engine (Phase 1A).",
+    version="1.0.0-phase1b",
+    description="Isolated culinary deterministic math, document/image interpretation, AI recipe generation, and Material Intelligence engine (Phase 1A + 1B).",
 )
 
 _agent = RecipeIntelligenceAgent()
+_index_mgr = get_index_manager()
+_material_engine = MaterialIntelligenceEngine(_index_mgr)
+_substitution_engine = SubstitutionEngine(_index_mgr)
 
 
 class ProviderTestEnvelope(BaseModel):
@@ -45,7 +67,7 @@ class ProviderTestEnvelope(BaseModel):
 
 @app.get("/health")
 def health() -> dict[str, str]:
-    return {"status": "ok", "phase": "phase1a", "mode": "culinary-recipe-intelligence"}
+    return {"status": "ok", "phase": "phase1b", "mode": "culinary-recipe-and-material-intelligence"}
 
 
 @app.get("/v1/providers/capabilities")
@@ -70,7 +92,17 @@ def capabilities() -> dict:
             "REPORT_SUMMARIES",
             "VOICE_INTERPRETATION",
         ],
-        "deterministicEngines": ["RECIPE_SCALING", "RECIPE_SCALING_V2", "EVENT_MRP", "EVENT_PNL", "UNIT_CONVERSION"],
+        "deterministicEngines": [
+            "RECIPE_SCALING",
+            "RECIPE_SCALING_V2",
+            "EVENT_MRP",
+            "EVENT_PNL",
+            "UNIT_CONVERSION",
+            "MATERIAL_MATCHING",
+            "MATERIAL_INDEX",
+            "UOM_PACK_VALIDATION",
+            "SUBSTITUTION_ENGINE",
+        ],
     }
 
 
@@ -193,3 +225,88 @@ async def post_prepare_dish_image(file: UploadFile = File(...)) -> dict:
         return {"base64": b64, "mime_type": mime, "width": w, "height": h}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+# ==================== PHASE 1B MATERIAL INTELLIGENCE ENDPOINTS ====================
+
+
+@app.post("/v1/materials/index/build", response_model=IndexStatusResponse)
+def post_build_material_index(req: IndexBuildRequest) -> IndexStatusResponse:
+    try:
+        return _index_mgr.build_index(
+            tenant_id=req.tenant_id,
+            materials=req.materials,
+            aliases=req.aliases,
+            config=req.config,
+            force_rebuild=req.force_rebuild,
+            persist=True,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/v1/materials/index/sync", response_model=IndexStatusResponse)
+def post_sync_material_index(req: IndexSyncRequest) -> IndexStatusResponse:
+    try:
+        return _index_mgr.sync_index(
+            tenant_id=req.tenant_id,
+            upserted_materials=req.upserted_materials,
+            deactivated_material_ids=req.deactivated_material_ids,
+            aliases=req.aliases,
+            config=req.config,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/v1/materials/index/status/{tenant_id}", response_model=IndexStatusResponse)
+def get_material_index_status(tenant_id: str) -> IndexStatusResponse:
+    try:
+        return _index_mgr.get_status(tenant_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/v1/materials/match", response_model=IngredientMatchResponse)
+async def post_match_material(req: MaterialMatchRequest) -> IngredientMatchResponse:
+    try:
+        return await _material_engine.match_ingredient(
+            tenant_id=req.tenant_id,
+            ingredient=req.ingredient,
+            config=req.config,
+            materials=req.materials,
+            aliases=req.aliases,
+            provider_config=req.provider_config,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/v1/materials/match-bulk", response_model=BulkMaterialMatchResponse)
+async def post_match_materials_bulk(req: BulkMaterialMatchRequest) -> BulkMaterialMatchResponse:
+    try:
+        return await _material_engine.match_bulk(req)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/v1/materials/search", response_model=list[MatchCandidateResult])
+def post_search_materials(req: MaterialSearchRequest) -> list[MatchCandidateResult]:
+    try:
+        return _material_engine.search_materials(req)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/v1/materials/substitutions", response_model=SubstitutionSuggestResponse)
+async def post_suggest_substitutions(req: SubstitutionSuggestRequest) -> SubstitutionSuggestResponse:
+    try:
+        return await _substitution_engine.suggest_substitutions(req)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/v1/materials/evaluate", response_model=EvaluationMetricsResponse)
+async def post_evaluate_material_engine(config: MaterialMatchingConfig | None = None) -> EvaluationMetricsResponse:
+    return await run_material_evaluation(config)
+

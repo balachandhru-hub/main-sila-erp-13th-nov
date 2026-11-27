@@ -22,3 +22,4 @@
 **/*.log
 .DS_Store
 Frontend/.data/
+Backend/sila-culinary-engine/data/indexes/
