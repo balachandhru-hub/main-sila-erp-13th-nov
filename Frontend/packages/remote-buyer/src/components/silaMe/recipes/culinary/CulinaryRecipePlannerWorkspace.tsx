@@ -48,6 +48,7 @@ import "./CulinarySuite.css";
 
 interface CulinaryRecipePlannerWorkspaceProps {
   onOpenWorkspace: (target: CulinaryWorkspaceKind) => void;
+  onContinueToMaterialMapping?: (draftId: string) => void;
 }
 
 const MODE_OPTIONS: { id: CulinaryGenerationMode; label: string; hint: string }[] = [
@@ -105,6 +106,7 @@ const splitCsvList = (value: string): string[] =>
 
 const CulinaryRecipePlannerWorkspace: React.FC<CulinaryRecipePlannerWorkspaceProps> = ({
   onOpenWorkspace,
+  onContinueToMaterialMapping,
 }) => {
   // Switch between Live Phase 1A Workspace and Phase 0 Scaling Simulator Demo
   const [workspaceMode, setWorkspaceMode] = useState<"PHASE1A" | "PHASE0_DEMO">("PHASE1A");
@@ -2225,9 +2227,16 @@ const CulinaryRecipePlannerWorkspace: React.FC<CulinaryRecipePlannerWorkspacePro
               <div className="cs2-actions-row">
                 <button
                   type="button"
-                  className="sila-btn sila-btn--sm sila-btn--secondary"
-                  disabled
-                  title="Phase 1B Material Intelligence & Semantic Matching activates in the next phase"
+                  className="sila-btn sila-btn--sm sila-btn--primary"
+                  data-testid="p1a-continue-material-mapping"
+                  disabled={saving}
+                  onClick={() => {
+                    if (onContinueToMaterialMapping) {
+                      onContinueToMaterialMapping(activeDraft.id);
+                    } else {
+                      onOpenWorkspace("materials");
+                    }
+                  }}
                 >
                   Continue to Material Mapping (Phase 1B)
                 </button>

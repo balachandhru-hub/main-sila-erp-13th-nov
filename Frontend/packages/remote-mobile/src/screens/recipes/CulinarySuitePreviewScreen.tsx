@@ -17,6 +17,21 @@ import {
   type CulinaryRefineResponse,
   type CulinaryStructuredRecipePayload,
 } from '../../../../remote-buyer/src/api/silaMe/silaCulinaryRecipesApi';
+import {
+  applyIngredientSubstitution,
+  bulkAcceptExactMappings,
+  confirmMaterialMapping,
+  getMaterialWorkspace,
+  matchDraftMaterials,
+  prepareMaterialRequestDraft,
+  rejectMaterialMapping,
+  searchMaterialsForMapping,
+  suggestIngredientSubstitutions,
+  type SilaCulinaryMaterialMappingLine,
+  type SilaCulinaryMaterialSearchItem,
+  type SilaCulinaryMaterialWorkspace,
+  type SilaCulinarySubstitutionResponse,
+} from '../../../../remote-buyer/src/api/silaMe/silaCulinaryMaterialsApi';
 import { scaleDraftLocally } from '../../../../remote-buyer/src/components/silaMe/recipes/culinary/culinaryRecipePlannerHelpers';
 import {
   calculateRecipeScaling,
@@ -29,13 +44,13 @@ import { useGo } from '../../navigation';
 import { errorText, useLoad } from '../../useLoad';
 import './recipeStudio.css';
 
-type MobileTab = 'generate' | 'draft' | 'history' | 'demo';
+type MobileTab = 'generate' | 'draft' | 'materials' | 'history' | 'demo';
 
 /**
- * Phase 1A Mobile Culinary Intelligence — responsive chef AI recipe generation,
+ * Phase 1A + Phase 1B Mobile Culinary Intelligence — responsive chef AI recipe generation,
  * dish photograph capture/upload, serving scaling, quantity editing, basic refinement,
- * draft saving, and draft history (§39).
- * Never fetches or displays administrator AI credentials.
+ * draft saving, draft history, and Material Intelligence mapping (§39, §43).
+ * Never fetches or displays administrator AI model settings or credentials.
  */
 const CulinarySuitePreviewScreen: React.FC = () => {
   const go = useGo();
@@ -66,6 +81,17 @@ const CulinarySuitePreviewScreen: React.FC = () => {
   const [refining, setRefining] = useState(false);
   const [pendingRefine, setPendingRefine] = useState<CulinaryRefineResponse | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // Phase 1B Mobile Material Intelligence state
+  const [matWs, setMatWs] = useState<SilaCulinaryMaterialWorkspace | null>(null);
+  const [matLoading, setMatLoading] = useState(false);
+  const [matMatching, setMatMatching] = useState(false);
+  const [activeMatRef, setActiveMatRef] = useState<string | null>(null);
+  const [matSearchQ, setMatSearchQ] = useState('');
+  const [matSearchItems, setMatSearchItems] = useState<SilaCulinaryMaterialSearchItem[]>([]);
+  const [matSubs, setMatSubs] = useState<SilaCulinarySubstitutionResponse | null>(null);
+  const [reqDraftDesc, setReqDraftDesc] = useState('');
+  const [reqDraftReason, setReqDraftReason] = useState('');
 
   // Phase 0 Demo fallback tab state
   const [demoServings, setDemoServings] = useState(10);
@@ -233,8 +259,95 @@ const CulinarySuitePreviewScreen: React.FC = () => {
     try {
       const detail = await getCulinaryRecipeDraft(draftId);
       hydrateDraft(detail);
+      setMatWs(null);
     } catch (caught) {
       setErrMsg(errorText(caught, 'Unable to open recipe draft.'));
+    }
+  };
+
+  const loadMaterialWorkspace = async (draftId: string) => {
+    setErrMsg(null);
+    setMatLoading(true);
+    try {
+      const ws = await getMaterialWorkspace(draftId);
+      setMatWs(ws);
+    } catch (caught) {
+      setErrMsg(errorText(caught, 'Unable to load material mapping workspace.'));
+    } finally {
+      setMatLoading(false);
+    }
+  };
+
+  const handleOpenMaterialsTab = async () => {
+    setTab('materials');
+    if (activeDraft && (!matWs || matWs.draftId !== activeDraft.id)) {
+      await loadMaterialWorkspace(activeDraft.id);
+    }
+  };
+
+  const handleMobileMatchAll = async () => {
+    if (!activeDraft) return;
+    setErrMsg(null);
+    setMatMatching(true);
+    try {
+      const ws = await matchDraftMaterials(activeDraft.id, { unresolvedOnly: false });
+      setMatWs(ws);
+      setStatusMsg(`Matched: ${ws.kpis.exactMatches} exact, ${ws.kpis.suggestedMatches} suggested.`);
+    } catch (caught) {
+      setErrMsg(errorText(caught, 'Material matching failed.'));
+    } finally {
+      setMatMatching(false);
+    }
+  };
+
+  const handleMobileBulkAccept = async () => {
+    if (!activeDraft) return;
+    setErrMsg(null);
+    setMatMatching(true);
+    try {
+      const ws = await bulkAcceptExactMappings(activeDraft.id);
+      setMatWs(ws);
+      setStatusMsg(`Confirmed ${ws.kpis.confirmedMappings} exact mapping(s).`);
+    } catch (caught) {
+      setErrMsg(errorText(caught, 'Bulk accept failed.'));
+    } finally {
+      setMatMatching(false);
+    }
+  };
+
+  const handleMobileLineConfirm = async (
+    line: SilaCulinaryMaterialMappingLine,
+    materialId: string | null,
+    materialCode: string | null,
+  ) => {
+    if (!activeDraft) return;
+    setErrMsg(null);
+    try {
+      await confirmMaterialMapping(activeDraft.id, line.ingredientTempRef, {
+        expectedMappingRevision: line.mappingRevision,
+        materialId,
+        materialCode,
+      });
+      await loadMaterialWorkspace(activeDraft.id);
+      setActiveMatRef(null);
+      setStatusMsg(`Confirmed ${materialCode ?? 'material'} for ${line.originalDescription}.`);
+    } catch (caught) {
+      setErrMsg(errorText(caught, 'Confirm failed.'));
+    }
+  };
+
+  const handleMobileLineReject = async (line: SilaCulinaryMaterialMappingLine) => {
+    if (!activeDraft) return;
+    setErrMsg(null);
+    try {
+      await rejectMaterialMapping(activeDraft.id, line.ingredientTempRef, {
+        expectedMappingRevision: line.mappingRevision,
+        reason: 'Rejected on mobile review',
+      });
+      await loadMaterialWorkspace(activeDraft.id);
+      setStatusMsg(`Rejected candidate for ${line.originalDescription}.`);
+    } catch (caught) {
+      setErrMsg(errorText(caught, 'Reject failed.'));
     }
   };
 
@@ -263,6 +376,9 @@ const CulinarySuitePreviewScreen: React.FC = () => {
               </button>
               <button type="button" className={`rs-tab ${tab === 'draft' ? 'rs-tab--on' : ''}`} onClick={() => setTab('draft')}>
                 Draft{activeDraft ? ` (R${activeDraft.revisionNumber})` : ''}
+              </button>
+              <button type="button" className={`rs-tab ${tab === 'materials' ? 'rs-tab--on' : ''}`} onClick={handleOpenMaterialsTab}>
+                Materials{matWs ? ` (${matWs.kpis.confirmedMappings}/${matWs.kpis.totalIngredients})` : ''}
               </button>
               <button type="button" className={`rs-tab ${tab === 'history' ? 'rs-tab--on' : ''}`} onClick={() => setTab('history')}>
                 History ({draftsLoad.data?.length ?? 0})
@@ -452,10 +568,285 @@ const CulinarySuitePreviewScreen: React.FC = () => {
                       <button type="button" className="sm-btn sm-btn--primary" disabled={saving} onClick={handleSaveDraft}>
                         {saving ? 'Saving...' : 'Save Draft'}
                       </button>
+                      <button type="button" className="sm-btn" onClick={handleOpenMaterialsTab}>
+                        Map Materials
+                      </button>
                       <button type="button" className="sm-btn" onClick={() => go('recipes/catalog')}>
                         Catalog
                       </button>
                     </div>
+                  </>
+                )}
+              </>
+            )}
+
+            {tab === 'materials' && (
+              <>
+                {!activeDraft ? (
+                  <section className="sm-card">
+                    <p className="sm-meta">Open or generate a recipe draft first to inspect Phase 1B material mappings.</p>
+                  </section>
+                ) : matLoading ? (
+                  <section className="sm-card">
+                    <p className="sm-meta">Loading Material Intelligence workspace...</p>
+                  </section>
+                ) : (
+                  <>
+                    <section className="sm-card" data-testid="mobile-p1b-materials-header">
+                      <p className="sm-eyebrow">PHASE 1B MATERIAL INTELLIGENCE</p>
+                      <h2 style={{ margin: '0.25rem 0' }}>{matWs?.recipeName ?? activeDraft.recipeName}</h2>
+                      <p className="sm-meta">
+                        Status: <strong>{matWs?.readinessStatus ?? 'MATERIAL_MAPPING_PENDING'}</strong> · Confirmed{' '}
+                        <strong>{matWs?.kpis.confirmedMappings ?? 0}/{matWs?.kpis.totalIngredients ?? 0}</strong> · Missing{' '}
+                        <strong>{matWs?.kpis.missingMaterials ?? 0}</strong>
+                      </p>
+                      <div className="sm-actions" style={{ marginTop: '0.5rem' }}>
+                        <button type="button" className="sm-btn sm-btn--primary" disabled={matMatching} onClick={handleMobileMatchAll}>
+                          {matMatching ? 'Matching...' : 'Match All'}
+                        </button>
+                        <button type="button" className="sm-btn" disabled={matMatching} onClick={handleMobileBulkAccept}>
+                          Accept Exact
+                        </button>
+                        <button type="button" className="sm-btn" onClick={() => loadMaterialWorkspace(activeDraft.id)}>
+                          Refresh
+                        </button>
+                      </div>
+                    </section>
+
+                    {(matWs?.lines ?? []).map((line) => {
+                      const isExpanded = activeMatRef === line.ingredientTempRef;
+                      return (
+                        <section key={line.ingredientTempRef} className="sm-card" data-testid={`mobile-p1b-line-${line.ingredientTempRef}`}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem' }}>
+                            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                              {line.materialImageUrl ? (
+                                <img
+                                  src={line.materialImageUrl}
+                                  alt={line.materialDescription ?? line.originalDescription}
+                                  style={{ width: 34, height: 34, borderRadius: 6, objectFit: 'cover' }}
+                                />
+                              ) : (
+                                <span
+                                  style={{
+                                    width: 34,
+                                    height: 34,
+                                    borderRadius: 6,
+                                    background: '#f1f5f9',
+                                    color: '#475569',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: 10,
+                                    fontWeight: 700,
+                                  }}
+                                >
+                                  MAT
+                                </span>
+                              )}
+                              <div>
+                                <strong>{line.originalDescription}</strong>
+                                <div className="sm-meta">
+                                  Need: {line.requiredQuantity} {line.recipeUom}
+                                  {line.convertedQuantity != null && line.baseUom
+                                    ? ` -> ${line.convertedQuantity} ${line.baseUom}`
+                                    : line.uomCompatible
+                                      ? ''
+                                      : ' (UOM Conflict)'}
+                                </div>
+                              </div>
+                            </div>
+                            <span className="sm-meta" style={{ fontWeight: 700 }}>{line.mappingStatus}</span>
+                          </div>
+
+                          <div className="sm-meta" style={{ marginTop: '0.35rem' }}>
+                            Material: <code>{line.materialCode ?? 'UNMATCHED'}</code>{' '}
+                            {line.materialDescription ?? ''} · Stock:{' '}
+                            <strong>
+                              {line.stockStatus === 'UNKNOWN' || line.availableStock == null
+                                ? 'Unknown'
+                                : `${line.availableStock} ${line.stockUom ?? ''}`}
+                            </strong>
+                          </div>
+
+                          <div className="sm-actions" style={{ marginTop: '0.45rem' }}>
+                            {line.materialId && line.mappingStatus !== 'CONFIRMED' && line.uomCompatible && line.specificationCompatible && (
+                              <button
+                                type="button"
+                                className="sm-btn sm-btn--primary"
+                                onClick={() => handleMobileLineConfirm(line, line.materialId ?? null, line.materialCode ?? null)}
+                              >
+                                Confirm
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              className="sm-btn"
+                              onClick={() => {
+                                if (isExpanded) {
+                                  setActiveMatRef(null);
+                                } else {
+                                  setActiveMatRef(line.ingredientTempRef);
+                                  setMatSearchQ(line.originalDescription);
+                                  setMatSearchItems([]);
+                                  setMatSubs(null);
+                                  setReqDraftDesc(line.requestDraft?.proposedDescription ?? line.originalDescription.toUpperCase());
+                                  setReqDraftReason(line.requestDraft?.reason ?? line.missingReason ?? '');
+                                }
+                              }}
+                            >
+                              {isExpanded ? 'Hide Details' : 'Options / Search'}
+                            </button>
+                            {line.materialId && (
+                              <button type="button" className="sm-btn" onClick={() => handleMobileLineReject(line)}>
+                                Reject
+                              </button>
+                            )}
+                          </div>
+
+                          {isExpanded && (
+                            <div style={{ marginTop: '0.6rem', paddingTop: '0.6rem', borderTop: '1px solid #e2e8f0' }}>
+                              {line.candidates.length > 0 && (
+                                <div style={{ marginBottom: '0.5rem' }}>
+                                  <strong style={{ fontSize: '0.8rem' }}>Candidates</strong>
+                                  {line.candidates.map((c) => (
+                                    <div key={c.materialId + c.materialCode} className="sm-row" style={{ padding: '0.3rem 0' }}>
+                                      <div>
+                                        <code>{c.materialCode}</code> {c.description}
+                                        <div className="sm-meta">
+                                          {c.matchMethod} · {(c.finalScore * 100).toFixed(0)}% · {c.baseUom}
+                                        </div>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        className="sm-btn"
+                                        disabled={!c.materialActive || !c.plantEligible}
+                                        onClick={() => handleMobileLineConfirm(line, c.materialId, c.materialCode)}
+                                      >
+                                        Select
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+
+                              <div className="sm-field">
+                                <label htmlFor={`m-search-${line.ingredientTempRef}`}>Search Material Master</label>
+                                <div style={{ display: 'flex', gap: '0.4rem' }}>
+                                  <input
+                                    id={`m-search-${line.ingredientTempRef}`}
+                                    value={matSearchQ}
+                                    onChange={(e) => setMatSearchQ(e.target.value)}
+                                    placeholder="Code or description"
+                                  />
+                                  <button
+                                    type="button"
+                                    className="sm-btn"
+                                    onClick={async () => {
+                                      const items = await searchMaterialsForMapping(matSearchQ, matWs?.propertyId ?? null, 10);
+                                      setMatSearchItems(items);
+                                    }}
+                                  >
+                                    Find
+                                  </button>
+                                </div>
+                              </div>
+                              {matSearchItems.map((it) => (
+                                <div key={it.materialId} className="sm-row" style={{ padding: '0.25rem 0' }}>
+                                  <span><code>{it.materialCode}</code> {it.description}</span>
+                                  <button
+                                    type="button"
+                                    className="sm-btn"
+                                    disabled={!it.plantEligible}
+                                    onClick={() => handleMobileLineConfirm(line, it.materialId, it.materialCode)}
+                                  >
+                                    Assign
+                                  </button>
+                                </div>
+                              ))}
+
+                              <div className="sm-actions" style={{ marginTop: '0.5rem' }}>
+                                <button
+                                  type="button"
+                                  className="sm-btn"
+                                  onClick={async () => {
+                                    const res = await suggestIngredientSubstitutions(activeDraft.id, line.ingredientTempRef);
+                                    setMatSubs(res);
+                                  }}
+                                >
+                                  Review Substitutions
+                                </button>
+                              </div>
+                              {matSubs && matSubs.temp_ref === line.ingredientTempRef && (
+                                <div style={{ marginTop: '0.4rem' }}>
+                                  {matSubs.suggestions.map((s) => (
+                                    <div key={s.proposed_ingredient} className="sm-row" style={{ padding: '0.25rem 0' }}>
+                                      <div>
+                                        <strong>{s.proposed_ingredient}</strong> ({s.substitution_kind})
+                                        <div className="sm-meta">{s.taste_impact}</div>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        className="sm-btn"
+                                        onClick={async () => {
+                                          await applyIngredientSubstitution(activeDraft.id, line.ingredientTempRef, {
+                                            expectedMappingRevision: line.mappingRevision,
+                                            proposedIngredient: s.proposed_ingredient,
+                                            proposedMaterialId: s.proposed_material_id ?? null,
+                                            proposedMaterialCode: s.proposed_material_code ?? null,
+                                            replacementRatio: s.suggested_replacement_ratio ?? 1,
+                                          });
+                                          await loadMaterialWorkspace(activeDraft.id);
+                                          setStatusMsg(`Applied substitution ${s.proposed_ingredient} to draft.`);
+                                        }}
+                                      >
+                                        Apply
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+
+                              <div style={{ marginTop: '0.5rem' }}>
+                                <strong style={{ fontSize: '0.8rem' }}>Prepare Missing Material Request (Phase 1C)</strong>
+                                <div className="sm-field" style={{ marginTop: '0.25rem' }}>
+                                  <input
+                                    placeholder="Proposed material description"
+                                    value={reqDraftDesc}
+                                    onChange={(e) => setReqDraftDesc(e.target.value)}
+                                  />
+                                </div>
+                                <div className="sm-field" style={{ marginTop: '0.25rem' }}>
+                                  <input
+                                    placeholder="Reason / specification"
+                                    value={reqDraftReason}
+                                    onChange={(e) => setReqDraftReason(e.target.value)}
+                                  />
+                                </div>
+                                <button
+                                  type="button"
+                                  className="sm-btn"
+                                  style={{ marginTop: '0.3rem' }}
+                                  disabled={!reqDraftDesc.trim()}
+                                  onClick={async () => {
+                                    await prepareMaterialRequestDraft(activeDraft.id, line.ingredientTempRef, {
+                                      expectedMappingRevision: line.mappingRevision,
+                                      requestType: line.recommendedRequestType ?? 'NEW_MATERIAL',
+                                      proposedDescription: reqDraftDesc.trim(),
+                                      proposedBaseUom: line.recipeUom,
+                                      reason: reqDraftReason.trim() || 'Marked missing on mobile',
+                                    });
+                                    await loadMaterialWorkspace(activeDraft.id);
+                                    setStatusMsg(`Prepared Phase 1C request draft for ${line.originalDescription}.`);
+                                  }}
+                                >
+                                  Mark Missing &amp; Save Draft
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </section>
+                      );
+                    })}
                   </>
                 )}
               </>

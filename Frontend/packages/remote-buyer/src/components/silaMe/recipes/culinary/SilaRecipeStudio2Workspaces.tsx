@@ -34,6 +34,8 @@ export const isCulinaryWorkspaceRoute = (
   route.kind !== "detail" &&
   route.kind !== "edit";
 
+const ACTIVE_MAT_DRAFT_KEY = "sila.culinary.activeMaterialDraftId";
+
 const SilaRecipeStudio2Workspaces: React.FC<SilaRecipeStudio2WorkspacesProps> = ({
   route,
   flags,
@@ -45,6 +47,34 @@ const SilaRecipeStudio2Workspaces: React.FC<SilaRecipeStudio2WorkspacesProps> = 
   onNavigateGlobal,
   onRefreshAiStatus,
 }) => {
+  const [handoverDraftId, setHandoverDraftId] = React.useState<string | null>(() => {
+    try {
+      return typeof window !== "undefined" ? window.sessionStorage.getItem(ACTIVE_MAT_DRAFT_KEY) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const handleSelectMaterialDraft = React.useCallback((draftId: string | null) => {
+    setHandoverDraftId(draftId);
+    try {
+      if (typeof window !== "undefined") {
+        if (draftId) window.sessionStorage.setItem(ACTIVE_MAT_DRAFT_KEY, draftId);
+        else window.sessionStorage.removeItem(ACTIVE_MAT_DRAFT_KEY);
+      }
+    } catch {
+      // Ignore storage access restrictions
+    }
+  }, []);
+
+  const handleContinueToMaterials = React.useCallback(
+    (draftId: string) => {
+      handleSelectMaterialDraft(draftId);
+      onSelectRecipeRoute("materials");
+    },
+    [handleSelectMaterialDraft, onSelectRecipeRoute]
+  );
+
   const nav = (
     <SilaRecipeStudio2Nav
       activeRoute={route}
@@ -73,11 +103,30 @@ const SilaRecipeStudio2Workspaces: React.FC<SilaRecipeStudio2WorkspacesProps> = 
           />
         );
       case "ai-planner":
-        return <CulinaryRecipePlannerWorkspace onOpenWorkspace={onSelectRecipeRoute} />;
+        return (
+          <CulinaryRecipePlannerWorkspace
+            onOpenWorkspace={onSelectRecipeRoute}
+            onContinueToMaterialMapping={handleContinueToMaterials}
+          />
+        );
       case "materials":
-        return <CulinaryMaterialIntelligenceWorkspace mode="materials" />;
+        return (
+          <CulinaryMaterialIntelligenceWorkspace
+            mode="materials"
+            selectedDraftId={handoverDraftId}
+            onSelectDraftId={handleSelectMaterialDraft}
+            onOpenWorkspace={onSelectRecipeRoute}
+          />
+        );
       case "material-requests":
-        return <CulinaryMaterialIntelligenceWorkspace mode="material-requests" />;
+        return (
+          <CulinaryMaterialIntelligenceWorkspace
+            mode="material-requests"
+            selectedDraftId={handoverDraftId}
+            onSelectDraftId={handleSelectMaterialDraft}
+            onOpenWorkspace={onSelectRecipeRoute}
+          />
+        );
       case "menus":
       case "events":
       case "procurement":

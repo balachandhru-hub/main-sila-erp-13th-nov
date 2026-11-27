@@ -3,6 +3,7 @@ import { EmptyState, Loader, toastService } from "@vosox/shared-ui";
 import {
   CULINARY_TASK_LABELS,
   DEFAULT_CULINARY_FEATURE_FLAGS,
+  DEFAULT_CULINARY_MATERIAL_CONFIG,
   getCulinaryAiConfig,
   saveCulinaryAiConfig,
   testCulinaryAiConnection,
@@ -11,7 +12,13 @@ import {
   type SilaCulinaryAiConfig,
   type SilaCulinaryAiConnectionTestResult,
   type SilaCulinaryAiFeatureFlags,
+  type SilaCulinaryMaterialConfig,
 } from "../../../../api/silaMe/silaCulinaryAiApi";
+import {
+  getMaterialIndexStatus,
+  rebuildMaterialIndex,
+  type SilaCulinaryMaterialIndexStatus,
+} from "../../../../api/silaMe/silaCulinaryMaterialsApi";
 import "./CulinarySuite.css";
 
 interface CulinaryAiEngineSetupWorkspaceProps {
@@ -53,6 +60,9 @@ const CulinaryAiEngineSetupWorkspace: React.FC<CulinaryAiEngineSetupWorkspacePro
   const [fallbackPolicy, setFallbackPolicy] = useState<CulinaryAiFallbackPolicy>("LOCAL_IF_ALLOWED");
   const [taskRouting, setTaskRouting] = useState<Record<string, string>>({});
   const [featureFlags, setFeatureFlags] = useState<SilaCulinaryAiFeatureFlags>(DEFAULT_CULINARY_FEATURE_FLAGS);
+  const [materialConfig, setMaterialConfig] = useState<SilaCulinaryMaterialConfig>(DEFAULT_CULINARY_MATERIAL_CONFIG);
+  const [indexStatus, setIndexStatus] = useState<SilaCulinaryMaterialIndexStatus | null>(null);
+  const [indexBusy, setIndexBusy] = useState(false);
 
   const hydrate = (data: SilaCulinaryAiConfig) => {
     setConfig(data);
@@ -80,14 +90,19 @@ const CulinaryAiEngineSetupWorkspace: React.FC<CulinaryAiEngineSetupWorkspacePro
     setFallbackPolicy(data.fallbackPolicy);
     setTaskRouting(data.taskRouting);
     setFeatureFlags(data.featureFlags);
+    setMaterialConfig(data.materialConfig ?? DEFAULT_CULINARY_MATERIAL_CONFIG);
   };
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const loaded = await getCulinaryAiConfig();
+      const [loaded, idx] = await Promise.all([
+        getCulinaryAiConfig(),
+        getMaterialIndexStatus().catch(() => null),
+      ]);
       hydrate(loaded);
+      setIndexStatus(idx);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Could not load Culinary AI Engine Setup.");
     } finally {
@@ -128,6 +143,7 @@ const CulinaryAiEngineSetupWorkspace: React.FC<CulinaryAiEngineSetupWorkspacePro
         fallbackPolicy,
         taskRouting,
         featureFlags,
+        materialConfig,
       });
       hydrate(updated);
       onConfigUpdated?.();
@@ -154,6 +170,23 @@ const CulinaryAiEngineSetupWorkspace: React.FC<CulinaryAiEngineSetupWorkspacePro
       toastService.error(err instanceof Error ? err.message : "Connection test failed.");
     } finally {
       setTestingProvider(null);
+    }
+  };
+
+  const handleIndexAction = async (incrementalOnly: boolean) => {
+    setIndexBusy(true);
+    try {
+      const status = await rebuildMaterialIndex(incrementalOnly);
+      setIndexStatus(status);
+      toastService.success(
+        incrementalOnly
+          ? `Incremental material index sync complete (${status.indexedMaterialCount} materials).`
+          : `Material index rebuilt cleanly (${status.indexedMaterialCount} materials in ${Math.round(status.buildDurationMs)} ms).`
+      );
+    } catch (err: unknown) {
+      toastService.error(err instanceof Error ? err.message : "Material index operation failed.");
+    } finally {
+      setIndexBusy(false);
     }
   };
 
@@ -491,6 +524,247 @@ const CulinaryAiEngineSetupWorkspace: React.FC<CulinaryAiEngineSetupWorkspacePro
             </div>
           </section>
         </div>
+      </div>
+
+      {/* Phase 1B Bounded Material Intelligence Configuration & Index Administration (§25) */}
+      <div className="cs2-grid-2" data-testid="culinary-material-intelligence-setup">
+        <section className="cs2-card">
+          <div className="cs2-card__head">
+            <h3 className="cs2-card__title">Material Intelligence Matching &amp; Local Models (Phase 1B)</h3>
+            <span className="cs2-badge cs2-badge--live">Local-First Engine</span>
+          </div>
+
+          <div className="cs2-form-grid" style={{ marginBottom: 12 }}>
+            {(
+              [
+                ["exactMatchingEnabled", "Level 1–2: Exact code & normalized description"],
+                ["aliasMatchingEnabled", "Level 3: Tenant approved aliases"],
+                ["fuzzyMatchingEnabled", "Level 5: RapidFuzz lexical matching"],
+                ["semanticMatchingEnabled", "Level 6: Semantic vector matching (FAISS/ONNX)"],
+                ["advancedRerankingEnabled", "Level 7: CrossEncoder candidate reranking"],
+                ["llmAssistedMatchingEnabled", "Level 8: Optional LLM disambiguation (bounded)"],
+                ["mandatoryChefReview", "Level 9: Mandatory chef confirmation before lock"],
+              ] as [keyof SilaCulinaryMaterialConfig, string][]
+            ).map(([k, label]) => (
+              <label key={k} className="cs2-checkbox-row">
+                <input
+                  type="checkbox"
+                  disabled={readOnly}
+                  checked={Boolean(materialConfig[k])}
+                  onChange={(e) =>
+                    setMaterialConfig((prev) => ({ ...prev, [k]: e.target.checked }))
+                  }
+                />
+                {label}
+              </label>
+            ))}
+          </div>
+
+          <div className="cs2-form-grid">
+            <div className="sila-field">
+              <label className="sila-label" htmlFor="cs2-mat-emb">Embedding Model</label>
+              <input
+                id="cs2-mat-emb"
+                className="sila-input"
+                disabled={readOnly}
+                value={materialConfig.embeddingModel}
+                onChange={(e) => setMaterialConfig((p) => ({ ...p, embeddingModel: e.target.value }))}
+              />
+            </div>
+            <div className="sila-field">
+              <label className="sila-label" htmlFor="cs2-mat-rerank">CrossEncoder Reranker</label>
+              <input
+                id="cs2-mat-rerank"
+                className="sila-input"
+                disabled={readOnly}
+                value={materialConfig.rerankingModel}
+                onChange={(e) => setMaterialConfig((p) => ({ ...p, rerankingModel: e.target.value }))}
+              />
+            </div>
+            <div className="sila-field">
+              <label className="sila-label" htmlFor="cs2-mat-dev">Execution Mode</label>
+              <select
+                id="cs2-mat-dev"
+                className="sila-select"
+                disabled={readOnly}
+                value={materialConfig.executionDevice}
+                onChange={(e) => setMaterialConfig((p) => ({ ...p, executionDevice: e.target.value }))}
+              >
+                <option value="cpu">CPU (ONNX Runtime)</option>
+                <option value="gpu">GPU (if available)</option>
+              </select>
+            </div>
+            <div className="sila-field">
+              <label className="sila-label" htmlFor="cs2-mat-ret">Candidate Retrieval / Display</label>
+              <div style={{ display: "flex", gap: 6 }}>
+                <input
+                  id="cs2-mat-ret"
+                  type="number"
+                  min={5}
+                  max={100}
+                  className="sila-input"
+                  disabled={readOnly}
+                  value={materialConfig.candidateRetrievalLimit}
+                  onChange={(e) =>
+                    setMaterialConfig((p) => ({
+                      ...p,
+                      candidateRetrievalLimit: Number(e.target.value) || 15,
+                    }))
+                  }
+                />
+                <input
+                  type="number"
+                  min={1}
+                  max={20}
+                  aria-label="Candidate display limit"
+                  className="sila-input"
+                  disabled={readOnly}
+                  value={materialConfig.candidateDisplayLimit}
+                  onChange={(e) =>
+                    setMaterialConfig((p) => ({
+                      ...p,
+                      candidateDisplayLimit: Number(e.target.value) || 5,
+                    }))
+                  }
+                />
+              </div>
+            </div>
+            <div className="sila-field">
+              <label className="sila-label" htmlFor="cs2-mat-fuzzy">Fuzzy / Semantic Thresholds</label>
+              <div style={{ display: "flex", gap: 6 }}>
+                <input
+                  id="cs2-mat-fuzzy"
+                  type="number"
+                  step="1"
+                  min={0}
+                  max={100}
+                  className="sila-input"
+                  disabled={readOnly}
+                  value={materialConfig.fuzzyThreshold}
+                  onChange={(e) =>
+                    setMaterialConfig((p) => ({ ...p, fuzzyThreshold: Number(e.target.value) || 70 }))
+                  }
+                />
+                <input
+                  type="number"
+                  step="0.01"
+                  min={0}
+                  max={1}
+                  aria-label="Semantic threshold"
+                  className="sila-input"
+                  disabled={readOnly}
+                  value={materialConfig.semanticThreshold}
+                  onChange={(e) =>
+                    setMaterialConfig((p) => ({ ...p, semanticThreshold: Number(e.target.value) || 0.66 }))
+                  }
+                />
+              </div>
+            </div>
+            <div className="sila-field">
+              <label className="sila-label" htmlFor="cs2-mat-gap">Ambiguity Margin / Max Bulk</label>
+              <div style={{ display: "flex", gap: 6 }}>
+                <input
+                  id="cs2-mat-gap"
+                  type="number"
+                  step="0.01"
+                  min={0}
+                  max={0.5}
+                  className="sila-input"
+                  disabled={readOnly}
+                  value={materialConfig.ambiguityGapThreshold}
+                  onChange={(e) =>
+                    setMaterialConfig((p) => ({
+                      ...p,
+                      ambiguityGapThreshold: Number(e.target.value) || 0.04,
+                    }))
+                  }
+                />
+                <input
+                  type="number"
+                  min={1}
+                  max={500}
+                  aria-label="Max ingredients per bulk"
+                  className="sila-input"
+                  disabled={readOnly}
+                  value={materialConfig.maxIngredientsPerBulk}
+                  onChange={(e) =>
+                    setMaterialConfig((p) => ({
+                      ...p,
+                      maxIngredientsPerBulk: Number(e.target.value) || 100,
+                    }))
+                  }
+                />
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="cs2-card" data-testid="culinary-material-index-admin">
+          <div className="cs2-card__head">
+            <h3 className="cs2-card__title">Tenant Material Index Administration</h3>
+            <span
+              className={`cs2-badge ${
+                indexStatus?.status === "READY"
+                  ? "cs2-badge--live"
+                  : indexStatus?.status === "FAILED"
+                    ? "cs2-badge--danger"
+                    : "cs2-badge--warn"
+              }`}
+            >
+              {indexStatus?.status ?? "NOT_BUILT"}
+            </span>
+          </div>
+          <p className="cs2-empty-note" style={{ marginBottom: 10 }}>
+            Derived tenant-isolated search index built strictly from authorized Material Master records. Existing SAP schedulers remain parked.
+          </p>
+          <div className="cs2-kpi-grid" style={{ marginBottom: 12 }}>
+            <div className="cs2-kpi">
+              <span className="cs2-kpi__label">Indexed / Active</span>
+              <span className="cs2-kpi__value">
+                {indexStatus?.indexedMaterialCount ?? 0} / {indexStatus?.activeMaterialCount ?? 0}
+              </span>
+            </div>
+            <div className="cs2-kpi">
+              <span className="cs2-kpi__label">Pending Updates</span>
+              <span className="cs2-kpi__value">{indexStatus?.pendingUpdatesCount ?? 0}</span>
+            </div>
+            <div className="cs2-kpi">
+              <span className="cs2-kpi__label">Semantic Backend</span>
+              <span className="cs2-kpi__value" style={{ fontSize: 13 }}>
+                {indexStatus?.semanticBackend ?? "FASTEMBED_ONNX"}
+              </span>
+            </div>
+            <div className="cs2-kpi">
+              <span className="cs2-kpi__label">Build Duration</span>
+              <span className="cs2-kpi__value">
+                {indexStatus ? `${Math.round(indexStatus.buildDurationMs)} ms` : "—"}
+              </span>
+            </div>
+          </div>
+          {indexStatus?.lastError && (
+            <div className="cs2-banner cs2-banner--warn" style={{ marginBottom: 10 }}>
+              <strong>Last Indexing Error:</strong> {indexStatus.lastError}
+            </div>
+          )}
+          <div className="cs2-actions-row">
+            <button
+              type="button"
+              className="sila-btn sila-btn--sm sila-btn--secondary"
+              disabled={readOnly || indexBusy}
+              onClick={() => handleIndexAction(true)}
+            >
+              {indexBusy ? "Syncing..." : "Refresh Changed Materials"}
+            </button>
+            <button
+              type="button"
+              className="sila-btn sila-btn--sm sila-btn--primary"
+              disabled={readOnly || indexBusy}
+              onClick={() => handleIndexAction(false)}
+            >
+              {indexBusy ? "Rebuilding..." : "Controlled Full Rebuild"}
+            </button>
+          </div>
+        </section>
       </div>
     </form>
   );
