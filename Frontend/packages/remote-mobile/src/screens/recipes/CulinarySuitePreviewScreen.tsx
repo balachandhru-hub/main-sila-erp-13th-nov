@@ -79,6 +79,16 @@ import {
   type SilaCulinaryProcurementPlanDetail,
   type SilaCulinaryProcurementPlanSummary,
 } from '../../../../remote-buyer/src/api/silaMe/silaCulinaryProcurementApi';
+import {
+  decideFinancialPlanApproval,
+  getMobileFinancialSummary,
+  listEventFinancialPlans,
+  simulateEventFinancials,
+  submitFinancialPlanForApproval,
+  type SilaCulinaryEventFinancialPlanSummary,
+  type SilaCulinaryMobileFinancialSummary,
+  type SilaCulinarySimulateFinancialResult,
+} from '../../../../remote-buyer/src/api/silaMe/silaCulinaryFinancialApi';
 import { scaleDraftLocally } from '../../../../remote-buyer/src/components/silaMe/recipes/culinary/culinaryRecipePlannerHelpers';
 import {
   calculateRecipeScaling,
@@ -91,7 +101,7 @@ import { useGo } from '../../navigation';
 import { errorText, useLoad } from '../../useLoad';
 import './recipeStudio.css';
 
-type MobileTab = 'generate' | 'draft' | 'materials' | 'lifecycle' | 'events' | 'mrp' | 'procurement' | 'history' | 'demo';
+type MobileTab = 'generate' | 'draft' | 'materials' | 'lifecycle' | 'events' | 'mrp' | 'procurement' | 'pnl' | 'history' | 'demo';
 
 /**
  * Phase 1A + Phase 1B Mobile Culinary Intelligence — responsive chef AI recipe generation,
@@ -176,6 +186,32 @@ const CulinarySuitePreviewScreen: React.FC = () => {
   const [activeMobileProc, setActiveMobileProc] = useState<SilaCulinaryProcurementPlanDetail | null>(null);
   const [procLoading, setProcLoading] = useState(false);
   const [procShortagesOnly, setProcShortagesOnly] = useState(false);
+
+  // Phase 3A Mobile Chef Financial Summary state (§69: hides salaries, supplier terms, GL balances, admin AI secrets)
+  const [mobileFinPlans, setMobileFinPlans] = useState<SilaCulinaryEventFinancialPlanSummary[]>([]);
+  const [mobileFinSummary, setMobileFinSummary] = useState<SilaCulinaryMobileFinancialSummary | null>(null);
+  const [mobileFinLoading, setMobileFinLoading] = useState(false);
+  const [mobileFinGuests, setMobileFinGuests] = useState(500);
+  const [mobileFinSim, setMobileFinSim] = useState<SilaCulinarySimulateFinancialResult | null>(null);
+
+  const handleOpenPnlTab = async () => {
+    setTab('pnl');
+    setMobileFinLoading(true);
+    try {
+      const [plansList, summaryData] = await Promise.all([
+        listEventFinancialPlans({ includeSimulations: false }).catch(() => []),
+        getMobileFinancialSummary().catch(() => null),
+      ]);
+      setMobileFinPlans(plansList);
+      setMobileFinSummary(summaryData);
+      if (summaryData?.plannedGuests) setMobileFinGuests(summaryData.plannedGuests);
+      setMobileFinSim(null);
+    } catch (err) {
+      setErrMsg(errorText(err));
+    } finally {
+      setMobileFinLoading(false);
+    }
+  };
 
   const handleOpenProcurementTab = async () => {
     setTab('procurement');
@@ -575,6 +611,9 @@ const CulinarySuitePreviewScreen: React.FC = () => {
               </button>
               <button type="button" className={`rs-tab ${tab === 'procurement' ? 'rs-tab--on' : ''}`} onClick={handleOpenProcurementTab}>
                 Procurement{mobileProcPlans.length > 0 ? ` (${mobileProcPlans.length})` : ''}
+              </button>
+              <button type="button" className={`rs-tab ${tab === 'pnl' ? 'rs-tab--on' : ''}`} onClick={handleOpenPnlTab}>
+                Event P&amp;L
               </button>
               <button type="button" className={`rs-tab ${tab === 'history' ? 'rs-tab--on' : ''}`} onClick={() => setTab('history')}>
                 History ({draftsLoad.data?.length ?? 0})
@@ -1663,6 +1702,181 @@ const CulinarySuitePreviewScreen: React.FC = () => {
                       </div>
                     )}
                   </>
+                )}
+              </section>
+            )}
+
+            {tab === 'pnl' && (
+              <section className="sm-card">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                  <h2 style={{ margin: 0 }}>Event Food Cost &amp; P&amp;L Summary</h2>
+                  <button type="button" className="sm-btn" onClick={handleOpenPnlTab} disabled={mobileFinLoading}>
+                    {mobileFinLoading ? 'Loading...' : 'Refresh'}
+                  </button>
+                </div>
+                {mobileFinPlans.length > 0 && (
+                  <div className="sm-field" style={{ marginBottom: '0.6rem' }}>
+                    <label htmlFor="m-p3a-plan">Event Financial Plan</label>
+                    <select
+                      id="m-p3a-plan"
+                      value={mobileFinSummary?.financialPlanId ?? ''}
+                      onChange={async (e) => {
+                        const id = e.target.value;
+                        if (!id) return;
+                        setMobileFinLoading(true);
+                        try {
+                          const s = await getMobileFinancialSummary(id);
+                          setMobileFinSummary(s);
+                          setMobileFinGuests(s.plannedGuests);
+                          setMobileFinSim(null);
+                        } catch (err) {
+                          setErrMsg(errorText(err));
+                        } finally {
+                          setMobileFinLoading(false);
+                        }
+                      }}
+                    >
+                      {mobileFinPlans.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.planCode} · {p.name} ({p.status})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                {mobileFinSummary && mobileFinSummary.financialPlanId ? (
+                  <>
+                    <div className="sm-meta" style={{ marginBottom: '0.5rem' }}>
+                      <strong>{mobileFinSummary.eventName}</strong> · {mobileFinSummary.plannedGuests} guests · Readiness:{' '}
+                      <strong>{mobileFinSummary.financialReadiness}</strong> ({mobileFinSummary.openExceptionsCount} open alerts)
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                      <div className="sm-card" style={{ padding: '0.55rem' }}>
+                        <div className="sm-meta">Food Cost</div>
+                        <strong>{mobileFinSummary.reportingCurrency} {mobileFinSummary.foodCost.toFixed(2)}</strong>
+                      </div>
+                      <div className="sm-card" style={{ padding: '0.55rem' }}>
+                        <div className="sm-meta">Beverage Cost</div>
+                        <strong>{mobileFinSummary.reportingCurrency} {mobileFinSummary.beverageCost.toFixed(2)}</strong>
+                      </div>
+                      <div className="sm-card" style={{ padding: '0.55rem' }}>
+                        <div className="sm-meta">Approved Budget</div>
+                        <strong>{mobileFinSummary.reportingCurrency} {mobileFinSummary.approvedBudget.toFixed(2)}</strong>
+                      </div>
+                      <div className="sm-card" style={{ padding: '0.55rem' }}>
+                        <div className="sm-meta">Budget Utilization</div>
+                        <strong>{mobileFinSummary.budgetUtilizationPercent.toFixed(1)}%</strong>
+                      </div>
+                      {mobileFinSummary.eventContribution != null && (
+                        <div className="sm-card" style={{ padding: '0.55rem', gridColumn: '1 / -1' }}>
+                          <div className="sm-meta">Event Contribution (Authorized View)</div>
+                          <strong>
+                            {mobileFinSummary.reportingCurrency} {mobileFinSummary.eventContribution.toFixed(2)} (
+                            {(mobileFinSummary.contributionMarginPercent ?? 0).toFixed(2)}%)
+                          </strong>
+                        </div>
+                      )}
+                    </div>
+                    <div className="sm-field" style={{ marginBottom: '0.6rem' }}>
+                      <label htmlFor="m-p3a-guests">Guest Count Simulation: <strong>{mobileFinGuests}</strong></label>
+                      <input
+                        id="m-p3a-guests"
+                        type="range"
+                        min={50}
+                        max={1200}
+                        step={10}
+                        value={mobileFinGuests}
+                        onChange={(e) => setMobileFinGuests(Number(e.target.value))}
+                      />
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                      <button
+                        type="button"
+                        className="sm-btn"
+                        disabled={mobileFinLoading}
+                        onClick={async () => {
+                          if (!mobileFinSummary.financialPlanId) return;
+                          setMobileFinLoading(true);
+                          try {
+                            const res = await simulateEventFinancials(mobileFinSummary.financialPlanId, {
+                              plannedGuests: mobileFinGuests,
+                              guaranteedGuests: mobileFinGuests,
+                              sellingPricePerGuest: 350,
+                              fixedEventRevenue: 0,
+                              additionalGuestRevenue: 0,
+                              discountPercent: 0,
+                              foodCostPerGuest: mobileFinSummary.plannedGuests > 0 ? mobileFinSummary.foodCost / mobileFinSummary.plannedGuests : 90,
+                              beverageCostPerGuest: mobileFinSummary.plannedGuests > 0 ? mobileFinSummary.beverageCost / mobileFinSummary.plannedGuests : 25,
+                              ingredientPriceChangePercent: 0,
+                              manpowerCost: 15000,
+                              equipmentCost: 5000,
+                              decorationCost: 10000,
+                              externalServiceCost: 0,
+                              otherDirectCost: 5000,
+                              allocatedOverhead: 0,
+                              targetContributionMarginPercent: 40,
+                              saveScenario: false,
+                            });
+                            setMobileFinSim(res);
+                          } catch (err) {
+                            setErrMsg(errorText(err));
+                          } finally {
+                            setMobileFinLoading(false);
+                          }
+                        }}
+                      >
+                        Simulate Guests
+                      </button>
+                      <button
+                        type="button"
+                        className="sm-btn"
+                        disabled={mobileFinLoading}
+                        onClick={async () => {
+                          if (!mobileFinSummary.financialPlanId) return;
+                          setMobileFinLoading(true);
+                          try {
+                            await submitFinancialPlanForApproval(mobileFinSummary.financialPlanId);
+                            setStatusMsg('Submitted event financial plan for approval.');
+                            await handleOpenPnlTab();
+                          } catch (err) {
+                            setErrMsg(errorText(err));
+                          } finally {
+                            setMobileFinLoading(false);
+                          }
+                        }}
+                      >
+                        Submit Approval
+                      </button>
+                      <button
+                        type="button"
+                        className="sm-btn"
+                        disabled={mobileFinLoading}
+                        onClick={async () => {
+                          if (!mobileFinSummary.financialPlanId) return;
+                          setMobileFinLoading(true);
+                          try {
+                            await decideFinancialPlanApproval(mobileFinSummary.financialPlanId, 'APPROVE', 'Approved from Mobile');
+                            setStatusMsg('Approved event financial plan.');
+                            await handleOpenPnlTab();
+                          } catch (err) {
+                            setErrMsg(errorText(err));
+                          } finally {
+                            setMobileFinLoading(false);
+                          }
+                        }}
+                      >
+                        Approve
+                      </button>
+                    </div>
+                    {mobileFinSim && (
+                      <div className="sm-meta" style={{ marginTop: '0.6rem' }}>
+                        Simulated ({mobileFinSim.plannedGuests} guests): Est. Total Cost {mobileFinSim.reportingCurrency}{' '}
+                        {mobileFinSim.totalEventCost.toFixed(2)} · Break-Even {mobileFinSim.breakEvenGuests ?? 'N/A'} guests
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <p className="sm-meta">No event financial plan found yet. Create a plan in Cloud Event P&amp;L Studio.</p>
                 )}
               </section>
             )}

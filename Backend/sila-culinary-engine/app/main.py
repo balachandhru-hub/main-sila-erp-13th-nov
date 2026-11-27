@@ -21,6 +21,13 @@ from app.engines.procurement_advanced import (
     compute_procurement_plan,
     optimize_procurement_milp,
 )
+from app.engines.financial_advanced import (
+    analyze_financial_with_ai,
+    calculate_advanced_recipe_costing,
+    calculate_event_financials,
+    calculate_material_price_impact,
+    calculate_menu_costing,
+)
 from app.engines.normalization import convert_physical_quantity, normalize_ingredient_text
 from app.engines.pnl import EventPnlRequest, EventPnlResult, calculate_event_pnl
 from app.engines.recipe_costing import calculate_recipe_costing, optimize_recipe_costing
@@ -84,6 +91,18 @@ from app.schemas.procurement_engine import (
     ProcurementOptimizeResponse,
     ProcurementPlanRequest,
     ProcurementPlanResponse,
+)
+from app.schemas.financial_engine import (
+    EventFinancialCalculateRequest,
+    EventFinancialCalculateResponse,
+    FinancialAiAnalyzeRequest,
+    FinancialAiAnalyzeResponse,
+    FinancialRecipeCostRequest,
+    FinancialRecipeCostResponse,
+    MaterialPriceImpactRequest,
+    MaterialPriceImpactResponse,
+    MenuCostingRequest,
+    MenuCostingResponse,
 )
 from app.schemas.recipe_ai import (
     ExtractedDocumentResult,
@@ -434,5 +453,34 @@ def post_optimize_procurement(req: ProcurementOptimizeRequest) -> ProcurementOpt
 @app.post("/v1/procurement/analyze", response_model=ProcurementAiAnalyzeResponse)
 async def post_analyze_procurement(req: ProcurementAiAnalyzeRequest) -> ProcurementAiAnalyzeResponse:
     return await analyze_procurement_with_ai(req)
+
+
+# ==================== PHASE 3A FINANCIAL INTELLIGENCE ENDPOINTS ====================
+
+
+@app.post("/v1/financial/recipe-cost", response_model=FinancialRecipeCostResponse)
+def post_financial_recipe_cost(req: FinancialRecipeCostRequest) -> FinancialRecipeCostResponse:
+    return calculate_advanced_recipe_costing(req)
+
+
+@app.post("/v1/financial/menu-cost", response_model=MenuCostingResponse)
+def post_financial_menu_cost(req: MenuCostingRequest) -> MenuCostingResponse:
+    return calculate_menu_costing(req)
+
+
+@app.post("/v1/financial/event-pnl", response_model=EventFinancialCalculateResponse)
+def post_financial_event_pnl(req: EventFinancialCalculateRequest) -> EventFinancialCalculateResponse:
+    return calculate_event_financials(req)
+
+
+@app.post("/v1/financial/price-impact", response_model=MaterialPriceImpactResponse)
+def post_financial_price_impact(req: MaterialPriceImpactRequest) -> MaterialPriceImpactResponse:
+    return calculate_material_price_impact(req)
+
+
+@app.post("/v1/financial/analyze", response_model=FinancialAiAnalyzeResponse)
+async def post_financial_analyze(req: FinancialAiAnalyzeRequest) -> FinancialAiAnalyzeResponse:
+    return await analyze_financial_with_ai(req)
+
 
 

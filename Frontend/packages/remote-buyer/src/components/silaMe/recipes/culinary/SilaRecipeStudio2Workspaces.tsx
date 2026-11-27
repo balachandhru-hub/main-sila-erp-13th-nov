@@ -11,7 +11,7 @@ import CulinaryMaterialRequestsWorkspace from "./CulinaryMaterialRequestsWorkspa
 import CulinaryFoodCostStudioWorkspace from "./CulinaryFoodCostStudioWorkspace";
 import CulinaryMenuEventWorkspaces from "./CulinaryMenuEventWorkspaces";
 import CulinaryEventMrpStudioWorkspace from "./CulinaryEventMrpStudioWorkspace";
-import CulinaryPnlSimulatorWorkspace from "./CulinaryPnlSimulatorWorkspace";
+import CulinaryEventPnlStudioWorkspace from "./CulinaryEventPnlStudioWorkspace";
 import CulinaryProductionAnalyticsReportWorkspaces from "./CulinaryProductionAnalyticsReportWorkspaces";
 import CulinaryAiEngineSetupWorkspace from "./CulinaryAiEngineSetupWorkspace";
 
@@ -143,7 +143,7 @@ const SilaRecipeStudio2Workspaces: React.FC<SilaRecipeStudio2WorkspacesProps> = 
       case "mrp":
         return <CulinaryEventMrpStudioWorkspace onOpenWorkspace={onSelectRecipeRoute} />;
       case "event-pnl":
-        return <CulinaryPnlSimulatorWorkspace />;
+        return <CulinaryEventPnlStudioWorkspace />;
       case "production":
         return <CulinaryProductionAnalyticsReportWorkspaces mode="production" />;
       case "analytics":

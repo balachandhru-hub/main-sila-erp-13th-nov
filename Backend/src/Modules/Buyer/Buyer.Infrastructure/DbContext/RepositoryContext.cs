@@ -186,6 +186,12 @@ namespace Buyer.Infrastructure.DbContext
         public DbSet<SilaCulinaryProcurementAllocation> SilaCulinaryProcurementAllocation { get; set; }
         public DbSet<SilaCulinaryProcurementException> SilaCulinaryProcurementException { get; set; }
         public DbSet<SilaCulinaryProcurementScenario> SilaCulinaryProcurementScenario { get; set; }
+        public DbSet<SilaCulinaryFinancialConfig> SilaCulinaryFinancialConfig { get; set; }
+        public DbSet<SilaCulinaryEventFinancialPlan> SilaCulinaryEventFinancialPlan { get; set; }
+        public DbSet<SilaCulinaryEventRevenueLine> SilaCulinaryEventRevenueLine { get; set; }
+        public DbSet<SilaCulinaryEventExpenseLine> SilaCulinaryEventExpenseLine { get; set; }
+        public DbSet<SilaCulinaryFinancialException> SilaCulinaryFinancialException { get; set; }
+        public DbSet<SilaCulinaryFinancialScenario> SilaCulinaryFinancialScenario { get; set; }
 
 
         protected override void OnModelCreating(Microsoft.EntityFrameworkCore.ModelBuilder modelBuilder)
@@ -530,6 +536,14 @@ namespace Buyer.Infrastructure.DbContext
             _ = modelBuilder.Entity<SilaCulinaryProcurementAllocation>().HasIndex(a => new { a.BuyerId, a.IdempotencyKey });
             _ = modelBuilder.Entity<SilaCulinaryProcurementException>().HasIndex(a => new { a.BuyerId, a.ProcurementPlanId, a.ResolutionStatus });
             _ = modelBuilder.Entity<SilaCulinaryProcurementScenario>().HasIndex(a => new { a.BuyerId, a.ProcurementPlanId });
+            _ = modelBuilder.Entity<SilaCulinaryFinancialConfig>().HasIndex(a => a.BuyerId).IsUnique();
+            _ = modelBuilder.Entity<SilaCulinaryEventFinancialPlan>().HasIndex(a => new { a.BuyerId, a.PlanCode }).IsUnique();
+            _ = modelBuilder.Entity<SilaCulinaryEventFinancialPlan>().HasIndex(a => new { a.BuyerId, a.EventId, a.Status });
+            _ = modelBuilder.Entity<SilaCulinaryEventFinancialPlan>().HasIndex(a => new { a.BuyerId, a.IdempotencyKey });
+            _ = modelBuilder.Entity<SilaCulinaryEventRevenueLine>().HasIndex(a => new { a.BuyerId, a.EventFinancialPlanId });
+            _ = modelBuilder.Entity<SilaCulinaryEventExpenseLine>().HasIndex(a => new { a.BuyerId, a.EventFinancialPlanId, a.Category });
+            _ = modelBuilder.Entity<SilaCulinaryFinancialException>().HasIndex(a => new { a.BuyerId, a.EventFinancialPlanId, a.ResolutionStatus });
+            _ = modelBuilder.Entity<SilaCulinaryFinancialScenario>().HasIndex(a => new { a.BuyerId, a.EventFinancialPlanId });
 
             base.OnModelCreating(modelBuilder);
 
