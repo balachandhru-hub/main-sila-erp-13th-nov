@@ -91,6 +91,34 @@ class RulesLlm:
             )
         if _CANCEL.search(lower):
             return LlmTurnResult(intent="CANCEL", spoken_reply="Cancelling this conversation.", agent_id=agent)
+        if re.search(r"\b(today'?s|show)\b.*\b(breakfast|lunch|dinner|brunch|menu)\b", lower):
+            return LlmTurnResult(
+                intent="MENU_TODAY_MEAL",
+                spoken_reply="Fetching today's menu schedule.",
+                agent_id="MENU_ENGINEERING_AGENT",
+                structured={"transcript": text},
+            )
+        if re.search(r"\b(ingredient requirements?|calculate)\b.*\bcovers?\b", lower):
+            return LlmTurnResult(
+                intent="MENU_CALC_COVERS",
+                spoken_reply="Calculating simulated ingredient requirements.",
+                agent_id="MENU_ENGINEERING_AGENT",
+                structured={"transcript": text},
+            )
+        if re.search(r"\b(low margin|low margins|high food cost)\b", lower):
+            return LlmTurnResult(
+                intent="MENU_LOW_MARGIN",
+                spoken_reply="Checking menu item margins.",
+                agent_id="MENU_ENGINEERING_AGENT",
+                structured={"transcript": text},
+            )
+        if re.search(r"\b(alternative|substitute)\b", lower):
+            return LlmTurnResult(
+                intent="MENU_ALTERNATIVE",
+                spoken_reply="Checking authorized substitution recommendations.",
+                agent_id="MENU_ENGINEERING_AGENT",
+                structured={"transcript": text},
+            )
         if _CONFIRM.search(lower):
             return LlmTurnResult(
                 intent="CONFIRM_PO",

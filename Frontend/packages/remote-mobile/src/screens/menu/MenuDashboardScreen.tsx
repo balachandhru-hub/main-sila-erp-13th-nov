@@ -1,5 +1,6 @@
 import React from 'react';
 import { getMenuEngineering } from '../../../../remote-buyer/src/api/silaMe/silaMenuEngineeringApi';
+import { getMeMobileSummary } from '../../../../remote-buyer/src/api/silaMe/menuEngineeringStudioApi';
 import ScreenHeader from '../../components/ScreenHeader';
 import StatusBadge from '../../components/StatusBadge';
 import { Empty, ErrorNotice, Loading, OfflineBanner } from '../../components/StateViews';
@@ -18,7 +19,12 @@ const MenuDashboardScreen: React.FC = () => {
     () => getMenuEngineering('dashboard', { dateFrom: date, dateTo: date }),
     can.viewMenuEngineering ? `menu-dash-${date}` : null,
   );
+  const mobile = useLoad(
+    () => getMeMobileSummary().catch(() => null),
+    can.viewMenuEngineering ? `menu-mobile-summary-${date}` : null,
+  );
   const dash = data?.dashboard;
+  const summary = mobile.data;
 
   const routeFor = (kind?: string): string => {
     if (kind === 'RECIPE_MISSING' || kind === 'COST_MISSING') return 'menu/items';
@@ -31,7 +37,7 @@ const MenuDashboardScreen: React.FC = () => {
 
   return (
     <>
-      <ScreenHeader title="Menu Engineering" eyebrow="SILA ME" intro="Today's occupancy, covers, portions and attention." />
+      <ScreenHeader title="Menu Engineering" eyebrow="SILA ME & SILA STORE" intro="Today's published menus, portion instructions, ingredient readiness and operational links." />
       <div className="sm-screen">
         <OfflineBanner />
         {loading && <Loading text="Loading Menu Engineering…" />}
@@ -69,25 +75,89 @@ const MenuDashboardScreen: React.FC = () => {
             </div>
             <p className="sm-meta">
               Source {dash.occupancySource || 'MANUAL'} · {dash.occupancyFreshness || 'UNAVAILABLE'}
+              {summary ? ` · Pending Approvals: ${summary.pendingApprovals.length} · Ingredient Alerts: ${summary.ingredientReadiness.length}` : ''}
             </p>
 
+            {/* Operational SILA Store handoffs — reuses existing mobile screens without duplicating */}
             <section className="sm-section">
-              <h2>Today's menus</h2>
-              {dash.todayMenus.length === 0 && <Empty text="No Menu Plan configured." description="Create a plan for this date." />}
+              <h2>Operational Kitchen &amp; Store Actions</h2>
+              <div className="sm-grid-2">
+                <button type="button" className="sm-btn" onClick={() => go('menu/portions')}>Portion Sampling</button>
+                <button type="button" className="sm-btn" onClick={() => go('inventory/goods-issues/new')}>Record Consumption</button>
+                <button type="button" className="sm-btn" onClick={() => go('inventory/adjustments/new')}>Record Food Waste</button>
+                <button type="button" className="sm-btn" onClick={() => go('inventory/stock')}>Ingredient Stock</button>
+                <button type="button" className="sm-btn" onClick={() => go('recipes/catalog')}>Approved Recipes</button>
+                <button type="button" className="sm-btn" onClick={() => go('purchasing/voice-po')}>SILA Voice</button>
+                {summary && summary.pendingApprovals.length > 0 && (
+                  <button type="button" className="sm-btn sm-btn--primary" onClick={() => go('tasks?tab=approvals')}>
+                    Pending Approvals ({summary.pendingApprovals.length})
+                  </button>
+                )}
+              </div>
+            </section>
+
+            {summary && summary.portionInstructions.length > 0 && (
+              <section className="sm-section">
+                <h2>Portion Instructions &amp; Readiness</h2>
+                <ul className="sm-list">
+                  {summary.portionInstructions.slice(0, 6).map((row) => (
+                    <li key={row.menuPlanLineId}>
+                      <button type="button" className="sm-list-btn" onClick={() => go('menu/portions')}>
+                        <span className="sm-row">
+                          <strong>{row.menuItemName}</strong>
+                          <StatusBadge status={row.varianceStatus} />
+                        </span>
+                        <span className="sm-meta">
+                          {row.expectedPortions} portions · {row.plannedPortion} {row.portionUom} · Usable {row.requiredUsableOutput} {row.portionUom}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            <section className="sm-section">
+              <h2>Today's &amp; Published Menus</h2>
+              {dash.todayMenus.length === 0 && (summary?.todayMenus.length ?? 0) === 0 && (
+                <Empty text="No Menu Plan configured." description="Create a plan for this date." />
+              )}
               <ul className="sm-list">
-                {dash.todayMenus.map((plan) => (
+                {(summary?.todayMenus.length ? summary.todayMenus : dash.todayMenus).map((plan) => (
                   <li key={plan.id}>
                     <button type="button" className="sm-list-btn" onClick={() => go('menu/planning')}>
                       <span className="sm-row">
                         <strong>{plan.name}</strong>
                         <StatusBadge status={plan.status} />
                       </span>
-                      <span className="sm-meta">{plan.mealPeriod || 'Meal'} · {plan.lineCount} items · {plan.missingRecipes} missing recipes</span>
+                      <span className="sm-meta">
+                        {'mealPeriod' in plan ? (plan.mealPeriod || 'Meal') : 'Meal'}
+                        {'lines' in plan ? ` · ${plan.lines.length} dishes · ${plan.expectedCovers ?? plan.expectedGuests} covers` : ` · ${plan.lineCount} items`}
+                      </span>
                     </button>
                   </li>
                 ))}
               </ul>
             </section>
+
+            {summary && summary.upcomingMenus.length > 0 && (
+              <section className="sm-section">
+                <h2>Upcoming Menu Plans</h2>
+                <ul className="sm-list">
+                  {summary.upcomingMenus.slice(0, 5).map((plan) => (
+                    <li key={plan.id}>
+                      <button type="button" className="sm-list-btn" onClick={() => go('menu/planning')}>
+                        <span className="sm-row">
+                          <strong>{plan.name}</strong>
+                          <StatusBadge status={plan.status} />
+                        </span>
+                        <span className="sm-meta">{plan.businessDate.slice(0, 10)} · {plan.mealPeriod || 'Meal'} · {plan.expectedCovers ?? plan.expectedGuests} covers</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
 
             <section className="sm-section">
               <h2>Menu mix</h2>

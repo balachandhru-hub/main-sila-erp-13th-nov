@@ -105,6 +105,27 @@ def register_default_agents(registry, tools: ToolRegistry, allowed: list[str]) -
             ),
             po,
         )
+    if "MENU_ENGINEERING_AGENT" in allowed:
+        from app.agents.menu_engineering import MenuEngineeringAgent
+
+        me = MenuEngineeringAgent(tools)
+        registry.register(
+            BusinessAgent(
+                agent_id="MENU_ENGINEERING_AGENT",
+                supported_intents=[
+                    "MENU_TODAY_MEAL",
+                    "MENU_CALC_COVERS",
+                    "MENU_LOW_MARGIN",
+                    "MENU_ALTERNATIVE",
+                ],
+                required_permission="ViewMeStudio",
+                required_fields=[],
+                allowed_tools=["GetMenuMobileSummary", "SimulateMenuCovers", "GetMenuCostMargin", "GetMenuAiIntelligence"],
+                confirmation_required=True,
+                implemented=True,
+            ),
+            me,
+        )
     # Reserved future agents — registered but not implemented / not exposed as working.
     for reserved_id in (
         "INVENTORY_QUERY_AGENT",

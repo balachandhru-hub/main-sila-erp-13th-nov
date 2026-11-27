@@ -87,7 +87,7 @@ class VoiceSettings(BaseModel):
     confidence_threshold: float = 0.0
     max_recording_seconds: int = 60
     listening_timeout_seconds: int = 12
-    allowed_agents: list[str] = Field(default_factory=lambda: ["PURCHASE_ORDER_AGENT"])
+    allowed_agents: list[str] = Field(default_factory=lambda: ["PURCHASE_ORDER_AGENT", "MENU_ENGINEERING_AGENT"])
     internal_service_key: str = ""
     buyer_api_url: str = "http://127.0.0.1:8004"
     identity_url: str = "http://127.0.0.1:8001"
@@ -114,7 +114,7 @@ def get_settings() -> VoiceSettings:
     if isinstance(languages, str):
         languages = [part.strip() for part in languages.split(",") if part.strip()]
 
-    agents = voice.get("AllowedAgents") or ["PURCHASE_ORDER_AGENT"]
+    agents = voice.get("AllowedAgents") or ["PURCHASE_ORDER_AGENT", "MENU_ENGINEERING_AGENT"]
     if isinstance(agents, str):
         agents = [part.strip() for part in agents.split(",") if part.strip()]
 

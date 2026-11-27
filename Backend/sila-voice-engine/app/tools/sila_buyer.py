@@ -89,6 +89,22 @@ class SilaBuyerTools:
             ToolSpec("StartOrContinueVoicePo", "Start/continue existing Voice PO session", "requestPurchase"),
             self.start_or_continue_voice_po,
         )
+        registry.register(
+            ToolSpec("GetMenuMobileSummary", "Today's and published menus summary", "ViewMeStudio"),
+            self.get_menu_mobile_summary,
+        )
+        registry.register(
+            ToolSpec("SimulateMenuCovers", "Simulate ingredient requirements for cover counts without mutating live data", "RunMenuSimulation"),
+            self.simulate_menu_covers,
+        )
+        registry.register(
+            ToolSpec("GetMenuCostMargin", "Identify low-margin or high-food-cost menu items", "ViewMenuMargin"),
+            self.get_menu_cost_margin,
+        )
+        registry.register(
+            ToolSpec("GetMenuAiIntelligence", "Get recipe or ingredient substitution recommendations", "UseAiMenuIntelligence"),
+            self.get_menu_ai_intelligence,
+        )
 
     async def get_current_user_context(self, args: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
         return {
@@ -175,3 +191,32 @@ class SilaBuyerTools:
                 "idempotencyKey": args.get("idempotencyKey"),
             },
         )
+
+    async def get_menu_mobile_summary(self, args: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
+        meal = (args.get("mealPeriod") or "").strip()
+        qs = f"?propertyId={ctx['propertyId']}" if ctx.get("propertyId") else ""
+        res = await self._request("GET", f"/api/v1/buyer/sila/me-studio/mobile-summary{qs}", ctx)
+        if res.get("ok") and meal and isinstance(res.get("data"), dict):
+            res["requestedMealPeriod"] = meal
+        return res
+
+    async def simulate_menu_covers(self, args: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
+        covers = int(args.get("expectedCovers") or 300)
+        return await self._request(
+            "POST",
+            "/api/v1/buyer/sila/me-studio/simulate",
+            ctx,
+            {
+                "scenarioName": f"Voice {covers} covers",
+                "expectedCovers": covers,
+                "saveScenario": False,
+            },
+        )
+
+    async def get_menu_cost_margin(self, args: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
+        qs = f"?propertyId={ctx['propertyId']}" if ctx.get("propertyId") else ""
+        return await self._request("GET", f"/api/v1/buyer/sila/me-studio/cost-margin{qs}", ctx)
+
+    async def get_menu_ai_intelligence(self, args: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
+        qs = f"?propertyId={ctx['propertyId']}" if ctx.get("propertyId") else ""
+        return await self._request("GET", f"/api/v1/buyer/sila/me-studio/ai-intelligence{qs}", ctx)

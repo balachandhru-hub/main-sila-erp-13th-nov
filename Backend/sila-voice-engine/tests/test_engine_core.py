@@ -144,3 +144,52 @@ def test_session_requires_auth():
     client = TestClient(app)
     denied = client.post("/api/v1/sila-voice/sessions", json={"language": "en"})
     assert denied.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_menu_engineering_voice_intents_and_agent():
+    from app.agents.menu_engineering import MenuEngineeringAgent
+    from app.tools.registry import ToolRegistry, ToolSpec
+
+    llm = RulesLlm()
+    for phrase, expected in [
+        ("Show today's breakfast menu.", "MENU_TODAY_MEAL"),
+        ("Calculate ingredient requirements for 300 covers.", "MENU_CALC_COVERS"),
+        ("Which menu items have low margins?", "MENU_LOW_MARGIN"),
+        ("Suggest an alternative to salmon.", "MENU_ALTERNATIVE"),
+    ]:
+        res = await llm.interpret(transcript=phrase, session_state={}, allowed_intents=[expected])
+        assert res.intent == expected
+        assert res.agent_id == "MENU_ENGINEERING_AGENT"
+
+    reg = ToolRegistry()
+    reg.register(
+        ToolSpec("GetMenuMobileSummary", "summary"),
+        lambda a, c: _async_val({"ok": True, "data": {"todayMenus": [{"name": "Sunrise Buffet", "mealPeriod": "Breakfast"}]}}),
+    )
+    reg.register(
+        ToolSpec("SimulateMenuCovers", "sim"),
+        lambda a, c: _async_val({"ok": True, "data": {"ingredientRequirement": 420.0, "shortage": 12.0}}),
+    )
+    reg.register(
+        ToolSpec("GetMenuCostMargin", "margin"),
+        lambda a, c: _async_val({"ok": False, "status": 403}),
+    )
+    reg.register(
+        ToolSpec("GetMenuAiIntelligence", "ai"),
+        lambda a, c: _async_val({"ok": True, "data": {"recommendations": [{"proposedChange": "Arctic Char Fillet"}]}}),
+    )
+
+    agent = MenuEngineeringAgent(reg)
+    r1 = await agent.handle("MENU_TODAY_MEAL", {"transcript": "Show today's breakfast menu."}, {})
+    assert r1["ok"] and "Sunrise Buffet" in r1["spoken"]
+    r2 = await agent.handle("MENU_CALC_COVERS", {"transcript": "Calculate ingredient requirements for 300 covers."}, {})
+    assert r2["ok"] and "300 covers" in r2["spoken"] and "420" in r2["spoken"]
+    r3 = await agent.handle("MENU_LOW_MARGIN", {"transcript": "Which menu items have low margins?"}, {})
+    assert not r3["ok"] and "denied" in r3["spoken"].lower()
+    r4 = await agent.handle("MENU_ALTERNATIVE", {"transcript": "Suggest an alternative to salmon."}, {})
+    assert r4["ok"] and "Arctic Char" in r4["spoken"] and "approval" in r4["spoken"].lower()
+
+
+async def _async_val(val):
+    return val

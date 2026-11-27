@@ -179,6 +179,10 @@ class VoiceEngine:
                         "SOCIAL",
                         "GRATITUDE",
                         "FAREWELL",
+                        "MENU_TODAY_MEAL",
+                        "MENU_CALC_COVERS",
+                        "MENU_LOW_MARGIN",
+                        "MENU_ALTERNATIVE",
                     ],
                     language=session.language,
                 )
