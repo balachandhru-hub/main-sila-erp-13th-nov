@@ -1,5 +1,15 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { LayoutGrid, Table2 } from "lucide-react";
 import { Loader, toastService } from "@vosox/shared-ui";
+import {
+  AIRecommendationCard,
+  MenuItemCard,
+  RecipeGrid,
+  ScenarioComparison,
+  StudioChartContainer,
+  StudioKPIBar,
+  StudioKPICard,
+} from "../studio";
 import {
   bulkImportMeMenuItems,
   bulkPriceMeMenuItems,
@@ -72,6 +82,7 @@ interface Props {
   lookups?: MenuLookups;
   permissions: MeStudioPermissionsDto;
   operatingMode?: AiOperatingMode;
+  externalCreateSignal?: number;
   onOpenInStudio?: (planId?: string) => void;
   onNavigate: (key: string) => void;
 }
@@ -115,9 +126,13 @@ const MeOperationalViews: React.FC<Props> = ({
   lookups,
   permissions,
   operatingMode = "AI_ASSISTED",
+  externalCreateSignal,
   onOpenInStudio,
   onNavigate,
 }) => {
+  const [itemsViewMode, setItemsViewMode] = useState<"cards" | "table">("cards");
+  const [fullscreenView, setFullscreenView] = useState(false);
+  const itemFormRef = useRef<HTMLDivElement | null>(null);
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<MenuItemEnhanced[]>([]);
   const [plans, setPlans] = useState<MenuPlanEnhanced[]>([]);
@@ -223,6 +238,25 @@ const MeOperationalViews: React.FC<Props> = ({
     void load();
   }, [load]);
 
+  useEffect(() => {
+    if (!externalCreateSignal) return;
+    setEditItem({ menuItemCode: "", name: "", category: "Mains", cuisine: "International", portionUom: "PORTION", defaultPortionQty: 1, sellingPrice: 20, taxRatePercent: 5, status: "ACTIVE", isAvailable: true });
+    itemFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [externalCreateSignal]);
+
+  useEffect(() => {
+    setFullscreenView(false);
+  }, [navKey]);
+
+  useEffect(() => {
+    if (!fullscreenView) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setFullscreenView(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [fullscreenView]);
+
   if (loading) return <Loader />;
 
   const viewCost = permissions.viewMenuCost;
@@ -249,7 +283,7 @@ const MeOperationalViews: React.FC<Props> = ({
           />
         )}
         {permissions.manageMenuItems && (
-          <div className="sme-panel">
+          <div className="sme-panel" ref={itemFormRef}>
             <div className="sme-panel__header">
               <h2 className="sme-panel__title">Menu Item Commercial Master</h2>
               <div style={{ display: "flex", gap: "0.4rem" }}>
@@ -325,7 +359,7 @@ const MeOperationalViews: React.FC<Props> = ({
         )}
 
         <div className="sme-panel">
-          <div className="sme-row" style={{ marginBottom: "0.75rem", flexWrap: "wrap" }}>
+          <div className="sme-row" style={{ marginBottom: "0.75rem", flexWrap: "wrap", alignItems: "center" }}>
             <input
               className="sila-input"
               style={{ flex: 1, minWidth: "14rem" }}
@@ -339,12 +373,28 @@ const MeOperationalViews: React.FC<Props> = ({
                 <option key={c} value={c!}>{c}</option>
               ))}
             </select>
+            <div style={{ display: "inline-flex", gap: "0.3rem" }}>
+              <button
+                type="button"
+                className={`sila-studio-btn sila-studio-btn--sm ${itemsViewMode === "cards" ? "sila-studio-btn--primary" : "sila-studio-btn--secondary"}`}
+                onClick={() => setItemsViewMode("cards")}
+              >
+                <LayoutGrid size={13} aria-hidden="true" />
+                <span>Cards</span>
+              </button>
+              <button
+                type="button"
+                className={`sila-studio-btn sila-studio-btn--sm ${itemsViewMode === "table" ? "sila-studio-btn--primary" : "sila-studio-btn--secondary"}`}
+                onClick={() => setItemsViewMode("table")}
+              >
+                <Table2 size={13} aria-hidden="true" />
+                <span>Table</span>
+              </button>
+            </div>
           </div>
-          <table className="sila-table">
-            <thead>
-              <tr><th>Select</th><th>Code</th><th>Dish</th><th>Category</th><th>Recipe</th><th>Net Price</th>{viewCost && <th>Cost</th>}{viewCost && <th>FC %</th>}{viewMargin && <th>Margin</th>}<th>Status</th><th>Actions</th></tr>
-            </thead>
-            <tbody>
+
+          {itemsViewMode === "cards" ? (
+            <RecipeGrid ariaLabel="Menu items catalogue">
               {items
                 .filter((it) => {
                   const q = itemSearch.trim().toLowerCase();
@@ -353,41 +403,84 @@ const MeOperationalViews: React.FC<Props> = ({
                   return true;
                 })
                 .map((it) => (
-                <tr key={it.id}>
-                  <td><input type="checkbox" checked={selectedItemIds.includes(it.id!)} onChange={(e) => setSelectedItemIds((p) => (e.target.checked ? [...p, it.id!] : p.filter((x) => x !== it.id)))} /></td>
-                  <td>{it.menuItemCode}</td>
-                  <td><strong>{it.name}</strong><div className="sme-muted">{it.cuisine} • {it.dietaryTags || "Standard"}</div></td>
-                  <td>{it.category}</td>
-                  <td>{it.recipeName || "Unlinked"}</td>
-                  <td>{num(it.netSellingPrice ?? it.sellingPrice)}</td>
-                  {viewCost && <td>{num(it.costPerPortion)}</td>}
-                  {viewCost && <td>{pct(it.foodCostPercent)}</td>}
-                  {viewMargin && <td>{num(it.contributionMargin)}</td>}
-                  <td><span className="sme-chip">{it.status} • {it.approvalStatus} v{it.versionNumber}</span></td>
-                  <td style={{ display: "flex", gap: "0.3rem", flexWrap: "wrap" }}>
-                    <button type="button" className="sila-btn sila-btn--secondary" onClick={() => setEditItem(it)}>Edit</button>
-                    {permissions.manageMenuItems && (
-                      <button type="button" className="sila-btn sila-btn--secondary" onClick={async () => { await copyMeMenuItem(it.id!); toastService.success("Copied item."); await load(); }}>Copy</button>
-                    )}
-                    {permissions.manageMenuItems && it.status !== "INACTIVE" && (
-                      <button
-                        type="button"
-                        className="sila-btn sila-btn--secondary"
-                        onClick={async () => {
-                          await saveMeMenuItem({ ...it, status: "INACTIVE", isAvailable: false });
-                          toastService.success(`Deactivated ${it.name}.`);
-                          await load();
-                        }}
-                      >
-                        Deactivate
-                      </button>
-                    )}
-                    <button type="button" className="sila-btn sila-btn--secondary" onClick={async () => setVersions(await getMeMenuItemVersions(it.id!))}>History</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  <MenuItemCard
+                    key={it.id}
+                    name={it.name}
+                    code={it.menuItemCode}
+                    linkedRecipeName={it.recipeName}
+                    category={it.category}
+                    cuisine={it.cuisine}
+                    sellingPriceText={num(it.netSellingPrice ?? it.sellingPrice)}
+                    foodCostText={viewCost ? num(it.costPerPortion) : undefined}
+                    foodCostPctText={viewCost ? pct(it.foodCostPercent) : undefined}
+                    contributionMarginText={viewMargin ? num(it.contributionMargin) : undefined}
+                    availabilityLabel={`${it.status} · v${it.versionNumber}`}
+                    classification={it.matrixClassification}
+                    imageUrl={it.imagePath}
+                    actions={
+                      <>
+                        <button type="button" className="sila-studio-btn sila-studio-btn--sm" onClick={() => { setEditItem(it); itemFormRef.current?.scrollIntoView({ behavior: "smooth" }); }}>Edit</button>
+                        {permissions.manageMenuItems && (
+                          <button type="button" className="sila-studio-btn sila-studio-btn--sm" onClick={async () => { await copyMeMenuItem(it.id!); toastService.success("Copied item."); await load(); }}>Copy</button>
+                        )}
+                        <button type="button" className="sila-studio-btn sila-studio-btn--sm" onClick={async () => setVersions(await getMeMenuItemVersions(it.id!))}>History</button>
+                      </>
+                    }
+                  />
+                ))}
+            </RecipeGrid>
+          ) : (
+            <div className="sila-studio-table-wrap">
+              <table className="sila-table sila-tabular">
+                <thead>
+                  <tr><th>Select</th><th>Code</th><th>Dish</th><th>Category</th><th>Recipe</th><th>Net Price</th>{viewCost && <th>Cost</th>}{viewCost && <th>FC %</th>}{viewMargin && <th>Margin</th>}<th>Status</th><th>Actions</th></tr>
+                </thead>
+                <tbody>
+                  {items
+                    .filter((it) => {
+                      const q = itemSearch.trim().toLowerCase();
+                      if (q && !it.name.toLowerCase().includes(q) && !it.menuItemCode.toLowerCase().includes(q) && !(it.cuisine ?? "").toLowerCase().includes(q)) return false;
+                      if (itemCatFilter && it.category !== itemCatFilter) return false;
+                      return true;
+                    })
+                    .map((it) => (
+                    <tr key={it.id}>
+                      <td><input type="checkbox" checked={selectedItemIds.includes(it.id!)} onChange={(e) => setSelectedItemIds((p) => (e.target.checked ? [...p, it.id!] : p.filter((x) => x !== it.id)))} /></td>
+                      <td>{it.menuItemCode}</td>
+                      <td><strong>{it.name}</strong><div className="sme-muted">{it.cuisine} • {it.dietaryTags || "Standard"}</div></td>
+                      <td>{it.category}</td>
+                      <td>{it.recipeName || "Unlinked"}</td>
+                      <td>{num(it.netSellingPrice ?? it.sellingPrice)}</td>
+                      {viewCost && <td>{num(it.costPerPortion)}</td>}
+                      {viewCost && <td>{pct(it.foodCostPercent)}</td>}
+                      {viewMargin && <td>{num(it.contributionMargin)}</td>}
+                      <td><span className="sme-chip">{it.status} • {it.approvalStatus} v{it.versionNumber}</span></td>
+                      <td style={{ display: "flex", gap: "0.3rem", flexWrap: "wrap" }}>
+                        <button type="button" className="sila-btn sila-btn--secondary" onClick={() => setEditItem(it)}>Edit</button>
+                        {permissions.manageMenuItems && (
+                          <button type="button" className="sila-btn sila-btn--secondary" onClick={async () => { await copyMeMenuItem(it.id!); toastService.success("Copied item."); await load(); }}>Copy</button>
+                        )}
+                        {permissions.manageMenuItems && it.status !== "INACTIVE" && (
+                          <button
+                            type="button"
+                            className="sila-btn sila-btn--secondary"
+                            onClick={async () => {
+                              await saveMeMenuItem({ ...it, status: "INACTIVE", isAvailable: false });
+                              toastService.success(`Deactivated ${it.name}.`);
+                              await load();
+                            }}
+                          >
+                            Deactivate
+                          </button>
+                        )}
+                        <button type="button" className="sila-btn sila-btn--secondary" onClick={async () => setVersions(await getMeMenuItemVersions(it.id!))}>History</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
           {versions.length > 0 && (
             <div className="sme-kpi-box" style={{ marginTop: "0.5rem" }}>
               <strong>Version History</strong>
@@ -588,13 +681,13 @@ const MeOperationalViews: React.FC<Props> = ({
               <button type="button" className="sila-btn sila-btn--secondary" onClick={async () => { await saveMenuEngineering({ action: "sync-pos" }); toastService.success("POS sync triggered."); await load(); }}>Sync POS</button>
             </div>
           </div>
-          <div className="sme-grid">
-            <div className="sme-kpi-box"><div className="sme-kpi-box__label">Qty Sold</div><div className="sme-kpi-box__val">{posSales.qtySold}</div></div>
-            <div className="sme-kpi-box"><div className="sme-kpi-box__label">Gross Sales</div><div className="sme-kpi-box__val">{num(posSales.grossRevenue)}</div></div>
-            <div className="sme-kpi-box"><div className="sme-kpi-box__label">Discounts / Tax</div><div className="sme-kpi-box__val">{num(posSales.discountTotal)} / {num(posSales.taxTotal)}</div></div>
-            <div className="sme-kpi-box"><div className="sme-kpi-box__label">Net Revenue</div><div className="sme-kpi-box__val">{num(posSales.netRevenue)}</div></div>
-            <div className="sme-kpi-box"><div className="sme-kpi-box__label">Unmapped Lines</div><div className="sme-kpi-box__val">{posSales.unmappedCount}</div></div>
-          </div>
+          <StudioKPIBar ariaLabel="POS sales metrics">
+            <StudioKPICard label="Qty Sold" value={posSales.qtySold} tone="blue" badge="Actual" />
+            <StudioKPICard label="Gross Sales" value={num(posSales.grossRevenue)} tone="sky" badge="Actual" />
+            <StudioKPICard label="Discounts / Tax" value={`${num(posSales.discountTotal)} / ${num(posSales.taxTotal)}`} tone="amber" badge="Actual" />
+            <StudioKPICard label="Net Revenue" value={num(posSales.netRevenue)} tone="green" badge="Actual" />
+            <StudioKPICard label="Unmapped Lines" value={posSales.unmappedCount} tone={posSales.unmappedCount > 0 ? "rose" : "green"} badge="Actual" />
+          </StudioKPIBar>
           <div className="sme-row">
             <textarea className="sila-input" rows={2} style={{ flex: 1 }} value={posCsv} onChange={(e) => setPosCsv(e.target.value)} />
             <button type="button" className="sila-btn sila-btn--primary" onClick={async () => { await saveMenuEngineering({ action: "import-pos-csv", csvContent: posCsv }); toastService.success("POS CSV imported."); await load(); }}>
@@ -710,48 +803,54 @@ const MeOperationalViews: React.FC<Props> = ({
   if (navKey === "silaMenuPerformance" && matrix) {
     return (
       <div className="sme-list">
-        <div className="sme-panel">
-          <div className="sme-panel__header">
-            <h2 className="sme-panel__title">Menu Performance &amp; Engineering Matrix</h2>
-            <div style={{ display: "flex", gap: "0.5rem" }}>
+        <StudioChartContainer
+          title="Menu Performance & Engineering Matrix"
+          subtitle="Stars, Plowhorses, Puzzles, and Dogs calculated from POS sales and recipe cost basis"
+          fullScreen={fullscreenView}
+          onToggleFullScreen={() => setFullscreenView((f) => !f)}
+          actions={
+            <div style={{ display: "flex", gap: "0.45rem", flexWrap: "wrap" }}>
               <select className="sila-input" value={costBasis} onChange={(e) => setCostBasis(e.target.value as "FOOD_COST_ONLY" | "VARIABLE_COST")}>
                 <option value="FOOD_COST_ONLY">Food-Cost-Only Basis</option>
                 <option value="VARIABLE_COST">Configured Variable-Cost Basis</option>
               </select>
               <input className="sila-input" style={{ width: "5.5rem" }} value={popThresh} onChange={(e) => setPopThresh(e.target.value)} title="Popularity threshold factor (default 0.70)" />
             </div>
-          </div>
+          }
+        >
           <div className="sme-quadrant-grid">
             <div className="sme-quadrant sme-quadrant--star"><strong>STARS ({matrix.stars})</strong><div className="sme-muted">High Popularity &amp; High CM</div></div>
             <div className="sme-quadrant sme-quadrant--plow"><strong>PLOWHORSES ({matrix.plowhorses})</strong><div className="sme-muted">High Popularity &amp; Low CM</div></div>
             <div className="sme-quadrant sme-quadrant--puzzle"><strong>PUZZLES ({matrix.puzzles})</strong><div className="sme-muted">Low Popularity &amp; High CM</div></div>
             <div className="sme-quadrant sme-quadrant--dog"><strong>DOGS ({matrix.dogs})</strong><div className="sme-muted">Low Popularity &amp; Low CM</div></div>
           </div>
-          <table className="sila-table">
-            <thead><tr><th>Dish</th><th>Category</th><th>Qty Sold</th><th>Net Rev</th><th>Mix %</th>{viewCost && <th>Cost/Portion</th>}{viewMargin && <th>Unit CM</th>}<th>Quadrant</th><th>Action</th></tr></thead>
-            <tbody>
-              {matrix.rows.map((r) => (
-                <tr key={r.menuItemId}>
-                  <td><strong>{r.name}</strong></td>
-                  <td>{r.category}</td>
-                  <td>{r.qtySold}</td>
-                  <td>{num(r.revenue)}</td>
-                  <td>{pct(r.mixPercent)}</td>
-                  {viewCost && <td>{num(r.costPerPortion)}</td>}
-                  {viewMargin && <td>{num(r.contributionMargin)}</td>}
-                  <td><span className="sme-chip">{r.classification}</span></td>
-                  <td className="sme-muted">{r.recommendedAction}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="sila-studio-table-wrap">
+            <table className="sila-table sila-tabular">
+              <thead><tr><th>Dish</th><th>Category</th><th>Qty Sold</th><th>Net Rev</th><th>Mix %</th>{viewCost && <th>Cost/Portion</th>}{viewMargin && <th>Unit CM</th>}<th>Quadrant</th><th>Action</th></tr></thead>
+              <tbody>
+                {matrix.rows.map((r) => (
+                  <tr key={r.menuItemId}>
+                    <td><strong>{r.name}</strong></td>
+                    <td>{r.category}</td>
+                    <td>{r.qtySold}</td>
+                    <td>{num(r.revenue)}</td>
+                    <td>{pct(r.mixPercent)}</td>
+                    {viewCost && <td>{num(r.costPerPortion)}</td>}
+                    {viewMargin && <td>{num(r.contributionMargin)}</td>}
+                    <td><span className="sme-chip">{r.classification}</span></td>
+                    <td className="sme-muted">{r.recommendedAction}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           {matrix.excludedRows.length > 0 && (
             <div className="sme-kpi-box">
               <strong>Excluded Items ({matrix.excludedCount}) — Not Misclassified as Dogs</strong>
               {matrix.excludedRows.map((x) => <div key={x.menuItemId} className="sme-muted">• {x.name}: {x.exclusionReason}</div>)}
             </div>
           )}
-        </div>
+        </StudioChartContainer>
       </div>
     );
   }
@@ -763,35 +862,39 @@ const MeOperationalViews: React.FC<Props> = ({
         {operatingMode !== "MANUAL" && permissions.useAiMenuIntelligence && (
           <ConsumptionRootCauseAiPanel propertyId={filter.propertyId} outletLocationId={filter.outletLocationId} />
         )}
-        <div className="sme-panel">
-        <div className="sme-panel__header">
-          <h2 className="sme-panel__title">Consumption Analysis (Theoretical vs Actual &amp; Waste)</h2>
-          <span className="sme-chip sme-chip--ok">Double-Counting Prevented</span>
-        </div>
-        <div className="sme-grid">
-          <div className="sme-kpi-box"><div className="sme-kpi-box__label">Theoretical</div><div className="sme-kpi-box__val">{consumption.theoretical.toFixed(2)}</div></div>
-          <div className="sme-kpi-box"><div className="sme-kpi-box__label">Actual</div><div className="sme-kpi-box__val">{consumption.actual.toFixed(2)}</div></div>
-          <div className="sme-kpi-box"><div className="sme-kpi-box__label">Yield Loss</div><div className="sme-kpi-box__val">{consumption.expectedYieldLoss.toFixed(2)}</div></div>
-          <div className="sme-kpi-box"><div className="sme-kpi-box__label">Recorded Waste</div><div className="sme-kpi-box__val">{consumption.recordedWaste.toFixed(2)}</div></div>
-          <div className="sme-kpi-box"><div className="sme-kpi-box__label">Unexplained Var</div><div className="sme-kpi-box__val">{consumption.unexplainedVariance.toFixed(2)}</div></div>
-        </div>
-        <table className="sila-table">
-          <thead><tr><th>Ingredient</th><th>UOM</th><th>Theoretical</th><th>Actual</th><th>Yield Loss</th><th>Waste</th><th>Unexplained</th></tr></thead>
-          <tbody>
-            {consumption.rows.map((r) => (
-              <tr key={r.materialId}>
-                <td><strong>{r.materialName}</strong></td>
-                <td>{r.uom}</td>
-                <td>{r.theoreticalQty}</td>
-                <td>{r.actualQty}</td>
-                <td>{r.expectedYieldLossQty}</td>
-                <td>{r.recordedWasteQty}</td>
-                <td><strong>{r.unexplainedVarianceQty}</strong></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        </div>
+        <StudioChartContainer
+          title="Consumption Analysis (Theoretical vs Actual & Waste)"
+          subtitle="Double-counting prevented across POS sales and production posting"
+          fullScreen={fullscreenView}
+          onToggleFullScreen={() => setFullscreenView((f) => !f)}
+          actions={<span className="sme-chip sme-chip--ok">Double-Counting Prevented</span>}
+        >
+          <StudioKPIBar ariaLabel="Consumption metrics">
+            <StudioKPICard label="Theoretical" value={consumption.theoretical.toFixed(2)} tone="blue" badge="Planned" />
+            <StudioKPICard label="Actual" value={consumption.actual.toFixed(2)} tone="sky" badge="Actual" />
+            <StudioKPICard label="Yield Loss" value={consumption.expectedYieldLoss.toFixed(2)} tone="amber" badge="Actual" />
+            <StudioKPICard label="Recorded Waste" value={consumption.recordedWaste.toFixed(2)} tone="rose" badge="Actual" />
+            <StudioKPICard label="Unexplained Var" value={consumption.unexplainedVariance.toFixed(2)} tone="indigo" badge="Actual" />
+          </StudioKPIBar>
+          <div className="sila-studio-table-wrap">
+            <table className="sila-table sila-tabular">
+              <thead><tr><th>Ingredient</th><th>UOM</th><th>Theoretical</th><th>Actual</th><th>Yield Loss</th><th>Waste</th><th>Unexplained</th></tr></thead>
+              <tbody>
+                {consumption.rows.map((r) => (
+                  <tr key={r.materialId}>
+                    <td><strong>{r.materialName}</strong></td>
+                    <td>{r.uom}</td>
+                    <td>{r.theoreticalQty}</td>
+                    <td>{r.actualQty}</td>
+                    <td>{r.expectedYieldLossQty}</td>
+                    <td>{r.recordedWasteQty}</td>
+                    <td><strong>{r.unexplainedVarianceQty}</strong></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </StudioChartContainer>
       </div>
     );
   }
@@ -803,23 +906,24 @@ const MeOperationalViews: React.FC<Props> = ({
         {operatingMode !== "MANUAL" && permissions.useAiMenuIntelligence && (
           <CostShockAndPricingAiPanel propertyId={filter.propertyId} />
         )}
-        <div className="sme-panel">
-          <h2 className="sme-panel__title">Cost &amp; Margin Analysis</h2>
-          <div className="sme-muted" style={{ marginBottom: "0.65rem" }}>
-            {costMargin.disclaimer || "Contribution Margin equals Net Revenue minus Applicable Variable Costs (not Net Profit). Estimated costs are clearly separated from actual production costs."}
-          </div>
-          <div className="sme-grid">
-            <div className="sme-kpi-box"><div className="sme-kpi-box__label">Total Revenue</div><div className="sme-kpi-box__val">{num(costMargin.totalRevenue)}</div></div>
-            {viewCost && <div className="sme-kpi-box"><div className="sme-kpi-box__label">Total Food Cost</div><div className="sme-kpi-box__val">{num(costMargin.totalFoodCost)}</div></div>}
-            {viewCost && <div className="sme-kpi-box"><div className="sme-kpi-box__label">Food Cost %</div><div className="sme-kpi-box__val">{pct(costMargin.overallFoodCostPercent)}</div></div>}
-            {viewMargin && <div className="sme-kpi-box"><div className="sme-kpi-box__label">Contribution Margin</div><div className="sme-kpi-box__val">{num(costMargin.totalContributionMargin)}</div></div>}
-          </div>
+        <StudioChartContainer
+          title="Cost & Margin Analysis"
+          subtitle={costMargin.disclaimer || "Contribution Margin equals Net Revenue minus Applicable Variable Costs (not Net Profit)."}
+          fullScreen={fullscreenView}
+          onToggleFullScreen={() => setFullscreenView((f) => !f)}
+        >
+          <StudioKPIBar ariaLabel="Cost and margin metrics">
+            <StudioKPICard label="Total Revenue" value={num(costMargin.totalRevenue)} tone="sky" badge="Actual" />
+            {viewCost && <StudioKPICard label="Total Food Cost" value={num(costMargin.totalFoodCost)} tone="blue" badge="Actual" />}
+            {viewCost && <StudioKPICard label="Food Cost %" value={pct(costMargin.overallFoodCostPercent)} tone="amber" badge="Actual" />}
+            {viewMargin && <StudioKPICard label="Contribution Margin" value={num(costMargin.totalContributionMargin)} tone="green" badge="Actual" />}
+          </StudioKPIBar>
           {costMargin.marginAlerts.map((a, i) => (
-            <div key={i} className="sme-kpi-box" style={{ background: "#fef2f2", borderColor: "#fecaca" }}>
+            <div key={i} className="sme-kpi-box" style={{ background: "#fff1f1", borderColor: "#f3cccc" }}>
               <strong>{a.title}</strong> — <span className="sme-muted">{a.recommendedAction}</span>
             </div>
           ))}
-        </div>
+        </StudioChartContainer>
       </div>
     );
   }
@@ -864,20 +968,31 @@ const MeOperationalViews: React.FC<Props> = ({
       <div className="sme-list">
         <AiControlTowerPanel propertyId={filter.propertyId} permissions={permissions} />
         <AiCockpitFullPanel propertyId={filter.propertyId} canApprove={permissions.approveMenu} />
-        <div className="sme-panel">
-          <div className="sme-panel__header">
-            <h2 className="sme-panel__title">AI Menu Intelligence</h2>
-            <span className={`sme-chip ${aiIntel.aiProviderAvailable ? "sme-chip--ok" : "sme-chip--warn"}`}>{aiIntel.providerMode}</span>
+        <StudioChartContainer
+          title="AI Menu Intelligence"
+          subtitle={aiIntel.fallbackNotice || "Contextual culinary & commercial recommendations backed by live evidence"}
+          fullScreen={fullscreenView}
+          onToggleFullScreen={() => setFullscreenView((f) => !f)}
+          actions={
+            <span className={`sme-chip ${aiIntel.aiProviderAvailable ? "sme-chip--ok" : "sme-chip--warn"}`}>
+              {aiIntel.providerMode}
+            </span>
+          }
+        >
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "0.75rem" }}>
+            {aiIntel.recommendations.map((r, i) => (
+              <AIRecommendationCard
+                key={i}
+                title={r.strategy}
+                recommendation={r.recommendation}
+                statusLabel={`Confidence ${(r.confidence * 100).toFixed(0)}%`}
+                evidence={`${r.supportingEvidence} · Data Quality: ${r.dataQuality}`}
+                impact={`Allergens: ${r.allergenImpact ?? "Unchanged"}`}
+                requiresApproval={r.requiresApproval}
+              />
+            ))}
           </div>
-          {aiIntel.fallbackNotice && <div className="sme-muted">{aiIntel.fallbackNotice}</div>}
-          {aiIntel.recommendations.map((r, i) => (
-            <div key={i} className="sme-kpi-box">
-              <strong>{r.strategy}</strong>: {r.recommendation}
-              <div className="sme-muted">Evidence: {r.supportingEvidence} • Data Quality: {r.dataQuality} • Confidence: {(r.confidence * 100).toFixed(0)}%</div>
-              <div className="sme-muted">Allergens: {r.allergenImpact ?? "Unchanged"} • Approval: {r.requiresApproval ? "Required before live change" : "Optional"}</div>
-            </div>
-          ))}
-        </div>
+        </StudioChartContainer>
       </div>
     );
   }
@@ -889,8 +1004,12 @@ const MeOperationalViews: React.FC<Props> = ({
         {operatingMode !== "MANUAL" && permissions.runMenuSimulation && (
           <NlWhatIfAiPanel menuPlanId={plans[0]?.id} propertyId={filter.propertyId} />
         )}
-        <div className="sme-panel">
-        <h2 className="sme-panel__title">What-If Simulation Workbench</h2>
+        <StudioChartContainer
+          title="What-If Simulation Workbench"
+          subtitle="Isolated scenario simulation — live menu and ERP data remain untouched"
+          fullScreen={fullscreenView}
+          onToggleFullScreen={() => setFullscreenView((f) => !f)}
+        >
         <div className="sme-form">
           <label className="sila-field"><span>Scenario Name</span><input className="sila-input" value={simForm.scenarioName} onChange={(e) => setSimForm({ ...simForm, scenarioName: e.target.value })} /></label>
           <label className="sila-field"><span>Expected Covers</span><input className="sila-input" type="number" value={simForm.expectedCovers} onChange={(e) => setSimForm({ ...simForm, expectedCovers: e.target.value })} /></label>
@@ -899,10 +1018,10 @@ const MeOperationalViews: React.FC<Props> = ({
           <label className="sila-field"><span>Portion Size Δ %</span><input className="sila-input" type="number" value={simForm.portionSizeChangePercent} onChange={(e) => setSimForm({ ...simForm, portionSizeChangePercent: e.target.value })} /></label>
           <label className="sila-field"><span>Discount %</span><input className="sila-input" type="number" value={simForm.discountPercent} onChange={(e) => setSimForm({ ...simForm, discountPercent: e.target.value })} /></label>
         </div>
-        <div style={{ display: "flex", gap: "0.5rem" }}>
+        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
           <button
             type="button"
-            className="sila-btn sila-btn--primary"
+            className="sila-studio-btn sila-studio-btn--primary"
             onClick={async () => {
               const res = await runMeSimulation({
                 menuPlanId: plans[0]?.id,
@@ -921,7 +1040,7 @@ const MeOperationalViews: React.FC<Props> = ({
           </button>
           <button
             type="button"
-            className="sila-btn sila-btn--secondary"
+            className="sila-studio-btn sila-studio-btn--secondary"
             onClick={async () => {
               const res = await runMeSimulation({
                 menuPlanId: plans[0]?.id,
@@ -941,17 +1060,22 @@ const MeOperationalViews: React.FC<Props> = ({
           </button>
         </div>
         {simRes && (
-          <div className="sme-kpi-box">
-            <div className="sme-muted">{simRes.demandAssumptionDisclosure}</div>
-            <div className="sme-grid" style={{ marginTop: "0.5rem" }}>
-              {viewCost && <div>Cost: {num(simRes.baselineCost)} → <strong>{num(simRes.foodCost)}</strong> ({simRes.costVariancePct}%)</div>}
-              <div>Revenue: {num(simRes.baselineRevenue)} → <strong>{num(simRes.revenue)}</strong> ({simRes.revenueVariancePct}%)</div>
-              {viewMargin && <div>Margin: {num(simRes.baselineMargin)} → <strong>{num(simRes.contributionMargin)}</strong> ({simRes.marginVariancePct}%)</div>}
-              <div>Requirement: {simRes.ingredientRequirement} • Shortage: {simRes.shortage}</div>
-            </div>
-          </div>
+          <ScenarioComparison
+            title={simForm.scenarioName}
+            subtitle={simRes.demandAssumptionDisclosure}
+            rows={[
+              ...(viewCost
+                ? [{ label: "Food Cost", baseline: num(simRes.baselineCost), simulated: num(simRes.foodCost), delta: `${simRes.costVariancePct}%` }]
+                : []),
+              { label: "Expected Revenue", baseline: num(simRes.baselineRevenue), simulated: num(simRes.revenue), delta: `${simRes.revenueVariancePct}%` },
+              ...(viewMargin
+                ? [{ label: "Contribution Margin", baseline: num(simRes.baselineMargin), simulated: num(simRes.contributionMargin), delta: `${simRes.marginVariancePct}%` }]
+                : []),
+              { label: "Ingredient Requirement / Shortage", baseline: String(simRes.ingredientRequirement), simulated: String(simRes.shortage), delta: simRes.shortage > 0 ? "Shortage" : "Ready" },
+            ]}
+          />
         )}
-        </div>
+        </StudioChartContainer>
       </div>
     );
   }

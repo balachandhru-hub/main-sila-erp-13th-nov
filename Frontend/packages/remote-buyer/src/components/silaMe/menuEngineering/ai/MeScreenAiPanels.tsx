@@ -77,7 +77,7 @@ export const MenuItemAiAssistantPanel: React.FC<{
   };
 
   return (
-    <div className="sme-panel" style={{ background: "#f8fbff", borderColor: "#bfdbfe" }}>
+    <div className="sme-panel" style={{ background: "#ffffff", borderColor: "#c7dff4" }}>
       <div className="sme-panel__header">
         <div>
           <AiValueTag kind="AI_RECOMMENDATION" />{" "}
@@ -149,7 +149,7 @@ export const MenuPlanningAiPanel: React.FC<{ propertyId?: string }> = ({ propert
   const [res, setRes] = useState<AiMenuCalendarGenerateResult | null>(null);
 
   return (
-    <div className="sme-panel" style={{ background: "#f8fbff", borderColor: "#bfdbfe" }}>
+    <div className="sme-panel" style={{ background: "#ffffff", borderColor: "#c7dff4" }}>
       <div className="sme-panel__header">
         <div>
           <AiValueTag kind="AI_RECOMMENDATION" /> <strong>AI Menu Calendar &amp; Rotation Planner</strong>
@@ -216,7 +216,7 @@ export const PortionOptimizationAiPanel: React.FC<{ propertyId?: string; menuPla
 }) => {
   const [res, setRes] = useState<AiPortionOptimizeResult | null>(null);
   return (
-    <div className="sme-panel" style={{ background: "#f8fbff", borderColor: "#bfdbfe" }}>
+    <div className="sme-panel" style={{ background: "#ffffff", borderColor: "#c7dff4" }}>
       <div className="sme-panel__header">
         <div>
           <AiValueTag kind="AI_RECOMMENDATION" /> <strong>AI Portion Optimization (Approved Master Portions Preserved)</strong>
@@ -265,7 +265,7 @@ export const DemandBacktestAiPanel: React.FC<{ propertyId?: string; outletLocati
 }) => {
   const [res, setRes] = useState<AiBacktestDemandResult | null>(null);
   return (
-    <div className="sme-panel" style={{ background: "#f8fbff", borderColor: "#bfdbfe" }}>
+    <div className="sme-panel" style={{ background: "#ffffff", borderColor: "#c7dff4" }}>
       <div className="sme-panel__header">
         <div>
           <AiValueTag kind="FORECAST" /> <strong>Backtested Multi-Model Demand Forecasting (Leakage-Free)</strong>
@@ -286,7 +286,7 @@ export const DemandBacktestAiPanel: React.FC<{ propertyId?: string; outletLocati
           </div>
           <div className="sme-grid">
             {res.modelEvaluations.map((m) => (
-              <div key={m.modelName} className="sme-kpi-box" style={m.selected ? { borderColor: "#2563eb", background: "#eff6ff" } : undefined}>
+              <div key={m.modelName} className="sme-kpi-box" style={m.selected ? { borderColor: "#087BB5", background: "#eaf5ff" } : undefined}>
                 <strong>{m.modelName} {m.selected ? "★" : ""}</strong>
                 <div className="sme-muted">MAE: {m.mae.toFixed(2)} · WAPE: {m.wape.toFixed(1)}%</div>
                 <div className="sme-muted">Bias: {m.bias.toFixed(2)} · PI Coverage: {m.intervalCoveragePercent.toFixed(0)}%</div>
@@ -305,7 +305,7 @@ export const PosSalesAiPanel: React.FC<{ propertyId?: string; outletLocationId?:
 }) => {
   const [res, setRes] = useState<AiPosSalesIntelligence | null>(null);
   return (
-    <div className="sme-panel" style={{ background: "#f8fbff", borderColor: "#bfdbfe" }}>
+    <div className="sme-panel" style={{ background: "#ffffff", borderColor: "#c7dff4" }}>
       <div className="sme-panel__header">
         <div>
           <AiValueTag kind="AI_RECOMMENDATION" /> <strong>AI POS Sales Intelligence &amp; Exception Worklist</strong>
@@ -341,7 +341,7 @@ export const PosMappingAiQueuePanel: React.FC<{ propertyId?: string; onApproved:
 }) => {
   const [res, setRes] = useState<AiPosMappingSuggestionBatch | null>(null);
   return (
-    <div className="sme-panel" style={{ background: "#f8fbff", borderColor: "#bfdbfe" }}>
+    <div className="sme-panel" style={{ background: "#ffffff", borderColor: "#c7dff4" }}>
       <div className="sme-panel__header">
         <div>
           <AiValueTag kind="AI_RECOMMENDATION" /> <strong>AI POS Mapping Auto-Suggest &amp; Review Queue</strong>
@@ -404,7 +404,7 @@ export const ConsumptionRootCauseAiPanel: React.FC<{ propertyId?: string; outlet
 }) => {
   const [res, setRes] = useState<AiConsumptionRootCauseResult | null>(null);
   return (
-    <div className="sme-panel" style={{ background: "#f8fbff", borderColor: "#bfdbfe" }}>
+    <div className="sme-panel" style={{ background: "#ffffff", borderColor: "#c7dff4" }}>
       <div className="sme-panel__header">
         <div>
           <AiValueTag kind="AI_RECOMMENDATION" /> <strong>AI Consumption Anomaly &amp; Root-Cause Ranker</strong>
@@ -444,7 +444,7 @@ export const CostShockAndPricingAiPanel: React.FC<{ propertyId?: string }> = ({ 
 
   return (
     <div className="sme-list">
-      <div className="sme-panel" style={{ background: "#f8fbff", borderColor: "#bfdbfe" }}>
+      <div className="sme-panel" style={{ background: "#ffffff", borderColor: "#c7dff4" }}>
         <div className="sme-panel__header">
           <div>
             <AiValueTag kind="SIMULATION" /> <strong>AI Ingredient Price Shock Cascader (Reverse Recipe Dependencies)</strong>
@@ -620,7 +620,7 @@ export const NlWhatIfAiPanel: React.FC<{ menuPlanId?: string; propertyId?: strin
   const [command, setCommand] = useState("What happens if salmon cost increases by 20%?");
   const [res, setRes] = useState<AiNlSimulationResult | null>(null);
   return (
-    <div className="sme-panel" style={{ background: "#f8fbff", borderColor: "#bfdbfe" }}>
+    <div className="sme-panel" style={{ background: "#ffffff", borderColor: "#c7dff4" }}>
       <div className="sme-panel__header">
         <div><AiValueTag kind="SIMULATION" /> <strong>Natural Language What-If Simulator</strong></div>
       </div>
@@ -652,7 +652,7 @@ export const NlWhatIfAiPanel: React.FC<{ menuPlanId?: string; propertyId?: strin
 export const SetupWizardAiPanel: React.FC<{ propertyId?: string }> = ({ propertyId }) => {
   const [wiz, setWiz] = useState<MeSetupWizardReadiness | null>(null);
   return (
-    <div className="sme-panel" style={{ background: "#f8fbff", borderColor: "#bfdbfe" }}>
+    <div className="sme-panel" style={{ background: "#ffffff", borderColor: "#c7dff4" }}>
       <div className="sme-panel__header">
         <div>
           <AiValueTag kind="AI_RECOMMENDATION" /> <strong>20-Step Customer Onboarding &amp; Readiness Wizard</strong>
@@ -675,7 +675,7 @@ export const SetupWizardAiPanel: React.FC<{ propertyId?: string }> = ({ property
             {wiz.adminApprovalRequiredToApply ? "Admin approval required to apply thresholds." : "Ready"}
           </div>
           {(wiz.validationErrors?.length ?? 0) > 0 && (
-            <div className="sme-kpi-box" style={{ background: "#fef2f2", borderColor: "#fecaca" }}>
+            <div className="sme-kpi-box" style={{ background: "#fff1f1", borderColor: "#f3cccc" }}>
               <strong>Validation Errors ({wiz.validationErrors!.length})</strong>
               {wiz.validationErrors!.map((err, i) => <div key={i} className="sme-muted">• {err}</div>)}
             </div>

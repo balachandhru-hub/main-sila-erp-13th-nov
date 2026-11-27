@@ -4,6 +4,7 @@ import {
   type AiContextualResponse,
   type AiOperatingMode,
 } from "../../../../api/silaMe/menuEngineeringAiApi";
+import { AICopilotDrawer } from "../../studio";
 import {
   AiDataQualityIndicator,
   AiEvidencePanel,
@@ -18,6 +19,8 @@ interface Props {
   outletLocationId?: string;
   menuPlanId?: string;
   menuItemId?: string;
+  open?: boolean;
+  onClose?: () => void;
   onTriggerAction?: (targetEndpoint: string, payload: Record<string, unknown>) => void;
 }
 
@@ -41,13 +44,26 @@ export const AiContextualAssistantPanel: React.FC<Props> = ({
   outletLocationId,
   menuPlanId,
   menuItemId,
+  open,
+  onClose,
   onTriggerAction,
 }) => {
-  const [collapsed, setCollapsed] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isControlled = typeof open === "boolean";
+  const isOpen = isControlled ? open : internalOpen;
+  const handleClose = () => {
+    if (isControlled) {
+      onClose?.();
+    } else {
+      setInternalOpen(false);
+    }
+  };
+
   const [prompt, setPrompt] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [response, setResponse] = useState<AiContextualResponse | null>(null);
+  const [listening, setListening] = useState(false);
 
   const invoke = async (actionKey: string) => {
     setLoading(true);
@@ -71,60 +87,66 @@ export const AiContextualAssistantPanel: React.FC<Props> = ({
     }
   };
 
-  if (collapsed) {
-    return (
-      <aside className="sme-ai-drawer sme-ai-drawer--collapsed">
-        <button type="button" className="sila-btn sila-btn--primary" onClick={() => setCollapsed(false)}>
-          SILA AI Assistant ◀
-        </button>
-      </aside>
-    );
-  }
+  const toggleVoiceInput = () => {
+    const SpeechRec = (window as unknown as { SpeechRecognition?: new () => unknown; webkitSpeechRecognition?: new () => unknown }).SpeechRecognition
+      || (window as unknown as { webkitSpeechRecognition?: new () => unknown }).webkitSpeechRecognition;
+    if (!SpeechRec) {
+      setError("Voice recognition is not supported in this browser.");
+      return;
+    }
+    try {
+      const rec = new SpeechRec() as {
+        lang: string;
+        interimResults: boolean;
+        onresult: (ev: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void;
+        onerror: () => void;
+        onend: () => void;
+        start: () => void;
+      };
+      rec.lang = "en-US";
+      rec.interimResults = false;
+      rec.onresult = (ev) => {
+        const text = ev.results?.[0]?.[0]?.transcript ?? "";
+        if (text) setPrompt(text);
+      };
+      rec.onerror = () => setListening(false);
+      rec.onend = () => setListening(false);
+      setListening(true);
+      rec.start();
+    } catch {
+      setListening(false);
+    }
+  };
 
   return (
-    <aside className="sme-ai-drawer" aria-label="SILA Contextual AI Assistant">
-      <div className="sme-ai-drawer-head">
-        <div>
-          <strong>SILA Contextual AI</strong>
-          <div className="sme-ai-drawer-sub">{screenKey} · Mode: {operatingMode}</div>
-        </div>
-        <button type="button" className="sme-ai-mini-btn" onClick={() => setCollapsed(true)}>Collapse ▸</button>
-      </div>
-
-      <div className="sme-ai-drawer-prompt">
-        <input
-          className="sila-input"
-          placeholder="Ask SILA about this screen (e.g. 'Explain variance' or 'Find alternatives')..."
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && prompt.trim()) void invoke("AnalyzeThis");
-          }}
-        />
-        <button type="button" className="sila-btn sila-btn--primary" disabled={loading} onClick={() => void invoke("AnalyzeThis")}>
-          {loading ? "Thinking..." : "Ask"}
-        </button>
-      </div>
-
-      <div className="sme-ai-chip-grid">
-        {CONTEXT_ACTIONS.map((a) => (
-          <button
-            key={a.key}
-            type="button"
-            disabled={loading}
-            className="sme-ai-chip"
-            onClick={() => void invoke(a.key)}
-          >
-            {a.label}
-          </button>
-        ))}
-      </div>
-
+    <AICopilotDrawer
+      open={isOpen}
+      onClose={handleClose}
+      title="SILA AI Copilot"
+      subtitle={`${screenKey} · Mode: ${operatingMode}`}
+      promptValue={prompt}
+      onPromptChange={setPrompt}
+      onSubmitPrompt={() => void invoke("AnalyzeThis")}
+      submitting={loading}
+      quickActions={CONTEXT_ACTIONS.map((a) => ({
+        key: a.key,
+        label: a.label,
+        onClick: () => void invoke(a.key),
+      }))}
+      onVoiceToggle={toggleVoiceInput}
+      voiceActive={listening}
+    >
       {error && <div className="sme-ai-warning-item">{error}</div>}
+
+      {!response && !error && (
+        <div className="sila-studio-muted">
+          Choose a quick prompt above or ask SILA AI about this workspace. Evidence, confidence, and approval controls appear here.
+        </div>
+      )}
 
       {response && (
         <div className="sme-ai-response-box">
-          <div className="sme-ai-rec-head">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
             <AiValueTag kind={response.valueTag} />
             <span className="sme-ai-agent-pill">{response.agentId}</span>
           </div>
@@ -142,7 +164,7 @@ export const AiContextualAssistantPanel: React.FC<Props> = ({
                 <button
                   key={idx}
                   type="button"
-                  className="sila-btn sila-btn--secondary"
+                  className="sila-studio-btn sila-studio-btn--secondary"
                   onClick={() => onTriggerAction?.(pa.targetEndpoint, pa.payload)}
                 >
                   {pa.label} {pa.requiresApproval ? "(Approval Gated)" : ""}
@@ -153,6 +175,6 @@ export const AiContextualAssistantPanel: React.FC<Props> = ({
           <AiFeedbackControl agentId={response.agentId} screenKey={screenKey} targetEntityId={menuPlanId || menuItemId} />
         </div>
       )}
-    </aside>
+    </AICopilotDrawer>
   );
 };

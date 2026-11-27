@@ -1,4 +1,21 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Activity,
+  BookOpen,
+  CheckCircle2,
+  Copy,
+  DollarSign,
+  LayoutGrid,
+  Maximize2,
+  Minimize2,
+  Percent,
+  RefreshCw,
+  Sparkles,
+  Table2,
+  TrendingUp,
+  Users,
+  UtensilsCrossed,
+} from "lucide-react";
 import { Loader, toastService } from "@vosox/shared-ui";
 import {
   bulkImportMeMenuItems,
@@ -21,7 +38,6 @@ import {
   type ScenarioCompareResultDto,
   type WhatIfSimulationResult,
 } from "../../../api/silaMe/menuEngineeringStudioApi";
-
 import {
   runMeContextualAi,
   runMeNlSimulation,
@@ -72,6 +88,32 @@ import {
   publishBusinessEvent,
   type ProactiveMenuHealthDto,
 } from "../../../api/silaMe/menuEngineeringAutonomousApi";
+import {
+  AIInsightCard,
+  AIRecommendationCard,
+  DishLibraryDrawer,
+  MenuCanvas,
+  MenuItemCard,
+  RecipeGrid,
+  StudioKPIBar,
+  StudioKPICard,
+  StudioLoadingState,
+  StudioSubNavigation,
+  type StudioSubNavItem,
+} from "../studio";
+import type { MeStudioHeroCommand } from "./SilaMenuEngineeringApp";
+
+export interface MeStudioHeroSnapshot {
+  selectedPlanId: string;
+  menuName: string;
+  versionNumber: number;
+  status: string;
+  guestCount: number;
+  serviceType: string;
+  isDirty: boolean;
+  saving: boolean;
+  dishLibraryOpen: boolean;
+}
 
 interface Props {
   initialPlanId?: string;
@@ -81,19 +123,22 @@ interface Props {
   onActiveContextChange?: (planId?: string, itemId?: string) => void;
   onOpenReports: () => void;
   onNavigate: (key: string) => void;
+  onHeroSnapshotChange?: (snapshot: MeStudioHeroSnapshot) => void;
+  registerCommandHandler?: (handler: ((cmd: MeStudioHeroCommand) => void) | null) => void;
 }
 
 type StudioTab =
   | "DESIGN"
   | "COSTING"
   | "PORTION_DEMAND"
-  | "DIGITAL_TWIN"
+  | "PERFORMANCE"
   | "READINESS"
+  | "DIGITAL_TWIN"
   | "PRODUCTION_FEASIBILITY"
-  | "AI_OPTIMIZATION"
-  | "SCENARIO_LAB"
-  | "RISK_SENSITIVITY"
   | "HISTORICAL"
+  | "AI_OPTIMIZATION"
+  | "RISK_SENSITIVITY"
+  | "SCENARIO_LAB"
   | "APPROVAL";
 
 const MENU_TYPES = [
@@ -118,18 +163,30 @@ const MeStudioWorkspace: React.FC<Props> = ({
   outletLocationId,
   operatingMode = "AI_ASSISTED",
   onActiveContextChange,
-  onOpenReports,
   onNavigate,
+  onHeroSnapshotChange,
+  registerCommandHandler,
 }) => {
   const [ws, setWs] = useState<MeStudioWorkspaceDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<StudioTab>("DESIGN");
-  const [bottomExpanded, setBottomExpanded] = useState(true);
   const [selectedPlanId, setSelectedPlanId] = useState<string>(initialPlanId ?? "");
   const [isDirty, setIsDirty] = useState(false);
-  const [recoverableDraft, setRecoverableDraft] = useState<{ savedAt: string; draftName: string; lines: MenuPlanLineEnhanced[]; draftCovers: string } | null>(null);
+  const [recoverableDraft, setRecoverableDraft] = useState<{
+    savedAt: string;
+    draftName: string;
+    lines: MenuPlanLineEnhanced[];
+    draftCovers: string;
+  } | null>(null);
   const hydratingRef = useRef(false);
+
+  // Dish Library temporary drawer state (collapsed by default for full-width canvas)
+  const [dishLibraryOpen, setDishLibraryOpen] = useState(false);
+  const [dishLibraryPinned, setDishLibraryPinned] = useState(false);
+  const [replaceLineIndex, setReplaceLineIndex] = useState<number | null>(null);
+  const [canvasViewMode, setCanvasViewMode] = useState<"editor" | "cards">("editor");
+  const [isFullScreen, setIsFullScreen] = useState(false);
 
   // Library filters
   const [libSearch, setLibSearch] = useState("");
@@ -154,13 +211,22 @@ const MeStudioWorkspace: React.FC<Props> = ({
   const [draftNotes, setDraftNotes] = useState("");
   const [draftStatus, setDraftStatus] = useState("DRAFT");
   const [draftVersion, setDraftVersion] = useState(1);
-  const [categoriesOrder, setCategoriesOrder] = useState<string[]>(["Appetizers", "Soups & Salads", "Mains", "Sides", "Desserts", "Beverages"]);
+  const [categoriesOrder, setCategoriesOrder] = useState<string[]>([
+    "Appetizers",
+    "Soups & Salads",
+    "Mains",
+    "Sides",
+    "Desserts",
+    "Beverages",
+  ]);
   const [lines, setLines] = useState<MenuPlanLineEnhanced[]>([]);
   const [dragDishId, setDragDishId] = useState<string | null>(null);
 
-  // Creation / import modals
+  // Creation / import drawers
   const [showCreateMode, setShowCreateMode] = useState<"" | "HISTORICAL" | "AI" | "IMPORT">("");
-  const [csvImport, setCsvImport] = useState("Code,Name,Category,Cuisine,SellingPrice,PortionUom\nME-NEW-1,Pan Seared Sea Bass,Mains,Mediterranean,34.00,PORTION");
+  const [csvImport, setCsvImport] = useState(
+    "Code,Name,Category,Cuisine,SellingPrice,PortionUom\nME-NEW-1,Pan Seared Sea Bass,Mains,Mediterranean,34.00,PORTION"
+  );
 
   // AI / What-If / Compare / Approval state
   const [aiData, setAiData] = useState<AiMenuIntelligenceDto | null>(null);
@@ -203,40 +269,61 @@ const MeStudioWorkspace: React.FC<Props> = ({
   const [twinBusy, setTwinBusy] = useState(false);
   const debounceRef = useRef<number | null>(null);
 
-  const hydrateFromPlan = useCallback((p?: MenuPlanEnhanced | null) => {
-    if (!p) return;
-    hydratingRef.current = true;
-    setSelectedPlanId(p.id);
-    onActiveContextChange?.(p.id, undefined);
-    setDraftName(p.name);
-    setDraftType(p.menuType || "A_LA_CARTE");
-    setDraftFormat(p.serviceFormat || p.menuType || "A_LA_CARTE");
-    setDraftMeal(p.mealPeriod || "Dinner");
-    setDraftDate(p.businessDate.slice(0, 10));
-    setDraftCovers(String(p.expectedCovers ?? p.expectedGuests ?? 100));
-    setDraftTargetFc(String(p.targetFoodCostPercent ?? 30));
-    setDraftTargetCm(p.targetContributionMargin != null ? String(p.targetContributionMargin) : "");
-    setDraftDietary(p.dietaryRequirements ?? "");
-    setDraftNotes(p.notes ?? "");
-    setDraftStatus(p.status);
-    setDraftVersion(p.versionNumber);
-    if (p.categoriesOrder?.length) setCategoriesOrder(p.categoriesOrder);
-    setLines(p.lines || []);
-    setIsDirty(false);
-    try {
-      const cached = window.localStorage.getItem(`sila_me_studio_draft_${p.id}`);
-      if (cached) {
-        const parsed = JSON.parse(cached) as { savedAt: string; draftName: string; lines: MenuPlanLineEnhanced[]; draftCovers: string };
-        setRecoverableDraft(parsed);
-      } else {
+  useEffect(() => {
+    if (!isFullScreen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setIsFullScreen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isFullScreen]);
+
+  const hydrateFromPlan = useCallback(
+    (p?: MenuPlanEnhanced | null) => {
+      if (!p) return;
+      hydratingRef.current = true;
+      setSelectedPlanId(p.id);
+      onActiveContextChange?.(p.id, undefined);
+      setDraftName(p.name);
+      setDraftType(p.menuType || "A_LA_CARTE");
+      setDraftFormat(p.serviceFormat || p.menuType || "A_LA_CARTE");
+      setDraftMeal(p.mealPeriod || "Dinner");
+      setDraftDate(p.businessDate.slice(0, 10));
+      setDraftCovers(String(p.expectedCovers ?? p.expectedGuests ?? 100));
+      setDraftTargetFc(String(p.targetFoodCostPercent ?? 30));
+      setDraftTargetCm(p.targetContributionMargin != null ? String(p.targetContributionMargin) : "");
+      setDraftDietary(p.dietaryRequirements ?? "");
+      setDraftNotes(p.notes ?? "");
+      setDraftStatus(p.status);
+      setDraftVersion(p.versionNumber);
+      if (p.categoriesOrder?.length) setCategoriesOrder(p.categoriesOrder);
+      setLines(p.lines || []);
+      setIsDirty(false);
+      try {
+        const cached = window.localStorage.getItem(`sila_me_studio_draft_${p.id}`);
+        if (cached) {
+          const parsed = JSON.parse(cached) as {
+            savedAt: string;
+            draftName: string;
+            lines: MenuPlanLineEnhanced[];
+            draftCovers: string;
+          };
+          setRecoverableDraft(parsed);
+        } else {
+          setRecoverableDraft(null);
+        }
+      } catch {
         setRecoverableDraft(null);
       }
-    } catch {
-      setRecoverableDraft(null);
-    }
-    window.setTimeout(() => { hydratingRef.current = false; }, 0);
-    void getProactiveMenuHealth(p.id, propertyId).then(setProactiveHealth).catch(() => setProactiveHealth(null));
-  }, [propertyId]);
+      window.setTimeout(() => {
+        hydratingRef.current = false;
+      }, 0);
+      void getProactiveMenuHealth(p.id, propertyId)
+        .then(setProactiveHealth)
+        .catch(() => setProactiveHealth(null));
+    },
+    [onActiveContextChange, propertyId]
+  );
 
   const loadWorkspace = useCallback(
     async (planId?: string) => {
@@ -301,12 +388,45 @@ const MeStudioWorkspace: React.FC<Props> = ({
     };
   }, [draftCovers, lines.length, selectedPlanId, ws?.permissions.runMenuSimulation]);
 
+  // Sync hero snapshot back to Menu Engineering shell
+  useEffect(() => {
+    onHeroSnapshotChange?.({
+      selectedPlanId,
+      menuName: draftName,
+      versionNumber: draftVersion,
+      status: draftStatus,
+      guestCount: Number(draftCovers) || 100,
+      serviceType: draftType,
+      isDirty,
+      saving,
+      dishLibraryOpen,
+    });
+  }, [
+    dishLibraryOpen,
+    draftCovers,
+    draftName,
+    draftStatus,
+    draftType,
+    draftVersion,
+    isDirty,
+    onHeroSnapshotChange,
+    saving,
+    selectedPlanId,
+  ]);
+
   const filteredLibrary = useMemo(() => {
     const all = ws?.libraryItems ?? [];
     const q = libSearch.trim().toLowerCase();
     const maxC = Number(libMaxCost);
     return all.filter((it) => {
-      if (q && !it.name.toLowerCase().includes(q) && !it.menuItemCode.toLowerCase().includes(q) && !(it.cuisine ?? "").toLowerCase().includes(q)) return false;
+      if (
+        q &&
+        !it.name.toLowerCase().includes(q) &&
+        !it.menuItemCode.toLowerCase().includes(q) &&
+        !(it.cuisine ?? "").toLowerCase().includes(q)
+      ) {
+        return false;
+      }
       if (libCat && it.category !== libCat) return false;
       if (libCuisine && it.cuisine !== libCuisine) return false;
       if (libDietary && !(it.dietaryTags ?? "").toLowerCase().includes(libDietary.toLowerCase())) return false;
@@ -341,11 +461,9 @@ const MeStudioWorkspace: React.FC<Props> = ({
     };
   }, [draftCovers, lines]);
 
-  const addDishToCategory = (dish: MenuItemEnhanced, categoryName?: string) => {
-    const cat = categoryName || dish.category || categoriesOrder[0] || "Mains";
-    if (!categoriesOrder.includes(cat)) setCategoriesOrder((prev) => [...prev, cat]);
+  const addOrReplaceDish = (dish: MenuItemEnhanced, categoryName?: string) => {
     const covers = Math.max(1, Number(draftCovers) || 100);
-    const nextLine: MenuPlanLineEnhanced = {
+    const buildLine = (cat: string, seq: number): MenuPlanLineEnhanced => ({
       menuItemId: dish.id!,
       menuItemName: dish.name,
       menuItemCode: dish.menuItemCode,
@@ -354,7 +472,7 @@ const MeStudioWorkspace: React.FC<Props> = ({
       imagePath: dish.imagePath,
       allergenNotes: dish.allergenNotes,
       categoryName: cat,
-      sequenceOrder: lines.length,
+      sequenceOrder: seq,
       recipeId: dish.linkedRecipeId,
       recipeVersion: dish.approvedRecipeVersion,
       portionSize: dish.defaultPortionQty || 1,
@@ -374,8 +492,55 @@ const MeStudioWorkspace: React.FC<Props> = ({
       foodCostPercent: dish.foodCostPercent,
       contributionMargin: dish.contributionMargin,
       availabilityStatus: dish.ingredientAvailabilityStatus || "READY",
-    };
-    setLines((prev) => [...prev, nextLine]);
+    });
+
+    if (replaceLineIndex != null) {
+      setLines((prev) =>
+        prev.map((existing, idx) =>
+          idx === replaceLineIndex ? buildLine(existing.categoryName || dish.category || "Mains", idx) : existing
+        )
+      );
+      setReplaceLineIndex(null);
+      toastService.success(`Replaced dish with ${dish.name}.`);
+      return;
+    }
+
+    const cat = categoryName || dish.category || categoriesOrder[0] || "Mains";
+    if (!categoriesOrder.includes(cat)) setCategoriesOrder((prev) => [...prev, cat]);
+    setLines((prev) => [...prev, buildLine(cat, prev.length)]);
+  };
+
+  const duplicateLine = (idx: number) => {
+    setLines((prev) => {
+      const target = prev[idx];
+      if (!target) return prev;
+      const copy = [...prev];
+      copy.splice(idx + 1, 0, {
+        ...target,
+        menuItemName: `${target.menuItemName} (Copy)`,
+      });
+      return copy;
+    });
+  };
+
+  const moveLineWithinCategory = (idx: number, dir: -1 | 1) => {
+    setLines((prev) => {
+      const current = prev[idx];
+      if (!current) return prev;
+      const cat = current.categoryName || "Mains";
+      const indicesInCat = prev
+        .map((item, i) => ({ item, i }))
+        .filter(({ item }) => (item.categoryName || "Mains") === cat)
+        .map(({ i }) => i);
+      const pos = indicesInCat.indexOf(idx);
+      const swapIdx = indicesInCat[pos + dir];
+      if (swapIdx == null) return prev;
+      const next = [...prev];
+      const temp = next[idx];
+      next[idx] = next[swapIdx];
+      next[swapIdx] = temp;
+      return next;
+    });
   };
 
   const moveCategory = (idx: number, dir: -1 | 1) => {
@@ -387,61 +552,139 @@ const MeStudioWorkspace: React.FC<Props> = ({
     setCategoriesOrder(copy);
   };
 
-  const handleSaveMenu = async (copyAsNew = false, asTemplate = false) => {
-    if (!draftName.trim()) return toastService.error("Menu name is required.");
-    setSaving(true);
-    try {
-      const saved = await saveMeMenuPlan({
-        id: copyAsNew || asTemplate ? undefined : selectedPlanId || undefined,
-        copyFromPlanId: copyAsNew ? selectedPlanId || undefined : undefined,
-        name: asTemplate ? `${draftName} (Template)` : copyAsNew ? `${draftName} (Copy)` : draftName.trim(),
-        propertyId: propertyId || undefined,
-        businessDate: draftDate,
-        mealPeriod: draftMeal,
-        menuType: draftType,
-        serviceFormat: draftFormat,
-        isTemplate: asTemplate,
-        expectedGuests: Number(draftCovers) || 100,
-        expectedCovers: Number(draftCovers) || 100,
-        targetFoodCostPercent: Number(draftTargetFc) || 30,
-        targetContributionMargin: draftTargetCm ? Number(draftTargetCm) : undefined,
-        dietaryRequirements: draftDietary || undefined,
-        notes: draftNotes || undefined,
-        categoriesOrder,
-        lines: lines.map((l, idx) => ({
-          menuItemId: l.menuItemId,
-          categoryName: l.categoryName || "Mains",
-          sequenceOrder: idx,
-          recipeId: l.recipeId,
-          recipeVersion: l.recipeVersion,
-          portionSize: l.portionSize ?? 1,
-          portionUom: l.portionUom || "PORTION",
-          expectedServingsPerGuest: l.expectedServingsPerGuest ?? 1,
-          sellingPrice: l.sellingPrice,
+  const handleSaveMenu = useCallback(
+    async (copyAsNew = false, asTemplate = false) => {
+      if (!draftName.trim()) {
+        toastService.error("Menu name is required.");
+        return;
+      }
+      setSaving(true);
+      try {
+        const saved = await saveMeMenuPlan({
+          id: copyAsNew || asTemplate ? undefined : selectedPlanId || undefined,
+          copyFromPlanId: copyAsNew ? selectedPlanId || undefined : undefined,
+          name: asTemplate ? `${draftName} (Template)` : copyAsNew ? `${draftName} (Copy)` : draftName.trim(),
+          propertyId: propertyId || undefined,
+          businessDate: draftDate,
+          mealPeriod: draftMeal,
+          menuType: draftType,
+          serviceFormat: draftFormat,
+          isTemplate: asTemplate,
+          expectedGuests: Number(draftCovers) || 100,
           expectedCovers: Number(draftCovers) || 100,
-          participationRate: l.participationRate ?? 0.5,
-          bufferPercentage: l.bufferPercentage ?? 0.05,
-          lineNotes: l.lineNotes,
-          alternativesJson: l.alternativesJson,
-          dietaryTags: l.dietaryTags,
-        })),
-      });
-      toastService.success(
-        saved.parentPublishedPlanId
-          ? `Published version preserved; created controlled Draft v${saved.versionNumber}.`
-          : `Saved ${saved.name} (v${saved.versionNumber}).`
-      );
-      setIsDirty(false);
-      setRecoverableDraft(null);
-      try { window.localStorage.removeItem(`sila_me_studio_draft_${selectedPlanId || "new"}`); } catch { /* ignore */ }
-      try { window.localStorage.removeItem(`sila_me_studio_draft_${saved.id}`); } catch { /* ignore */ }
-      await loadWorkspace(saved.id);
-    } catch (e) {
-      toastService.error(e instanceof Error ? e.message : "Could not save menu.");
-    } finally {
-      setSaving(false);
-    }
-  };
+          targetFoodCostPercent: Number(draftTargetFc) || 30,
+          targetContributionMargin: draftTargetCm ? Number(draftTargetCm) : undefined,
+          dietaryRequirements: draftDietary || undefined,
+          notes: draftNotes || undefined,
+          categoriesOrder,
+          lines: lines.map((l, idx) => ({
+            menuItemId: l.menuItemId,
+            categoryName: l.categoryName || "Mains",
+            sequenceOrder: idx,
+            recipeId: l.recipeId,
+            recipeVersion: l.recipeVersion,
+            portionSize: l.portionSize ?? 1,
+            portionUom: l.portionUom || "PORTION",
+            expectedServingsPerGuest: l.expectedServingsPerGuest ?? 1,
+            sellingPrice: l.sellingPrice,
+            expectedCovers: Number(draftCovers) || 100,
+            participationRate: l.participationRate ?? 0.5,
+            bufferPercentage: l.bufferPercentage ?? 0.05,
+            lineNotes: l.lineNotes,
+            alternativesJson: l.alternativesJson,
+            dietaryTags: l.dietaryTags,
+          })),
+        });
+        toastService.success(
+          saved.parentPublishedPlanId
+            ? `Published version preserved; created controlled Draft v${saved.versionNumber}.`
+            : `Saved ${saved.name} (v${saved.versionNumber}).`
+        );
+        setIsDirty(false);
+        setRecoverableDraft(null);
+        try {
+          window.localStorage.removeItem(`sila_me_studio_draft_${selectedPlanId || "new"}`);
+          window.localStorage.removeItem(`sila_me_studio_draft_${saved.id}`);
+        } catch {
+          // ignore
+        }
+        await loadWorkspace(saved.id);
+      } catch (e) {
+        toastService.error(e instanceof Error ? e.message : "Could not save menu.");
+      } finally {
+        setSaving(false);
+      }
+    },
+    [
+      categoriesOrder,
+      draftCovers,
+      draftDate,
+      draftDietary,
+      draftFormat,
+      draftMeal,
+      draftName,
+      draftNotes,
+      draftTargetCm,
+      draftTargetFc,
+      draftType,
+      lines,
+      loadWorkspace,
+      propertyId,
+      selectedPlanId,
+    ]
+  );
+
+  const selectTab = useCallback(
+    async (tabKey: StudioTab) => {
+      setActiveTab(tabKey);
+      try {
+        if (tabKey === "AI_OPTIMIZATION" && !aiData) {
+          setAiData(await getMeAiIntelligence(selectedPlanId || undefined, propertyId || undefined));
+        } else if (tabKey === "DIGITAL_TWIN" && twinSnapshots.length === 0) {
+          setTwinSnapshots(await getTwinSnapshots(selectedPlanId || undefined));
+        } else if (tabKey === "PRODUCTION_FEASIBILITY" && !prodFeasibility) {
+          setProdFeasibility(await getProductionFeasibility(selectedPlanId || undefined, propertyId || undefined));
+        } else if (tabKey === "SCENARIO_LAB" && !scenarioLab) {
+          setScenarioLab(await getScenarioLab(selectedPlanId || undefined));
+        } else if (tabKey === "PORTION_DEMAND" && !hierForecast) {
+          setHierForecast(await getHierarchicalForecast(propertyId || undefined, 7));
+        } else if (tabKey === "HISTORICAL") {
+          if (!histSimilarity) setHistSimilarity(await getHistoricalSimilarity(selectedPlanId || undefined));
+          if (!govStatus) setGovStatus(await getModelGovernanceStatus());
+        }
+      } catch {
+        // handled gracefully
+      }
+    },
+    [aiData, govStatus, hierForecast, histSimilarity, prodFeasibility, propertyId, scenarioLab, selectedPlanId, twinSnapshots.length]
+  );
+
+  // Register hero panel command handlers
+  useEffect(() => {
+    if (!registerCommandHandler) return;
+    registerCommandHandler((cmd: MeStudioHeroCommand) => {
+      if (cmd === "new-menu") {
+        setSelectedPlanId("");
+        setDraftName("New Menu Draft");
+        setDraftStatus("DRAFT");
+        setDraftVersion(1);
+        setLines([]);
+        setActiveTab("DESIGN");
+      } else if (cmd === "save-draft") {
+        void handleSaveMenu(false, false);
+      } else if (cmd === "optimize-ai") {
+        void selectTab("AI_OPTIMIZATION");
+      } else if (cmd === "compare-scenarios") {
+        void selectTab("SCENARIO_LAB");
+      } else if (cmd === "submit-approval") {
+        void selectTab("APPROVAL");
+      } else if (cmd === "open-library") {
+        setReplaceLineIndex(null);
+        setDishLibraryOpen((prev) => !prev);
+      }
+    });
+    return () => registerCommandHandler(null);
+  }, [handleSaveMenu, registerCommandHandler, selectTab]);
 
   const handleTransition = async (targetStatus: string, handoff = false) => {
     if (!selectedPlanId) return;
@@ -502,100 +745,319 @@ const MeStudioWorkspace: React.FC<Props> = ({
     }
   };
 
-  if (loading && !ws) return <Loader />;
+  if (loading && !ws) return <StudioLoadingState label="Loading ME Studio workspace..." />;
   if (!ws) return null;
 
   const perms = ws.permissions;
   const viewCost = perms.viewMenuCost;
   const viewMargin = perms.viewMenuMargin;
+  const libraryItemsById = new Map((ws.libraryItems ?? []).map((it) => [it.id, it]));
+
+  const studioTabs: StudioSubNavItem[] = [
+    { id: "DESIGN", label: "Design", active: activeTab === "DESIGN" },
+    { id: "COSTING", label: "Live Costing", active: activeTab === "COSTING" },
+    { id: "PORTION_DEMAND", label: "Portion & Demand", active: activeTab === "PORTION_DEMAND" },
+    { id: "PERFORMANCE", label: "Menu Performance", active: activeTab === "PERFORMANCE" },
+    { id: "READINESS", label: "Ingredient Readiness", active: activeTab === "READINESS" },
+    { id: "DIGITAL_TWIN", label: "Digital Twin", active: activeTab === "DIGITAL_TWIN" },
+    { id: "PRODUCTION_FEASIBILITY", label: "Production Feasibility", active: activeTab === "PRODUCTION_FEASIBILITY" },
+    { id: "HISTORICAL", label: "Historical Intelligence", active: activeTab === "HISTORICAL" },
+    { id: "AI_OPTIMIZATION", label: "AI Optimization", active: activeTab === "AI_OPTIMIZATION" },
+    { id: "RISK_SENSITIVITY", label: "What-If Simulation", active: activeTab === "RISK_SENSITIVITY" },
+    { id: "SCENARIO_LAB", label: "Compare Scenarios", active: activeTab === "SCENARIO_LAB" },
+    { id: "APPROVAL", label: "Approval & Publish", active: activeTab === "APPROVAL" },
+  ];
+
+  const dishLibraryContent = (
+    <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+      {replaceLineIndex != null && (
+        <div
+          style={{
+            padding: "0.45rem 0.6rem",
+            borderRadius: "8px",
+            background: "#eaf5ff",
+            border: "1px solid #a6cff1",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            fontSize: "0.78rem",
+          }}
+        >
+          <span>
+            Replacing: <strong>{lines[replaceLineIndex]?.menuItemName}</strong>
+          </span>
+          <button
+            type="button"
+            className="sila-studio-btn sila-studio-btn--sm"
+            onClick={() => setReplaceLineIndex(null)}
+          >
+            Cancel Replace
+          </button>
+        </div>
+      )}
+      <div style={{ display: "flex", gap: "0.4rem", alignItems: "center" }}>
+        <input
+          className="sila-input"
+          placeholder="Search dishes, code, cuisine…"
+          value={libSearch}
+          onChange={(e) => setLibSearch(e.target.value)}
+        />
+        <button
+          type="button"
+          className="sila-studio-btn sila-studio-btn--secondary sila-studio-btn--sm"
+          onClick={() => onNavigate("silaMenuItems")}
+        >
+          Master
+        </button>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.4rem" }}>
+        <select className="sila-input" value={libCat} onChange={(e) => setLibCat(e.target.value)}>
+          <option value="">All Categories</option>
+          {ws.lookups.categories.map((c) => (
+            <option key={c} value={c}>{c}</option>
+          ))}
+        </select>
+        <select className="sila-input" value={libClass} onChange={(e) => setLibClass(e.target.value)}>
+          <option value="">All Quadrants</option>
+          <option value="STAR">Stars</option>
+          <option value="PLOWHORSE">Plowhorses</option>
+          <option value="PUZZLE">Puzzles</option>
+          <option value="DOG">Dogs</option>
+        </select>
+        <input className="sila-input" placeholder="Cuisine…" value={libCuisine} onChange={(e) => setLibCuisine(e.target.value)} />
+        <input className="sila-input" placeholder="Dietary (Vegan…)" value={libDietary} onChange={(e) => setLibDietary(e.target.value)} />
+        <input className="sila-input" placeholder="Exclude allergen…" value={libAllergenExcl} onChange={(e) => setLibAllergenExcl(e.target.value)} />
+        {viewCost && (
+          <input className="sila-input" type="number" placeholder="Max cost…" value={libMaxCost} onChange={(e) => setLibMaxCost(e.target.value)} />
+        )}
+      </div>
+      <label className="sme-muted" style={{ display: "flex", gap: "0.4rem", alignItems: "center" }}>
+        <input type="checkbox" checked={libAvailOnly} onChange={(e) => setLibAvailOnly(e.target.checked)} />
+        Ingredient available only ({filteredLibrary.length} items)
+      </label>
+
+      <div className="sme-library-list">
+        {filteredLibrary.map((dish) => (
+          <div
+            key={dish.id}
+            className="sme-dish-card"
+            draggable
+            onDragStart={() => setDragDishId(dish.id ?? null)}
+          >
+            <div className="sme-dish-thumb">
+              {dish.imagePath ? <img src={dish.imagePath} alt={dish.name} loading="lazy" /> : dish.name.slice(0, 2).toUpperCase()}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: "0.25rem", alignItems: "flex-start" }}>
+                <strong style={{ fontSize: "0.84rem", color: "#123354" }}>{dish.name}</strong>
+                {dish.matrixClassification && (
+                  <span className="sila-studio-badge sila-studio-badge--info">{dish.matrixClassification}</span>
+                )}
+              </div>
+              <div className="sme-muted">
+                {dish.category || "Mains"} · {dish.recipeName ? `Recipe: ${dish.recipeName}` : "No recipe linked"}
+              </div>
+              <div className="sme-muted sila-tabular">
+                Sell: {num(dish.sellingPrice)} {viewCost ? `· Cost: ${num(dish.costPerPortion)}` : ""}{" "}
+                {viewMargin ? `· CM: ${num(dish.contributionMargin)}` : ""}
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.35rem" }}>
+                <span className={`sme-chip ${dish.ingredientAvailabilityStatus === "READY" ? "sme-chip--ok" : "sme-chip--warn"}`}>
+                  {dish.ingredientAvailabilityStatus}
+                </span>
+                <button
+                  type="button"
+                  className="sila-studio-btn sila-studio-btn--primary sila-studio-btn--sm"
+                  onClick={() => addOrReplaceDish(dish)}
+                >
+                  {replaceLineIndex != null ? "Replace" : "+ Add"}
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 
   return (
-    <div className="sme-page">
-      {/* HERO & TOP WORKFLOW ACTIONS */}
-      <div className="sme-hero">
-        <div>
-          <p className="sme-kicker">SILA Menu Engineering • Flagship Design Workspace</p>
-          <h1 className="sme-hero__title">ME Studio</h1>
-          <div style={{ display: "flex", gap: "0.45rem", flexWrap: "wrap", marginTop: "0.35rem" }}>
-            <span className="sme-chip">{draftStatus} • v{draftVersion}</span>
-            <span className="sme-chip sme-chip--ok">{lines.length} Dishes</span>
-            <span className="sme-chip">{draftType.replace(/_/g, " ")}</span>
-            {isDirty && <span className="sme-chip sme-chip--warn">Unsaved Changes</span>}
-          </div>
-        </div>
-        <div className="sme-hero__actions">
-          <select
-            className="sila-input"
-            style={{ minWidth: "13rem" }}
-            value={selectedPlanId}
-            onChange={(e) => {
-              const id = e.target.value;
-              setSelectedPlanId(id);
-              if (id) void loadWorkspace(id);
-            }}
-          >
-            <option value="">— Select Active Menu —</option>
-            {ws.menus.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name} ({m.status} v{m.versionNumber})
-              </option>
-            ))}
-          </select>
-          {perms.createMenu && (
-            <>
-              <button
-                type="button"
-                className="sila-btn sila-btn--secondary"
-                onClick={() => {
-                  setSelectedPlanId("");
-                  setDraftName("New Menu Draft");
-                  setDraftStatus("DRAFT");
-                  setDraftVersion(1);
-                  setLines([]);
-                }}
-              >
-                + Blank Menu
-              </button>
-              <button type="button" className="sila-btn sila-btn--secondary" onClick={() => handleSaveMenu(true, false)} disabled={!selectedPlanId || saving}>
-                Copy Menu
-              </button>
-              <button type="button" className="sila-btn sila-btn--secondary" onClick={() => handleSaveMenu(false, true)} disabled={saving}>
-                Save Template
-              </button>
-              <button type="button" className="sila-btn sila-btn--secondary" onClick={() => setShowCreateMode(showCreateMode === "HISTORICAL" ? "" : "HISTORICAL")}>
-                From Historical
-              </button>
-              {perms.useAiMenuIntelligence && (
-                <button type="button" className="sila-btn sila-btn--secondary" onClick={() => setShowCreateMode(showCreateMode === "AI" ? "" : "AI")}>
-                  From AI Strategy
+    <div className={`sme-workspace-fs ${isFullScreen ? "is-fullscreen" : ""}`}>
+      {/* COMPACT ACTIVE MENU CONTEXT & CREATION BAR */}
+      <div className="sila-studio-panel" style={{ padding: "0.65rem 0.9rem" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+            <select
+              className="sila-input"
+              style={{ minWidth: "220px" }}
+              aria-label="Select Active Menu"
+              value={selectedPlanId}
+              onChange={(e) => {
+                const id = e.target.value;
+                setSelectedPlanId(id);
+                if (id) void loadWorkspace(id);
+              }}
+            >
+              <option value="">— Select Active Menu —</option>
+              {ws.menus.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name} ({m.status} v{m.versionNumber})
+                </option>
+              ))}
+            </select>
+            {perms.createMenu && (
+              <>
+                <button
+                  type="button"
+                  className="sila-studio-btn sila-studio-btn--secondary sila-studio-btn--sm"
+                  onClick={() => handleSaveMenu(true, false)}
+                  disabled={!selectedPlanId || saving}
+                >
+                  <Copy size={13} aria-hidden="true" />
+                  <span>Copy Menu</span>
                 </button>
-              )}
-              <button type="button" className="sila-btn sila-btn--secondary" onClick={() => setShowCreateMode(showCreateMode === "IMPORT" ? "" : "IMPORT")}>
-                Import Items
-              </button>
-            </>
-          )}
-          <button type="button" className="sila-btn sila-btn--secondary" onClick={onOpenReports}>
-            Reports (22)
-          </button>
-          {(perms.editDraftMenu || perms.createMenu) && (
-            <button type="button" className="sila-btn sila-btn--primary" onClick={() => handleSaveMenu(false, false)} disabled={saving}>
-              {saving ? "Saving…" : draftStatus === "PUBLISHED" ? "Save as New Draft v" + (draftVersion + 1) : "Save Draft"}
+                <button
+                  type="button"
+                  className="sila-studio-btn sila-studio-btn--secondary sila-studio-btn--sm"
+                  onClick={() => handleSaveMenu(false, true)}
+                  disabled={saving}
+                >
+                  Save Template
+                </button>
+                <button
+                  type="button"
+                  className="sila-studio-btn sila-studio-btn--secondary sila-studio-btn--sm"
+                  onClick={() => setShowCreateMode(showCreateMode === "HISTORICAL" ? "" : "HISTORICAL")}
+                >
+                  From Historical
+                </button>
+                {perms.useAiMenuIntelligence && (
+                  <button
+                    type="button"
+                    className="sila-studio-btn sila-studio-btn--secondary sila-studio-btn--sm"
+                    onClick={() => setShowCreateMode(showCreateMode === "AI" ? "" : "AI")}
+                  >
+                    <Sparkles size={13} aria-hidden="true" />
+                    <span>From AI Strategy</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="sila-studio-btn sila-studio-btn--secondary sila-studio-btn--sm"
+                  onClick={() => setShowCreateMode(showCreateMode === "IMPORT" ? "" : "IMPORT")}
+                >
+                  Import Items
+                </button>
+              </>
+            )}
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
+            <button
+              type="button"
+              className="sila-studio-btn sila-studio-btn--secondary sila-studio-btn--sm"
+              onClick={() => {
+                setReplaceLineIndex(null);
+                setDishLibraryOpen((o) => !o);
+              }}
+              data-testid="me-studio-open-library"
+            >
+              <BookOpen size={13} aria-hidden="true" />
+              <span>{dishLibraryOpen ? "Close Dish Library" : "Open Dish Library"}</span>
             </button>
-          )}
+            <button
+              type="button"
+              className="sila-studio-btn sila-studio-btn--secondary sila-studio-btn--sm"
+              onClick={() => setIsFullScreen((f) => !f)}
+              data-testid="me-studio-fullscreen-toggle"
+            >
+              {isFullScreen ? <Minimize2 size={13} aria-hidden="true" /> : <Maximize2 size={13} aria-hidden="true" />}
+              <span>{isFullScreen ? "Exit Full Screen" : "Maximize"}</span>
+            </button>
+          </div>
         </div>
       </div>
 
+      {/* 8 PASTEL KPI BOXES IN ONE COMPACT HORIZONTAL ROW */}
+      <StudioKPIBar ariaLabel="ME Studio metrics" testId="me-studio-kpis">
+        <StudioKPICard
+          label="Expected Guests"
+          value={liveCalc.covers}
+          tone="blue"
+          badge="Planned"
+          icon={<Users size={15} aria-hidden="true" />}
+        />
+        <StudioKPICard
+          label="Projected Revenue"
+          value={num(liveCalc.totalRev)}
+          tone="sky"
+          badge="Forecast"
+          icon={<TrendingUp size={15} aria-hidden="true" />}
+        />
+        <StudioKPICard
+          label="Total Food Cost"
+          value={viewCost ? num(liveCalc.totalCost) : "Restricted"}
+          tone="indigo"
+          badge="Planned"
+          icon={<DollarSign size={15} aria-hidden="true" />}
+        />
+        <StudioKPICard
+          label="Cost Per Guest"
+          value={viewCost ? num(liveCalc.costPerGuest) : "Restricted"}
+          tone="lavender"
+          badge="Planned"
+          icon={<UtensilsCrossed size={15} aria-hidden="true" />}
+        />
+        <StudioKPICard
+          label="Food Cost %"
+          value={viewCost ? pct(liveCalc.fcPct) : "Restricted"}
+          tone="amber"
+          badge="Planned"
+          icon={<Percent size={15} aria-hidden="true" />}
+        />
+        <StudioKPICard
+          label="Contribution Margin"
+          value={viewMargin ? num(liveCalc.cm) : "Restricted"}
+          tone="green"
+          badge="Planned"
+          icon={<Activity size={15} aria-hidden="true" />}
+        />
+        <StudioKPICard
+          label="Ingredient Readiness"
+          value={pct(ws.liveIntelligence.ingredientReadinessPercent)}
+          tone={ws.liveIntelligence.ingredientReadinessPercent >= 85 ? "green" : "rose"}
+          badge="Actual"
+          icon={<CheckCircle2 size={15} aria-hidden="true" />}
+        />
+        <StudioKPICard
+          label="AI Opportunities"
+          value={ws.liveIntelligence.aiRecommendations.length}
+          tone="blue"
+          badge="Recommendation"
+          icon={<Sparkles size={15} aria-hidden="true" />}
+        />
+      </StudioKPIBar>
+
+      {/* RECOVERABLE DRAFT / COMMAND BAR / FEEDBACK */}
       {recoverableDraft && (
-        <div className="sme-kpi-box" style={{ background: "#fffbeb", borderColor: "#f59e0b", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
-          <span>
-            <strong>Local Draft Available:</strong> Unsaved edits for "{recoverableDraft.draftName}" saved at{" "}
+        <div
+          className="sila-studio-panel"
+          style={{
+            background: "#fff6e8",
+            borderColor: "#f3dbb6",
+            flexDirection: "row",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+          }}
+        >
+          <span style={{ fontSize: "0.82rem", color: "#92400e" }}>
+            <strong>Local Draft Available:</strong> Unsaved edits for &ldquo;{recoverableDraft.draftName}&rdquo; saved at{" "}
             {new Date(recoverableDraft.savedAt).toLocaleString()}.
           </span>
           <div style={{ display: "flex", gap: "0.45rem" }}>
             <button
               type="button"
-              className="sila-btn sila-btn--primary"
+              className="sila-studio-btn sila-studio-btn--primary sila-studio-btn--sm"
               onClick={() => {
                 setDraftName(recoverableDraft.draftName);
                 setDraftCovers(recoverableDraft.draftCovers);
@@ -609,9 +1071,13 @@ const MeStudioWorkspace: React.FC<Props> = ({
             </button>
             <button
               type="button"
-              className="sila-btn sila-btn--secondary"
+              className="sila-studio-btn sila-studio-btn--secondary sila-studio-btn--sm"
               onClick={() => {
-                try { window.localStorage.removeItem(`sila_me_studio_draft_${selectedPlanId || "new"}`); } catch { /* ignore */ }
+                try {
+                  window.localStorage.removeItem(`sila_me_studio_draft_${selectedPlanId || "new"}`);
+                } catch {
+                  // ignore
+                }
                 setRecoverableDraft(null);
               }}
             >
@@ -633,38 +1099,54 @@ const MeStudioWorkspace: React.FC<Props> = ({
       )}
 
       {itemAiFeedback && (
-        <div className="sme-panel" style={{ borderColor: "#93c5fd", background: "#f8fbff" }}>
-          <div className="sme-panel__header">
-            <div>
-              <AiValueTag kind={itemAiFeedback.response.valueTag} />{" "}
-              <strong>{itemAiFeedback.itemName}</strong> · {itemAiFeedback.response.agentId}
-            </div>
-            <button type="button" className="sme-ai-mini-btn" onClick={() => setItemAiFeedback(null)}>Close</button>
-          </div>
-          <p className="sme-ai-summary">{itemAiFeedback.response.summary}</p>
-          <p className="sme-ai-explanation">{itemAiFeedback.response.explanation}</p>
-          {itemAiFeedback.response.evidence.length > 0 && (
-            <div className="sme-muted">Evidence: {itemAiFeedback.response.evidence.join(" · ")}</div>
-          )}
-        </div>
+        <AIInsightCard
+          title={`${itemAiFeedback.itemName} · ${itemAiFeedback.response.agentId}`}
+          summary={itemAiFeedback.response.summary}
+          explanation={itemAiFeedback.response.explanation}
+          statusLabel={itemAiFeedback.response.valueTag}
+          evidence={itemAiFeedback.response.evidence}
+          actionSlot={
+            <button
+              type="button"
+              className="sila-studio-btn sila-studio-btn--secondary sila-studio-btn--sm"
+              onClick={() => setItemAiFeedback(null)}
+            >
+              Dismiss
+            </button>
+          }
+        />
       )}
 
-      {/* CREATION DRAWERS: HISTORICAL / AI / BULK IMPORT */}
+      {/* CREATION MODES */}
       {showCreateMode === "HISTORICAL" && (
-        <div className="sme-panel">
+        <div className="sila-studio-panel">
           <div className="sme-panel__header">
-            <h3 className="sme-panel__title">Create Menu from Historical Performance (Recosted at Current Approved Recipes & Prices)</h3>
-            <button type="button" className="sila-btn sila-btn--secondary" onClick={() => setShowCreateMode("")}>Close</button>
+            <h3 className="sme-panel__title">
+              Create Menu from Historical Performance (Recosted at Current Approved Recipes &amp; Prices)
+            </h3>
+            <button
+              type="button"
+              className="sila-studio-btn sila-studio-btn--secondary sila-studio-btn--sm"
+              onClick={() => setShowCreateMode("")}
+            >
+              Close
+            </button>
           </div>
           <div className="sme-grid">
             {ws.historicalMenus.slice(0, 6).map((h) => (
               <div key={h.sourceId} className="sme-kpi-box">
                 <strong>{h.name}</strong>
-                <div className="sme-muted">{h.eventType} • {h.businessDate.slice(0, 10)} • {h.guestCount} guests</div>
-                {viewCost && <div className="sme-muted">Current Recost: {num(h.recalculatedCurrentCost)} ({pct(h.recalculatedCurrentFoodCostPercent)})</div>}
+                <div className="sme-muted">
+                  {h.eventType} · {h.businessDate.slice(0, 10)} · {h.guestCount} guests
+                </div>
+                {viewCost && (
+                  <div className="sme-muted">
+                    Current Recost: {num(h.recalculatedCurrentCost)} ({pct(h.recalculatedCurrentFoodCostPercent)})
+                  </div>
+                )}
                 <button
                   type="button"
-                  className="sila-btn sila-btn--primary"
+                  className="sila-studio-btn sila-studio-btn--primary sila-studio-btn--sm"
                   style={{ marginTop: "0.45rem" }}
                   onClick={async () => {
                     try {
@@ -686,10 +1168,16 @@ const MeStudioWorkspace: React.FC<Props> = ({
       )}
 
       {showCreateMode === "AI" && (
-        <div className="sme-panel">
+        <div className="sila-studio-panel">
           <div className="sme-panel__header">
             <h3 className="sme-panel__title">Create Menu from AI Recommendation Strategy</h3>
-            <button type="button" className="sila-btn sila-btn--secondary" onClick={() => setShowCreateMode("")}>Close</button>
+            <button
+              type="button"
+              className="sila-studio-btn sila-studio-btn--secondary sila-studio-btn--sm"
+              onClick={() => setShowCreateMode("")}
+            >
+              Close
+            </button>
           </div>
           <div className="sme-grid">
             {[
@@ -704,7 +1192,7 @@ const MeStudioWorkspace: React.FC<Props> = ({
               <button
                 key={key}
                 type="button"
-                className="sila-btn sila-btn--secondary"
+                className="sila-studio-btn sila-studio-btn--secondary"
                 onClick={async () => {
                   try {
                     const created = await createMePlanFromAi(key, Number(draftCovers) || 120, propertyId || undefined);
@@ -724,16 +1212,22 @@ const MeStudioWorkspace: React.FC<Props> = ({
       )}
 
       {showCreateMode === "IMPORT" && (
-        <div className="sme-panel">
+        <div className="sila-studio-panel">
           <div className="sme-panel__header">
             <h3 className="sme-panel__title">Bulk Import Menu Items (CSV)</h3>
-            <button type="button" className="sila-btn sila-btn--secondary" onClick={() => setShowCreateMode("")}>Close</button>
+            <button
+              type="button"
+              className="sila-studio-btn sila-studio-btn--secondary sila-studio-btn--sm"
+              onClick={() => setShowCreateMode("")}
+            >
+              Close
+            </button>
           </div>
           <textarea className="sila-input" rows={4} value={csvImport} onChange={(e) => setCsvImport(e.target.value)} />
           <div>
             <button
               type="button"
-              className="sila-btn sila-btn--primary"
+              className="sila-studio-btn sila-studio-btn--primary"
               onClick={async () => {
                 try {
                   const count = await bulkImportMeMenuItems(csvImport, "CSV");
@@ -751,480 +1245,657 @@ const MeStudioWorkspace: React.FC<Props> = ({
         </div>
       )}
 
-      {/* THREE-PANEL DESKTOP WORKSPACE */}
-      <div className="sme-studio-shell">
-        {/* LEFT PANEL: MENU ITEM LIBRARY */}
-        <aside className="sme-panel">
-          <div className="sme-panel__header">
-            <h2 className="sme-panel__title">Menu Item Library ({filteredLibrary.length})</h2>
-            <button type="button" className="sila-btn sila-btn--secondary" onClick={() => onNavigate("silaMenuItems")}>Master</button>
-          </div>
-          <input className="sila-input" placeholder="Search dishes, code, cuisine…" value={libSearch} onChange={(e) => setLibSearch(e.target.value)} />
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.4rem" }}>
-            <select className="sila-input" value={libCat} onChange={(e) => setLibCat(e.target.value)}>
-              <option value="">All Categories</option>
-              {ws.lookups.categories.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-            <select className="sila-input" value={libClass} onChange={(e) => setLibClass(e.target.value)}>
-              <option value="">All Quadrants</option>
-              <option value="STAR">Stars</option>
-              <option value="PLOWHORSE">Plowhorses</option>
-              <option value="PUZZLE">Puzzles</option>
-              <option value="DOG">Dogs</option>
-            </select>
-            <input className="sila-input" placeholder="Cuisine…" value={libCuisine} onChange={(e) => setLibCuisine(e.target.value)} />
-            <input className="sila-input" placeholder="Dietary (Vegan…)" value={libDietary} onChange={(e) => setLibDietary(e.target.value)} />
-            <input className="sila-input" placeholder="Exclude allergen…" value={libAllergenExcl} onChange={(e) => setLibAllergenExcl(e.target.value)} />
-            {viewCost && <input className="sila-input" type="number" placeholder="Max cost…" value={libMaxCost} onChange={(e) => setLibMaxCost(e.target.value)} />}
-          </div>
-          <label className="sme-muted" style={{ display: "flex", gap: "0.4rem", alignItems: "center" }}>
-            <input type="checkbox" checked={libAvailOnly} onChange={(e) => setLibAvailOnly(e.target.checked)} />
-            Ingredient available only
-          </label>
+      {/* ME STUDIO INTERNAL HORIZONTAL NAVIGATION */}
+      <StudioSubNavigation
+        items={studioTabs}
+        onSelect={(id: string) => void selectTab(id as StudioTab)}
+        ariaLabel="ME Studio internal workbench tabs"
+      />
 
-          <div className="sme-library-list">
-            {filteredLibrary.map((dish) => (
-              <div
-                key={dish.id}
-                className="sme-dish-card"
-                draggable
-                onDragStart={() => setDragDishId(dish.id ?? null)}
-              >
-                <div className="sme-dish-thumb">
-                  {dish.imagePath ? <img src={dish.imagePath} alt={dish.name} /> : dish.name.slice(0, 2).toUpperCase()}
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: "0.25rem" }}>
-                    <strong style={{ fontSize: "0.84rem", color: "#0f172a" }}>{dish.name}</strong>
-                    {dish.matrixClassification && <span className="sme-chip">{dish.matrixClassification}</span>}
-                  </div>
-                  <div className="sme-muted">
-                    {dish.category || "Mains"} • {dish.recipeName ? `Recipe: ${dish.recipeName}` : "No recipe linked"}
-                  </div>
-                  <div className="sme-muted">
-                    Sell: {num(dish.sellingPrice)} {viewCost ? `• Cost: ${num(dish.costPerPortion)}` : ""} {viewMargin ? `• CM: ${num(dish.contributionMargin)}` : ""}
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.35rem" }}>
-                    <span className={`sme-chip ${dish.ingredientAvailabilityStatus === "READY" ? "sme-chip--ok" : "sme-chip--warn"}`}>
-                      {dish.ingredientAvailabilityStatus}
-                    </span>
-                    <button type="button" className="sila-btn sila-btn--secondary" onClick={() => addDishToCategory(dish)}>
-                      + Add
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </aside>
-
-        {/* CENTER PANEL: MENU DESIGN CANVAS */}
-        <section className="sme-panel">
-          <div className="sme-panel__header">
-            <h2 className="sme-panel__title">Menu Design Canvas</h2>
-            <span className="sme-muted">Drag dishes from Library into any category or reorder categories</span>
-          </div>
-
-          <div className="sme-form">
-            <label className="sila-field">
-              <span>Menu Name</span>
-              <input className="sila-input" value={draftName} onChange={(e) => setDraftName(e.target.value)} />
-            </label>
-            <label className="sila-field">
-              <span>Menu Type</span>
-              <select className="sila-input" value={draftType} onChange={(e) => { setDraftType(e.target.value); setDraftFormat(e.target.value); }}>
-                {MENU_TYPES.map((t) => <option key={t} value={t}>{t.replace(/_/g, " ")}</option>)}
-              </select>
-            </label>
-            <label className="sila-field">
-              <span>Meal Period</span>
-              <select className="sila-input" value={draftMeal} onChange={(e) => setDraftMeal(e.target.value)}>
-                {ws.lookups.mealPeriods.map((m) => <option key={m} value={m}>{m}</option>)}
-              </select>
-            </label>
-            <label className="sila-field">
-              <span>Service Date</span>
-              <input className="sila-input" type="date" value={draftDate} onChange={(e) => setDraftDate(e.target.value)} />
-            </label>
-            <label className="sila-field">
-              <span>Expected Covers</span>
-              <input className="sila-input" type="number" value={draftCovers} onChange={(e) => setDraftCovers(e.target.value)} />
-            </label>
-            <label className="sila-field">
-              <span>Target Food Cost %</span>
-              <input className="sila-input" type="number" value={draftTargetFc} onChange={(e) => setDraftTargetFc(e.target.value)} />
-            </label>
-            <label className="sila-field">
-              <span>Target CM</span>
-              <input className="sila-input" type="number" value={draftTargetCm} onChange={(e) => setDraftTargetCm(e.target.value)} />
-            </label>
-            <label className="sila-field">
-              <span>Dietary Coverage</span>
-              <input className="sila-input" placeholder="Halal, Vegan, GF…" value={draftDietary} onChange={(e) => setDraftDietary(e.target.value)} />
-            </label>
-          </div>
-
-          {proactiveHealth && proactiveHealth.alerts.length > 0 && (
-            <div className="sme-kpi-box" style={{ marginBottom: "0.75rem", borderColor: "#f59e0b", background: "#fffbeb" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-                <strong>Proactive Culinary Health Alerts — {proactiveHealth.menuTitle}</strong>
-                <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap" }}>
+      {/* FULL-WIDTH WORKING AREA (OPTIONAL PINNED DISH LIBRARY SIDE-BY-SIDE ONLY WHEN PINNED) */}
+      <div className={dishLibraryOpen && dishLibraryPinned ? "sme-studio-pinned-layout" : ""}>
+        <div>
+          {activeTab === "DESIGN" && (
+            <MenuCanvas
+              title="Menu Design Canvas"
+              subtitle={`Active menu: ${draftName} · ${lines.length} dish${lines.length === 1 ? "" : "es"} · Drag dishes from Dish Library or edit inline`}
+              headerActions={
+                <>
                   <button
                     type="button"
-                    className="sila-btn sila-btn--secondary"
-                    onClick={() => setActiveTab("AI_OPTIMIZATION")}
+                    className={`sila-studio-btn sila-studio-btn--sm ${
+                      canvasViewMode === "editor" ? "sila-studio-btn--primary" : "sila-studio-btn--secondary"
+                    }`}
+                    onClick={() => setCanvasViewMode("editor")}
                   >
-                    Optimize Menu
+                    <Table2 size={13} aria-hidden="true" />
+                    <span>Canvas Editor</span>
                   </button>
                   <button
                     type="button"
-                    className="sila-btn sila-btn--secondary"
-                    onClick={() => setActiveTab("SCENARIO_LAB")}
+                    className={`sila-studio-btn sila-studio-btn--sm ${
+                      canvasViewMode === "cards" ? "sila-studio-btn--primary" : "sila-studio-btn--secondary"
+                    }`}
+                    onClick={() => setCanvasViewMode("cards")}
                   >
-                    Compare Scenarios
+                    <LayoutGrid size={13} aria-hidden="true" />
+                    <span>Dish Cards</span>
                   </button>
                   <button
                     type="button"
-                    className="sila-btn sila-btn--primary"
+                    className="sila-studio-btn sila-studio-btn--secondary sila-studio-btn--sm"
                     onClick={() => {
-                      void publishBusinessEvent({
-                        propertyId,
-                        eventType: "ForecastDeviationDetected",
-                        sourceSystem: "ME_STUDIO",
-                        objectType: "MenuPlan",
-                        objectId: selectedPlanId || undefined,
-                        objectLabel: proactiveHealth.menuTitle,
-                        materialityScore: 12,
-                        payload: { alerts: proactiveHealth.alerts },
-                      })
-                        .then(() => processPendingEvents(propertyId))
-                        .then(() => toastService.success("Prepared consolidated Business Action Plan in AI Control Tower."));
+                      setReplaceLineIndex(null);
+                      setDishLibraryOpen(true);
                     }}
                   >
-                    Prepare Corrective Action Plan
+                    <BookOpen size={13} aria-hidden="true" />
+                    <span>Add Dish from Library</span>
+                  </button>
+                </>
+              }
+            >
+              <div className="sme-form">
+                <label className="sila-field">
+                  <span>Menu Name</span>
+                  <input className="sila-input" value={draftName} onChange={(e) => setDraftName(e.target.value)} />
+                </label>
+                <label className="sila-field">
+                  <span>Menu Type</span>
+                  <select
+                    className="sila-input"
+                    value={draftType}
+                    onChange={(e) => {
+                      setDraftType(e.target.value);
+                      setDraftFormat(e.target.value);
+                    }}
+                  >
+                    {MENU_TYPES.map((t) => (
+                      <option key={t} value={t}>
+                        {t.replace(/_/g, " ")}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="sila-field">
+                  <span>Meal Period</span>
+                  <select className="sila-input" value={draftMeal} onChange={(e) => setDraftMeal(e.target.value)}>
+                    {ws.lookups.mealPeriods.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="sila-field">
+                  <span>Service Date</span>
+                  <input className="sila-input" type="date" value={draftDate} onChange={(e) => setDraftDate(e.target.value)} />
+                </label>
+                <label className="sila-field">
+                  <span>Expected Covers</span>
+                  <input className="sila-input" type="number" value={draftCovers} onChange={(e) => setDraftCovers(e.target.value)} />
+                </label>
+                <label className="sila-field">
+                  <span>Target Food Cost %</span>
+                  <input className="sila-input" type="number" value={draftTargetFc} onChange={(e) => setDraftTargetFc(e.target.value)} />
+                </label>
+                <label className="sila-field">
+                  <span>Target CM</span>
+                  <input className="sila-input" type="number" value={draftTargetCm} onChange={(e) => setDraftTargetCm(e.target.value)} />
+                </label>
+                <label className="sila-field">
+                  <span>Dietary Coverage</span>
+                  <input
+                    className="sila-input"
+                    placeholder="Halal, Vegan, GF…"
+                    value={draftDietary}
+                    onChange={(e) => setDraftDietary(e.target.value)}
+                  />
+                </label>
+              </div>
+
+              {proactiveHealth && proactiveHealth.alerts.length > 0 && (
+                <div
+                  className="sme-kpi-box"
+                  style={{ borderColor: "#f3dbb6", background: "#fff6e8" }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                    <strong style={{ color: "#92400e" }}>
+                      Proactive Culinary Health Alerts — {proactiveHealth.menuTitle}
+                    </strong>
+                    <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap" }}>
+                      <button
+                        type="button"
+                        className="sila-studio-btn sila-studio-btn--secondary sila-studio-btn--sm"
+                        onClick={() => void selectTab("AI_OPTIMIZATION")}
+                      >
+                        Optimize Menu
+                      </button>
+                      <button
+                        type="button"
+                        className="sila-studio-btn sila-studio-btn--secondary sila-studio-btn--sm"
+                        onClick={() => void selectTab("SCENARIO_LAB")}
+                      >
+                        Compare Scenarios
+                      </button>
+                      <button
+                        type="button"
+                        className="sila-studio-btn sila-studio-btn--primary sila-studio-btn--sm"
+                        onClick={() => {
+                          void publishBusinessEvent({
+                            propertyId,
+                            eventType: "ForecastDeviationDetected",
+                            sourceSystem: "ME_STUDIO",
+                            objectType: "MenuPlan",
+                            objectId: selectedPlanId || undefined,
+                            objectLabel: proactiveHealth.menuTitle,
+                            materialityScore: 12,
+                            payload: { alerts: proactiveHealth.alerts },
+                          })
+                            .then(() => processPendingEvents(propertyId))
+                            .then(() =>
+                              toastService.success("Prepared consolidated Business Action Plan in AI Control Tower.")
+                            );
+                        }}
+                      >
+                        Prepare Corrective Action Plan
+                      </button>
+                    </div>
+                  </div>
+                  {proactiveHealth.alerts.map((al, idx) => (
+                    <div key={idx} className="sme-muted">
+                      • {al}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {canvasViewMode === "cards" ? (
+                <RecipeGrid ariaLabel="Menu dishes">
+                  {lines.map((l, idx) => {
+                    const libItem = libraryItemsById.get(l.menuItemId);
+                    const fcPctVal =
+                      l.sellingPrice && l.portionCost != null && l.sellingPrice > 0
+                        ? (l.portionCost / l.sellingPrice) * 100
+                        : l.foodCostPercent;
+                    const cmVal =
+                      l.sellingPrice != null && l.portionCost != null
+                        ? l.sellingPrice - l.portionCost
+                        : l.contributionMargin;
+                    return (
+                      <MenuItemCard
+                        key={`${l.menuItemId}-${idx}`}
+                        name={l.menuItemName}
+                        code={l.menuItemCode || `#${idx + 1}`}
+                        linkedRecipeName={l.recipeName}
+                        category={l.categoryName}
+                        cuisine={libItem?.cuisine}
+                        sellingPriceText={num(l.sellingPrice)}
+                        foodCostText={viewCost ? num(l.portionCost) : undefined}
+                        foodCostPctText={viewCost ? pct(fcPctVal) : undefined}
+                        contributionMarginText={viewMargin ? num(cmVal) : undefined}
+                        popularityText={
+                          l.participationRate != null ? `${Math.round(l.participationRate * 100)}% part.` : undefined
+                        }
+                        availabilityLabel={l.availabilityStatus}
+                        classification={libItem?.matrixClassification}
+                        imageUrl={l.imagePath}
+                        actions={
+                          <>
+                            <button
+                              type="button"
+                              className="sila-studio-btn sila-studio-btn--sm"
+                              onClick={() => duplicateLine(idx)}
+                            >
+                              Duplicate
+                            </button>
+                            <button
+                              type="button"
+                              className="sila-studio-btn sila-studio-btn--sm"
+                              onClick={() => {
+                                setReplaceLineIndex(idx);
+                                setDishLibraryOpen(true);
+                              }}
+                            >
+                              Replace
+                            </button>
+                            <button
+                              type="button"
+                              className="sila-studio-btn sila-studio-btn--sm"
+                              onClick={() => setLines((prev) => prev.filter((_, i) => i !== idx))}
+                            >
+                              Remove
+                            </button>
+                          </>
+                        }
+                      />
+                    );
+                  })}
+                </RecipeGrid>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                  {categoriesOrder.map((cat, catIdx) => {
+                    const catLines = lines
+                      .map((l, idx) => ({ l, idx }))
+                      .filter(({ l }) => (l.categoryName || "Mains") === cat);
+                    return (
+                      <div
+                        key={cat}
+                        className="sme-cat-group"
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={() => {
+                          if (!dragDishId) return;
+                          const dish = ws.libraryItems.find((d) => d.id === dragDishId);
+                          if (dish) addOrReplaceDish(dish, cat);
+                          setDragDishId(null);
+                        }}
+                      >
+                        <div className="sme-cat-header">
+                          <strong style={{ color: "#123354" }}>
+                            {cat} ({catLines.length})
+                          </strong>
+                          <div style={{ display: "flex", gap: "0.3rem" }}>
+                            <button
+                              type="button"
+                              className="sila-studio-btn sila-studio-btn--sm"
+                              onClick={() => moveCategory(catIdx, -1)}
+                              disabled={catIdx === 0}
+                              aria-label={`Move ${cat} up`}
+                            >
+                              ↑
+                            </button>
+                            <button
+                              type="button"
+                              className="sila-studio-btn sila-studio-btn--sm"
+                              onClick={() => moveCategory(catIdx, 1)}
+                              disabled={catIdx === categoriesOrder.length - 1}
+                              aria-label={`Move ${cat} down`}
+                            >
+                              ↓
+                            </button>
+                          </div>
+                        </div>
+                        {catLines.length === 0 ? (
+                          <div
+                            className="sme-muted"
+                            style={{
+                              padding: "0.55rem",
+                              border: "1px dashed #bbd9f2",
+                              borderRadius: "8px",
+                              background: "#f5faff",
+                            }}
+                          >
+                            Drop a dish here or open Dish Library to add dishes to {cat}.
+                          </div>
+                        ) : (
+                          catLines.map(({ l, idx }) => {
+                            const expectedDemand = Math.round(liveCalc.covers * (l.participationRate ?? 0.5));
+                            const dishFcPct =
+                              l.sellingPrice && l.portionCost != null && l.sellingPrice > 0
+                                ? (l.portionCost / l.sellingPrice) * 100
+                                : l.foodCostPercent;
+                            const dishCm =
+                              l.sellingPrice != null && l.portionCost != null
+                                ? l.sellingPrice - l.portionCost
+                                : l.contributionMargin;
+                            return (
+                              <div key={`${l.menuItemId}-${idx}`} className="sme-canvas-line">
+                                <div className="sme-dish-thumb">
+                                  {l.imagePath ? (
+                                    <img src={l.imagePath} alt={l.menuItemName} loading="lazy" />
+                                  ) : (
+                                    l.menuItemName.slice(0, 2).toUpperCase()
+                                  )}
+                                </div>
+                                <div>
+                                  <strong style={{ fontSize: "0.86rem", color: "#123354" }}>{l.menuItemName}</strong>
+                                  <div className="sme-muted">
+                                    {l.recipeName ? `Recipe: ${l.recipeName}` : "No recipe"} · {l.availabilityStatus}
+                                    {l.allergenNotes ? ` · Allergens: ${l.allergenNotes}` : ""}
+                                  </div>
+                                  <input
+                                    className="sila-input"
+                                    style={{ marginTop: "0.25rem", fontSize: "0.75rem", padding: "0.2rem 0.45rem" }}
+                                    placeholder="Notes / alternatives…"
+                                    value={l.lineNotes ?? ""}
+                                    onChange={(e) =>
+                                      setLines((prev) =>
+                                        prev.map((x, i) => (i === idx ? { ...x, lineNotes: e.target.value } : x))
+                                      )
+                                    }
+                                  />
+                                  {operatingMode !== "MANUAL" && (
+                                    <div className="sme-ai-item-actions">
+                                      <button
+                                        type="button"
+                                        className="sme-ai-mini-btn"
+                                        onClick={() =>
+                                          void invokeDishAi(
+                                            l.menuItemId,
+                                            l.menuItemName,
+                                            "Optimize",
+                                            `Optimize portion for ${l.menuItemName}`
+                                          )
+                                        }
+                                      >
+                                        Optimize portion
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="sme-ai-mini-btn"
+                                        onClick={() =>
+                                          void invokeDishAi(
+                                            l.menuItemId,
+                                            l.menuItemName,
+                                            "FindAlternatives",
+                                            `Suggest alternative for ${l.menuItemName}`
+                                          )
+                                        }
+                                      >
+                                        Suggest alternative
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="sme-ai-mini-btn"
+                                        onClick={() =>
+                                          void invokeDishAi(
+                                            l.menuItemId,
+                                            l.menuItemName,
+                                            "ShowSupportingEvidence",
+                                            `Explain cost of ${l.menuItemName}`
+                                          )
+                                        }
+                                      >
+                                        Explain cost
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="sme-ai-mini-btn"
+                                        onClick={() =>
+                                          void invokeDishAi(
+                                            l.menuItemId,
+                                            l.menuItemName,
+                                            "AnalyzeThis",
+                                            `Analyze margin of ${l.menuItemName}`
+                                          )
+                                        }
+                                      >
+                                        Analyze margin
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                                <label className="sila-field">
+                                  <span>Portion</span>
+                                  <input
+                                    className="sila-input"
+                                    type="number"
+                                    step="0.1"
+                                    value={l.portionSize ?? 1}
+                                    onChange={(e) =>
+                                      setLines((prev) =>
+                                        prev.map((x, i) =>
+                                          i === idx ? { ...x, portionSize: Number(e.target.value) || 1 } : x
+                                        )
+                                      )
+                                    }
+                                  />
+                                </label>
+                                <label className="sila-field">
+                                  <span>Part. Rate</span>
+                                  <input
+                                    className="sila-input"
+                                    type="number"
+                                    step="0.05"
+                                    value={l.participationRate ?? 0.5}
+                                    onChange={(e) =>
+                                      setLines((prev) =>
+                                        prev.map((x, i) =>
+                                          i === idx ? { ...x, participationRate: Number(e.target.value) || 0.1 } : x
+                                        )
+                                      )
+                                    }
+                                  />
+                                </label>
+                                <label className="sila-field">
+                                  <span>Sell Price</span>
+                                  <input
+                                    className="sila-input"
+                                    type="number"
+                                    step="0.5"
+                                    value={l.sellingPrice ?? 0}
+                                    onChange={(e) =>
+                                      setLines((prev) =>
+                                        prev.map((x, i) =>
+                                          i === idx ? { ...x, sellingPrice: Number(e.target.value) || 0 } : x
+                                        )
+                                      )
+                                    }
+                                  />
+                                </label>
+                                <div className="sme-muted sila-tabular">
+                                  <div>
+                                    Demand: <strong>{expectedDemand}</strong>
+                                  </div>
+                                  {viewCost && (
+                                    <div>
+                                      Cost: {num(l.portionCost)} ({pct(dishFcPct)})
+                                    </div>
+                                  )}
+                                  {viewMargin && <div>CM: {num(dishCm)}</div>}
+                                </div>
+                                <div style={{ display: "flex", gap: "0.25rem", flexWrap: "wrap", justifyContent: "flex-end" }}>
+                                  <button
+                                    type="button"
+                                    className="sila-studio-btn sila-studio-btn--sm"
+                                    onClick={() => moveLineWithinCategory(idx, -1)}
+                                    title="Move dish up"
+                                  >
+                                    ↑
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="sila-studio-btn sila-studio-btn--sm"
+                                    onClick={() => moveLineWithinCategory(idx, 1)}
+                                    title="Move dish down"
+                                  >
+                                    ↓
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="sila-studio-btn sila-studio-btn--sm"
+                                    onClick={() => duplicateLine(idx)}
+                                    title="Duplicate dish"
+                                  >
+                                    Copy
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="sila-studio-btn sila-studio-btn--sm"
+                                    onClick={() => {
+                                      setReplaceLineIndex(idx);
+                                      setDishLibraryOpen(true);
+                                    }}
+                                    title="Replace dish from library"
+                                  >
+                                    <RefreshCw size={12} aria-hidden="true" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="sila-studio-btn sila-studio-btn--sm"
+                                    onClick={() => setLines((prev) => prev.filter((_, i) => i !== idx))}
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* CONTEXTUAL LIVE RISKS & AI RECOMMENDATIONS BELOW FULL-WIDTH CANVAS */}
+              {(ws.liveIntelligence.riskIndicators.length > 0 || ws.liveIntelligence.aiRecommendations.length > 0) && (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "0.75rem", marginTop: "0.4rem" }}>
+                  {ws.liveIntelligence.riskIndicators.length > 0 && (
+                    <AIInsightCard
+                      title="Operational Risk Indicators"
+                      summary={`${ws.liveIntelligence.riskIndicators.length} active operational notice(s) on current menu`}
+                      statusLabel="Actual"
+                      statusTone="warning"
+                      evidence={ws.liveIntelligence.riskIndicators}
+                    />
+                  )}
+                  {ws.liveIntelligence.aiRecommendations.slice(0, 2).map((rec, i) => (
+                    <AIRecommendationCard
+                      key={i}
+                      title={`${rec.strategy} Recommendation`}
+                      recommendation={rec.recommendation}
+                      statusLabel="Recommendation"
+                      evidence={rec.supportingEvidence}
+                      impact={`Baseline: ${rec.currentBaseline} → Proposed: ${rec.proposedChange}`}
+                      requiresApproval={rec.requiresApproval}
+                      onAction={() => void selectTab("AI_OPTIMIZATION")}
+                      actionLabel="Review in AI Optimization"
+                    />
+                  ))}
+                </div>
+              )}
+            </MenuCanvas>
+          )}
+
+          {activeTab === "PERFORMANCE" && (
+            <div className="sila-studio-panel">
+              <div className="sme-panel__header">
+                <h2 className="sme-panel__title">Menu Performance Matrix</h2>
+                <span className="sme-muted">
+                  Basis: {ws.performanceMatrix?.costBasis ?? "Approved recipe & POS sales"} · Excluded incomplete items:{" "}
+                  {ws.performanceMatrix?.excludedCount ?? 0}
+                </span>
+              </div>
+              {ws.performanceMatrix ? (
+                <div className="sme-quadrant-grid">
+                  <div className="sme-quadrant sme-quadrant--star">
+                    <strong>STARS ({ws.performanceMatrix.stars})</strong>
+                    <div className="sme-muted">High popularity &amp; high contribution margin</div>
+                  </div>
+                  <div className="sme-quadrant sme-quadrant--plow">
+                    <strong>PLOWHORSES ({ws.performanceMatrix.plowhorses})</strong>
+                    <div className="sme-muted">High popularity, lower contribution margin</div>
+                  </div>
+                  <div className="sme-quadrant sme-quadrant--puzzle">
+                    <strong>PUZZLES ({ws.performanceMatrix.puzzles})</strong>
+                    <div className="sme-muted">Low popularity, high contribution margin</div>
+                  </div>
+                  <div className="sme-quadrant sme-quadrant--dog">
+                    <strong>DOGS ({ws.performanceMatrix.dogs})</strong>
+                    <div className="sme-muted">Low popularity &amp; low contribution margin</div>
+                  </div>
+                </div>
+              ) : (
+                <div className="sme-muted">No performance matrix data available for this menu yet.</div>
+              )}
+            </div>
+          )}
+
+          {activeTab === "COSTING" && (
+            <div className="sila-studio-panel">
+              <div className="sme-panel__header">
+                <h2 className="sme-panel__title">Live Costing Breakdown</h2>
+                <span className="sme-muted sila-tabular">
+                  {liveCalc.covers} covers · Food Cost {pct(liveCalc.fcPct)}
+                </span>
+              </div>
+              <div className="sila-studio-table-wrap">
+                <table className="sila-table sila-tabular">
+                  <thead>
+                    <tr>
+                      <th>Dish</th>
+                      <th>Category</th>
+                      <th>Portions</th>
+                      <th>Sell Price</th>
+                      {viewCost && <th>Unit Cost</th>}
+                      {viewCost && <th>Total Cost</th>}
+                      <th>Exp. Revenue</th>
+                      {viewCost && <th>Food Cost %</th>}
+                      {viewMargin && <th>Contrib. Margin</th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lines.map((l, idx) => (
+                      <tr key={idx}>
+                        <td>{l.menuItemName}</td>
+                        <td>{l.categoryName}</td>
+                        <td>{Math.round(liveCalc.covers * (l.participationRate ?? 0.5))}</td>
+                        <td>{num(l.sellingPrice)}</td>
+                        {viewCost && <td>{num(l.portionCost)}</td>}
+                        {viewCost && <td>{num((l.portionCost ?? 0) * liveCalc.covers * (l.participationRate ?? 0.5))}</td>}
+                        <td>{num((l.sellingPrice ?? 0) * liveCalc.covers * (l.participationRate ?? 0.5))}</td>
+                        {viewCost && <td>{pct(l.foodCostPercent)}</td>}
+                        {viewMargin && <td>{num(l.contributionMargin)}</td>}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "PORTION_DEMAND" && (
+            <div className="sila-studio-panel">
+              <div className="sme-row">
+                <span className="sme-muted">
+                  Buffet &amp; service portion math: Expected Portions = Covers × Participation × Servings/Guest.
+                </span>
+                <div style={{ display: "flex", gap: "0.5rem" }}>
+                  <button
+                    type="button"
+                    className="sila-studio-btn sila-studio-btn--primary sila-studio-btn--sm"
+                    disabled={twinBusy}
+                    onClick={async () => {
+                      setTwinBusy(true);
+                      try {
+                        setHierForecast(await getHierarchicalForecast(propertyId || undefined, 7));
+                      } catch (e) {
+                        toastService.error(e instanceof Error ? e.message : "Forecast failed.");
+                      } finally {
+                        setTwinBusy(false);
+                      }
+                    }}
+                  >
+                    Run Hierarchical Backtested Forecast
+                  </button>
+                  <button
+                    type="button"
+                    className="sila-studio-btn sila-studio-btn--secondary sila-studio-btn--sm"
+                    onClick={() => onNavigate("silaMenuPortions")}
+                  >
+                    Portion Planning
+                  </button>
+                  <button
+                    type="button"
+                    className="sila-studio-btn sila-studio-btn--secondary sila-studio-btn--sm"
+                    onClick={() => onNavigate("silaMenuDemand")}
+                  >
+                    Demand Planning
                   </button>
                 </div>
               </div>
-              {proactiveHealth.alerts.map((al, idx) => (
-                <div key={idx} className="sme-muted">• {al}</div>
-              ))}
-            </div>
-          )}
-
-          {/* CATEGORY GROUPS */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-            {categoriesOrder.map((cat, catIdx) => {
-              const catLines = lines
-                .map((l, idx) => ({ l, idx }))
-                .filter(({ l }) => (l.categoryName || "Mains") === cat);
-              return (
-                <div
-                  key={cat}
-                  className="sme-cat-group"
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={() => {
-                    if (!dragDishId) return;
-                    const dish = ws.libraryItems.find((d) => d.id === dragDishId);
-                    if (dish) addDishToCategory(dish, cat);
-                    setDragDishId(null);
-                  }}
-                >
-                  <div className="sme-cat-header">
-                    <strong style={{ color: "#12355b" }}>{cat} ({catLines.length})</strong>
-                    <div style={{ display: "flex", gap: "0.3rem" }}>
-                      <button type="button" className="sila-btn sila-btn--secondary" onClick={() => moveCategory(catIdx, -1)} disabled={catIdx === 0}>↑</button>
-                      <button type="button" className="sila-btn sila-btn--secondary" onClick={() => moveCategory(catIdx, 1)} disabled={catIdx === categoriesOrder.length - 1}>↓</button>
-                    </div>
-                  </div>
-                  {catLines.length === 0 ? (
-                    <div className="sme-muted" style={{ padding: "0.45rem", border: "1px dashed #cbd5e1", borderRadius: "0.5rem" }}>
-                      Drop a dish here or click + Add in Library.
-                    </div>
-                  ) : (
-                    catLines.map(({ l, idx }) => (
-                      <div key={`${l.menuItemId}-${idx}`} className="sme-canvas-line">
-                        <div>
-                          <strong style={{ fontSize: "0.85rem" }}>{l.menuItemName}</strong>
-                          <div className="sme-muted">
-                            {l.recipeName ? `Recipe: ${l.recipeName}` : "No recipe"} • {l.availabilityStatus}
-                            {l.allergenNotes ? ` • Allergens: ${l.allergenNotes}` : ""}
-                          </div>
-                          <input
-                            className="sila-input"
-                            style={{ marginTop: "0.25rem", fontSize: "0.75rem", padding: "0.2rem 0.4rem" }}
-                            placeholder="Notes / alternatives…"
-                            value={l.lineNotes ?? ""}
-                            onChange={(e) => setLines((prev) => prev.map((x, i) => (i === idx ? { ...x, lineNotes: e.target.value } : x)))}
-                          />
-                          {operatingMode !== "MANUAL" && (
-                            <div className="sme-ai-item-actions">
-                              <button type="button" className="sme-ai-mini-btn" onClick={() => void invokeDishAi(l.menuItemId, l.menuItemName, "Optimize", `Optimize portion for ${l.menuItemName}`)}>Optimize portion</button>
-                              <button type="button" className="sme-ai-mini-btn" onClick={() => void invokeDishAi(l.menuItemId, l.menuItemName, "FindAlternatives", `Suggest alternative for ${l.menuItemName}`)}>Suggest alternative</button>
-                              <button type="button" className="sme-ai-mini-btn" onClick={() => void invokeDishAi(l.menuItemId, l.menuItemName, "ShowSupportingEvidence", `Explain cost of ${l.menuItemName}`)}>Explain cost</button>
-                              <button type="button" className="sme-ai-mini-btn" onClick={() => void invokeDishAi(l.menuItemId, l.menuItemName, "PredictNextPeriod", `Predict popularity of ${l.menuItemName}`)}>Predict popularity</button>
-                              <button type="button" className="sme-ai-mini-btn" onClick={() => void invokeDishAi(l.menuItemId, l.menuItemName, "AnalyzeThis", `Analyze margin of ${l.menuItemName}`)}>Analyze margin</button>
-                              <button type="button" className="sme-ai-mini-btn" onClick={() => void invokeDishAi(l.menuItemId, l.menuItemName, "RecommendImprovements", `Check availability for ${l.menuItemName}`)}>Check availability</button>
-                              <button type="button" className="sme-ai-mini-btn" onClick={() => void invokeDishAi(l.menuItemId, l.menuItemName, "CompareWithHistory", `Compare historical performance of ${l.menuItemName}`)}>Compare history</button>
-                            </div>
-                          )}
-                        </div>
-                        <label className="sila-field">
-                          <span>Portion</span>
-                          <input
-                            className="sila-input"
-                            type="number"
-                            step="0.1"
-                            value={l.portionSize ?? 1}
-                            onChange={(e) => setLines((prev) => prev.map((x, i) => (i === idx ? { ...x, portionSize: Number(e.target.value) || 1 } : x)))}
-                          />
-                        </label>
-                        <label className="sila-field">
-                          <span>Part. Rate</span>
-                          <input
-                            className="sila-input"
-                            type="number"
-                            step="0.05"
-                            value={l.participationRate ?? 0.5}
-                            onChange={(e) => setLines((prev) => prev.map((x, i) => (i === idx ? { ...x, participationRate: Number(e.target.value) || 0.1 } : x)))}
-                          />
-                        </label>
-                        <label className="sila-field">
-                          <span>Sell Price</span>
-                          <input
-                            className="sila-input"
-                            type="number"
-                            step="0.5"
-                            value={l.sellingPrice ?? 0}
-                            onChange={(e) => setLines((prev) => prev.map((x, i) => (i === idx ? { ...x, sellingPrice: Number(e.target.value) || 0 } : x)))}
-                          />
-                        </label>
-                        <div className="sme-muted">
-                          <div>Portions: <strong>{Math.round(liveCalc.covers * (l.participationRate ?? 0.5))}</strong></div>
-                          {viewCost && <div>Cost: {num(l.portionCost)}</div>}
-                        </div>
-                        <button type="button" className="sila-btn sila-btn--secondary" onClick={() => setLines((prev) => prev.filter((_, i) => i !== idx))}>
-                          Remove
-                        </button>
-                      </div>
-                    ))
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </section>
-
-        {/* RIGHT PANEL: LIVE INTELLIGENCE */}
-        <aside className="sme-panel sme-studio-right">
-          <div className="sme-panel__header">
-            <h2 className="sme-panel__title">Live Intelligence</h2>
-            <span className="sme-chip sme-chip--ok">Real-Time</span>
-          </div>
-          <div className="sme-kpi-mini">
-            {viewCost && (
-              <div className="sme-kpi-box">
-                <div className="sme-kpi-box__label">Total Menu Cost</div>
-                <div className="sme-kpi-box__val">{num(liveCalc.totalCost)}</div>
-              </div>
-            )}
-            {viewCost && (
-              <div className="sme-kpi-box">
-                <div className="sme-kpi-box__label">Cost / Guest</div>
-                <div className="sme-kpi-box__val">{num(liveCalc.costPerGuest)}</div>
-              </div>
-            )}
-            <div className="sme-kpi-box">
-              <div className="sme-kpi-box__label">Expected Revenue</div>
-              <div className="sme-kpi-box__val">{num(liveCalc.totalRev)}</div>
-            </div>
-            {viewCost && (
-              <div className="sme-kpi-box">
-                <div className="sme-kpi-box__label">Food Cost %</div>
-                <div className="sme-kpi-box__val">{pct(liveCalc.fcPct)}</div>
-              </div>
-            )}
-            {viewMargin && (
-              <div className="sme-kpi-box">
-                <div className="sme-kpi-box__label">Contrib. Margin</div>
-                <div className="sme-kpi-box__val">{num(liveCalc.cm)}</div>
-              </div>
-            )}
-            <div className="sme-kpi-box">
-              <div className="sme-kpi-box__label">Ing. Readiness</div>
-              <div className="sme-kpi-box__val">{pct(ws.liveIntelligence.ingredientReadinessPercent)}</div>
-            </div>
-            <div className="sme-kpi-box">
-              <div className="sme-kpi-box__label">Purchase Req.</div>
-              <div className="sme-kpi-box__val">{num(ws.liveIntelligence.totalPurchaseRequirementValue)}</div>
-            </div>
-            <div className="sme-kpi-box">
-              <div className="sme-kpi-box__label">Expected Waste</div>
-              <div className="sme-kpi-box__val">{num(ws.liveIntelligence.expectedWasteQty, 1)}</div>
-            </div>
-          </div>
-
-          {ws.liveIntelligence.riskIndicators.length > 0 && (
-            <div className="sme-cat-group">
-              <strong style={{ fontSize: "0.82rem", color: "#991b1b" }}>Risk Indicators</strong>
-              {ws.liveIntelligence.riskIndicators.map((r, i) => (
-                <div key={i} className="sme-muted" style={{ color: "#b91c1c" }}>• {r}</div>
-              ))}
-            </div>
-          )}
-
-          <div className="sme-cat-group">
-            <strong style={{ fontSize: "0.82rem", color: "#12355b" }}>AI Recommendations</strong>
-            {ws.liveIntelligence.aiRecommendations.slice(0, 3).map((rec, i) => (
-              <div key={i} style={{ fontSize: "0.78rem", borderBottom: "1px solid #eef2f7", paddingBottom: "0.35rem" }}>
-                <strong>{rec.strategy}</strong>: {rec.recommendation}
-              </div>
-            ))}
-          </div>
-        </aside>
-      </div>
-
-      {/* BOTTOM EXPANDABLE 10-TAB WORKBENCH */}
-      <div className="sme-panel">
-        <div className="sme-panel__header">
-          <h2 className="sme-panel__title">ME Studio Deep Workbench (Shared Active Menu Context)</h2>
-          <button type="button" className="sila-btn sila-btn--secondary" onClick={() => setBottomExpanded((v) => !v)}>
-            {bottomExpanded ? "Collapse" : "Expand"}
-          </button>
-        </div>
-
-        <div className="sme-tabs">
-          {(
-            [
-              ["DESIGN", "1. Design"],
-              ["COSTING", "2. Live Costing"],
-              ["PORTION_DEMAND", "3. Demand & Portion"],
-              ["DIGITAL_TWIN", "4. Digital Twin"],
-              ["READINESS", "5. Ingredient Readiness"],
-              ["PRODUCTION_FEASIBILITY", "6. Production Feasibility"],
-              ["AI_OPTIMIZATION", "7. AI Optimization"],
-              ["SCENARIO_LAB", "8. Scenario Lab"],
-              ["RISK_SENSITIVITY", "9. Risk & Sensitivity"],
-              ["HISTORICAL", "10. Historical Intelligence"],
-              ["APPROVAL", "11. Approval & Publish"],
-            ] as [StudioTab, string][]
-          ).map(([tabKey, label]) => (
-            <button
-              key={tabKey}
-              type="button"
-              className={`sme-tab ${activeTab === tabKey ? "active" : ""}`}
-              onClick={async () => {
-                setActiveTab(tabKey);
-                setBottomExpanded(true);
-                try {
-                  if (tabKey === "AI_OPTIMIZATION" && !aiData) {
-                    setAiData(await getMeAiIntelligence(selectedPlanId || undefined, propertyId || undefined));
-                  } else if (tabKey === "DIGITAL_TWIN" && twinSnapshots.length === 0) {
-                    setTwinSnapshots(await getTwinSnapshots(selectedPlanId || undefined));
-                  } else if (tabKey === "PRODUCTION_FEASIBILITY" && !prodFeasibility) {
-                    setProdFeasibility(await getProductionFeasibility(selectedPlanId || undefined, propertyId || undefined));
-                  } else if (tabKey === "SCENARIO_LAB" && !scenarioLab) {
-                    setScenarioLab(await getScenarioLab(selectedPlanId || undefined));
-                  } else if (tabKey === "PORTION_DEMAND" && !hierForecast) {
-                    setHierForecast(await getHierarchicalForecast(propertyId || undefined, 7));
-                  } else if (tabKey === "HISTORICAL") {
-                    if (!histSimilarity) setHistSimilarity(await getHistoricalSimilarity(selectedPlanId || undefined));
-                    if (!govStatus) setGovStatus(await getModelGovernanceStatus());
-                  }
-                } catch {
-                  // handled gracefully
-                }
-              }}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-
-        {bottomExpanded && (
-          <div style={{ paddingTop: "0.5rem" }}>
-            {activeTab === "DESIGN" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                <div className="sme-muted">
-                  Active menu <strong>{draftName}</strong> ({draftType}, {draftCovers} covers, {lines.length} dishes). Use the 3-panel canvas above to compose dishes, adjust portions/prices, and save draft or controlled new version.
-                </div>
-                {ws.performanceMatrix && (
-                  <div>
-                    <div className="sme-quadrant-grid">
-                      <div className="sme-quadrant sme-quadrant--star"><strong>STARS ({ws.performanceMatrix.stars})</strong><div className="sme-muted">High popularity &amp; high margin</div></div>
-                      <div className="sme-quadrant sme-quadrant--plow"><strong>PLOWHORSES ({ws.performanceMatrix.plowhorses})</strong><div className="sme-muted">High popularity, lower margin</div></div>
-                      <div className="sme-quadrant sme-quadrant--puzzle"><strong>PUZZLES ({ws.performanceMatrix.puzzles})</strong><div className="sme-muted">Low popularity, high margin</div></div>
-                      <div className="sme-quadrant sme-quadrant--dog"><strong>DOGS ({ws.performanceMatrix.dogs})</strong><div className="sme-muted">Low popularity &amp; low margin</div></div>
-                    </div>
-                    <div className="sme-muted" style={{ marginTop: "0.35rem" }}>
-                      Excluded incomplete/new items: {ws.performanceMatrix.excludedCount} • Basis: {ws.performanceMatrix.costBasis}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {activeTab === "COSTING" && (
-              <table className="sila-table">
-                <thead>
-                  <tr>
-                    <th>Dish</th>
-                    <th>Category</th>
-                    <th>Portions</th>
-                    <th>Sell Price</th>
-                    {viewCost && <th>Unit Cost</th>}
-                    {viewCost && <th>Total Cost</th>}
-                    <th>Exp. Revenue</th>
-                    {viewCost && <th>Food Cost %</th>}
-                    {viewMargin && <th>Contrib. Margin</th>}
-                  </tr>
-                </thead>
-                <tbody>
-                  {lines.map((l, idx) => (
-                    <tr key={idx}>
-                      <td>{l.menuItemName}</td>
-                      <td>{l.categoryName}</td>
-                      <td>{Math.round(liveCalc.covers * (l.participationRate ?? 0.5))}</td>
-                      <td>{num(l.sellingPrice)}</td>
-                      {viewCost && <td>{num(l.portionCost)}</td>}
-                      {viewCost && <td>{num((l.portionCost ?? 0) * liveCalc.covers * (l.participationRate ?? 0.5))}</td>}
-                      <td>{num((l.sellingPrice ?? 0) * liveCalc.covers * (l.participationRate ?? 0.5))}</td>
-                      {viewCost && <td>{pct(l.foodCostPercent)}</td>}
-                      {viewMargin && <td>{num(l.contributionMargin)}</td>}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-
-            {activeTab === "PORTION_DEMAND" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                <div className="sme-row">
-                  <span className="sme-muted">Buffet &amp; service portion math: Expected Portions = Covers × Participation × Servings/Guest.</span>
-                  <div style={{ display: "flex", gap: "0.5rem" }}>
-                    <button
-                      type="button"
-                      className="sila-btn sila-btn--primary"
-                      disabled={twinBusy}
-                      onClick={async () => {
-                        setTwinBusy(true);
-                        try {
-                          setHierForecast(await getHierarchicalForecast(propertyId || undefined, 7));
-                        } catch (e) {
-                          toastService.error(e instanceof Error ? e.message : "Forecast failed.");
-                        } finally {
-                          setTwinBusy(false);
-                        }
-                      }}
-                    >
-                      Run Hierarchical Backtested Forecast
-                    </button>
-                    <button type="button" className="sila-btn sila-btn--secondary" onClick={() => onNavigate("silaMenuPortions")}>Portion Planning</button>
-                    <button type="button" className="sila-btn sila-btn--secondary" onClick={() => onNavigate("silaMenuDemand")}>Demand Planning</button>
-                  </div>
-                </div>
-                <table className="sila-table">
+              <div className="sila-studio-table-wrap">
+                <table className="sila-table sila-tabular">
                   <thead>
-                    <tr><th>Dish</th><th>Covers</th><th>Participation</th><th>Portion Size</th><th>Expected Portions</th><th>Usable Output</th></tr>
+                    <tr>
+                      <th>Dish</th>
+                      <th>Covers</th>
+                      <th>Participation</th>
+                      <th>Portion Size</th>
+                      <th>Expected Portions</th>
+                      <th>Usable Output</th>
+                    </tr>
                   </thead>
                   <tbody>
                     {lines.map((l, idx) => {
@@ -1234,29 +1905,50 @@ const MeStudioWorkspace: React.FC<Props> = ({
                           <td>{l.menuItemName}</td>
                           <td>{liveCalc.covers}</td>
                           <td>{pct((l.participationRate ?? 0.5) * 100)}</td>
-                          <td>{l.portionSize ?? 1} {l.portionUom || "PORTION"}</td>
+                          <td>
+                            {l.portionSize ?? 1} {l.portionUom || "PORTION"}
+                          </td>
                           <td>{ep}</td>
-                          <td>{(ep * (l.portionSize ?? 1)).toFixed(2)} {l.portionUom || "PORTION"}</td>
+                          <td>
+                            {(ep * (l.portionSize ?? 1)).toFixed(2)} {l.portionUom || "PORTION"}
+                          </td>
                         </tr>
                       );
                     })}
                   </tbody>
                 </table>
-                {hierForecast && (
-                  <div className="sme-kpi-box">
-                    <div className="sme-row">
-                      <strong>Hierarchical Forecast ({hierForecast.reconciliationMethod})</strong>
-                      <span className="sme-chip">Leakage Checked: {hierForecast.leakageChecked ? "YES" : "NO"} · Max Gap: {hierForecast.consistencyMaxGap.toFixed(2)}</span>
-                    </div>
-                    <table className="sila-table" style={{ marginTop: "0.5rem" }}>
-                      <thead><tr><th>Node</th><th>Level</th><th>Selected Model</th><th>Tomorrow (P10–P90)</th><th>MAE</th><th>WAPE %</th><th>Bias %</th></tr></thead>
+              </div>
+              {hierForecast && (
+                <div className="sme-kpi-box">
+                  <div className="sme-row">
+                    <strong>Hierarchical Forecast ({hierForecast.reconciliationMethod})</strong>
+                    <span className="sme-chip">
+                      Leakage Checked: {hierForecast.leakageChecked ? "YES" : "NO"} · Max Gap:{" "}
+                      {hierForecast.consistencyMaxGap.toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="sila-studio-table-wrap" style={{ marginTop: "0.5rem" }}>
+                    <table className="sila-table sila-tabular">
+                      <thead>
+                        <tr>
+                          <th>Node</th>
+                          <th>Level</th>
+                          <th>Selected Model</th>
+                          <th>Tomorrow (P10–P90)</th>
+                          <th>MAE</th>
+                          <th>WAPE %</th>
+                          <th>Bias %</th>
+                        </tr>
+                      </thead>
                       <tbody>
                         {hierForecast.nodes.slice(0, 8).map((n) => (
                           <tr key={n.nodeKey}>
                             <td>{n.nodeKey}</td>
                             <td>{n.level}</td>
                             <td>{n.selectedModel}</td>
-                            <td>{num(n.reconciledForecast[0], 0)} ({num(n.lowerP10[0], 0)}–{num(n.upperP90[0], 0)})</td>
+                            <td>
+                              {num(n.reconciledForecast[0], 0)} ({num(n.lowerP10[0], 0)}–{num(n.upperP90[0], 0)})
+                            </td>
                             <td>{num(n.mae, 2)}</td>
                             <td>{pct(n.wape)}</td>
                             <td>{pct(n.bias)}</td>
@@ -1265,130 +1957,165 @@ const MeStudioWorkspace: React.FC<Props> = ({
                       </tbody>
                     </table>
                   </div>
-                )}
-              </div>
-            )}
+                </div>
+              )}
+            </div>
+          )}
 
-            {activeTab === "DIGITAL_TWIN" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                <div className="sme-row">
-                  <span className="sme-muted">
-                    Culinary Digital Twin — 9-component live/historical/simulated representation without duplicating master data.
-                  </span>
-                  <div style={{ display: "flex", gap: "0.5rem" }}>
+          {activeTab === "DIGITAL_TWIN" && (
+            <div className="sila-studio-panel">
+              <div className="sme-row">
+                <span className="sme-muted">
+                  Culinary Digital Twin — 9-component live/historical/simulated representation without duplicating master data.
+                </span>
+                <div style={{ display: "flex", gap: "0.5rem" }}>
+                  <button
+                    type="button"
+                    className="sila-studio-btn sila-studio-btn--primary sila-studio-btn--sm"
+                    disabled={twinBusy}
+                    onClick={async () => {
+                      setTwinBusy(true);
+                      try {
+                        const snap = await createTwinSnapshot({
+                          propertyId: propertyId || undefined,
+                          outletLocationId: outletLocationId || undefined,
+                          menuPlanId: selectedPlanId || undefined,
+                          snapshotType: "LIVE",
+                        });
+                        setTwinSnapshots((prev) => [snap, ...prev]);
+                        toastService.success(
+                          `Captured Digital Twin Snapshot v${snap.versionNumber} (${snap.dataQualityLabel}).`
+                        );
+                      } catch (e) {
+                        toastService.error(e instanceof Error ? e.message : "Failed to create snapshot.");
+                      } finally {
+                        setTwinBusy(false);
+                      }
+                    }}
+                  >
+                    Capture Live Twin Snapshot
+                  </button>
+                  {twinSnapshots[0]?.isStale && (
                     <button
                       type="button"
-                      className="sila-btn sila-btn--primary"
+                      className="sila-studio-btn sila-studio-btn--secondary sila-studio-btn--sm"
                       disabled={twinBusy}
                       onClick={async () => {
                         setTwinBusy(true);
                         try {
-                          const snap = await createTwinSnapshot({ propertyId: propertyId || undefined, outletLocationId: outletLocationId || undefined, menuPlanId: selectedPlanId || undefined, snapshotType: "LIVE" });
-                          setTwinSnapshots((prev) => [snap, ...prev]);
-                          toastService.success(`Captured Digital Twin Snapshot v${snap.versionNumber} (${snap.dataQualityLabel}).`);
-                        } catch (e) {
-                          toastService.error(e instanceof Error ? e.message : "Failed to create snapshot.");
+                          const refreshed = await refreshTwinSnapshot(twinSnapshots[0].snapshotId);
+                          setTwinSnapshots((prev) => [refreshed, ...prev]);
+                          toastService.success(`Refreshed stale snapshot -> v${refreshed.versionNumber}.`);
                         } finally {
                           setTwinBusy(false);
                         }
                       }}
                     >
-                      Capture Live Twin Snapshot
+                      Refresh Stale Baseline
                     </button>
-                    {twinSnapshots[0]?.isStale && (
-                      <button
-                        type="button"
-                        className="sila-btn sila-btn--secondary"
-                        disabled={twinBusy}
-                        onClick={async () => {
-                          setTwinBusy(true);
-                          try {
-                            const refreshed = await refreshTwinSnapshot(twinSnapshots[0].snapshotId);
-                            setTwinSnapshots((prev) => [refreshed, ...prev]);
-                            toastService.success(`Refreshed stale snapshot -> v${refreshed.versionNumber}.`);
-                          } finally {
-                            setTwinBusy(false);
-                          }
-                        }}
-                      >
-                        Refresh Stale Baseline
-                      </button>
-                    )}
+                  )}
+                </div>
+              </div>
+
+              {twinSnapshots[0] && (
+                <>
+                  <div className="sme-kpi-box">
+                    <div className="sme-row">
+                      <strong>
+                        Snapshot v{twinSnapshots[0].versionNumber} ({twinSnapshots[0].snapshotType}) · Hash{" "}
+                        {twinSnapshots[0].snapshotHash}
+                      </strong>
+                      <span className={`sme-chip ${twinSnapshots[0].isStale ? "" : "sme-chip--ok"}`}>
+                        {twinSnapshots[0].isStale
+                          ? `STALE: ${twinSnapshots[0].stalenessReason}`
+                          : `FRESH · DQ ${twinSnapshots[0].dataQualityScore}% (${twinSnapshots[0].dataQualityLabel})`}
+                      </span>
+                    </div>
+                    <div className="sme-muted">
+                      Calc: {twinSnapshots[0].calculationVersion} · Model: {twinSnapshots[0].modelVersion} · Captured:{" "}
+                      {new Date(twinSnapshots[0].capturedAtUtc).toLocaleString()}
+                    </div>
+                  </div>
+                  <div className="sme-quadrant-grid">
+                    {twinSnapshots[0].components.map((c) => (
+                      <div key={c.componentKey} className="sme-kpi-box">
+                        <div className="sme-row">
+                          <strong>{c.displayName}</strong>
+                          <span className="sme-chip">{c.dataQuality}</span>
+                        </div>
+                        <div className="sme-muted">{c.recordCount} records</div>
+                        <div style={{ fontSize: "0.78rem", marginTop: "0.2rem" }}>{c.summaryMetric}</div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              <div className="sme-kpi-box" style={{ background: "#f5faff" }}>
+                <div className="sme-row">
+                  <strong>Dependency Graph &amp; Reverse Price-Shock Cascade</strong>
+                  <div style={{ display: "flex", gap: "0.4rem", alignItems: "center", flexWrap: "wrap" }}>
+                    <input
+                      className="sila-input"
+                      style={{ width: "160px" }}
+                      value={shockIngredient}
+                      onChange={(e) => setShockIngredient(e.target.value)}
+                      placeholder="Ingredient (e.g. Salmon)"
+                    />
+                    <input
+                      className="sila-input"
+                      style={{ width: "80px" }}
+                      type="number"
+                      value={shockPct}
+                      onChange={(e) => setShockPct(e.target.value)}
+                    />
+                    <span className="sme-muted">%</span>
+                    <button
+                      type="button"
+                      className="sila-studio-btn sila-studio-btn--primary sila-studio-btn--sm"
+                      disabled={twinBusy}
+                      onClick={async () => {
+                        setTwinBusy(true);
+                        try {
+                          const res = await analyzeTwinDependencies({
+                            propertyId: propertyId || undefined,
+                            menuPlanId: selectedPlanId || undefined,
+                            shockIngredientName: shockIngredient,
+                            priceChangePercent: Number(shockPct) || 20,
+                          });
+                          setDepAnalysis(res);
+                        } catch (e) {
+                          toastService.error(e instanceof Error ? e.message : "Dependency analysis failed.");
+                        } finally {
+                          setTwinBusy(false);
+                        }
+                      }}
+                    >
+                      Analyze Impact Cascade
+                    </button>
                   </div>
                 </div>
-
-                {twinSnapshots[0] && (
-                  <>
-                    <div className="sme-kpi-box">
-                      <div className="sme-row">
-                        <strong>
-                          Snapshot v{twinSnapshots[0].versionNumber} ({twinSnapshots[0].snapshotType}) · Hash {twinSnapshots[0].snapshotHash}
-                        </strong>
-                        <span className={`sme-chip ${twinSnapshots[0].isStale ? "" : "sme-chip--ok"}`}>
-                          {twinSnapshots[0].isStale ? `STALE: ${twinSnapshots[0].stalenessReason}` : `FRESH · DQ ${twinSnapshots[0].dataQualityScore}% (${twinSnapshots[0].dataQualityLabel})`}
-                        </span>
-                      </div>
-                      <div className="sme-muted">
-                        Calc: {twinSnapshots[0].calculationVersion} · Model: {twinSnapshots[0].modelVersion} · Captured: {new Date(twinSnapshots[0].capturedAtUtc).toLocaleString()}
-                      </div>
+                {depAnalysis && (
+                  <div style={{ marginTop: "0.5rem" }}>
+                    <div className="sme-muted">
+                      Graph: {depAnalysis.nodeCount} nodes, {depAnalysis.edgeCount} edges · Acyclic:{" "}
+                      {depAnalysis.isAcyclic ? "YES" : `NO (${depAnalysis.cycles.length} cycles)`} · Affected Recipes:{" "}
+                      {depAnalysis.affectedRecipes.length} · Affected Dishes: {depAnalysis.affectedMenuItems.length} ·
+                      Total Cost Impact: {viewCost ? num(depAnalysis.totalCostImpact) : "[REDACTED]"}
                     </div>
-                    <div className="sme-quadrant-grid">
-                      {twinSnapshots[0].components.map((c) => (
-                        <div key={c.componentKey} className="sme-kpi-box">
-                          <div className="sme-row">
-                            <strong>{c.displayName}</strong>
-                            <span className="sme-chip">{c.dataQuality}</span>
-                          </div>
-                          <div className="sme-muted">{c.recordCount} records</div>
-                          <div style={{ fontSize: "0.78rem", marginTop: "0.2rem" }}>{c.summaryMetric}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                )}
-
-                <div className="sme-kpi-box" style={{ background: "#f8fafc" }}>
-                  <div className="sme-row">
-                    <strong>Dependency Graph &amp; Reverse Price-Shock Cascade</strong>
-                    <div style={{ display: "flex", gap: "0.4rem", alignItems: "center" }}>
-                      <input className="sila-input" style={{ width: "160px" }} value={shockIngredient} onChange={(e) => setShockIngredient(e.target.value)} placeholder="Ingredient (e.g. Salmon)" />
-                      <input className="sila-input" style={{ width: "80px" }} type="number" value={shockPct} onChange={(e) => setShockPct(e.target.value)} />
-                      <span className="sme-muted">%</span>
-                      <button
-                        type="button"
-                        className="sila-btn sila-btn--primary"
-                        disabled={twinBusy}
-                        onClick={async () => {
-                          setTwinBusy(true);
-                          try {
-                            const res = await analyzeTwinDependencies({
-                              propertyId: propertyId || undefined,
-                              menuPlanId: selectedPlanId || undefined,
-                              shockIngredientName: shockIngredient,
-                              priceChangePercent: Number(shockPct) || 20,
-                            });
-                            setDepAnalysis(res);
-                          } catch (e) {
-                            toastService.error(e instanceof Error ? e.message : "Dependency analysis failed.");
-                          } finally {
-                            setTwinBusy(false);
-                          }
-                        }}
-                      >
-                        Analyze Impact Cascade
-                      </button>
-                    </div>
-                  </div>
-                  {depAnalysis && (
-                    <div style={{ marginTop: "0.5rem" }}>
-                      <div className="sme-muted">
-                        Graph: {depAnalysis.nodeCount} nodes, {depAnalysis.edgeCount} edges · Acyclic: {depAnalysis.isAcyclic ? "YES" : `NO (${depAnalysis.cycles.length} cycles)`} ·
-                        Affected Recipes: {depAnalysis.affectedRecipes.length} · Affected Dishes: {depAnalysis.affectedMenuItems.length} ·
-                        Total Cost Impact: {viewCost ? num(depAnalysis.totalCostImpact) : "[REDACTED]"}
-                      </div>
-                      {depAnalysis.impactedObjects.length > 0 && (
-                        <table className="sila-table" style={{ marginTop: "0.4rem" }}>
-                          <thead><tr><th>Object</th><th>Type</th><th>Hops</th>{viewCost && <th>Baseline Cost</th>}{viewCost && <th>Shocked Cost</th>}{viewCost && <th>Cost Δ %</th>}</tr></thead>
+                    {depAnalysis.impactedObjects.length > 0 && (
+                      <div className="sila-studio-table-wrap" style={{ marginTop: "0.4rem" }}>
+                        <table className="sila-table sila-tabular">
+                          <thead>
+                            <tr>
+                              <th>Object</th>
+                              <th>Type</th>
+                              <th>Hops</th>
+                              {viewCost && <th>Baseline Cost</th>}
+                              {viewCost && <th>Shocked Cost</th>}
+                              {viewCost && <th>Cost Δ %</th>}
+                            </tr>
+                          </thead>
                           <tbody>
                             {depAnalysis.impactedObjects.slice(0, 8).map((o) => (
                               <tr key={o.nodeId}>
@@ -1402,74 +2129,91 @@ const MeStudioWorkspace: React.FC<Props> = ({
                             ))}
                           </tbody>
                         </table>
-                      )}
-                    </div>
-                  )}
-                </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
-            )}
+            </div>
+          )}
 
-            {activeTab === "READINESS" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                <div className="sme-row">
-                  <span className="sme-muted">Time-phased against required service date; reserved, blocked &amp; expired stock excluded (FEFO).</span>
-                  <div style={{ display: "flex", gap: "0.5rem" }}>
+          {activeTab === "READINESS" && (
+            <div className="sila-studio-panel">
+              <div className="sme-row">
+                <span className="sme-muted">
+                  Time-phased against required service date; reserved, blocked &amp; expired stock excluded (FEFO).
+                </span>
+                <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    className="sila-studio-btn sila-studio-btn--secondary sila-studio-btn--sm"
+                    disabled={twinBusy}
+                    onClick={async () => {
+                      setTwinBusy(true);
+                      try {
+                        const r = await optimizeInventoryMenu({
+                          propertyId: propertyId || undefined,
+                          guestCount: Number(draftCovers) || 150,
+                          maxFoodCostPercent: Number(draftTargetFc) || 32,
+                        });
+                        setInvOptResult(r);
+                      } catch (e) {
+                        toastService.error(e instanceof Error ? e.message : "Inventory menu optimization failed.");
+                      } finally {
+                        setTwinBusy(false);
+                      }
+                    }}
+                  >
+                    Design Menu From Eligible Stock (FEFO)
+                  </button>
+                  {perms.generatePurchaseRecommendation && (
                     <button
                       type="button"
-                      className="sila-btn sila-btn--secondary"
-                      disabled={twinBusy}
+                      className="sila-studio-btn sila-studio-btn--primary sila-studio-btn--sm"
                       onClick={async () => {
-                        setTwinBusy(true);
                         try {
-                          const r = await optimizeInventoryMenu({
+                          const rec = await createMeDraftPurchaseRec({
+                            menuPlanId: selectedPlanId || undefined,
                             propertyId: propertyId || undefined,
-                            guestCount: Number(draftCovers) || 150,
-                            maxFoodCostPercent: Number(draftTargetFc) || 32,
                           });
-                          setInvOptResult(r);
+                          toastService.success(`Generated ${rec.items.length} draft purchase recommendation(s).`);
                         } catch (e) {
-                          toastService.error(e instanceof Error ? e.message : "Inventory menu optimization failed.");
-                        } finally {
-                          setTwinBusy(false);
+                          toastService.error(e instanceof Error ? e.message : "Could not generate draft recommendation.");
                         }
                       }}
                     >
-                      Design Menu From Eligible Stock (FEFO)
+                      Generate Draft Purchase Recommendation
                     </button>
-                    {perms.generatePurchaseRecommendation && (
-                      <button
-                        type="button"
-                        className="sila-btn sila-btn--primary"
-                        onClick={async () => {
-                          try {
-                            const rec = await createMeDraftPurchaseRec({ menuPlanId: selectedPlanId || undefined, propertyId: propertyId || undefined });
-                            toastService.success(`Generated ${rec.items.length} draft purchase recommendation(s).`);
-                          } catch (e) {
-                            toastService.error(e instanceof Error ? e.message : "Could not generate draft recommendation.");
-                          }
-                        }}
-                      >
-                        Generate Draft Purchase Recommendation
-                      </button>
-                    )}
+                  )}
+                </div>
+              </div>
+              {invOptResult && (
+                <div className="sme-kpi-box" style={{ background: "#e9f8f0", borderColor: "#c0e8d2" }}>
+                  <div className="sme-row">
+                    <strong>FEFO Inventory-Driven Optimization ({invOptResult.status})</strong>
+                    <span className="sme-chip sme-chip--ok">
+                      Utilization {pct(invOptResult.inventoryUtilizationPercent)}
+                    </span>
+                  </div>
+                  <div className="sme-muted">
+                    Selected Dishes: {invOptResult.selectedDishes.map((d) => `${d.name} (${d.plannedPortions})`).join(", ")} ·
+                    Avoidable Purchase: {viewCost ? num(invOptResult.avoidablePurchaseCost) : "[REDACTED]"} · Reserved
+                    Excluded: {num(invOptResult.excludedStockSummary?.reservedQty ?? 0, 1)}
                   </div>
                 </div>
-                {invOptResult && (
-                  <div className="sme-kpi-box" style={{ background: "#f0fdf4" }}>
-                    <div className="sme-row">
-                      <strong>FEFO Inventory-Driven Optimization ({invOptResult.status})</strong>
-                      <span className="sme-chip sme-chip--ok">Utilization {pct(invOptResult.inventoryUtilizationPercent)}</span>
-                    </div>
-                    <div className="sme-muted">
-                      Selected Dishes: {invOptResult.selectedDishes.map((d) => `${d.name} (${d.plannedPortions})`).join(", ")} ·
-                      Avoidable Purchase: {viewCost ? num(invOptResult.avoidablePurchaseCost) : "[REDACTED]"} ·
-                      Reserved Excluded: {num(invOptResult.excludedStockSummary?.reservedQty ?? 0, 1)}
-                    </div>
-                  </div>
-                )}
-                <table className="sila-table">
+              )}
+              <div className="sila-studio-table-wrap">
+                <table className="sila-table sila-tabular">
                   <thead>
-                    <tr><th>Ingredient</th><th>UOM</th><th>Required</th><th>Available</th><th>Open PO</th><th>Shortage</th><th>Status</th></tr>
+                    <tr>
+                      <th>Ingredient</th>
+                      <th>UOM</th>
+                      <th>Required</th>
+                      <th>Available</th>
+                      <th>Open PO</th>
+                      <th>Shortage</th>
+                      <th>Status</th>
+                    </tr>
                   </thead>
                   <tbody>
                     {ws.ingredientRequirements.map((r, i) => (
@@ -1479,116 +2223,147 @@ const MeStudioWorkspace: React.FC<Props> = ({
                         <td>{r.requirement}</td>
                         <td>{r.available}</td>
                         <td>{r.openPo}</td>
-                        <td><strong>{r.shortage}</strong></td>
+                        <td>
+                          <strong>{r.shortage}</strong>
+                        </td>
                         <td>{r.shortage > 0 ? "SHORTAGE" : "READY"}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-            )}
+            </div>
+          )}
 
-            {activeTab === "PRODUCTION_FEASIBILITY" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                <div className="sme-row">
-                  <span className="sme-muted">Kitchen, workstation, equipment, staff, batch-size &amp; allergen segregation validation.</span>
-                  <button
-                    type="button"
-                    className="sila-btn sila-btn--primary"
-                    disabled={twinBusy}
-                    onClick={async () => {
-                      setTwinBusy(true);
-                      try {
-                        setProdFeasibility(await getProductionFeasibility(selectedPlanId || undefined, propertyId || undefined));
-                      } finally {
-                        setTwinBusy(false);
-                      }
-                    }}
-                  >
-                    Re-Evaluate Kitchen Capacity
-                  </button>
-                </div>
-                {prodFeasibility && (
-                  <div className="sme-kpi-box">
-                    <div className="sme-row">
-                      <strong>Status: {prodFeasibility.isFeasible ? "OPERATIONALLY FEASIBLE" : "INFEASIBLE — BOTTLENECK DETECTED"}</strong>
-                      <span className="sme-chip">{pct(prodFeasibility.utilizationPercent)} Kitchen Utilization</span>
-                    </div>
-                    <div className="sme-muted" style={{ marginTop: "0.3rem" }}>
-                      Active Kitchens: {prodFeasibility.activeKitchenCount} · Equipment: {prodFeasibility.activeEquipmentCount} · Staff: {prodFeasibility.activeStaffCount} ·
-                      Required Prep: {num(prodFeasibility.totalRequiredPrepMinutes, 0)} min / Available: {num(prodFeasibility.availableKitchenMinutes, 0)} min
-                    </div>
-                    {prodFeasibility.bottlenecks.map((b, i) => (
-                      <div key={i} style={{ color: "#b91c1c", fontSize: "0.82rem", marginTop: "0.25rem" }}>• Bottleneck: {b}</div>
-                    ))}
-                    {prodFeasibility.recommendations.map((r, i) => (
-                      <div key={i} className="sme-muted" style={{ marginTop: "0.2rem" }}>• Action: {r}</div>
-                    ))}
-                  </div>
-                )}
+          {activeTab === "PRODUCTION_FEASIBILITY" && (
+            <div className="sila-studio-panel">
+              <div className="sme-row">
+                <span className="sme-muted">
+                  Kitchen, workstation, equipment, staff, batch-size &amp; allergen segregation validation.
+                </span>
+                <button
+                  type="button"
+                  className="sila-studio-btn sila-studio-btn--primary sila-studio-btn--sm"
+                  disabled={twinBusy}
+                  onClick={async () => {
+                    setTwinBusy(true);
+                    try {
+                      setProdFeasibility(
+                        await getProductionFeasibility(selectedPlanId || undefined, propertyId || undefined)
+                      );
+                    } finally {
+                      setTwinBusy(false);
+                    }
+                  }}
+                >
+                  Re-Evaluate Kitchen Capacity
+                </button>
               </div>
-            )}
-
-            {activeTab === "AI_OPTIMIZATION" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                <div className="sme-kpi-box" style={{ background: "#f0f7ff" }}>
+              {prodFeasibility && (
+                <div className="sme-kpi-box">
                   <div className="sme-row">
-                    <strong>OR-Tools CP-SAT Multi-Objective Menu Optimizer</strong>
-                    <div style={{ display: "flex", gap: "0.4rem", alignItems: "center" }}>
-                      <select className="sila-input" value={optMode} onChange={(e) => setOptMode(e.target.value)}>
-                        <option value="PARETO_FRONTIER">Pareto Frontier (Trade-offs)</option>
-                        <option value="WEIGHTED_MULTI_OBJECTIVE">Weighted Multi-Objective</option>
-                        <option value="LEXICOGRAPHIC">Lexicographic</option>
-                        <option value="SINGLE_OBJECTIVE">Single Objective (Min Cost)</option>
-                      </select>
-                      <button
-                        type="button"
-                        className="sila-btn sila-btn--primary"
-                        disabled={twinBusy}
-                        onClick={async () => {
-                          setTwinBusy(true);
-                          try {
-                            const job = await runMultiObjectiveOptimization({
-                              propertyId: propertyId || undefined,
-                              menuPlanId: selectedPlanId || undefined,
-                              baselineSnapshotId: twinSnapshots[0]?.snapshotId,
-                              mode: optMode,
-                              menuFormat: draftType,
-                              guestCount: Number(draftCovers) || 300,
-                              maxFoodCostPercent: Number(draftTargetFc) || 30,
-                              minTotalItems: 4,
-                              maxTotalItems: 16,
-                            });
-                            setMultiOptJob(job);
-                            toastService.success(`Solver finished (${job.status}) in ${job.runtimeMs.toFixed(0)} ms.`);
-                          } catch (e) {
-                            toastService.error(e instanceof Error ? e.message : "Optimization failed.");
-                          } finally {
-                            setTwinBusy(false);
-                          }
-                        }}
-                      >
-                        Run Mathematical Optimization
-                      </button>
-                    </div>
+                    <strong>
+                      Status: {prodFeasibility.isFeasible ? "OPERATIONALLY FEASIBLE" : "INFEASIBLE — BOTTLENECK DETECTED"}
+                    </strong>
+                    <span className="sme-chip">{pct(prodFeasibility.utilizationPercent)} Kitchen Utilization</span>
                   </div>
-                  {multiOptJob && (
-                    <div style={{ marginTop: "0.5rem" }}>
-                      <div className="sme-muted">
-                        Job {multiOptJob.jobId.slice(0, 8)} · Solver: {multiOptJob.solverUsed} · Status: <strong>{multiOptJob.status}</strong> · Runtime: {multiOptJob.runtimeMs.toFixed(1)} ms
+                  <div className="sme-muted" style={{ marginTop: "0.3rem" }}>
+                    Active Kitchens: {prodFeasibility.activeKitchenCount} · Equipment: {prodFeasibility.activeEquipmentCount}{" "}
+                    · Staff: {prodFeasibility.activeStaffCount} · Required Prep:{" "}
+                    {num(prodFeasibility.totalRequiredPrepMinutes, 0)} min / Available:{" "}
+                    {num(prodFeasibility.availableKitchenMinutes, 0)} min
+                  </div>
+                  {prodFeasibility.bottlenecks.map((b, i) => (
+                    <div key={i} style={{ color: "#c24141", fontSize: "0.82rem", marginTop: "0.25rem" }}>
+                      • Bottleneck: {b}
+                    </div>
+                  ))}
+                  {prodFeasibility.recommendations.map((r, i) => (
+                    <div key={i} className="sme-muted" style={{ marginTop: "0.2rem" }}>
+                      • Action: {r}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === "AI_OPTIMIZATION" && (
+            <div className="sila-studio-panel">
+              <div className="sme-kpi-box" style={{ background: "#f5faff" }}>
+                <div className="sme-row">
+                  <strong>OR-Tools CP-SAT Multi-Objective Menu Optimizer</strong>
+                  <div style={{ display: "flex", gap: "0.4rem", alignItems: "center", flexWrap: "wrap" }}>
+                    <select className="sila-input" value={optMode} onChange={(e) => setOptMode(e.target.value)}>
+                      <option value="PARETO_FRONTIER">Pareto Frontier (Trade-offs)</option>
+                      <option value="WEIGHTED_MULTI_OBJECTIVE">Weighted Multi-Objective</option>
+                      <option value="LEXICOGRAPHIC">Lexicographic</option>
+                      <option value="SINGLE_OBJECTIVE">Single Objective (Min Cost)</option>
+                    </select>
+                    <button
+                      type="button"
+                      className="sila-studio-btn sila-studio-btn--primary sila-studio-btn--sm"
+                      disabled={twinBusy}
+                      onClick={async () => {
+                        setTwinBusy(true);
+                        try {
+                          const job = await runMultiObjectiveOptimization({
+                            propertyId: propertyId || undefined,
+                            menuPlanId: selectedPlanId || undefined,
+                            baselineSnapshotId: twinSnapshots[0]?.snapshotId,
+                            mode: optMode,
+                            menuFormat: draftType,
+                            guestCount: Number(draftCovers) || 300,
+                            maxFoodCostPercent: Number(draftTargetFc) || 30,
+                            minTotalItems: 4,
+                            maxTotalItems: 16,
+                          });
+                          setMultiOptJob(job);
+                          toastService.success(`Solver finished (${job.status}) in ${job.runtimeMs.toFixed(0)} ms.`);
+                        } catch (e) {
+                          toastService.error(e instanceof Error ? e.message : "Optimization failed.");
+                        } finally {
+                          setTwinBusy(false);
+                        }
+                      }}
+                    >
+                      Run Mathematical Optimization
+                    </button>
+                  </div>
+                </div>
+                {multiOptJob && (
+                  <div style={{ marginTop: "0.5rem" }}>
+                    <div className="sme-muted">
+                      Job {multiOptJob.jobId.slice(0, 8)} · Solver: {multiOptJob.solverUsed} · Status:{" "}
+                      <strong>{multiOptJob.status}</strong> · Runtime: {multiOptJob.runtimeMs.toFixed(1)} ms
+                    </div>
+                    {multiOptJob.infeasibilityReasons.length > 0 && (
+                      <div style={{ color: "#c24141", fontSize: "0.82rem", marginTop: "0.25rem" }}>
+                        Hard Constraint Infeasibility (never silently relaxed):{" "}
+                        {multiOptJob.infeasibilityReasons.join("; ")}
                       </div>
-                      {multiOptJob.infeasibilityReasons.length > 0 && (
-                        <div style={{ color: "#b91c1c", fontSize: "0.82rem", marginTop: "0.25rem" }}>
-                          Hard Constraint Infeasibility (never silently relaxed): {multiOptJob.infeasibilityReasons.join("; ")}
-                        </div>
-                      )}
-                      {multiOptJob.solutions.length > 0 && (
-                        <table className="sila-table" style={{ marginTop: "0.4rem" }}>
-                          <thead><tr><th>Pareto Scenario</th><th>Status</th><th>Dishes</th>{viewCost && <th>Food Cost %</th>}{viewMargin && <th>Margin</th>}<th>Stock Util %</th><th>Prep Min</th><th>Trade-Off</th></tr></thead>
+                    )}
+                    {multiOptJob.solutions.length > 0 && (
+                      <div className="sila-studio-table-wrap" style={{ marginTop: "0.4rem" }}>
+                        <table className="sila-table sila-tabular">
+                          <thead>
+                            <tr>
+                              <th>Pareto Scenario</th>
+                              <th>Status</th>
+                              <th>Dishes</th>
+                              {viewCost && <th>Food Cost %</th>}
+                              {viewMargin && <th>Margin</th>}
+                              <th>Stock Util %</th>
+                              <th>Prep Min</th>
+                              <th>Trade-Off</th>
+                            </tr>
+                          </thead>
                           <tbody>
                             {multiOptJob.solutions.map((s) => (
                               <tr key={`${s.paretoRank}-${s.scenarioLabel}`}>
-                                <td><strong>{s.scenarioLabel}</strong> (#{s.paretoRank})</td>
+                                <td>
+                                  <strong>{s.scenarioLabel}</strong> (#{s.paretoRank})
+                                </td>
                                 <td>{s.solverStatus}</td>
                                 <td>{s.selectedDishes.length}</td>
                                 {viewCost && <td>{pct(s.foodCostPercent)}</td>}
@@ -1600,73 +2375,95 @@ const MeStudioWorkspace: React.FC<Props> = ({
                             ))}
                           </tbody>
                         </table>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                <div className="sme-muted">
-                  Mode: <strong>{aiData?.providerMode ?? "LOCAL_DETERMINISTIC"}</strong> {aiData?.fallbackNotice ? `• ${aiData.fallbackNotice}` : ""}
-                </div>
-                {(aiData?.recommendations ?? ws.liveIntelligence.aiRecommendations).map((r, i) => (
-                  <div key={i} className="sme-kpi-box">
-                    <div className="sme-row">
-                      <strong>{r.strategy} — {r.recommendation}</strong>
-                      <span className="sme-chip">Confidence {(r.confidence * 100).toFixed(0)}%</span>
-                    </div>
-                    <div className="sme-muted">Evidence: {r.supportingEvidence}</div>
-                    <div className="sme-muted">Baseline: {r.currentBaseline} → Proposed: {r.proposedChange}</div>
-                    <div className="sme-muted">
-                      Operational: {r.operationalImpact} • Allergens: {r.allergenImpact ?? "Unchanged"} • Approval: {r.requiresApproval ? "Required" : "Optional"}
-                    </div>
+                      </div>
+                    )}
                   </div>
+                )}
+              </div>
+
+              <div className="sme-muted">
+                Mode: <strong>{aiData?.providerMode ?? "LOCAL_DETERMINISTIC"}</strong>{" "}
+                {aiData?.fallbackNotice ? `· ${aiData.fallbackNotice}` : ""}
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "0.75rem" }}>
+                {(aiData?.recommendations ?? ws.liveIntelligence.aiRecommendations).map((r, i) => (
+                  <AIRecommendationCard
+                    key={i}
+                    title={r.strategy}
+                    recommendation={r.recommendation}
+                    statusLabel={`Confidence ${(r.confidence * 100).toFixed(0)}%`}
+                    evidence={r.supportingEvidence}
+                    impact={`Baseline: ${r.currentBaseline} → Proposed: ${r.proposedChange} · Operational: ${r.operationalImpact} · Allergens: ${r.allergenImpact ?? "Unchanged"}`}
+                    requiresApproval={r.requiresApproval}
+                  />
                 ))}
               </div>
-            )}
+            </div>
+          )}
 
-            {activeTab === "SCENARIO_LAB" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                <div className="sme-row">
-                  <div style={{ display: "flex", gap: "0.4rem", alignItems: "center", flex: 1 }}>
-                    <input className="sila-input" style={{ maxWidth: "260px" }} value={newScenarioName} onChange={(e) => setNewScenarioName(e.target.value)} placeholder="New scenario name…" />
-                    <button
-                      type="button"
-                      className="sila-btn sila-btn--primary"
-                      disabled={twinBusy}
-                      onClick={async () => {
-                        setTwinBusy(true);
-                        try {
-                          await createTwinScenario({
-                            propertyId: propertyId || undefined,
-                            menuPlanId: selectedPlanId || undefined,
-                            baselineSnapshotId: twinSnapshots[0]?.snapshotId,
-                            scenarioName: newScenarioName,
-                            scenarioType: "OPTIMIZED",
-                          });
-                          setScenarioLab(await getScenarioLab(selectedPlanId || undefined));
-                        } finally {
-                          setTwinBusy(false);
-                        }
-                      }}
-                    >
-                      Save Scenario Snapshot
-                    </button>
-                    <button
-                      type="button"
-                      className="sila-btn sila-btn--secondary"
-                      onClick={async () => setScenarioLab(await getScenarioLab(selectedPlanId || undefined))}
-                    >
-                      Refresh Scenario Ranking
-                    </button>
-                  </div>
+          {activeTab === "SCENARIO_LAB" && (
+            <div className="sila-studio-panel">
+              <div className="sme-row">
+                <div style={{ display: "flex", gap: "0.4rem", alignItems: "center", flex: 1, flexWrap: "wrap" }}>
+                  <input
+                    className="sila-input"
+                    style={{ maxWidth: "260px" }}
+                    value={newScenarioName}
+                    onChange={(e) => setNewScenarioName(e.target.value)}
+                    placeholder="New scenario name…"
+                  />
+                  <button
+                    type="button"
+                    className="sila-studio-btn sila-studio-btn--primary sila-studio-btn--sm"
+                    disabled={twinBusy}
+                    onClick={async () => {
+                      setTwinBusy(true);
+                      try {
+                        await createTwinScenario({
+                          propertyId: propertyId || undefined,
+                          menuPlanId: selectedPlanId || undefined,
+                          baselineSnapshotId: twinSnapshots[0]?.snapshotId,
+                          scenarioName: newScenarioName,
+                          scenarioType: "OPTIMIZED",
+                        });
+                        setScenarioLab(await getScenarioLab(selectedPlanId || undefined));
+                      } finally {
+                        setTwinBusy(false);
+                      }
+                    }}
+                  >
+                    Save Scenario Snapshot
+                  </button>
+                  <button
+                    type="button"
+                    className="sila-studio-btn sila-studio-btn--secondary sila-studio-btn--sm"
+                    onClick={async () => setScenarioLab(await getScenarioLab(selectedPlanId || undefined))}
+                  >
+                    Refresh Scenario Ranking
+                  </button>
                 </div>
+              </div>
 
-                {scenarioLab && (
-                  <>
-                    <div className="sme-muted">Basis: {scenarioLab.calculationBasis} · Feasible Scenarios Ranked First ({scenarioLab.feasibleScenarios.length} feasible, {scenarioLab.infeasibleScenarios.length} infeasible)</div>
-                    <table className="sila-table">
+              {scenarioLab && (
+                <>
+                  <div className="sme-muted">
+                    Basis: {scenarioLab.calculationBasis} · Feasible Scenarios Ranked First (
+                    {scenarioLab.feasibleScenarios.length} feasible, {scenarioLab.infeasibleScenarios.length} infeasible)
+                  </div>
+                  <div className="sila-studio-table-wrap">
+                    <table className="sila-table sila-tabular">
                       <thead>
-                        <tr><th>Scenario</th><th>Type</th><th>Rank Score</th><th>Revenue</th>{viewCost && <th>FC %</th>}{viewMargin && <th>Margin</th>}<th>Stock Util</th><th>Stale?</th><th>Actions</th></tr>
+                        <tr>
+                          <th>Scenario</th>
+                          <th>Type</th>
+                          <th>Rank Score</th>
+                          <th>Revenue</th>
+                          {viewCost && <th>FC %</th>}
+                          {viewMargin && <th>Margin</th>}
+                          <th>Stock Util</th>
+                          <th>Stale?</th>
+                          <th>Actions</th>
+                        </tr>
                       </thead>
                       <tbody>
                         {[...scenarioLab.feasibleScenarios, ...scenarioLab.infeasibleScenarios].map((sc) => (
@@ -1683,196 +2480,405 @@ const MeStudioWorkspace: React.FC<Props> = ({
                             <td>{pct(sc.inventoryUtilizationPercent)}</td>
                             <td>{sc.isBaselineStale ? "STALE" : "FRESH"}</td>
                             <td style={{ display: "flex", gap: "0.3rem" }}>
-                              <button type="button" className="sila-btn sila-btn--secondary" onClick={async () => { await copyTwinScenario(sc.scenarioId); setScenarioLab(await getScenarioLab(selectedPlanId || undefined)); }}>Copy</button>
-                              <button type="button" className="sila-btn sila-btn--secondary" onClick={async () => { await archiveTwinScenario(sc.scenarioId); setScenarioLab(await getScenarioLab(selectedPlanId || undefined)); }}>Archive</button>
-                              <button type="button" className="sila-btn sila-btn--primary" onClick={async () => { const d = await convertTwinScenarioToDraft(sc.scenarioId); await loadWorkspace(d.menuPlanId); }}>To Draft</button>
+                              <button
+                                type="button"
+                                className="sila-studio-btn sila-studio-btn--secondary sila-studio-btn--sm"
+                                onClick={async () => {
+                                  await copyTwinScenario(sc.scenarioId);
+                                  setScenarioLab(await getScenarioLab(selectedPlanId || undefined));
+                                }}
+                              >
+                                Copy
+                              </button>
+                              <button
+                                type="button"
+                                className="sila-studio-btn sila-studio-btn--secondary sila-studio-btn--sm"
+                                onClick={async () => {
+                                  await archiveTwinScenario(sc.scenarioId);
+                                  setScenarioLab(await getScenarioLab(selectedPlanId || undefined));
+                                }}
+                              >
+                                Archive
+                              </button>
+                              <button
+                                type="button"
+                                className="sila-studio-btn sila-studio-btn--primary sila-studio-btn--sm"
+                                onClick={async () => {
+                                  const d = await convertTwinScenarioToDraft(sc.scenarioId);
+                                  await loadWorkspace(d.menuPlanId);
+                                }}
+                              >
+                                To Draft
+                              </button>
                             </td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
-                  </>
-                )}
+                  </div>
+                </>
+              )}
 
-                {operatingMode !== "MANUAL" && (
-                  <div className="sme-kpi-box" style={{ background: "#f0f7ff" }}>
-                    <div className="sme-row">
-                      <input
-                        className="sila-input"
-                        style={{ flex: 1 }}
-                        value={nlQuery}
-                        onChange={(e) => setNlQuery(e.target.value)}
-                        placeholder="Natural language What-If (e.g. 'What happens if salmon cost increases by 20%?')"
-                      />
-                      <button
-                        type="button"
-                        className="sila-btn sila-btn--primary"
-                        onClick={async () => {
-                          try {
-                            const r = await runMeNlSimulation({ command: nlQuery, menuPlanId: selectedPlanId || undefined, propertyId });
-                            setNlSimResult(r);
-                          } catch (e) {
-                            toastService.error(e instanceof Error ? e.message : "NL simulation failed.");
-                          }
-                        }}
-                      >
-                        Run NL Simulation
-                      </button>
+              {operatingMode !== "MANUAL" && (
+                <div className="sme-kpi-box" style={{ background: "#f5faff" }}>
+                  <div className="sme-row">
+                    <input
+                      className="sila-input"
+                      style={{ flex: 1 }}
+                      value={nlQuery}
+                      onChange={(e) => setNlQuery(e.target.value)}
+                      placeholder="Natural language What-If (e.g. 'What happens if salmon cost increases by 20%?')"
+                    />
+                    <button
+                      type="button"
+                      className="sila-studio-btn sila-studio-btn--primary sila-studio-btn--sm"
+                      onClick={async () => {
+                        try {
+                          const r = await runMeNlSimulation({
+                            command: nlQuery,
+                            menuPlanId: selectedPlanId || undefined,
+                            propertyId,
+                          });
+                          setNlSimResult(r);
+                        } catch (e) {
+                          toastService.error(e instanceof Error ? e.message : "NL simulation failed.");
+                        }
+                      }}
+                    >
+                      Run NL Simulation
+                    </button>
+                  </div>
+                  {nlSimResult && (
+                    <div style={{ marginTop: "0.5rem" }}>
+                      <AiValueTag kind="SIMULATION" /> <strong>{nlSimResult.parsedIntent}</strong> —{" "}
+                      {nlSimResult.sanitizedCommand}
                     </div>
-                    {nlSimResult && (
-                      <div style={{ marginTop: "0.5rem" }}>
-                        <AiValueTag kind="SIMULATION" /> <strong>{nlSimResult.parsedIntent}</strong> — {nlSimResult.sanitizedCommand}
+                  )}
+                </div>
+              )}
+
+              <div className="sme-form">
+                <label className="sila-field">
+                  <span>Scenario Name</span>
+                  <input
+                    className="sila-input"
+                    value={simReq.scenarioName}
+                    onChange={(e) => setSimReq({ ...simReq, scenarioName: e.target.value })}
+                  />
+                </label>
+                <label className="sila-field">
+                  <span>Guest Count</span>
+                  <input
+                    className="sila-input"
+                    type="number"
+                    value={simReq.expectedCovers}
+                    onChange={(e) => setSimReq({ ...simReq, expectedCovers: e.target.value })}
+                  />
+                </label>
+                <label className="sila-field">
+                  <span>Ingredient Price Δ %</span>
+                  <input
+                    className="sila-input"
+                    type="number"
+                    value={simReq.ingredientPriceChangePercent}
+                    onChange={(e) => setSimReq({ ...simReq, ingredientPriceChangePercent: e.target.value })}
+                  />
+                </label>
+                <label className="sila-field">
+                  <span>Selling Price Δ %</span>
+                  <input
+                    className="sila-input"
+                    type="number"
+                    value={simReq.sellingPriceChangePercent}
+                    onChange={(e) => setSimReq({ ...simReq, sellingPriceChangePercent: e.target.value })}
+                  />
+                </label>
+                <label className="sila-field">
+                  <span>Portion Size Δ %</span>
+                  <input
+                    className="sila-input"
+                    type="number"
+                    value={simReq.portionSizeChangePercent}
+                    onChange={(e) => setSimReq({ ...simReq, portionSizeChangePercent: e.target.value })}
+                  />
+                </label>
+                <label className="sila-field">
+                  <span>Discount %</span>
+                  <input
+                    className="sila-input"
+                    type="number"
+                    value={simReq.discountPercent}
+                    onChange={(e) => setSimReq({ ...simReq, discountPercent: e.target.value })}
+                  />
+                </label>
+              </div>
+              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  className="sila-studio-btn sila-studio-btn--secondary"
+                  onClick={() => handleRunSim(false)}
+                >
+                  Run Isolated What-If
+                </button>
+                <button
+                  type="button"
+                  className="sila-studio-btn sila-studio-btn--primary"
+                  onClick={() => handleRunSim(true)}
+                >
+                  Save What-If Scenario
+                </button>
+                <button
+                  type="button"
+                  className="sila-studio-btn sila-studio-btn--secondary"
+                  onClick={async () => {
+                    const ids = compareIds.length > 0 ? compareIds : (ws.scenarios ?? []).slice(0, 4).map((x) => x.id);
+                    setCompareResult(await compareMeScenarios(ids));
+                  }}
+                >
+                  Compare Saved Scenarios
+                </button>
+              </div>
+              {(ws.scenarios ?? []).length > 0 && (
+                <div style={{ display: "flex", gap: "0.45rem", flexWrap: "wrap" }}>
+                  {(ws.scenarios ?? []).map((sc) => (
+                    <label key={sc.id} className="sme-chip" style={{ cursor: "pointer" }}>
+                      <input
+                        type="checkbox"
+                        checked={compareIds.includes(sc.id)}
+                        onChange={(e) =>
+                          setCompareIds((prev) => (e.target.checked ? [...prev, sc.id] : prev.filter((id) => id !== sc.id)))
+                        }
+                      />{" "}
+                      {sc.scenarioName}
+                    </label>
+                  ))}
+                </div>
+              )}
+              {simResult && (
+                <div className="sme-kpi-box">
+                  <div className="sme-muted">{simResult.demandAssumptionDisclosure}</div>
+                  <div className="sme-grid sila-tabular" style={{ marginTop: "0.5rem" }}>
+                    {viewCost && (
+                      <div>
+                        Baseline Cost: {num(simResult.baselineCost)} → <strong>{num(simResult.foodCost)}</strong> (
+                        {simResult.costVariancePct}%)
+                      </div>
+                    )}
+                    <div>
+                      Baseline Rev: {num(simResult.baselineRevenue)} → <strong>{num(simResult.revenue)}</strong> (
+                      {simResult.revenueVariancePct}%)
+                    </div>
+                    {viewMargin && (
+                      <div>
+                        Baseline Margin: {num(simResult.baselineMargin)} →{" "}
+                        <strong>{num(simResult.contributionMargin)}</strong> ({simResult.marginVariancePct}%)
                       </div>
                     )}
                   </div>
-                )}
-
-                <div className="sme-form">
-                  <label className="sila-field"><span>Scenario Name</span><input className="sila-input" value={simReq.scenarioName} onChange={(e) => setSimReq({ ...simReq, scenarioName: e.target.value })} /></label>
-                  <label className="sila-field"><span>Guest Count</span><input className="sila-input" type="number" value={simReq.expectedCovers} onChange={(e) => setSimReq({ ...simReq, expectedCovers: e.target.value })} /></label>
-                  <label className="sila-field"><span>Ingredient Price Δ %</span><input className="sila-input" type="number" value={simReq.ingredientPriceChangePercent} onChange={(e) => setSimReq({ ...simReq, ingredientPriceChangePercent: e.target.value })} /></label>
-                  <label className="sila-field"><span>Selling Price Δ %</span><input className="sila-input" type="number" value={simReq.sellingPriceChangePercent} onChange={(e) => setSimReq({ ...simReq, sellingPriceChangePercent: e.target.value })} /></label>
-                  <label className="sila-field"><span>Portion Size Δ %</span><input className="sila-input" type="number" value={simReq.portionSizeChangePercent} onChange={(e) => setSimReq({ ...simReq, portionSizeChangePercent: e.target.value })} /></label>
-                  <label className="sila-field"><span>Discount %</span><input className="sila-input" type="number" value={simReq.discountPercent} onChange={(e) => setSimReq({ ...simReq, discountPercent: e.target.value })} /></label>
                 </div>
-                <div style={{ display: "flex", gap: "0.5rem" }}>
-                  <button type="button" className="sila-btn sila-btn--secondary" onClick={() => handleRunSim(false)}>Run Isolated What-If</button>
-                  <button type="button" className="sila-btn sila-btn--primary" onClick={() => handleRunSim(true)}>Save What-If Scenario</button>
-                  <button
-                    type="button"
-                    className="sila-btn sila-btn--secondary"
-                    onClick={async () => {
-                      const ids = compareIds.length > 0 ? compareIds : (ws.scenarios ?? []).slice(0, 4).map((x) => x.id);
-                      setCompareResult(await compareMeScenarios(ids));
-                    }}
-                  >
-                    Compare Legacy Scenarios
-                  </button>
-                </div>
-                {(ws.scenarios ?? []).length > 0 && (
-                  <div style={{ display: "flex", gap: "0.45rem", flexWrap: "wrap", marginTop: "0.4rem" }}>
-                    {(ws.scenarios ?? []).map((sc) => (
-                      <label key={sc.id} className="sme-chip" style={{ cursor: "pointer" }}>
-                        <input
-                          type="checkbox"
-                          checked={compareIds.includes(sc.id)}
-                          onChange={(e) => setCompareIds((prev) => (e.target.checked ? [...prev, sc.id] : prev.filter((id) => id !== sc.id)))}
-                        />{" "}
-                        {sc.scenarioName}
-                      </label>
-                    ))}
-                  </div>
-                )}
-                {simResult && (
-                  <div className="sme-kpi-box">
-                    <div className="sme-muted">{simResult.demandAssumptionDisclosure}</div>
-                    <div className="sme-grid" style={{ marginTop: "0.5rem" }}>
-                      {viewCost && <div>Baseline Cost: {num(simResult.baselineCost)} → <strong>{num(simResult.foodCost)}</strong> ({simResult.costVariancePct}%)</div>}
-                      <div>Baseline Rev: {num(simResult.baselineRevenue)} → <strong>{num(simResult.revenue)}</strong> ({simResult.revenueVariancePct}%)</div>
-                      {viewMargin && <div>Baseline Margin: {num(simResult.baselineMargin)} → <strong>{num(simResult.contributionMargin)}</strong> ({simResult.marginVariancePct}%)</div>}
-                    </div>
-                  </div>
-                )}
-                {compareResult && (
-                  <table className="sila-table">
-                    <thead><tr><th>Scenario</th><th>Covers</th><th>Revenue</th>{viewCost && <th>FC %</th>}{viewMargin && <th>Margin</th>}<th>Action</th></tr></thead>
+              )}
+              {compareResult && (
+                <div className="sila-studio-table-wrap">
+                  <table className="sila-table sila-tabular">
+                    <thead>
+                      <tr>
+                        <th>Scenario</th>
+                        <th>Covers</th>
+                        <th>Revenue</th>
+                        {viewCost && <th>FC %</th>}
+                        {viewMargin && <th>Margin</th>}
+                        <th>Action</th>
+                      </tr>
+                    </thead>
                     <tbody>
                       {compareResult.scenarios.map((s) => (
                         <tr key={s.id}>
-                          <td><strong>{s.scenarioName}</strong> {s.isPreferred && "★"}</td>
+                          <td>
+                            <strong>{s.scenarioName}</strong> {s.isPreferred && "★"}
+                          </td>
                           <td>{s.expectedCovers}</td>
                           <td>{num(s.expectedRevenue)}</td>
                           {viewCost && <td>{pct(s.foodCostPercent)}</td>}
                           {viewMargin && <td>{num(s.contributionMargin)}</td>}
                           <td style={{ display: "flex", gap: "0.3rem", flexWrap: "wrap" }}>
-                            <button type="button" className="sila-btn sila-btn--secondary" onClick={async () => { await setMePreferredScenario(s.id); await loadWorkspace(selectedPlanId || undefined); }}>Preferred</button>
-                            <button type="button" className="sila-btn sila-btn--secondary" onClick={async () => { const d = await convertMeScenarioToDraft(s.id); toastService.success(`Converted to draft ${d.name}`); await loadWorkspace(d.id); }}>Convert to Draft</button>
+                            <button
+                              type="button"
+                              className="sila-studio-btn sila-studio-btn--secondary sila-studio-btn--sm"
+                              onClick={async () => {
+                                await setMePreferredScenario(s.id);
+                                await loadWorkspace(selectedPlanId || undefined);
+                              }}
+                            >
+                              Preferred
+                            </button>
+                            <button
+                              type="button"
+                              className="sila-studio-btn sila-studio-btn--secondary sila-studio-btn--sm"
+                              onClick={async () => {
+                                const d = await convertMeScenarioToDraft(s.id);
+                                toastService.success(`Converted to draft ${d.name}`);
+                                await loadWorkspace(d.id);
+                              }}
+                            >
+                              Convert to Draft
+                            </button>
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
-                )}
-              </div>
-            )}
+                </div>
+              )}
+            </div>
+          )}
 
-            {activeTab === "RISK_SENSITIVITY" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                <div className="sme-row">
-                  <span className="sme-muted">Probabilistic Monte Carlo risk, Tornado sensitivity, operational stress testing &amp; separated food waste prediction.</span>
-                  <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
-                    <button
-                      type="button"
-                      className="sila-btn sila-btn--primary"
-                      disabled={twinBusy}
-                      onClick={async () => {
-                        setTwinBusy(true);
-                        try {
-                          const [mc, sens, st, w] = await Promise.all([
-                            runMonteCarlo({ propertyId: propertyId || undefined, menuPlanId: selectedPlanId || undefined, seed: 42, runs: 1000, guestCountMean: Number(draftCovers) || 300, targetFoodCostPercent: Number(draftTargetFc) || 30 }),
-                            runSensitivity({ propertyId: propertyId || undefined, menuPlanId: selectedPlanId || undefined, targetFoodCostPercent: Number(draftTargetFc) || 30 }),
-                            runStressTest({ propertyId: propertyId || undefined, menuPlanId: selectedPlanId || undefined, baselineGuests: Number(draftCovers) || 300 }),
-                            getWastePrediction(propertyId || undefined, selectedPlanId || undefined),
-                          ]);
-                          setMonteCarloResult(mc);
-                          setSensitivityResult(sens);
-                          setStressResult(st);
-                          setWasteResult(w);
-                        } catch (e) {
-                          toastService.error(e instanceof Error ? e.message : "Risk suite failed.");
-                        } finally {
-                          setTwinBusy(false);
-                        }
-                      }}
-                    >
-                      Run Full Risk, Monte Carlo &amp; Stress Suite
-                    </button>
+          {activeTab === "RISK_SENSITIVITY" && (
+            <div className="sila-studio-panel">
+              <div className="sme-row">
+                <span className="sme-muted">
+                  Probabilistic Monte Carlo risk, Tornado sensitivity, operational stress testing &amp; separated food waste
+                  prediction.
+                </span>
+                <button
+                  type="button"
+                  className="sila-studio-btn sila-studio-btn--primary sila-studio-btn--sm"
+                  disabled={twinBusy}
+                  onClick={async () => {
+                    setTwinBusy(true);
+                    try {
+                      const [mc, sens, st, w] = await Promise.all([
+                        runMonteCarlo({
+                          propertyId: propertyId || undefined,
+                          menuPlanId: selectedPlanId || undefined,
+                          seed: 42,
+                          runs: 1000,
+                          guestCountMean: Number(draftCovers) || 300,
+                          targetFoodCostPercent: Number(draftTargetFc) || 30,
+                        }),
+                        runSensitivity({
+                          propertyId: propertyId || undefined,
+                          menuPlanId: selectedPlanId || undefined,
+                          targetFoodCostPercent: Number(draftTargetFc) || 30,
+                        }),
+                        runStressTest({
+                          propertyId: propertyId || undefined,
+                          menuPlanId: selectedPlanId || undefined,
+                          baselineGuests: Number(draftCovers) || 300,
+                        }),
+                        getWastePrediction(propertyId || undefined, selectedPlanId || undefined),
+                      ]);
+                      setMonteCarloResult(mc);
+                      setSensitivityResult(sens);
+                      setStressResult(st);
+                      setWasteResult(w);
+                    } catch (e) {
+                      toastService.error(e instanceof Error ? e.message : "Risk suite failed.");
+                    } finally {
+                      setTwinBusy(false);
+                    }
+                  }}
+                >
+                  Run Full Risk, Monte Carlo &amp; Stress Suite
+                </button>
+              </div>
+
+              {monteCarloResult && (
+                <div className="sme-kpi-box">
+                  <div className="sme-row">
+                    <strong>
+                      Monte Carlo Distribution ({monteCarloResult.runs} seeded runs · Seed {monteCarloResult.seed})
+                    </strong>
+                    <span className="sme-chip">Runtime {monteCarloResult.runtimeMs.toFixed(1)} ms</span>
+                  </div>
+                  <div className="sme-quadrant-grid sila-tabular" style={{ marginTop: "0.4rem" }}>
+                    <div>
+                      <span className="sme-muted">P(Exceed Budget)</span>
+                      <div>
+                        <strong>{pct(monteCarloResult.probExceedBudget)}</strong>
+                      </div>
+                    </div>
+                    <div>
+                      <span className="sme-muted">P(Exceed FC Target)</span>
+                      <div>
+                        <strong>{pct(monteCarloResult.probExceedFoodCostTarget)}</strong>
+                      </div>
+                    </div>
+                    <div>
+                      <span className="sme-muted">P(Shortage)</span>
+                      <div>
+                        <strong>{pct(monteCarloResult.probIngredientShortage)}</strong>
+                      </div>
+                    </div>
+                    {viewMargin && (
+                      <div>
+                        <span className="sme-muted">Margin P10 / Exp / P90</span>
+                        <div>
+                          <strong>
+                            {num(monteCarloResult.marginP10)} / {num(monteCarloResult.expectedContributionMargin)} /{" "}
+                            {num(monteCarloResult.marginP90)}
+                          </strong>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
+              )}
 
-                {monteCarloResult && (
-                  <div className="sme-kpi-box">
-                    <div className="sme-row">
-                      <strong>Monte Carlo Distribution ({monteCarloResult.runs} seeded runs · Seed {monteCarloResult.seed})</strong>
-                      <span className="sme-chip">Runtime {monteCarloResult.runtimeMs.toFixed(1)} ms</span>
-                    </div>
-                    <div className="sme-quadrant-grid" style={{ marginTop: "0.4rem" }}>
-                      <div><span className="sme-muted">P(Exceed Budget)</span><div><strong>{pct(monteCarloResult.probExceedBudget)}</strong></div></div>
-                      <div><span className="sme-muted">P(Exceed FC Target)</span><div><strong>{pct(monteCarloResult.probExceedFoodCostTarget)}</strong></div></div>
-                      <div><span className="sme-muted">P(Shortage)</span><div><strong>{pct(monteCarloResult.probIngredientShortage)}</strong></div></div>
-                      {viewMargin && <div><span className="sme-muted">Margin P10 / Exp / P90</span><div><strong>{num(monteCarloResult.marginP10)} / {num(monteCarloResult.expectedContributionMargin)} / {num(monteCarloResult.marginP90)}</strong></div></div>}
-                    </div>
-                  </div>
-                )}
-
-                {sensitivityResult && (
-                  <div className="sme-kpi-box">
-                    <strong>Tornado Sensitivity Analysis (Break-Even FC Ceiling: {pct(sensitivityResult.breakEvenFoodCostCeiling)})</strong>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem", marginTop: "0.4rem" }}>
-                      {sensitivityResult.tornado.map((t) => {
-                        const maxSwing = Math.max(1, sensitivityResult.tornado[0]?.marginSwing ?? 1);
-                        const barPct = Math.min(100, Math.round((t.marginSwing / maxSwing) * 100));
-                        return (
-                          <div key={t.variableName} style={{ display: "grid", gridTemplateColumns: "180px 1fr 120px", gap: "0.5rem", alignItems: "center", fontSize: "0.8rem" }}>
-                            <span>{t.variableName}</span>
-                            <div style={{ background: "#e2e8f0", height: "10px", borderRadius: "4px", overflow: "hidden" }}>
-                              <div style={{ width: `${barPct}%`, background: "#0284c7", height: "100%" }} />
-                            </div>
-                            <span>{viewMargin ? `Swing ${num(t.marginSwing)}` : `FC Δ ${pct(t.foodCostSwingPercent)}`}</span>
+              {sensitivityResult && (
+                <div className="sme-kpi-box">
+                  <strong>
+                    Tornado Sensitivity Analysis (Break-Even FC Ceiling:{" "}
+                    {pct(sensitivityResult.breakEvenFoodCostCeiling)})
+                  </strong>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem", marginTop: "0.4rem" }}>
+                    {sensitivityResult.tornado.map((t) => {
+                      const maxSwing = Math.max(1, sensitivityResult.tornado[0]?.marginSwing ?? 1);
+                      const barPct = Math.min(100, Math.round((t.marginSwing / maxSwing) * 100));
+                      return (
+                        <div
+                          key={t.variableName}
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "180px 1fr 120px",
+                            gap: "0.5rem",
+                            alignItems: "center",
+                            fontSize: "0.8rem",
+                          }}
+                        >
+                          <span>{t.variableName}</span>
+                          <div style={{ background: "#e1edf8", height: "10px", borderRadius: "4px", overflow: "hidden" }}>
+                            <div style={{ width: `${barPct}%`, background: "#087BB5", height: "100%" }} />
                           </div>
-                        );
-                      })}
-                    </div>
+                          <span className="sila-tabular">
+                            {viewMargin ? `Swing ${num(t.marginSwing)}` : `FC Δ ${pct(t.foodCostSwingPercent)}`}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
-                )}
+                </div>
+              )}
 
-                {stressResult && (
-                  <table className="sila-table">
-                    <thead><tr><th>Stress Test</th><th>Guests</th>{viewCost && <th>Revised FC %</th>}{viewMargin && <th>Revised Margin</th>}<th>Feasible?</th><th>Shortage Risk</th><th>Corrective Action</th></tr></thead>
+              {stressResult && (
+                <div className="sila-studio-table-wrap">
+                  <table className="sila-table sila-tabular">
+                    <thead>
+                      <tr>
+                        <th>Stress Test</th>
+                        <th>Guests</th>
+                        {viewCost && <th>Revised FC %</th>}
+                        {viewMargin && <th>Revised Margin</th>}
+                        <th>Feasible?</th>
+                        <th>Shortage Risk</th>
+                        <th>Corrective Action</th>
+                      </tr>
+                    </thead>
                     <tbody>
                       {stressResult.outcomes.map((o) => (
                         <tr key={o.stressType}>
-                          <td><strong>{o.label}</strong></td>
+                          <td>
+                            <strong>{o.label}</strong>
+                          </td>
                           <td>{o.revisedGuests}</td>
                           {viewCost && <td>{pct(o.revisedFoodCostPercent)}</td>}
                           {viewMargin && <td>{num(o.revisedMargin)}</td>}
@@ -1883,16 +2889,31 @@ const MeStudioWorkspace: React.FC<Props> = ({
                       ))}
                     </tbody>
                   </table>
-                )}
+                </div>
+              )}
 
-                {wasteResult && (
-                  <div className="sme-kpi-box">
-                    <div className="sme-row">
-                      <strong>Food Waste Prediction (Yield &amp; Waste Separated: {wasteResult.yieldAndWasteSeparated ? "YES" : "NO"})</strong>
-                      <span className="sme-chip sme-chip--ok">Food Safety Priority Enforced</span>
-                    </div>
-                    <table className="sila-table" style={{ marginTop: "0.4rem" }}>
-                      <thead><tr><th>Item</th><th>Prep Waste</th><th>Yield Loss</th><th>Overprod.</th><th>Buffet Leftover</th><th>Expiry Risk</th><th>Guidance</th></tr></thead>
+              {wasteResult && (
+                <div className="sme-kpi-box">
+                  <div className="sme-row">
+                    <strong>
+                      Food Waste Prediction (Yield &amp; Waste Separated:{" "}
+                      {wasteResult.yieldAndWasteSeparated ? "YES" : "NO"})
+                    </strong>
+                    <span className="sme-chip sme-chip--ok">Food Safety Priority Enforced</span>
+                  </div>
+                  <div className="sila-studio-table-wrap" style={{ marginTop: "0.4rem" }}>
+                    <table className="sila-table sila-tabular">
+                      <thead>
+                        <tr>
+                          <th>Item</th>
+                          <th>Prep Waste</th>
+                          <th>Yield Loss</th>
+                          <th>Overprod.</th>
+                          <th>Buffet Leftover</th>
+                          <th>Expiry Risk</th>
+                          <th>Guidance</th>
+                        </tr>
+                      </thead>
                       <tbody>
                         {wasteResult.items.slice(0, 6).map((w) => (
                           <tr key={w.itemId}>
@@ -1908,47 +2929,69 @@ const MeStudioWorkspace: React.FC<Props> = ({
                       </tbody>
                     </table>
                   </div>
-                )}
-              </div>
-            )}
+                </div>
+              )}
+            </div>
+          )}
 
-            {activeTab === "HISTORICAL" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                {selectedPlanId && (
-                  <div className="sme-row">
-                    <span className="sme-muted">Historical menus, structural similarity, and continuous champion/challenger outcome learning.</span>
-                    <button
-                      type="button"
-                      className="sila-btn sila-btn--secondary"
-                      onClick={async () => {
-                        await captureOutcomeLearning(selectedPlanId);
-                        setGovStatus(await getModelGovernanceStatus());
-                        toastService.success("Captured actual vs predicted event outcome lineage.");
-                      }}
-                    >
-                      Capture Completed Outcome Lineage
-                    </button>
-                  </div>
-                )}
-                <table className="sila-table">
+          {activeTab === "HISTORICAL" && (
+            <div className="sila-studio-panel">
+              {selectedPlanId && (
+                <div className="sme-row">
+                  <span className="sme-muted">
+                    Historical menus, structural similarity, and continuous champion/challenger outcome learning.
+                  </span>
+                  <button
+                    type="button"
+                    className="sila-studio-btn sila-studio-btn--secondary sila-studio-btn--sm"
+                    onClick={async () => {
+                      await captureOutcomeLearning(selectedPlanId);
+                      setGovStatus(await getModelGovernanceStatus());
+                      toastService.success("Captured actual vs predicted event outcome lineage.");
+                    }}
+                  >
+                    Capture Completed Outcome Lineage
+                  </button>
+                </div>
+              )}
+              <div className="sila-studio-table-wrap">
+                <table className="sila-table sila-tabular">
                   <thead>
-                    <tr><th>Historical Menu</th><th>Type</th><th>Date</th><th>Guests</th><th>Actual Sales</th>{viewCost && <th>Current Recost</th>}<th>Action</th></tr>
+                    <tr>
+                      <th>Historical Menu</th>
+                      <th>Type</th>
+                      <th>Date</th>
+                      <th>Guests</th>
+                      <th>Actual Sales</th>
+                      {viewCost && <th>Current Recost</th>}
+                      <th>Action</th>
+                    </tr>
                   </thead>
                   <tbody>
                     {ws.historicalMenus.map((h) => (
                       <tr key={h.sourceId}>
-                        <td>{h.name} (v{h.versionNumber})</td>
+                        <td>
+                          {h.name} (v{h.versionNumber})
+                        </td>
                         <td>{h.eventType}</td>
                         <td>{h.businessDate.slice(0, 10)}</td>
                         <td>{h.guestCount}</td>
                         <td>{num(h.actualSales)}</td>
-                        {viewCost && <td>{num(h.recalculatedCurrentCost)} ({pct(h.recalculatedCurrentFoodCostPercent)})</td>}
+                        {viewCost && (
+                          <td>
+                            {num(h.recalculatedCurrentCost)} ({pct(h.recalculatedCurrentFoodCostPercent)})
+                          </td>
+                        )}
                         <td>
                           <button
                             type="button"
-                            className="sila-btn sila-btn--secondary"
+                            className="sila-studio-btn sila-studio-btn--secondary sila-studio-btn--sm"
                             onClick={async () => {
-                              const created = await createMePlanFromHistorical(h.sourceId, h.sourceKind, propertyId || undefined);
+                              const created = await createMePlanFromHistorical(
+                                h.sourceId,
+                                h.sourceKind,
+                                propertyId || undefined
+                              );
                               toastService.success(`Copied historical menu into draft '${created.name}' at current prices.`);
                               await loadWorkspace(created.id);
                             }}
@@ -1960,12 +3003,23 @@ const MeStudioWorkspace: React.FC<Props> = ({
                     ))}
                   </tbody>
                 </table>
+              </div>
 
-                {histSimilarity && histSimilarity.matches.length > 0 && (
-                  <div className="sme-kpi-box">
-                    <strong>Comparable Historical Events / Menus ({histSimilarity.targetTitle})</strong>
-                    <table className="sila-table" style={{ marginTop: "0.4rem" }}>
-                      <thead><tr><th>Comparable</th><th>Similarity</th><th>Matching Factors</th><th>Key Differences</th>{viewCost && <th>Actual FC %</th>}<th>Actual Waste %</th></tr></thead>
+              {histSimilarity && histSimilarity.matches.length > 0 && (
+                <div className="sme-kpi-box">
+                  <strong>Comparable Historical Events / Menus ({histSimilarity.targetTitle})</strong>
+                  <div className="sila-studio-table-wrap" style={{ marginTop: "0.4rem" }}>
+                    <table className="sila-table sila-tabular">
+                      <thead>
+                        <tr>
+                          <th>Comparable</th>
+                          <th>Similarity</th>
+                          <th>Matching Factors</th>
+                          <th>Key Differences</th>
+                          {viewCost && <th>Actual FC %</th>}
+                          <th>Actual Waste %</th>
+                        </tr>
+                      </thead>
                       <tbody>
                         {histSimilarity.matches.map((m) => (
                           <tr key={m.recordId}>
@@ -1980,54 +3034,126 @@ const MeStudioWorkspace: React.FC<Props> = ({
                       </tbody>
                     </table>
                   </div>
-                )}
+                </div>
+              )}
 
-                {govStatus && (
-                  <div className="sme-kpi-box">
-                    <div className="sme-row">
-                      <strong>Continuous Learning &amp; Model Governance (Champion: {govStatus.activeChampionModel})</strong>
-                      <span className="sme-chip">Drift Events: {govStatus.driftEvents.length} · Tracked Outcomes: {govStatus.recentOutcomeLineage.length}</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {activeTab === "APPROVAL" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                <div className="sme-row">
-                  <input className="sila-input" style={{ flex: 1 }} placeholder="Approval / review comment…" value={approvalComment} onChange={(e) => setApprovalComment(e.target.value)} />
-                  <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
-                    <button type="button" className="sila-btn sila-btn--secondary" onClick={() => handleTransition("UNDER_REVIEW")}>Submit for Review</button>
-                    <button type="button" className="sila-btn sila-btn--secondary" onClick={() => handleTransition("PENDING_APPROVAL")}>Request Approval</button>
-                    {perms.approveMenu && (
-                      <>
-                        <button type="button" className="sila-btn sila-btn--secondary" onClick={() => handleTransition("CHANGES_REQUESTED")}>Request Changes</button>
-                        <button type="button" className="sila-btn sila-btn--primary" onClick={() => handleTransition("APPROVED")}>Approve</button>
-                      </>
-                    )}
-                    {perms.publishMenu && (
-                      <>
-                        <button type="button" className="sila-btn sila-btn--secondary" onClick={() => handleTransition("SCHEDULED")}>Schedule</button>
-                        <button type="button" className="sila-btn sila-btn--primary" onClick={() => handleTransition("PUBLISHED")}>Publish Menu</button>
-                      </>
-                    )}
-                    {perms.approveMenu && (
-                      <>
-                        <button type="button" className="sila-btn sila-btn--secondary" onClick={() => handleTransition("SUSPENDED")}>Suspend</button>
-                        <button type="button" className="sila-btn sila-btn--secondary" onClick={() => handleTransition("ARCHIVED")}>Archive</button>
-                      </>
-                    )}
+              {govStatus && (
+                <div className="sme-kpi-box">
+                  <div className="sme-row">
+                    <strong>
+                      Continuous Learning &amp; Model Governance (Champion: {govStatus.activeChampionModel})
+                    </strong>
+                    <span className="sme-chip">
+                      Drift Events: {govStatus.driftEvents.length} · Tracked Outcomes:{" "}
+                      {govStatus.recentOutcomeLineage.length}
+                    </span>
                   </div>
                 </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === "APPROVAL" && (
+            <div className="sila-studio-panel">
+              <div className="sme-row">
+                <input
+                  className="sila-input"
+                  style={{ flex: 1 }}
+                  placeholder="Approval / review comment…"
+                  value={approvalComment}
+                  onChange={(e) => setApprovalComment(e.target.value)}
+                />
+                <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    className="sila-studio-btn sila-studio-btn--secondary sila-studio-btn--sm"
+                    onClick={() => handleTransition("UNDER_REVIEW")}
+                  >
+                    Submit for Review
+                  </button>
+                  <button
+                    type="button"
+                    className="sila-studio-btn sila-studio-btn--secondary sila-studio-btn--sm"
+                    onClick={() => handleTransition("PENDING_APPROVAL")}
+                  >
+                    Request Approval
+                  </button>
+                  {perms.approveMenu && (
+                    <>
+                      <button
+                        type="button"
+                        className="sila-studio-btn sila-studio-btn--secondary sila-studio-btn--sm"
+                        onClick={() => handleTransition("CHANGES_REQUESTED")}
+                      >
+                        Request Changes
+                      </button>
+                      <button
+                        type="button"
+                        className="sila-studio-btn sila-studio-btn--primary sila-studio-btn--sm"
+                        onClick={() => handleTransition("APPROVED")}
+                      >
+                        Approve
+                      </button>
+                    </>
+                  )}
+                  {perms.publishMenu && (
+                    <>
+                      <button
+                        type="button"
+                        className="sila-studio-btn sila-studio-btn--secondary sila-studio-btn--sm"
+                        onClick={() => handleTransition("SCHEDULED")}
+                      >
+                        Schedule
+                      </button>
+                      <button
+                        type="button"
+                        className="sila-studio-btn sila-studio-btn--primary sila-studio-btn--sm"
+                        onClick={() => handleTransition("PUBLISHED")}
+                      >
+                        Publish Menu
+                      </button>
+                    </>
+                  )}
+                  {perms.approveMenu && (
+                    <>
+                      <button
+                        type="button"
+                        className="sila-studio-btn sila-studio-btn--secondary sila-studio-btn--sm"
+                        onClick={() => handleTransition("SUSPENDED")}
+                      >
+                        Suspend
+                      </button>
+                      <button
+                        type="button"
+                        className="sila-studio-btn sila-studio-btn--secondary sila-studio-btn--sm"
+                        onClick={() => handleTransition("ARCHIVED")}
+                      >
+                        Archive
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+              <div className="sila-studio-table-wrap">
                 <table className="sila-table">
-                  <thead><tr><th>Version</th><th>From</th><th>To</th><th>Role</th><th>Reason</th><th>Timestamp</th></tr></thead>
+                  <thead>
+                    <tr>
+                      <th>Version</th>
+                      <th>From</th>
+                      <th>To</th>
+                      <th>Role</th>
+                      <th>Reason</th>
+                      <th>Timestamp</th>
+                    </tr>
+                  </thead>
                   <tbody>
                     {ws.approvalHistory.map((h) => (
                       <tr key={h.id}>
                         <td>v{h.versionNumber}</td>
                         <td>{h.fromStatus}</td>
-                        <td><strong>{h.toStatus}</strong></td>
+                        <td>
+                          <strong>{h.toStatus}</strong>
+                        </td>
                         <td>{h.approverRole || "—"}</td>
                         <td>{h.reason || "—"}</td>
                         <td>{new Date(h.actionAtUtc).toLocaleString()}</td>
@@ -2036,9 +3162,23 @@ const MeStudioWorkspace: React.FC<Props> = ({
                   </tbody>
                 </table>
               </div>
-            )}
-          </div>
-        )}
+            </div>
+          )}
+        </div>
+
+        {/* TEMPORARY / PINNABLE DISH LIBRARY DRAWER (CLOSED BY DEFAULT) */}
+        <DishLibraryDrawer
+          isOpen={dishLibraryOpen}
+          pinned={dishLibraryPinned}
+          onTogglePin={() => setDishLibraryPinned((p) => !p)}
+          onClose={() => {
+            setDishLibraryOpen(false);
+            setReplaceLineIndex(null);
+          }}
+          title={`Dish & Recipe Library (${filteredLibrary.length})`}
+        >
+          {dishLibraryContent}
+        </DishLibraryDrawer>
       </div>
     </div>
   );

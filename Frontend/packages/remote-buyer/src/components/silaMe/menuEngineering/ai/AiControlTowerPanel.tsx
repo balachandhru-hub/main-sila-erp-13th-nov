@@ -176,7 +176,7 @@ export const AiControlTowerPanel: React.FC<Props> = ({ propertyId, permissions }
       </div>
 
       {em.autonomousModePaused && (
-        <div className="sme-kpi-box" style={{ borderColor: "#dc2626", background: "#fef2f2", marginBottom: "0.65rem" }}>
+        <div className="sme-kpi-box" style={{ borderColor: "#c24141", background: "#fff1f1", marginBottom: "0.65rem" }}>
           <strong>EMERGENCY PAUSE ACTIVE</strong> — {em.emergencyPauseReason || "Autonomous agent execution paused by administrator. Manual operations continue normally."}
         </div>
       )}
@@ -214,7 +214,7 @@ export const AiControlTowerPanel: React.FC<Props> = ({ propertyId, permissions }
       {/* TAB 1: INTELLIGENCE OVERVIEW + EXECUTIVE DASHBOARD */}
       {tab === "OVERVIEW" && execDash && (
         <div className="sme-list">
-          <div className="sme-panel" style={{ background: "#f8fafc" }}>
+          <div className="sme-panel" style={{ background: "#ffffff" }}>
             <div className="sme-panel__header" style={{ flexWrap: "wrap", gap: "0.4rem" }}>
               <strong>Executive Intelligence Dashboard ({execDash.currency})</strong>
               <div style={{ display: "flex", gap: "0.3rem", flexWrap: "wrap" }}>
