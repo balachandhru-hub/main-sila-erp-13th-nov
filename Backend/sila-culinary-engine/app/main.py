@@ -7,9 +7,11 @@ from app.engines.documents import extract_recipe_document, validate_and_prepare_
 from app.engines.material_eval import run_material_evaluation
 from app.engines.material_index import get_index_manager
 from app.engines.material_matcher import MaterialIntelligenceEngine
+from app.engines.material_request_assist import assist_material_request
 from app.engines.mrp import EventMrpRequest, EventMrpResult, calculate_event_mrp
 from app.engines.normalization import convert_physical_quantity, normalize_ingredient_text
 from app.engines.pnl import EventPnlRequest, EventPnlResult, calculate_event_pnl
+from app.engines.recipe_costing import calculate_recipe_costing, optimize_recipe_costing
 from app.engines.scaling import (
     RecipeScaleRequest,
     RecipeScaleResult,
@@ -22,6 +24,14 @@ from app.engines.substitution_engine import SubstitutionEngine
 from app.engines.validation import enrich_and_validate_recipe
 from app.providers.adapters import test_provider_connection
 from app.providers.router import ProviderKind, ProviderPolicy, ProviderUnavailableError
+from app.schemas.costing_ai import (
+    CostOptimizationRequest,
+    CostOptimizationResponse,
+    MaterialRequestAssistRequest,
+    MaterialRequestAssistResponse,
+    RecipeCostingRequest,
+    RecipeCostingResponse,
+)
 from app.schemas.material_ai import (
     BulkMaterialMatchRequest,
     BulkMaterialMatchResponse,
@@ -309,4 +319,22 @@ async def post_suggest_substitutions(req: SubstitutionSuggestRequest) -> Substit
 @app.post("/v1/materials/evaluate", response_model=EvaluationMetricsResponse)
 async def post_evaluate_material_engine(config: MaterialMatchingConfig | None = None) -> EvaluationMetricsResponse:
     return await run_material_evaluation(config)
+
+
+# ==================== PHASE 1C MATERIAL REQUESTS & COSTING ENDPOINTS ====================
+
+
+@app.post("/v1/material-requests/assist", response_model=MaterialRequestAssistResponse)
+def post_assist_material_request(req: MaterialRequestAssistRequest) -> MaterialRequestAssistResponse:
+    return assist_material_request(req)
+
+
+@app.post("/v1/costing/calculate", response_model=RecipeCostingResponse)
+def post_calculate_recipe_costing(req: RecipeCostingRequest) -> RecipeCostingResponse:
+    return calculate_recipe_costing(req)
+
+
+@app.post("/v1/costing/optimize", response_model=CostOptimizationResponse)
+def post_optimize_recipe_costing(req: CostOptimizationRequest) -> CostOptimizationResponse:
+    return optimize_recipe_costing(req)
 
