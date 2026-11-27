@@ -284,7 +284,7 @@ const CulinaryMenuStudioWorkspace: React.FC<CulinaryMenuStudioWorkspaceProps> = 
           <h2 className="cs2-title">Menu Studio — Course, Published Recipe &amp; Dietary Builder</h2>
           <p className="cs2-subtitle">
             Build reusable Banquet, Buffet, Plated &amp; Corporate menus from published Recipe Master versions with
-            semantic search, allergen verification, portion sizing, and Phase 1C costing.
+            semantic search, allergen verification, portion sizing, and live costing.
           </p>
         </div>
         <div className="cs2-actions-row">

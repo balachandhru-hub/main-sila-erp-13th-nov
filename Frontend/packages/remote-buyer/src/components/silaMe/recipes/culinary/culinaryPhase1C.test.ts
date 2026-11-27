@@ -108,7 +108,8 @@ const workspacesSrc = read("SilaRecipeStudio2Workspaces.tsx");
 const navSrc = read("SilaRecipeStudio2Nav.tsx");
 assert.match(workspacesSrc, /CulinaryMaterialRequestsWorkspace/);
 assert.match(workspacesSrc, /CulinaryFoodCostStudioWorkspace/);
-assert.match(navSrc, /Phase 1C Live/);
+assert.match(navSrc, /id:\s*"material-requests"/);
+assert.match(navSrc, /id:\s*"food-cost"/);
 
 // 5. AI Engine Setup exposes costingConfig
 const aiSetupSrc = read("CulinaryAiEngineSetupWorkspace.tsx");

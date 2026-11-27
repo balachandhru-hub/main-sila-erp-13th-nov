@@ -470,22 +470,22 @@ const CulinaryEventPnlStudioWorkspace: React.FC = () => {
         <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "flex-start", gap: 14 }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-              <span className="cs2-brand-pill">Phase 3A Live</span>
-              <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>
+              <span className="cs2-brand-pill">Live Financial Engine</span>
+              <span style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>
                 Zero Live SAP Postings &middot; Zero GL/Invoice Auto-Creation &middot; Deterministic Decimal Engine
               </span>
             </div>
-            <h2 style={{ margin: "6px 0 4px", fontSize: 20, fontWeight: 700, color: "#0f172a" }}>
+            <h2 style={{ margin: "6px 0 4px", fontSize: 20, fontWeight: 700, color: "#123354" }}>
               {summary ? `${summary.eventName || summary.name} — Event P&L & Financial Intelligence` : "Event P&L & Financial Intelligence Studio"}
             </h2>
             {summary ? (
-              <div style={{ fontSize: 12.5, color: "#475569", display: "flex", flexWrap: "wrap", gap: 12 }}>
+              <div style={{ fontSize: 12.5, color: "#64748b", display: "flex", flexWrap: "wrap", gap: 12 }}>
                 <span>Plan: <strong>{summary.planCode}</strong> (v{summary.versionNumber})</span>
                 <span>Property: <strong>{summary.propertyName || "Main Property"}</strong></span>
                 <span>Venue: <strong>{summary.venueName || "Grand Ballroom"}</strong></span>
                 <span>Guests: <strong>{summary.plannedGuests}</strong> planned / <strong>{summary.billableGuests}</strong> billable</span>
                 <span>Status: <strong>{summary.status}</strong></span>
-                <span>Actuals: <strong>{summary.actualIsProvisional ? "PROVISIONAL (Phase 3A)" : "VERIFIED"}</strong></span>
+                <span>Actuals: <strong>{summary.actualIsProvisional ? "PROVISIONAL" : "VERIFIED"}</strong></span>
               </div>
             ) : (
               <div style={{ fontSize: 13, color: "#64748b" }}>
@@ -696,10 +696,10 @@ const CulinaryEventPnlStudioWorkspace: React.FC = () => {
                         key={`cell-${idx}`}
                         fill={
                           entry.kind === "REVENUE"
-                            ? "#4f46e5"
+                            ? "#087bb5"
                             : entry.kind === "CONTRIBUTION"
-                              ? "#059669"
-                              : "#f59e0b"
+                              ? "#16865c"
+                              : "#d97706"
                         }
                       />
                     ))}
@@ -726,9 +726,9 @@ const CulinaryEventPnlStudioWorkspace: React.FC = () => {
               <div style={{ fontSize: 13, color: "#64748b" }}>Launch or select a financial plan to inspect tenant portfolio metrics.</div>
             )}
             {detail?.phase3BHandover && (
-              <div style={{ marginTop: 12, padding: 10, borderRadius: 8, background: "#eef2ff", fontSize: 12 }}>
-                <strong>Phase 3B Analytics Handover:</strong> Ready ({String(detail.phase3BHandover.contractVersion ?? "PHASE3B-HANDOVER-1.0")}) &middot;{" "}
-                <strong>Phase 4B Reconciliation Handover:</strong> Provisional Framework Active
+              <div style={{ marginTop: 12, padding: 10, borderRadius: 8, background: "#eaf5ff", border: "1px solid #c7dff4", fontSize: 12 }}>
+                <strong>Analytics Handover:</strong> Ready ({String(detail.phase3BHandover.contractVersion ?? "HANDOVER-1.0")}) &middot;{" "}
+                <strong>Reconciliation Handover:</strong> Provisional Framework Active
               </div>
             )}
           </div>
@@ -962,7 +962,7 @@ const CulinaryEventPnlStudioWorkspace: React.FC = () => {
             </table>
           ) : (
             <div style={{ fontSize: 13, color: "#64748b" }}>
-              No linked PO allocations on this plan yet. Link an Event Procurement Plan (Phase 2C) to reconcile Purchase Expenditure vs Attributable Event Consumption vs Remaining Inventory Value.
+              No linked PO allocations on this plan yet. Link an Event Procurement Plan to reconcile Purchase Expenditure vs Attributable Event Consumption vs Remaining Inventory Value.
             </div>
           )}
         </div>
@@ -1185,7 +1185,7 @@ const CulinaryEventPnlStudioWorkspace: React.FC = () => {
           </div>
           {aiResponse && (
             <div style={{ padding: 12, borderRadius: 10, background: aiResponse.promptInjectionBlocked ? "#fef2f2" : "#f8fafc", border: "1px solid #e2e8f0" }}>
-              <div style={{ fontSize: 11.5, fontWeight: 700, color: "#4f46e5", marginBottom: 6 }}>Provider: {aiResponse.providerUsed}</div>
+              <div style={{ fontSize: 11.5, fontWeight: 700, color: "#087BB5", marginBottom: 6 }}>Provider: {aiResponse.providerUsed}</div>
               <div style={{ fontSize: 13.5, marginBottom: 8 }}>{aiResponse.answer}</div>
               {aiResponse.groundedFacts.length > 0 && (
                 <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: "#475569" }}>
@@ -1305,7 +1305,7 @@ const CulinaryEventPnlStudioWorkspace: React.FC = () => {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))", gap: 10, marginBottom: 14 }}>
             {filteredCatalog.map((r) => (
               <div key={r.reportCode} style={{ border: "1px solid #e2e8f0", borderRadius: 10, padding: 10, background: "#ffffff" }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: "#4f46e5" }}>{r.category}</div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#087BB5" }}>{r.category}</div>
                 <div style={{ fontSize: 13, fontWeight: 700, margin: "4px 0" }}>{r.title}</div>
                 <button type="button" className="cs2-btn cs2-btn-secondary" disabled={busy || !detail} onClick={() => void handleExportReport(r.reportCode)}>
                   Preview &amp; Export CSV

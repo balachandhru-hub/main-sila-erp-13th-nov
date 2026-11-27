@@ -1,8 +1,10 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
+import { ArrowUpRight, Maximize2, Minimize2 } from "lucide-react";
 import type { SilaCulinaryAiFeatureFlags, SilaCulinaryAiStatus } from "../../../../api/silaMe/silaCulinaryAiApi";
 import type { SilaRecipeDashboard } from "../../../../api/silaMe/silaRecipeToolsApi";
 import type { SilaMePermissions } from "../../silaMePermissions";
 import type { CulinaryWorkspaceKind, SilaRecipeRoute } from "../silaRecipeRoutes";
+import { StudioEmptyState } from "../../studio";
 import SilaRecipeStudio2Nav from "./SilaRecipeStudio2Nav";
 import CulinaryOverviewWorkspace from "./CulinaryOverviewWorkspace";
 import CulinaryRecipePlannerWorkspace from "./CulinaryRecipePlannerWorkspace";
@@ -30,7 +32,7 @@ interface SilaRecipeStudio2WorkspacesProps {
 }
 
 export const isCulinaryWorkspaceRoute = (
-  route: SilaRecipeRoute
+  route: SilaRecipeRoute,
 ): route is { kind: CulinaryWorkspaceKind } =>
   route.kind !== "list" &&
   route.kind !== "new" &&
@@ -61,6 +63,35 @@ const SilaRecipeStudio2Workspaces: React.FC<SilaRecipeStudio2WorkspacesProps> = 
     }
   });
 
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  const supportsFullscreen =
+    isCulinaryWorkspaceRoute(route) &&
+    route.kind !== "overview" &&
+    route.kind !== "menus" &&
+    route.kind !== "ai-setup";
+
+  useEffect(() => {
+    setIsFullscreen(false);
+  }, [route.kind]);
+
+  useEffect(() => {
+    if (!isFullscreen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsFullscreen(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isFullscreen]);
+
+  useEffect(() => {
+    if (route.kind === "menus" && onNavigateGlobal) {
+      onNavigateGlobal("silaMenuStudio");
+    }
+  }, [route.kind, onNavigateGlobal]);
+
   const handleSelectMaterialDraft = React.useCallback((draftId: string | null) => {
     setHandoverDraftId(draftId);
     try {
@@ -78,7 +109,7 @@ const SilaRecipeStudio2Workspaces: React.FC<SilaRecipeStudio2WorkspacesProps> = 
       handleSelectMaterialDraft(draftId);
       onSelectRecipeRoute("materials");
     },
-    [handleSelectMaterialDraft, onSelectRecipeRoute]
+    [handleSelectMaterialDraft, onSelectRecipeRoute],
   );
 
   const nav = showOptions ? (
@@ -99,6 +130,33 @@ const SilaRecipeStudio2Workspaces: React.FC<SilaRecipeStudio2WorkspacesProps> = 
 
   const renderBody = () => {
     switch (route.kind) {
+      case "menus":
+        return (
+          <StudioEmptyState
+            title="ME Studio lives under Menu Engineering"
+            description="ME Studio has been consolidated exclusively under the Menu Engineering module."
+            action={
+              onNavigateGlobal ? (
+                <button
+                  type="button"
+                  className="sila-studio-btn sila-studio-btn--primary"
+                  onClick={() => onNavigateGlobal("silaMenuStudio")}
+                >
+                  <span>Open Menu Engineering</span>
+                  <ArrowUpRight size={15} strokeWidth={1.9} aria-hidden="true" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="sila-studio-btn sila-studio-btn--secondary"
+                  onClick={() => onSelectRecipeRoute("overview")}
+                >
+                  Return to Overview
+                </button>
+              )
+            }
+          />
+        );
       case "overview":
         return (
           <CulinaryOverviewWorkspace
@@ -133,7 +191,6 @@ const SilaRecipeStudio2Workspaces: React.FC<SilaRecipeStudio2WorkspacesProps> = 
             onOpenWorkspace={onSelectRecipeRoute}
           />
         );
-      case "menus":
       case "events":
       case "procurement":
         return <CulinaryMenuEventWorkspaces mode={route.kind} onOpenWorkspace={onSelectRecipeRoute} />;
@@ -162,8 +219,25 @@ const SilaRecipeStudio2Workspaces: React.FC<SilaRecipeStudio2WorkspacesProps> = 
 
   return (
     <div className="cs2-shell">
-      {nav}
-      <div>{renderBody()}</div>
+      {!isFullscreen && nav}
+      <div className={`cs2-workspace-fs${isFullscreen ? " is-fullscreen" : ""}`}>
+        {supportsFullscreen && (
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <button
+              type="button"
+              className="sila-studio-btn sila-studio-btn--secondary"
+              onClick={() => setIsFullscreen((fs) => !fs)}
+              aria-label={isFullscreen ? "Exit Full-Screen Intelligence Mode" : "Maximize workspace"}
+              title={isFullscreen ? "Exit full screen (Esc)" : "Full-Screen Intelligence Mode"}
+              data-testid="culinary-fullscreen-toggle"
+            >
+              {isFullscreen ? <Minimize2 size={14} strokeWidth={1.9} aria-hidden="true" /> : <Maximize2 size={14} strokeWidth={1.9} aria-hidden="true" />}
+              <span>{isFullscreen ? "Exit Full Screen" : "Full Screen"}</span>
+            </button>
+          </div>
+        )}
+        {renderBody()}
+      </div>
     </div>
   );
 };

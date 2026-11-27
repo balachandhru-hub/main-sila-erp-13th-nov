@@ -253,7 +253,7 @@ const CulinaryMaterialRequestsWorkspace: React.FC<Props> = ({
     <div className="cs2-shell" data-testid="culinary-material-requests-workspace">
       <div className="cs2-header">
         <div>
-          <h2 className="cs2-title">Material Creation &amp; Master Data Requests (Phase 1C)</h2>
+          <h2 className="cs2-title">Material Creation &amp; Master Data Requests</h2>
           <p className="cs2-subtitle">
             Controlled material creation, plant extensions, reactivations, UOM conversions, duplicate screening,
             master data approvals, ERP/standalone synchronization, and automatic recipe draft reconnection.
@@ -315,13 +315,13 @@ const CulinaryMaterialRequestsWorkspace: React.FC<Props> = ({
       {/* Phase 1B Handover Consolidation Strip */}
       <section className="cs2-card">
         <div className="cs2-card__head">
-          <h3 className="cs2-card__title">Connect Waiting AI Recipe Drafts (Phase 1B → 1C)</h3>
+          <h3 className="cs2-card__title">Connect Waiting AI Recipe Drafts (Material Mapping → Requests)</h3>
           <div className="cs2-actions-row">
             <select
               className="sila-select"
               value={activeDraftId}
               onChange={(e) => handleSelectDraft(e.target.value)}
-              aria-label="Select Recipe Draft for Phase 1B Handover"
+              aria-label="Select Recipe Draft for Material Handover"
             >
               <option value="">All recipe drafts</option>
               {drafts.map((d) => (
@@ -469,7 +469,7 @@ const CulinaryMaterialRequestsWorkspace: React.FC<Props> = ({
         ) : requests.length === 0 ? (
           <EmptyState
             title="No material requests found"
-            description="Prepare a material request manually or consolidate missing ingredients from a Phase 1B draft."
+            description="Prepare a material request manually or consolidate missing ingredients from an AI recipe draft."
           />
         ) : (
           <div className="cs2-grid-2">
@@ -489,7 +489,7 @@ const CulinaryMaterialRequestsWorkspace: React.FC<Props> = ({
                     <tr
                       key={r.id}
                       onClick={() => setSelectedReq(r)}
-                      style={{ cursor: "pointer", background: selectedReq?.id === r.id ? "#eef2ff" : undefined }}
+                      style={{ cursor: "pointer", background: selectedReq?.id === r.id ? "#eaf5ff" : undefined }}
                     >
                       <td><code>{r.requestReference}</code></td>
                       <td>

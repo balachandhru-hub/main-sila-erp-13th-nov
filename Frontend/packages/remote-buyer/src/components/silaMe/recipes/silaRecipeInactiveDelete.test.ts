@@ -29,8 +29,8 @@ assert.equal(DELETE_INACTIVE_SUCCESS, "Inactive recipe permanently deleted");
 
 const catalog = read("SilaRecipeCatalogGrid.tsx");
 assert.match(catalog, /status === "INACTIVE"/);
-assert.match(catalog, /Delete permanently/);
-assert.match(catalog, /recipe-catalog-delete-inactive/);
+assert.match(catalog, /Delete Permanently/);
+assert.match(catalog, /delete-permanent/);
 
 const table = read("SilaRecipeTable.tsx");
 assert.match(table, /status === "INACTIVE"/);

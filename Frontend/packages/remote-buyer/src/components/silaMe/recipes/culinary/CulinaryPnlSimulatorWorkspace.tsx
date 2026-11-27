@@ -82,7 +82,7 @@ const CulinaryPnlSimulatorWorkspace: React.FC = () => {
         <div>
           <h2 className="cs2-title">Event Profitability &amp; What-If P&amp;L Simulator</h2>
           <p className="cs2-subtitle">
-            Phase 0 interactive financial simulator (§49–§51). Models Estimated vs What-If event contribution, food cost %,
+            Interactive financial simulator. Models Estimated vs What-If event contribution, food cost %,
             break-even guests, required selling price, and maximum allowable food cost without altering production ledgers.
           </p>
         </div>
@@ -198,7 +198,7 @@ const CulinaryPnlSimulatorWorkspace: React.FC = () => {
                 <XAxis dataKey="name" tick={{ fontSize: 12 }} />
                 <YAxis tick={{ fontSize: 12 }} />
                 <Tooltip formatter={(val: unknown) => `AED ${Number(val).toLocaleString()}`} />
-                <Bar dataKey="value" fill="#4f46e5" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="value" fill="#087bb5" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>

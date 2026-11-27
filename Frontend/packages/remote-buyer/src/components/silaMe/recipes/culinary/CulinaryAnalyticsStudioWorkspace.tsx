@@ -195,13 +195,13 @@ const CulinaryAnalyticsStudioWorkspace: React.FC = () => {
     <div className="cs2-shell" data-testid="culinary-analytics-workspace">
       <div className="cs2-header">
         <div>
-          <h2 className="cs2-title">Culinary Intelligence Studio — Phase 3B Live</h2>
+          <h2 className="cs2-title">Culinary Intelligence Analytics</h2>
           <p className="cs2-subtitle">
-            Enterprise Menu Engineering, Consumption Variance, Isolated What-If Simulation, Python MILP Optimization, Demand Forecasting, Benchmarking &amp; Grounded Copilot.
+            Enterprise Menu Engineering, Consumption Variance, Isolated What-If Simulation, Optimization, Demand Forecasting, Benchmarking &amp; Grounded Copilot.
           </p>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <span className="cs2-badge cs2-badge--live">Phase 3B Live</span>
+          <span className="cs2-badge cs2-badge--live">Live Analytics</span>
           <button type="button" className="sila-btn sila-btn--sm sila-btn--primary" disabled={loading} onClick={() => void loadExecutive()}>
             {loading ? "Refreshing..." : "Refresh Analytics"}
           </button>
@@ -812,7 +812,7 @@ const CulinaryAnalyticsStudioWorkspace: React.FC = () => {
                   <YAxis />
                   <Tooltip />
                   <Area type="monotone" dataKey="upperBound80" stroke="#93c5fd" fill="#dbeafe" name="80% Upper" />
-                  <Area type="monotone" dataKey="forecastCovers" stroke="#4f46e5" fill="#c7d2fe" name="Forecast Covers" />
+                  <Area type="monotone" dataKey="forecastCovers" stroke="#087bb5" fill="#dceeff" name="Forecast Covers" />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -1001,7 +1001,7 @@ const CulinaryAnalyticsStudioWorkspace: React.FC = () => {
       {subTab === "config" && config && (
         <section className="cs2-card">
           <div className="cs2-card__head">
-            <h3 className="cs2-card__title">Phase 3B Intelligence Configuration (v{config.configVersion})</h3>
+            <h3 className="cs2-card__title">Culinary Intelligence Configuration (v{config.configVersion})</h3>
           </div>
           <div className="cs2-form-grid">
             <div className="sila-field">
@@ -1034,7 +1034,7 @@ const CulinaryAnalyticsStudioWorkspace: React.FC = () => {
               onClick={async () => {
                 const updated = await saveCulinaryAnalyticsConfig(config);
                 setConfig(updated);
-                toastService.success(`Saved Phase 3B Config v${updated.configVersion}`);
+                toastService.success(`Saved Intelligence Config v${updated.configVersion}`);
               }}
             >
               Save Configuration

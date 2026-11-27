@@ -169,7 +169,7 @@ assert.match(cloudPlannerSrc, /refineCulinaryRecipe/);
 assert.match(cloudPlannerSrc, /regenerateCulinaryRecipeSection/);
 assert.match(cloudPlannerSrc, /extractCulinaryRecipeDocument/);
 assert.match(cloudPlannerSrc, /prepareCulinaryDishImage/);
-assert.match(cloudPlannerSrc, /Phase 1B/);
+assert.match(cloudPlannerSrc, /Material Mapping/);
 
 const mobileScreenSrc = read("../../../../../../remote-mobile/src/screens/recipes/CulinarySuitePreviewScreen.tsx");
 assert.match(mobileScreenSrc, /getCulinaryAiStatus/);

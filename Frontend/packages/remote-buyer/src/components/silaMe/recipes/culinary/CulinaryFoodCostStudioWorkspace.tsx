@@ -255,7 +255,7 @@ const CulinaryFoodCostStudioWorkspace: React.FC<Props> = ({
       <div className="cs2-header">
         <div>
           <h2 className="cs2-title">
-            Food Cost &amp; Recipe Lifecycle Studio (Phase 1C)
+            Food Cost &amp; Recipe Lifecycle Studio
             {lc?.productionRecipeCode && <span className="cs2-badge cs2-badge--live" style={{ marginLeft: 8 }}>{lc.productionRecipeCode} v{lc.productionRecipeVersion}</span>}
           </h2>
           <p className="cs2-subtitle">
@@ -437,7 +437,7 @@ const CulinaryFoodCostStudioWorkspace: React.FC<Props> = ({
                     <XAxis dataKey="name" />
                     <YAxis />
                     <Tooltip formatter={(v: unknown) => `${costing.currency} ${Number(v).toFixed(2)}`} />
-                    <Bar dataKey="cost" name="Ingredient Cost" fill="#4f46e5" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="cost" name="Ingredient Cost" fill="#087bb5" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -637,7 +637,7 @@ const CulinaryFoodCostStudioWorkspace: React.FC<Props> = ({
 
           <section className="cs2-card">
             <div className="cs2-card__head">
-              <h3 className="cs2-card__title">Version History &amp; Phase 2A Handover Contract</h3>
+              <h3 className="cs2-card__title">Version History &amp; Event Planner Handover Contract</h3>
             </div>
             {versions.length > 0 && (
               <ul style={{ margin: "0 0 12px", paddingLeft: 18, fontSize: 13 }}>
@@ -651,14 +651,14 @@ const CulinaryFoodCostStudioWorkspace: React.FC<Props> = ({
 
             {handover2A ? (
               <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: 12, fontSize: 13 }}>
-                <strong>Phase 2A Menu &amp; Event Planner Handover Ready</strong>
+                <strong>Event &amp; Menu Planner Handover Ready</strong>
                 <div>Production ID: <code>{handover2A.productionRecipeCode}</code> (v{handover2A.recipeVersion})</div>
                 <div>Cost / Portion: {handover2A.currency} {handover2A.costPerPortion?.toFixed(4) ?? "—"} · Snapshot: <code>{handover2A.costingReference ?? "—"}</code></div>
                 <div>Ingredients pinned: {handover2A.ingredients.length}</div>
               </div>
             ) : (
               <div className="cs2-empty-note">
-                Publish the Production Recipe ID to activate the read-only Phase 2A Menu &amp; Event Planner handover contract.
+                Publish the Production Recipe ID to activate the read-only Event &amp; Menu Planner handover contract.
               </div>
             )}
           </section>

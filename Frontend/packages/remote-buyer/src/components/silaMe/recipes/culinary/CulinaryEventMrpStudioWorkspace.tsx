@@ -344,7 +344,7 @@ const CulinaryEventMrpStudioWorkspace: React.FC<Props> = ({ onOpenWorkspace }) =
         <div>
           <h2 className="cs2-title">Event MRP Studio — Material Requirement Planning Engine</h2>
           <p className="cs2-subtitle">
-            Phase 2B deterministic multi-level recipe explosion, yield &amp; buffer planning, time-phased demand, preliminary stock comparison, and Phase 2C handover.
+            Deterministic multi-level recipe explosion, yield &amp; buffer planning, time-phased demand, preliminary stock comparison, and procurement handover.
             <strong style={{ marginLeft: 6, color: "#0f766e" }}>Zero stock reservations, POs, ITOs, or SAP postings.</strong>
           </p>
         </div>
@@ -388,10 +388,10 @@ const CulinaryEventMrpStudioWorkspace: React.FC<Props> = ({ onOpenWorkspace }) =
                   void handleAction(async () => {
                     const updated = await releaseMrpForPlanning(activeRun.id);
                     setActiveRun(updated);
-                  }, `Released ${activeRun.mrpCode} for Phase 2C planning (0 POs/ITOs/reservations).`)
+                  }, `Released ${activeRun.mrpCode} for procurement planning (0 POs/ITOs/reservations).`)
                 }
               >
-                Release Phase 2C
+                Release to Procurement
               </button>
             </>
           )}
@@ -559,7 +559,7 @@ const CulinaryEventMrpStudioWorkspace: React.FC<Props> = ({ onOpenWorkspace }) =
           { id: "timeline", label: "Time-Phased & Stock" },
           { id: "simulator", label: "MRP Simulator & Scenarios" },
           { id: "ai", label: "AI Analysis & Optimization" },
-          { id: "governance", label: `Exceptions, Approval & Phase 2C (${activeRun?.blockingExceptionCount ?? 0})` },
+          { id: "governance", label: `Exceptions, Approval & Procurement Handover (${activeRun?.blockingExceptionCount ?? 0})` },
           { id: "reports", label: `Report Studio (${reportCatalog.length || 36})` },
           { id: "demo", label: "§32 Grand Gala Fixture" },
         ].map((t) => (
@@ -1057,7 +1057,7 @@ const CulinaryEventMrpStudioWorkspace: React.FC<Props> = ({ onOpenWorkspace }) =
 
           <div className="cs2-card">
             <div className="cs2-row-between">
-              <h3 className="cs2-card-title">Approval, Impact Analysis &amp; Phase 2C Handover</h3>
+              <h3 className="cs2-card-title">Approval, Impact Analysis &amp; Procurement Handover</h3>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                 <button
                   type="button"
@@ -1081,9 +1081,9 @@ const CulinaryEventMrpStudioWorkspace: React.FC<Props> = ({ onOpenWorkspace }) =
                 <button
                   type="button"
                   className="sila-btn sila-btn--xs sila-btn--primary"
-                  onClick={() => void handleAction(async () => setHandover(await getMrpPhase2CHandover(activeRun.id)), "Phase 2C procurement handover contract generated.")}
+                  onClick={() => void handleAction(async () => setHandover(await getMrpPhase2CHandover(activeRun.id)), "Procurement handover contract generated.")}
                 >
-                  Inspect Phase 2C Handover
+                  Inspect Procurement Handover
                 </button>
               </div>
             </div>
@@ -1123,7 +1123,7 @@ const CulinaryEventMrpStudioWorkspace: React.FC<Props> = ({ onOpenWorkspace }) =
 
             {handover && (
               <div style={{ marginTop: 12, padding: 10, background: "#ecfdf5", borderRadius: 8, fontSize: 12 }}>
-                <strong>Phase 2C Handover ({handover.mrpCode} v{handover.mrpVersion})</strong> —{" "}
+                <strong>Procurement Handover ({handover.mrpCode} v{handover.mrpVersion})</strong> —{" "}
                 Zero Reservations: {String(handover.zeroReservationsCreated)} · Zero POs: {String(handover.zeroPosCreated)} · Zero ITOs: {String(handover.zeroItosCreated)} · Zero SAP Postings: {String(handover.zeroSapPostingsExecuted)} · {handover.materials.length} material line(s)
               </div>
             )}

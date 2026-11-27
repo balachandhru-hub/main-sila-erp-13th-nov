@@ -30,13 +30,13 @@ const CulinaryMenuEventWorkspaces: React.FC<CulinaryMenuEventWorkspacesProps> = 
     <div className="cs2-shell" data-testid="culinary-food-cost-workspace">
       <div className="cs2-header">
         <div>
-          <h2 className="cs2-title">Food Cost Studio (Phase 3A Preview)</h2>
+          <h2 className="cs2-title">Food Cost Studio</h2>
           <p className="cs2-subtitle">
-            Deterministic Decimal costing engine (§45) honoring cost source priority: Approved Contract → Catalog →
+            Deterministic costing engine honoring cost source priority: Approved Contract → Catalog →
             Inventory Valuation → Latest Eligible Purchase → Standard Cost. Missing prices stay flagged as missing, never zero.
           </p>
         </div>
-        <span className="cs2-badge cs2-badge--planned">Planned · Phase 3A</span>
+        <span className="cs2-badge cs2-badge--planned">Preview</span>
       </div>
       <div className="cs2-banner cs2-banner--phase" role="status">
         <div>

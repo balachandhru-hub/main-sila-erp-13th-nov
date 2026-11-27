@@ -219,13 +219,13 @@ const CulinaryProductionStudioWorkspace: React.FC = () => {
     <div
       className="cs2-shell"
       data-testid="culinary-production-workspace"
-      style={kdsFullScreen ? { position: "fixed", inset: 0, zIndex: 1200, overflowY: "auto", background: "#f8fafc", padding: 20 } : undefined}
+      style={kdsFullScreen ? { position: "fixed", top: "var(--sila-topbar-height, 3.75rem)", left: 0, right: 0, bottom: 0, zIndex: 950, overflowY: "auto", background: "#ffffff", padding: 20 } : undefined}
     >
       <div className="cs2-header">
         <div>
-          <h2 className="cs2-title">Kitchen Production Planning, Batch Scheduling &amp; Execution (Phase 4A)</h2>
+          <h2 className="cs2-title">Kitchen Production Planning, Batch Scheduling &amp; Execution</h2>
           <p className="cs2-subtitle">
-            Multi-level recipe explosion, ingredient availability, OR-Tools / HiGHS MILP scheduling, KDS, FEFO picking, food safety checkpoints &amp; QR batch traceability.
+            Multi-level recipe explosion, ingredient availability, scheduling optimization, KDS, FEFO picking, food safety checkpoints &amp; QR batch traceability.
           </p>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
@@ -251,7 +251,7 @@ const CulinaryProductionStudioWorkspace: React.FC = () => {
         </div>
       </div>
 
-      <div className="cs2-nav-tabs" role="tablist" aria-label="Phase 4A Kitchen Production Modules" style={{ marginBottom: 14 }}>
+      <div className="cs2-nav-tabs" role="tablist" aria-label="Kitchen Production Modules" style={{ marginBottom: 14 }}>
         {(
           [
             ["cockpit", "1. Production Cockpit"],
@@ -306,7 +306,7 @@ const CulinaryProductionStudioWorkspace: React.FC = () => {
           <section className="cs2-card">
             <div className="cs2-card__head">
               <h3 className="cs2-card__title">Buffet Replenishment Quick Control</h3>
-              <span className="cs2-badge cs2-badge--live">Phase 3B Buffet Sync</span>
+              <span className="cs2-badge cs2-badge--live">Buffet Analytics Sync</span>
             </div>
             <div className="cs2-form-grid">
               <div className="sila-field">

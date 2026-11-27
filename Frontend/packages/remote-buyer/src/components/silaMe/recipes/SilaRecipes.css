@@ -470,7 +470,7 @@
 
 .srec-intel {
   position: sticky;
-  top: 0.75rem;
+  top: calc(var(--sila-topbar-height, 3.75rem) + 0.75rem);
 }
 
 .srec-intel-metrics {

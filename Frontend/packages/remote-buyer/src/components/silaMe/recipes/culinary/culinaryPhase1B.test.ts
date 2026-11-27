@@ -75,7 +75,7 @@ assert.match(matWsSrc, /stockStatus === "UNKNOWN"|Unknown/);
 // 4. Phase 1A -> Phase 1B handover wired across Workspaces & Planner
 const plannerSrc = read("CulinaryRecipePlannerWorkspace.tsx");
 const workspacesSrc = read("SilaRecipeStudio2Workspaces.tsx");
-assert.match(plannerSrc, /Continue to Material Mapping \(Phase 1B\)/);
+assert.match(plannerSrc, /Continue to Material Mapping/);
 assert.match(workspacesSrc, /handoverDraftId/);
 assert.match(workspacesSrc, /sila\.culinary\.activeMaterialDraftId/);
 

@@ -96,10 +96,10 @@ const reportsSrc = read("CulinaryProductionAnalyticsReportWorkspaces.tsx");
 assert.ok(reportsSrc.includes("<CulinaryProductionStudioWorkspace />"));
 assert.ok(reportsSrc.includes("getProductionReportCatalog"));
 assert.ok(reportsSrc.includes("exportProductionReport"));
-assert.ok(reportsSrc.includes("Phase 4A Kitchen Production Reports (20 Reports)"));
+assert.ok(reportsSrc.includes("Kitchen Production Reports (20 Reports)"));
 
 const navSrc = read("SilaRecipeStudio2Nav.tsx");
-assert.ok(navSrc.includes("Phase 4A Live"));
+assert.ok(navSrc.includes('id: "production"'));
 assert.ok(navSrc.includes("culinaryPhase4AEnabled"));
 
 // 4. Feature flags include Phase 4A flags

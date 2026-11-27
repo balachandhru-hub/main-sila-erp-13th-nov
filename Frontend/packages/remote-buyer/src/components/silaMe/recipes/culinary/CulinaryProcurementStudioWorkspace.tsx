@@ -500,16 +500,16 @@ const CulinaryProcurementStudioWorkspace: React.FC<Props> = ({ onOpenWorkspace }
     <div className="cs2-shell" data-testid="culinary-procurement-workspace">
       <div className="cs2-header">
         <div>
-          <h2 className="cs2-title">Event Procurement Intelligence Studio (Phase 2C)</h2>
+          <h2 className="cs2-title">Event Procurement Intelligence</h2>
           <p className="cs2-subtitle">
             Date-aware projected availability, atomic stock reservations, FEFO batches, incoming PO &amp; GRN reconciliation,
-            outlet/kitchen ITO (SAP 311/312), supplier &amp; MOQ/pack optimization, and Phase 3A cost handover.
+            outlet/kitchen ITO (SAP 311/312), supplier &amp; MOQ/pack optimization, and Event P&amp;L cost handover.
           </p>
         </div>
         <div className="cs2-actions-row">
-          <span className="cs2-badge cs2-badge--live">Phase 2C Live</span>
+          <span className="cs2-badge cs2-badge--live">Live</span>
           <button type="button" className="sila-btn sila-btn--sm sila-btn--secondary" onClick={() => onOpenWorkspace("mrp")}>
-            Event MRP (2B)
+            Event Material Req.
           </button>
           <button
             type="button"
@@ -571,11 +571,11 @@ const CulinaryProcurementStudioWorkspace: React.FC<Props> = ({ onOpenWorkspace }
       {showNewPlan && (
         <form className="cs2-card" onSubmit={handleCreatePlan} data-testid="proc-create-plan-form">
           <div className="cs2-card__head">
-            <h3 className="cs2-card__title">Create Procurement Plan from Approved Phase 2B MRP</h3>
+            <h3 className="cs2-card__title">Create Procurement Plan from Approved Event MRP</h3>
           </div>
           <div className="cs2-form-grid">
             <label>
-              <span>Phase 2B MRP Run</span>
+              <span>Event MRP Run</span>
               <select className="sila-input" value={selectedMrpId} onChange={(e) => setSelectedMrpId(e.target.value)}>
                 <option value="">-- Choose MRP Run --</option>
                 {mrpRuns.map((r) => (
@@ -673,7 +673,7 @@ const CulinaryProcurementStudioWorkspace: React.FC<Props> = ({ onOpenWorkspace }
       ) : (
         <div className="cs2-card">
           <p className="cs2-empty-note">
-            {loading ? "Loading procurement plans..." : "No procurement plan selected. Create a plan from an approved Phase 2B MRP run above."}
+            {loading ? "Loading procurement plans..." : "No procurement plan selected. Create a plan from an approved Event MRP run above."}
           </p>
         </div>
       )}
@@ -1899,9 +1899,9 @@ const CulinaryProcurementStudioWorkspace: React.FC<Props> = ({ onOpenWorkspace }
 
           <div className="cs2-card">
             <div className="cs2-card__head">
-              <h3 className="cs2-card__title">Phase 3A Event P&amp;L Handover Contract</h3>
+              <h3 className="cs2-card__title">Event P&amp;L Handover Contract</h3>
               <button type="button" className="sila-btn sila-btn--sm sila-btn--primary" disabled={busy} onClick={handleLoadPhase3A}>
-                Load Phase 3A Handover
+                Load Event P&amp;L Handover
               </button>
             </div>
             {phase3a ? (
@@ -1916,7 +1916,7 @@ const CulinaryProcurementStudioWorkspace: React.FC<Props> = ({ onOpenWorkspace }
                 </div>
               </div>
             ) : (
-              <p className="cs2-empty-note">Click &quot;Load Phase 3A Handover&quot; to inspect version-controlled event, MRP, reservation, ITO, PO, GRN, and cost object references.</p>
+              <p className="cs2-empty-note">Click &quot;Load Event P&amp;L Handover&quot; to inspect version-controlled event, MRP, reservation, ITO, PO, GRN, and cost object references.</p>
             )}
           </div>
         </div>

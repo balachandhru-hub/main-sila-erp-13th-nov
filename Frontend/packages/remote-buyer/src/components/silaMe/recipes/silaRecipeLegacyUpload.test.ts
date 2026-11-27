@@ -17,7 +17,8 @@ const read = (name: string) => readFileSync(join(dir, name), "utf8");
 assert.equal(silaRecipeLegacyUploadPath(), "/sila-recipes/legacy-upload");
 assert.deepEqual(parseSilaRecipePath("/sila-recipes/legacy-upload"), { kind: "legacy-upload" });
 assert.deepEqual(parseSilaRecipePath("/sila-recipes/new"), { kind: "new" });
-assert.equal(parseSilaRecipePath("/sila-recipes").kind, "list");
+assert.equal(parseSilaRecipePath("/sila-recipes").kind, "overview");
+assert.equal(parseSilaRecipePath("/sila-recipes/master").kind, "list");
 
 const studio = read("SilaRecipeLegacyUpload.tsx");
 assert.match(studio, /data-testid="recipe-legacy-upload"/);
@@ -46,11 +47,10 @@ assert.match(recipes, /silaRecipeLegacyUploadPath/);
 assert.match(recipes, /recipe-legacy-upload-entry/);
 assert.match(recipes, /kind === "legacy-upload"/);
 assert.match(recipes, /SilaRecipeLegacyUpload/);
-// Preserve catalog Filters toggle + compact brand hero (do not regress on mobile/inventory tips).
-assert.match(recipes, /showCategoryFilters/);
+// Preserve catalog Filters drawer toggle + compact brand hero.
+assert.match(recipes, /showFiltersDrawer/);
 assert.match(recipes, /recipe-category-filters-toggle/);
-assert.match(recipes, /Hide filters/);
-assert.match(recipes, /<h1 className="rstudio-hero__title">SILA Recipe Studio<\/h1>/);
+assert.match(recipes, /title="Recipe Studio"/);
 assert.doesNotMatch(recipes, /Culinary catalog/);
 
 const routes = read("silaRecipeRoutes.ts");

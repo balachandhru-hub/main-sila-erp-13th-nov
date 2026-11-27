@@ -21,8 +21,8 @@ const Incomplete: React.FC = () => <span className="sila-me-flag">Incomplete</sp
  * recipe cost, cost per serving, cost % and margin (or INCOMPLETE / NO MENU PRICE), status and readiness.
  */
 const SilaRecipeTable: React.FC<SilaRecipeTableProps> = ({ rows, onOpen, openLabel = "Open", showEvent = false, onEdit, onDelete }) => (
-  <div className="sila-table-wrap">
-    <table className="sila-table">
+  <div className="sila-studio-table-wrap">
+    <table className="sila-studio-table">
       <thead>
         <tr>
           <th scope="col">POS code</th>

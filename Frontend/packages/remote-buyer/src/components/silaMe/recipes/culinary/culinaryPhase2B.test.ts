@@ -66,7 +66,7 @@ for (const token of [
   "Time-Phased & Stock",
   "MRP Simulator & Scenarios",
   "AI Analysis & Optimization",
-  "Exceptions, Approval & Phase 2C",
+  "Exceptions, Approval & Procurement Handover",
   "Report Studio",
 ]) {
   assert.ok(mrpWsSrc.includes(token), `Missing Event MRP Studio token: ${token}`);

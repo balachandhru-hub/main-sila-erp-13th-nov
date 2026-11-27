@@ -746,8 +746,8 @@ const CulinaryRecipePlannerWorkspace: React.FC<CulinaryRecipePlannerWorkspacePro
         <div>
           <h2 className="cs2-title">AI Recipe Planner &amp; Culinary Intelligence Engine</h2>
           <p className="cs2-subtitle">
-            Phase 1A Chef AI Workspace — Generate structured hospitality recipes across Local AI, Gemini, Claude, or Hybrid routing,
-            scale deterministically, refine conversationally, and prepare drafts for Phase 1B Material Mapping.
+            Chef AI Workspace — Generate structured hospitality recipes across Local AI, Gemini, Claude, or Hybrid routing,
+            scale deterministically, refine conversationally, and prepare drafts for Material Mapping.
           </p>
         </div>
         <div className="cs2-actions-row">
@@ -756,14 +756,14 @@ const CulinaryRecipePlannerWorkspace: React.FC<CulinaryRecipePlannerWorkspacePro
             className={`sila-btn sila-btn--sm ${workspaceMode === "PHASE1A" ? "sila-btn--primary" : "sila-btn--secondary"}`}
             onClick={() => setWorkspaceMode("PHASE1A")}
           >
-            Live AI Planner (Phase 1A)
+            Live AI Planner
           </button>
           <button
             type="button"
             className={`sila-btn sila-btn--sm ${workspaceMode === "PHASE0_DEMO" ? "sila-btn--primary" : "sila-btn--secondary"}`}
             onClick={() => setWorkspaceMode("PHASE0_DEMO")}
           >
-            Phase 0 Scaling Simulator (Demo)
+            Scaling Simulator (Preview)
           </button>
           <button
             type="button"
@@ -779,13 +779,13 @@ const CulinaryRecipePlannerWorkspace: React.FC<CulinaryRecipePlannerWorkspacePro
         <>
           <div className="cs2-banner" role="status">
             <div>
-              <strong>DEMONSTRATION DATA — ILLUSTRATIVE RECIPE ONLY ({DEMO_SALMON_RECIPE.title})</strong>
+              <strong>PREVIEW DATA — ILLUSTRATIVE RECIPE ONLY ({DEMO_SALMON_RECIPE.title})</strong>
               <div>
-                Isolated Phase 0 deterministic scaling &amp; costing simulator. Switch back to &ldquo;Live AI Planner (Phase 1A)&rdquo;
+                Isolated deterministic scaling &amp; costing simulator. Switch back to &ldquo;Live AI Planner&rdquo;
                 for real AI recipe generation and tenant draft management.
               </div>
             </div>
-            <span className="cs2-badge cs2-badge--demo">Phase 0 Interactive Demo</span>
+            <span className="cs2-badge cs2-badge--demo">Interactive Preview</span>
           </div>
 
           <section className="cs2-card" aria-label="Interactive Recipe Scaling Controls">
@@ -945,7 +945,7 @@ const CulinaryRecipePlannerWorkspace: React.FC<CulinaryRecipePlannerWorkspacePro
           {/* Guardrail & Context Banner */}
           <div className="cs2-banner cs2-banner--phase" role="status">
             <div>
-              <strong>Phase 1A Guardrail Active:</strong> AI drafts stay isolated from production Recipe Master, Material Master, Live Inventory, and SAP postings.
+              <strong>Draft Isolation Guardrail Active:</strong> AI drafts stay isolated from production Recipe Master, Material Master, Live Inventory, and SAP postings.
               {context && (
                 <span>
                   {" "}· Configured Mode: <strong>{context.operatingMode}</strong> · Enabled:{" "}
@@ -1303,7 +1303,7 @@ const CulinaryRecipePlannerWorkspace: React.FC<CulinaryRecipePlannerWorkspacePro
                   </div>
                   <p className="cs2-subtitle">
                     Enter a dish name (for example, <strong>Butter Chicken</strong>) or select a saved draft from History to generate,
-                    edit ingredients, scale portions deterministically, manage sub-recipes, and prepare for Phase 1B Material Mapping.
+                    edit ingredients, scale portions deterministically, manage sub-recipes, and prepare for Material Mapping.
                   </p>
                 </section>
               ) : (
@@ -1556,7 +1556,7 @@ const CulinaryRecipePlannerWorkspace: React.FC<CulinaryRecipePlannerWorkspacePro
                   <section className="cs2-card">
                     <div className="cs2-card__head">
                       <h3 className="cs2-card__title">
-                        Ingredients ({payload.ingredients.length}) · Phase 1B Handover Ready
+                        Ingredients ({payload.ingredients.length}) · Material Mapping Ready
                       </h3>
                       <button
                         type="button"
@@ -1578,7 +1578,7 @@ const CulinaryRecipePlannerWorkspace: React.FC<CulinaryRecipePlannerWorkspacePro
                             <th>Scaling Method</th>
                             <th className="cs2-num">Scaled Edible</th>
                             <th className="cs2-num">Scaled Raw</th>
-                            <th>Phase 1B Status</th>
+                            <th>Material Status</th>
                             <th />
                           </tr>
                         </thead>
@@ -2238,7 +2238,7 @@ const CulinaryRecipePlannerWorkspace: React.FC<CulinaryRecipePlannerWorkspacePro
                     }
                   }}
                 >
-                  Continue to Material Mapping (Phase 1B)
+                  Continue to Material Mapping
                 </button>
               </div>
             </div>

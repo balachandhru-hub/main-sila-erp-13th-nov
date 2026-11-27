@@ -158,7 +158,7 @@ const CulinaryProductionAnalyticsReportWorkspaces: React.FC<Props> = ({ mode }) 
       triggerBlobDownload(blob, res.fileName);
       toastService.success(`Exported ${res.fileName}`);
     } catch (err: unknown) {
-      toastService.error(err instanceof Error ? err.message : "Phase 3B export failed.");
+      toastService.error(err instanceof Error ? err.message : "Analytics export failed.");
     } finally {
       setExporting(false);
     }
@@ -172,7 +172,7 @@ const CulinaryProductionAnalyticsReportWorkspaces: React.FC<Props> = ({ mode }) 
       triggerBlobDownload(blob, res.fileName);
       toastService.success(`Exported ${res.fileName}`);
     } catch (err: unknown) {
-      toastService.error(err instanceof Error ? err.message : "Phase 4A export failed.");
+      toastService.error(err instanceof Error ? err.message : "Production export failed.");
     } finally {
       setExporting(false);
     }
@@ -182,22 +182,22 @@ const CulinaryProductionAnalyticsReportWorkspaces: React.FC<Props> = ({ mode }) 
     <div className="cs2-shell" data-testid="culinary-reports-workspace">
       <div className="cs2-header">
         <div>
-          <h2 className="cs2-title">Culinary Intelligence Report Studio (Phase 1C – 4A Live)</h2>
+          <h2 className="cs2-title">Culinary Intelligence Report Studio</h2>
           <p className="cs2-subtitle">
             Generate formula-injection-safe Excel, CSV, and PDF reports across Kitchen Production, Recipe Costing, Events, Menu Engineering, Consumption Variance, Waste &amp; Savings.
           </p>
         </div>
-        <span className="cs2-badge cs2-badge--live">Phase 4A Reports Live</span>
+        <span className="cs2-badge cs2-badge--live">Reports Ready</span>
       </div>
 
       <section className="cs2-card">
         <div className="cs2-card__head">
-          <h3 className="cs2-card__title">Export Live Phase 4A Kitchen Production Reports (20 Reports)</h3>
+          <h3 className="cs2-card__title">Kitchen Production Reports (20 Reports)</h3>
           <span className="cs2-badge cs2-badge--live">RBAC &amp; Formula-Safe</span>
         </div>
         <div className="cs2-form-grid">
           <div className="sila-field">
-            <label className="sila-label">Phase 4A Production Report</label>
+            <label className="sila-label">Production Report</label>
             <select className="sila-select" value={phase4AReportCode} onChange={(e) => setPhase4AReportCode(e.target.value)}>
               {phase4ACatalog.map((c) => (
                 <option key={c.reportCode} value={c.reportCode}>
@@ -223,12 +223,12 @@ const CulinaryProductionAnalyticsReportWorkspaces: React.FC<Props> = ({ mode }) 
 
       <section className="cs2-card">
         <div className="cs2-card__head">
-          <h3 className="cs2-card__title">Export Live Phase 3B Culinary Intelligence Reports (15 Reports)</h3>
+          <h3 className="cs2-card__title">Culinary Intelligence Reports (15 Reports)</h3>
           <span className="cs2-badge cs2-badge--live">RBAC &amp; Formula-Safe</span>
         </div>
         <div className="cs2-form-grid">
           <div className="sila-field">
-            <label className="sila-label">Phase 3B Report</label>
+            <label className="sila-label">Analytics Report</label>
             <select className="sila-select" value={phase3BReportCode} onChange={(e) => setPhase3BReportCode(e.target.value)}>
               {phase3BCatalog.map((c) => (
                 <option key={c.reportCode} value={c.reportCode}>
@@ -254,7 +254,7 @@ const CulinaryProductionAnalyticsReportWorkspaces: React.FC<Props> = ({ mode }) 
 
       <section className="cs2-card">
         <div className="cs2-card__head">
-          <h3 className="cs2-card__title">Export Live Phase 1C Recipe &amp; Material Reports</h3>
+          <h3 className="cs2-card__title">Recipe &amp; Material Reports</h3>
         </div>
         <div className="cs2-form-grid">
           <div className="sila-field">
@@ -305,8 +305,8 @@ const CulinaryProductionAnalyticsReportWorkspaces: React.FC<Props> = ({ mode }) 
 
       <section className="cs2-card">
         <div className="cs2-card__head">
-          <h3 className="cs2-card__title">Export Live Phase 2A Event &amp; Menu Reports</h3>
-          <span className="cs2-badge cs2-badge--live">Phase 2A Live</span>
+          <h3 className="cs2-card__title">Event &amp; Menu Reports</h3>
+          <span className="cs2-badge cs2-badge--live">Active</span>
         </div>
         <div className="cs2-form-grid">
           <div className="sila-field">
@@ -374,7 +374,7 @@ const CulinaryProductionAnalyticsReportWorkspaces: React.FC<Props> = ({ mode }) 
         <section className="cs2-card">
           <div className="cs2-card__head">
             <h3 className="cs2-card__title">Event Intelligence Reports (23)</h3>
-            <span className="cs2-badge cs2-badge--indigo">Excel / PDF / Print (Phase 3B)</span>
+            <span className="cs2-badge cs2-badge--indigo">Excel / PDF / Print</span>
           </div>
           <ul style={{ margin: 0, paddingLeft: 18, lineHeight: 1.75, fontSize: 13 }}>
             {EVENT_REPORTS.map((r) => (

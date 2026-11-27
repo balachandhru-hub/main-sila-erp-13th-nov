@@ -393,10 +393,10 @@ const CulinaryEventPlannerWorkspace: React.FC<CulinaryEventPlannerWorkspaceProps
     <div className="cs2-shell" data-testid="culinary-events-workspace">
       <div className="cs2-header">
         <div>
-          <h2 className="cs2-title">AI Event Planner &amp; Menu Studio</h2>
+          <h2 className="cs2-title">AI Event Planner</h2>
           <p className="cs2-subtitle">
-            Phase 2A Hospitality Event Lifecycle: Calendar, Multi-Day Sessions, Guest Uptake, Published Recipe Selection,
-            AI Menu Generation, MILP Optimization, Dietary &amp; Allergen Review, Read-Only Stock Preview, Approvals &amp; Phase 2B Handover.
+            Hospitality Event Lifecycle: Calendar, Multi-Day Sessions, Guest Uptake, Published Recipe Selection,
+            AI Event Planning, Optimization, Dietary &amp; Allergen Review, Read-Only Stock Preview, Approvals &amp; Material Requirements Handover.
           </p>
         </div>
         <div className="cs2-actions-row">
@@ -506,7 +506,7 @@ const CulinaryEventPlannerWorkspace: React.FC<CulinaryEventPlannerWorkspaceProps
             <div className="cs2-kpi cs2-kpi--emerald">
               <span className="cs2-kpi__label">Approved &amp; MRP Ready</span>
               <span className="cs2-kpi__value">{dashboard?.approvedEvents ?? 0} / {dashboard?.readyForMrpEvents ?? 0}</span>
-              <span className="cs2-kpi__hint">Ready for Phase 2B MRP</span>
+              <span className="cs2-kpi__hint">Ready for Event MRP</span>
             </div>
             <div className="cs2-kpi cs2-kpi--warn">
               <span className="cs2-kpi__label">Attention Required</span>
@@ -569,7 +569,7 @@ const CulinaryEventPlannerWorkspace: React.FC<CulinaryEventPlannerWorkspaceProps
                       <YAxis />
                       <Tooltip />
                       <Legend />
-                      <Bar dataKey="budget" name="Budget" fill="#4f46e5" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="budget" name="Budget" fill="#087bb5" radius={[4, 4, 0, 0]} />
                       <Bar dataKey="estimatedCost" name="Est. Menu Cost" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
@@ -1157,7 +1157,7 @@ const CulinaryEventPlannerWorkspace: React.FC<CulinaryEventPlannerWorkspaceProps
 
                   <section className="cs2-card">
                     <div className="cs2-card__head">
-                      <h3 className="cs2-card__title">Event Reports &amp; Phase 2B Handover</h3>
+                      <h3 className="cs2-card__title">Event Reports &amp; MRP Handover</h3>
                       {handover && (
                         <span className={`cs2-badge ${handover.mrpReady ? "cs2-badge--live" : "cs2-badge--warn"}`}>
                           {handover.mrpReady ? "MRP Ready" : "Review Warnings"}
@@ -1184,7 +1184,7 @@ const CulinaryEventPlannerWorkspace: React.FC<CulinaryEventPlannerWorkspaceProps
                         )}
                         <div style={{ marginTop: 8 }}>
                           <button type="button" className="sila-btn sila-btn--sm sila-btn--primary" onClick={() => onOpenWorkspace("mrp")}>
-                            Launch Phase 2B Event MRP
+                            Launch Event MRP
                           </button>
                         </div>
                       </div>
