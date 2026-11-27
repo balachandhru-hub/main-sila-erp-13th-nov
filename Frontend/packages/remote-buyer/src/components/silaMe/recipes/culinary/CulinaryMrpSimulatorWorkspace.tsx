@@ -5,6 +5,7 @@ import {
   type ComputedMrpRow,
   type DemoMrpMaterialRow,
 } from "./culinarySimulatorsMath";
+import { CulinaryKpis } from "./CulinaryWorkspaceKit";
 import "./CulinarySuite.css";
 
 interface SavedMrpScenario {
@@ -19,6 +20,13 @@ const CulinaryMrpSimulatorWorkspace: React.FC = () => {
   const [rows, setRows] = useState<DemoMrpMaterialRow[]>(DEMO_EVENT_MRP_ROWS);
   const [groupFilter, setGroupFilter] = useState("ALL");
   const [statusFilter, setStatusFilter] = useState("ALL");
+  const [transferOnly, setTransferOnly] = useState(false);
+  const showRows = (status: string, transfers = false) => {
+    setGroupFilter("ALL");
+    setStatusFilter(status);
+    setTransferOnly(transfers);
+    window.setTimeout(() => document.getElementById("mrp-sim-table")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+  };
   const [savedScenarios, setSavedScenarios] = useState<SavedMrpScenario[]>([]);
 
   const computed: ComputedMrpRow[] = useMemo(
@@ -31,9 +39,10 @@ const CulinaryMrpSimulatorWorkspace: React.FC = () => {
       computed.filter((row) => {
         if (groupFilter !== "ALL" && row.materialGroup !== groupFilter) return false;
         if (statusFilter !== "ALL" && row.status !== statusFilter) return false;
+        if (transferOnly && row.recommendedTransferQty <= 0) return false;
         return true;
       }),
-    [computed, groupFilter, statusFilter]
+    [computed, groupFilter, statusFilter, transferOnly]
   );
 
   const summary = useMemo(() => {
@@ -146,7 +155,7 @@ const CulinaryMrpSimulatorWorkspace: React.FC = () => {
             </div>
             <div className="sila-field">
               <label className="sila-label" htmlFor="cs2-mrp-st">Requirement Status</label>
-              <select id="cs2-mrp-st" className="sila-select" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+              <select id="cs2-mrp-st" className="sila-select" value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setTransferOnly(false); }}>
                 <option value="ALL">All statuses</option>
                 <option value="SHORTAGE">Shortage (PO Needed)</option>
                 <option value="OK">Covered by Stock / Incoming</option>
@@ -176,28 +185,17 @@ const CulinaryMrpSimulatorWorkspace: React.FC = () => {
         )}
       </div>
 
-      <div className="cs2-kpi-grid">
-        <div className="cs2-kpi cs2-kpi--rose">
-          <span className="cs2-kpi__label">Materials w/ Shortage</span>
-          <span className="cs2-kpi__value">{summary.shortageItems}</span>
-          <span className="cs2-kpi__hint">Eligible for transfer / PO</span>
-        </div>
-        <div className="cs2-kpi cs2-kpi--amber">
-          <span className="cs2-kpi__label">Missing Materials</span>
-          <span className="cs2-kpi__value">{summary.missingMaterials}</span>
-          <span className="cs2-kpi__hint">Cannot order until created</span>
-        </div>
-        <div className="cs2-kpi cs2-kpi--cyan">
-          <span className="cs2-kpi__label">Recommended 311 Transfers</span>
-          <span className="cs2-kpi__value">{summary.totalTransferQty.toFixed(1)}</span>
-          <span className="cs2-kpi__hint">Same-plant alt-store units</span>
-        </div>
-        <div className="cs2-kpi cs2-kpi--accent">
-          <span className="cs2-kpi__label">Est. Procurement Cost</span>
-          <span className="cs2-kpi__value">AED {summary.totalProcurementCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-          <span className="cs2-kpi__hint">Includes pack-size rounding</span>
-        </div>
-      </div>
+      <CulinaryKpis
+        ariaLabel="MRP simulation metrics"
+        testId="mrp-sim-kpis"
+        columns={4}
+        items={[
+          { id: "mrpsim-shortage", label: "Materials w/ Shortage", value: summary.shortageItems, hint: "Eligible for transfer / PO", tone: "rose", drillLabel: "Show materials with a shortage", selected: statusFilter === "SHORTAGE" && !transferOnly, onClick: () => showRows("SHORTAGE") },
+          { id: "mrpsim-missing", label: "Missing Materials", value: summary.missingMaterials, hint: "Cannot order until created", tone: "amber", drillLabel: "Show materials that must be created", selected: statusFilter === "MATERIAL_CREATION_REQUIRED", onClick: () => showRows("MATERIAL_CREATION_REQUIRED") },
+          { id: "mrpsim-transfer", label: "Recommended 311 Transfers", value: summary.totalTransferQty.toFixed(1), hint: "Same-plant alt-store units", tone: "sky", drillLabel: "Show rows with recommended transfers", selected: transferOnly, onClick: () => showRows("ALL", true) },
+          { id: "mrpsim-cost", label: "Est. Procurement Cost", value: `AED ${summary.totalProcurementCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, hint: "Includes pack-size rounding", tone: "indigo", drillLabel: "Show rows that need a purchase order", onClick: () => showRows("SHORTAGE") },
+        ]}
+      />
 
       {savedScenarios.length > 0 && (
         <section className="cs2-card">
@@ -215,7 +213,7 @@ const CulinaryMrpSimulatorWorkspace: React.FC = () => {
       )}
 
       {/* Consolidated MRP Table */}
-      <section className="cs2-card">
+      <section className="cs2-card" id="mrp-sim-table">
         <div className="cs2-card__head">
           <h3 className="cs2-card__title">Consolidated Event Material Requirement Table (Editable Assumptions)</h3>
         </div>

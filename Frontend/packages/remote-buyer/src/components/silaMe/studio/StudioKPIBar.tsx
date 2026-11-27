@@ -19,6 +19,12 @@ export interface StudioKPIItem {
   tone?: StudioKPITone;
   icon?: React.ReactNode;
   testId?: string;
+  /** When set, the box becomes a drill-down control that opens the data behind the number. */
+  onClick?: () => void;
+  /** Highlights the box whose data is currently displayed. */
+  selected?: boolean;
+  /** Tooltip / accessible description of the drill-down target. */
+  drillLabel?: string;
 }
 
 export interface StudioKPICardProps extends StudioKPIItem {}
@@ -32,10 +38,32 @@ export const StudioKPICard: React.FC<StudioKPICardProps> = ({
   tone = "blue",
   icon,
   testId,
+  onClick,
+  selected = false,
+  drillLabel,
 }) => {
   const metaNode = meta ?? hint;
+  const interactive = typeof onClick === "function";
   return (
-    <article className={`sila-studio-kpi sila-studio-kpi--${tone}`} data-testid={testId}>
+    <article
+      className={`sila-studio-kpi sila-studio-kpi--${tone}${interactive ? " sila-studio-kpi--clickable" : ""}${selected ? " is-selected" : ""}`}
+      data-testid={testId}
+      {...(interactive
+        ? {
+            role: "button",
+            tabIndex: 0,
+            "aria-pressed": selected,
+            title: drillLabel ?? `Open ${label}`,
+            onClick,
+            onKeyDown: (event: React.KeyboardEvent) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                onClick?.();
+              }
+            },
+          }
+        : {})}
+    >
       <div className="sila-studio-kpi__head">
         <span className="sila-studio-kpi__label">{label}</span>
         {icon && <span className="sila-studio-kpi__icon" aria-hidden="true">{icon}</span>}
@@ -56,6 +84,8 @@ export interface StudioKPIBarProps {
   children?: React.ReactNode;
   ariaLabel?: string;
   testId?: string;
+  /** Max boxes per row on wide screens (defaults to the number of boxes, capped at 8). */
+  columns?: number;
 }
 
 export const StudioKPIBar: React.FC<StudioKPIBarProps> = ({
@@ -63,8 +93,9 @@ export const StudioKPIBar: React.FC<StudioKPIBarProps> = ({
   children,
   ariaLabel = "Key performance indicators",
   testId = "studio-kpi-bar",
+  columns,
 }) => {
-  const count = items ? items.length : React.Children.count(children);
+  const count = columns ?? (items ? items.length : React.Children.count(children));
   return (
     <section
       className="sila-studio-kpi-bar"

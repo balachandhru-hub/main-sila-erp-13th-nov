@@ -524,3 +524,26 @@
   flex-wrap: wrap;
   gap: 0.4rem;
 }
+
+.sme-quadrant--button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  transition: box-shadow 140ms ease, transform 140ms ease;
+}
+
+.sme-quadrant--button:hover {
+  box-shadow: 0 4px 12px rgba(8, 123, 181, 0.16);
+  transform: translateY(-1px);
+}
+
+.sme-quadrant--button:focus-visible {
+  outline: 2px solid #087bb5;
+  outline-offset: 2px;
+}
+
+.sme-quadrant--button.is-selected {
+  box-shadow: 0 0 0 2px #087bb5;
+}

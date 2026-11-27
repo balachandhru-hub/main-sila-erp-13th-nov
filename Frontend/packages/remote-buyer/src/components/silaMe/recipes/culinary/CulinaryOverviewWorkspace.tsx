@@ -23,7 +23,7 @@ import {
   getEventDashboard,
   type SilaCulinaryEventDashboard,
 } from "../../../../api/silaMe/silaCulinaryEventMenuApi";
-import type { CulinaryWorkspaceKind } from "../silaRecipeRoutes";
+import type { CulinaryWorkspaceKind, SilaRecipeCatalogQuery } from "../silaRecipeRoutes";
 import { StudioKPIBar, StudioKPICard } from "../../studio";
 import "./CulinarySuite.css";
 
@@ -33,6 +33,7 @@ interface CulinaryOverviewWorkspaceProps {
   demoEnabled: boolean;
   onOpenWorkspace: (target: "list" | "legacy-upload" | Exclude<CulinaryWorkspaceKind, "menus">) => void;
   onNavigateGlobal?: (navKey: string) => void;
+  onOpenRecipeView?: (query: SilaRecipeCatalogQuery) => void;
 }
 
 const DEMO_OVERVIEW_METRICS = {
@@ -55,7 +56,12 @@ const CulinaryOverviewWorkspace: React.FC<CulinaryOverviewWorkspaceProps> = ({
   demoEnabled,
   onOpenWorkspace,
   onNavigateGlobal,
+  onOpenRecipeView,
 }) => {
+  const openRecipes = (query: SilaRecipeCatalogQuery) => {
+    if (onOpenRecipeView) onOpenRecipeView(query);
+    else onOpenWorkspace("list");
+  };
   const [demoMode, setDemoMode] = useState(false);
   const [propertyFilter, setPropertyFilter] = useState("ALL");
   const [outletFilter, setOutletFilter] = useState("ALL");
@@ -169,13 +175,15 @@ const CulinaryOverviewWorkspace: React.FC<CulinaryOverviewWorkspaceProps> = ({
         </div>
       </section>
 
-      <StudioKPIBar ariaLabel="Culinary Overview Primary Metrics" testId="culinary-overview-kpis">
+      <StudioKPIBar ariaLabel="Culinary Overview Primary Metrics" testId="culinary-overview-kpis" columns={6}>
         <StudioKPICard
           label="Total Recipes"
           value={demoMode ? DEMO_OVERVIEW_METRICS.totalRecipes : (dashboard?.totalRecipes ?? totalCatalogCount)}
           hint={demoMode ? "Sample dataset" : "Live Recipe Master"}
           tone="blue"
           icon={<ChefHat size={15} />}
+          drillLabel="Open all recipes"
+          onClick={() => openRecipes({})}
         />
         <StudioKPICard
           label="Active Recipes"
@@ -183,6 +191,8 @@ const CulinaryOverviewWorkspace: React.FC<CulinaryOverviewWorkspaceProps> = ({
           hint={demoMode ? "Sample dataset" : "Published & selling"}
           tone="green"
           icon={<CheckCircle2 size={15} />}
+          drillLabel="Open active recipes"
+          onClick={() => openRecipes({ status: "ACTIVE" })}
         />
         <StudioKPICard
           label="Draft Recipes"
@@ -190,6 +200,8 @@ const CulinaryOverviewWorkspace: React.FC<CulinaryOverviewWorkspaceProps> = ({
           hint={demoMode ? "Sample dataset" : "In authoring"}
           tone="lavender"
           icon={<FileText size={15} />}
+          drillLabel="Open draft recipes"
+          onClick={() => openRecipes({ status: "DRAFT" })}
         />
         <StudioKPICard
           label="Pending Approvals"
@@ -197,6 +209,8 @@ const CulinaryOverviewWorkspace: React.FC<CulinaryOverviewWorkspaceProps> = ({
           hint={demoMode ? "Sample dataset" : "Live Approval Queue"}
           tone="amber"
           icon={<Clock size={15} />}
+          drillLabel="Open recipes pending approval"
+          onClick={() => openRecipes({ status: "PENDING_APPROVAL" })}
         />
         <StudioKPICard
           label="AI Recipe Drafts"
@@ -204,6 +218,8 @@ const CulinaryOverviewWorkspace: React.FC<CulinaryOverviewWorkspaceProps> = ({
           hint={demoMode ? "Sample dataset" : `Published: ${lifecycleDash?.publishedRecipes ?? 0}`}
           tone="indigo"
           icon={<Sparkles size={15} />}
+          drillLabel="Open AI Recipe Planner drafts"
+          onClick={() => onOpenWorkspace("ai-planner")}
         />
         <StudioKPICard
           label="Material Mappings"
@@ -211,6 +227,8 @@ const CulinaryOverviewWorkspace: React.FC<CulinaryOverviewWorkspaceProps> = ({
           hint={`Costing Ready: ${lifecycleDash?.readyForCosting ?? 0}`}
           tone="amber"
           icon={<Package size={15} />}
+          drillLabel="Open Material Intelligence"
+          onClick={() => onOpenWorkspace("materials")}
         />
         <StudioKPICard
           label="Material Requests"
@@ -218,6 +236,8 @@ const CulinaryOverviewWorkspace: React.FC<CulinaryOverviewWorkspaceProps> = ({
           hint={`Pending: ${mrqDash?.pendingApprovalRequests ?? 0}`}
           tone="sky"
           icon={<ShoppingBag size={15} />}
+          drillLabel="Open Material Requests"
+          onClick={() => onOpenWorkspace("material-requests")}
         />
         <StudioKPICard
           label="Upcoming Events"
@@ -225,6 +245,8 @@ const CulinaryOverviewWorkspace: React.FC<CulinaryOverviewWorkspaceProps> = ({
           hint={demoMode ? "Sample dataset" : `Approved: ${eventDash?.approvedEvents ?? 0}`}
           tone="blue"
           icon={<Calendar size={15} />}
+          drillLabel="Open Event Planner"
+          onClick={() => onOpenWorkspace("events")}
         />
         <StudioKPICard
           label="Above Food Cost Target"
@@ -232,13 +254,26 @@ const CulinaryOverviewWorkspace: React.FC<CulinaryOverviewWorkspaceProps> = ({
           hint={demoMode ? "Target: 28.0%" : `Incomplete: ${lifecycleDash?.costingIncomplete ?? 0}`}
           tone="green"
           icon={<TrendingUp size={15} />}
+          drillLabel="Open Food Cost Studio"
+          onClick={() => onOpenWorkspace("food-cost")}
         />
         <StudioKPICard
-          label="POS Failed / Posted"
-          value={demoMode ? "0 / 184" : `${dashboard?.failedPosSales ?? 0} / ${dashboard?.consumptionPostedToday ?? 0}`}
-          hint={demoMode ? "Sample dataset" : "POS Consumption Today"}
+          label="POS Failed"
+          value={demoMode ? 0 : (dashboard?.failedPosSales ?? 0)}
+          hint={demoMode ? "Sample dataset" : "Needs mapping or stock posting"}
           tone="rose"
           icon={<AlertTriangle size={15} />}
+          drillLabel="Open failed POS sale lines"
+          onClick={() => openRecipes({ view: "failed-pos" })}
+        />
+        <StudioKPICard
+          label="POS Posted Today"
+          value={demoMode ? 184 : (dashboard?.consumptionPostedToday ?? 0)}
+          hint={demoMode ? "Sample dataset" : "Consumption posted today"}
+          tone="indigo"
+          icon={<ShoppingBag size={15} />}
+          drillLabel="Open consumption posted today"
+          onClick={() => openRecipes({ view: "posted-consumption" })}
         />
       </StudioKPIBar>
 

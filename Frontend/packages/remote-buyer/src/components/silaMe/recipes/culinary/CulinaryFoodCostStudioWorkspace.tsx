@@ -38,6 +38,7 @@ import {
 } from "../../../../api/silaMe/silaCulinaryLifecycleApi";
 import { triggerBlobDownload } from "./culinaryRecipePlannerHelpers";
 import type { CulinaryWorkspaceKind } from "../silaRecipeRoutes";
+import { CulinaryKpis, CulinaryTabs } from "./CulinaryWorkspaceKit";
 import "./CulinarySuite.css";
 
 interface Props {
@@ -281,54 +282,32 @@ const CulinaryFoodCostStudioWorkspace: React.FC<Props> = ({
         </div>
       </div>
 
-      {/* Sub-tabs */}
-      <div className="cs2-actions-row">
-        <button type="button" className={`sila-btn sila-btn--sm ${subTab === "costing" ? "sila-btn--primary" : "sila-btn--secondary"}`} onClick={() => setSubTab("costing")}>
-          Interactive Costing
-        </button>
-        <button type="button" className={`sila-btn sila-btn--sm ${subTab === "scenarios" ? "sila-btn--primary" : "sila-btn--secondary"}`} onClick={() => setSubTab("scenarios")}>
-          Snapshots &amp; Scenarios ({snapshots.length})
-        </button>
-        <button type="button" className={`sila-btn sila-btn--sm ${subTab === "readiness" ? "sila-btn--primary" : "sila-btn--secondary"}`} onClick={() => setSubTab("readiness")}>
-          Readiness ({readiness?.passedCount ?? 0}/{(readiness?.checks.length ?? 0)})
-        </button>
-        <button type="button" className={`sila-btn sila-btn--sm ${subTab === "lifecycle" ? "sila-btn--primary" : "sila-btn--secondary"}`} onClick={() => setSubTab("lifecycle")}>
-          Approval, Recipe ID &amp; Publish ({lc?.lifecycleStatus ?? "DRAFT"})
-        </button>
-      </div>
+      <CulinaryTabs<"costing" | "scenarios" | "readiness" | "lifecycle">
+        ariaLabel="Food cost studio modules"
+        testId="costing-tabs"
+        active={subTab as "costing" | "scenarios" | "readiness" | "lifecycle"}
+        onChange={(id) => setSubTab(id)}
+        tabs={[
+          { id: "costing", label: "Interactive Costing" },
+          { id: "scenarios", label: `Snapshots & Scenarios (${snapshots.length})` },
+          { id: "readiness", label: `Readiness (${readiness?.passedCount ?? 0}/${readiness?.checks.length ?? 0})` },
+          { id: "lifecycle", label: `Approval, Recipe ID & Publish (${lc?.lifecycleStatus ?? "DRAFT"})` },
+        ]}
+      />
 
-      {/* KPI Cards */}
       {costing && (
-        <div className="cs2-kpi-grid" data-testid="costing-kpis">
-          <div className="cs2-kpi cs2-kpi--accent">
-            <span className="cs2-kpi__label">Total Ingredient Cost</span>
-            <span className="cs2-kpi__value">{costing.currency} {costing.totalIngredientCost.toFixed(2)}</span>
-            <span className="cs2-kpi__hint">Completeness: {costing.costCompleteness} (Missing: {costing.missingPriceCount})</span>
-          </div>
-          <div className="cs2-kpi cs2-kpi--cyan">
-            <span className="cs2-kpi__label">Ingredient Cost / Portion</span>
-            <span className="cs2-kpi__value">{costing.currency} {costing.ingredientCostPerPortion.toFixed(3)}</span>
-            <span className="cs2-kpi__hint">Servings: {costing.servings} · Total/portion: {costing.totalCostPerPortion.toFixed(2)}</span>
-          </div>
-          <div className={`cs2-kpi ${(costing.foodCostPercent ?? 0) > (costing.targetFoodCostPercent ?? 100) ? "cs2-kpi--warn" : "cs2-kpi--emerald"}`}>
-            <span className="cs2-kpi__label">Food Cost % vs Target</span>
-            <span className="cs2-kpi__value">
-              {costing.foodCostPercent != null ? `${costing.foodCostPercent.toFixed(2)}%` : "N/A"}
-            </span>
-            <span className="cs2-kpi__hint">
-              Target: {costing.targetFoodCostPercent ?? 28}% · Recommended Net: {costing.currency} {costing.recommendedSellingPriceNet?.toFixed(2) ?? "—"}
-            </span>
-          </div>
-          <div className="cs2-kpi cs2-kpi--emerald">
-            <span className="cs2-kpi__label">Estimated Contribution</span>
-            <span className="cs2-kpi__value">
-              {costing.contributionAmount != null ? `${costing.currency} ${costing.contributionAmount.toFixed(2)}` : "—"}
-            </span>
-            <span className="cs2-kpi__hint">
-              Est. Revenue: {costing.estimatedRevenue != null ? `${costing.currency} ${costing.estimatedRevenue.toFixed(2)}` : "Set selling price"}
-            </span>
-          </div>
-        </div>
+        <CulinaryKpis
+          ariaLabel="Food cost metrics"
+          testId="costing-kpis"
+          columns={5}
+          items={[
+            { id: "fc-total", label: "Total Ingredient Cost", value: `${costing.currency} ${costing.totalIngredientCost.toFixed(2)}`, hint: `Completeness: ${costing.costCompleteness}`, tone: "blue", drillLabel: "Show the ingredient cost lines", selected: subTab === "costing", onClick: () => setSubTab("costing") },
+            { id: "fc-portion", label: "Ingredient Cost / Portion", value: `${costing.currency} ${costing.ingredientCostPerPortion.toFixed(3)}`, hint: `Servings: ${costing.servings} · Total/portion: ${costing.totalCostPerPortion.toFixed(2)}`, tone: "sky", drillLabel: "Show the ingredient cost lines", onClick: () => setSubTab("costing") },
+            { id: "fc-pct", label: "Food Cost % vs Target", value: costing.foodCostPercent != null ? `${costing.foodCostPercent.toFixed(2)}%` : "N/A", hint: `Target: ${costing.targetFoodCostPercent ?? 28}%`, tone: (costing.foodCostPercent ?? 0) > (costing.targetFoodCostPercent ?? 100) ? "rose" : "green", drillLabel: "Show snapshots and scenarios", selected: subTab === "scenarios", onClick: () => setSubTab("scenarios") },
+            { id: "fc-contribution", label: "Estimated Contribution", value: costing.contributionAmount != null ? `${costing.currency} ${costing.contributionAmount.toFixed(2)}` : "—", hint: costing.estimatedRevenue != null ? `Est. Revenue: ${costing.currency} ${costing.estimatedRevenue.toFixed(2)}` : "Set selling price", tone: "green", drillLabel: "Show snapshots and scenarios", onClick: () => setSubTab("scenarios") },
+            { id: "fc-missing", label: "Missing Prices", value: costing.missingPriceCount, tone: costing.missingPriceCount > 0 ? "amber" : "green", drillLabel: "Show readiness checks", selected: subTab === "readiness", onClick: () => setSubTab("readiness") },
+          ]}
+        />
       )}
 
       {/* TAB 1: INTERACTIVE COSTING */}

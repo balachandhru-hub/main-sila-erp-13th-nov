@@ -37,6 +37,7 @@ import {
 } from "../../../../api/silaMe/silaCulinaryMrpApi";
 import type { CulinaryWorkspaceKind } from "../silaRecipeRoutes";
 import CulinaryMrpSimulatorWorkspace from "./CulinaryMrpSimulatorWorkspace";
+import { CulinaryKpis, CulinaryTabs } from "./CulinaryWorkspaceKit";
 import "./CulinarySuite.css";
 
 interface Props {
@@ -87,6 +88,11 @@ const CulinaryEventMrpStudioWorkspace: React.FC<Props> = ({ onOpenWorkspace }) =
   const [groupedView, setGroupedView] = useState<SilaCulinaryMrpGroupView | null>(null);
   const [bomSearch, setBomSearch] = useState("");
   const [bomStatusFilter, setBomStatusFilter] = useState("ALL");
+  const openBom = (status: string) => {
+    setBomStatusFilter(status);
+    setBomSearch("");
+    setTab("bom");
+  };
   const [expandedLineId, setExpandedLineId] = useState<string | null>(null);
 
   // Tree state
@@ -494,65 +500,12 @@ const CulinaryEventMrpStudioWorkspace: React.FC<Props> = ({ onOpenWorkspace }) =
         </div>
       </div>
 
-      {/* KPI Strip */}
-      <div className="cs2-kpi-grid" style={{ marginTop: 12 }}>
-        <div className="cs2-kpi-card">
-          <span>Active MRP Runs</span>
-          <strong>{dashboard?.activeMrpRuns ?? runs.length}</strong>
-        </div>
-        <div className="cs2-kpi-card">
-          <span>Total Recipes</span>
-          <strong>{activeRun?.totalRecipes ?? 0}</strong>
-        </div>
-        <div className="cs2-kpi-card">
-          <span>Unique Materials</span>
-          <strong>{activeRun?.totalUniqueMaterials ?? dashboard?.uniqueRequiredMaterials ?? 0}</strong>
-        </div>
-        <div className="cs2-kpi-card">
-          <span>Sufficient Stock</span>
-          <strong style={{ color: "#0f766e" }}>{activeRun?.sufficientStockCount ?? 0}</strong>
-        </div>
-        <div className="cs2-kpi-card">
-          <span>Potential Shortages</span>
-          <strong style={{ color: "#b91c1c" }}>{activeRun?.shortageCount ?? dashboard?.materialsWithShortages ?? 0}</strong>
-        </div>
-        <div className="cs2-kpi-card">
-          <span>Unknown Availability</span>
-          <strong>{activeRun?.unknownStockCount ?? 0}</strong>
-        </div>
-        <div className="cs2-kpi-card">
-          <span>Missing Mappings</span>
-          <strong style={{ color: "#b45309" }}>{activeRun?.missingMappingCount ?? dashboard?.materialsWithUnresolvedMappings ?? 0}</strong>
-        </div>
-        <div className="cs2-kpi-card">
-          <span>Est. Requirement Value</span>
-          <strong>
-            {activeRun?.costVisible && activeRun.estimatedRequirementValue != null
-              ? `${activeRun.currency} ${activeRun.estimatedRequirementValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
-              : activeRun?.costVisible === false
-                ? "Restricted"
-                : "Unknown"}
-          </strong>
-        </div>
-        <div className="cs2-kpi-card">
-          <span>Indicative Shortage Value</span>
-          <strong style={{ color: "#b91c1c" }}>
-            {activeRun?.costVisible && activeRun.indicativeShortageValue != null
-              ? `${activeRun.currency} ${activeRun.indicativeShortageValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
-              : activeRun?.costVisible === false
-                ? "Restricted"
-                : "Unknown"}
-          </strong>
-        </div>
-        <div className="cs2-kpi-card">
-          <span>Due ≤24h / ≤48h</span>
-          <strong>{dashboard?.materialsRequiredWithin24Hours ?? 0} / {dashboard?.materialsRequiredWithin48Hours ?? 0}</strong>
-        </div>
-      </div>
-
-      {/* Studio Sub-Navigation */}
-      <div className="cs2-tabs" style={{ marginTop: 14, flexWrap: "wrap" }}>
-        {[
+      <CulinaryTabs<MrpTab>
+        ariaLabel="Event MRP modules"
+        testId="mrp-tabs"
+        active={tab}
+        onChange={setTab}
+        tabs={[
           { id: "overview", label: "Dashboard & Overview" },
           { id: "bom", label: "Consolidated BOM (10 Views)" },
           { id: "tree", label: "Recipe Explosion Tree" },
@@ -562,17 +515,50 @@ const CulinaryEventMrpStudioWorkspace: React.FC<Props> = ({ onOpenWorkspace }) =
           { id: "governance", label: `Exceptions, Approval & Procurement Handover (${activeRun?.blockingExceptionCount ?? 0})` },
           { id: "reports", label: `Report Studio (${reportCatalog.length || 36})` },
           { id: "demo", label: "§32 Grand Gala Fixture" },
-        ].map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            className={`cs2-tab ${tab === t.id ? "cs2-tab--active" : ""}`}
-            onClick={() => setTab(t.id as MrpTab)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+        ]}
+      />
+
+      <CulinaryKpis
+        ariaLabel="Event MRP metrics"
+        testId="mrp-kpis"
+        columns={5}
+        items={[
+          { id: "mrp-runs", label: "Active MRP Runs", value: dashboard?.activeMrpRuns ?? runs.length, tone: "blue", drillLabel: "Show the MRP run overview", selected: tab === "overview", onClick: () => setTab("overview") },
+          { id: "mrp-recipes", label: "Total Recipes", value: activeRun?.totalRecipes ?? 0, tone: "lavender", drillLabel: "Show the recipe explosion tree", selected: tab === "tree", onClick: () => setTab("tree") },
+          { id: "mrp-materials", label: "Unique Materials", value: activeRun?.totalUniqueMaterials ?? dashboard?.uniqueRequiredMaterials ?? 0, tone: "sky", drillLabel: "Show all BOM material lines", selected: tab === "bom" && bomStatusFilter === "ALL", onClick: () => openBom("ALL") },
+          { id: "mrp-sufficient", label: "Sufficient Stock", value: activeRun?.sufficientStockCount ?? 0, tone: "green", drillLabel: "Show BOM lines with sufficient stock", selected: tab === "bom" && bomStatusFilter === "CURRENT_STOCK_SUFFICIENT", onClick: () => openBom("CURRENT_STOCK_SUFFICIENT") },
+          { id: "mrp-shortages", label: "Potential Shortages", value: activeRun?.shortageCount ?? dashboard?.materialsWithShortages ?? 0, tone: "rose", drillLabel: "Show BOM lines with potential shortages", selected: tab === "bom" && bomStatusFilter === "POTENTIAL_SHORTAGE", onClick: () => openBom("POTENTIAL_SHORTAGE") },
+          { id: "mrp-unknown", label: "Unknown Availability", value: activeRun?.unknownStockCount ?? 0, tone: "amber", drillLabel: "Show BOM lines with unknown availability", selected: tab === "bom" && bomStatusFilter === "AVAILABILITY_UNKNOWN", onClick: () => openBom("AVAILABILITY_UNKNOWN") },
+          { id: "mrp-missing", label: "Missing Mappings", value: activeRun?.missingMappingCount ?? dashboard?.materialsWithUnresolvedMappings ?? 0, tone: "amber", drillLabel: "Show BOM lines whose material is not mapped", selected: tab === "bom" && bomStatusFilter === "MATERIAL_NOT_MAPPED", onClick: () => openBom("MATERIAL_NOT_MAPPED") },
+          {
+            id: "mrp-req-value",
+            label: "Est. Requirement Value",
+            value:
+              activeRun?.costVisible && activeRun.estimatedRequirementValue != null
+                ? `${activeRun.currency} ${activeRun.estimatedRequirementValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+                : activeRun?.costVisible === false
+                  ? "Restricted"
+                  : "Unknown",
+            tone: "indigo",
+            drillLabel: "Show all BOM lines with requirement values",
+            onClick: () => openBom("ALL"),
+          },
+          {
+            id: "mrp-shortage-value",
+            label: "Indicative Shortage Value",
+            value:
+              activeRun?.costVisible && activeRun.indicativeShortageValue != null
+                ? `${activeRun.currency} ${activeRun.indicativeShortageValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+                : activeRun?.costVisible === false
+                  ? "Restricted"
+                  : "Unknown",
+            tone: "rose",
+            drillLabel: "Show shortage BOM lines",
+            onClick: () => openBom("POTENTIAL_SHORTAGE"),
+          },
+          { id: "mrp-due", label: "Due ≤24h / ≤48h", value: `${dashboard?.materialsRequiredWithin24Hours ?? 0} / ${dashboard?.materialsRequiredWithin48Hours ?? 0}`, tone: "amber", drillLabel: "Open the time-phased requirement view", selected: tab === "timeline", onClick: () => setTab("timeline") },
+        ]}
+      />
 
       {loading && <p style={{ padding: 16 }}>Loading MRP Studio...</p>}
 

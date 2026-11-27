@@ -13,6 +13,7 @@ import {
   DEMO_EVENT_PNL_BASE,
   type EventPnlInput,
 } from "./culinarySimulatorsMath";
+import { CulinaryKpis } from "./CulinaryWorkspaceKit";
 import "./CulinarySuite.css";
 
 interface SavedPnlScenario {
@@ -26,6 +27,7 @@ interface SavedPnlScenario {
 const CulinaryPnlSimulatorWorkspace: React.FC = () => {
   const [input, setInput] = useState<EventPnlInput>(DEMO_EVENT_PNL_BASE);
   const [saved, setSaved] = useState<SavedPnlScenario[]>([]);
+  const goTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
 
   const result = useMemo(() => calculateEventPnl(input), [input]);
 
@@ -113,38 +115,21 @@ const CulinaryPnlSimulatorWorkspace: React.FC = () => {
         <span className="cs2-badge cs2-badge--demo">Interactive Simulator</span>
       </div>
 
-      <div className="cs2-kpi-grid" data-testid="pnl-kpis">
-        <div className="cs2-kpi cs2-kpi--accent">
-          <span className="cs2-kpi__label">Net Event Revenue</span>
-          <span className="cs2-kpi__value">AED {result.netRevenueAed.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-          <span className="cs2-kpi__hint">AED {result.revenuePerGuestAed.toFixed(2)} / guest</span>
-        </div>
-        <div className="cs2-kpi cs2-kpi--rose">
-          <span className="cs2-kpi__label">Total Event Cost</span>
-          <span className="cs2-kpi__value">AED {result.totalEventCostAed.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-          <span className="cs2-kpi__hint">Food AED {result.foodCostAed.toLocaleString()} · Bev AED {result.beverageCostAed.toLocaleString()}</span>
-        </div>
-        <div className="cs2-kpi cs2-kpi--emerald">
-          <span className="cs2-kpi__label">Event Contribution</span>
-          <span className="cs2-kpi__value">AED {result.eventContributionAed.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-          <span className="cs2-kpi__hint">Margin: <strong>{result.contributionMarginPercent.toFixed(2)}%</strong></span>
-        </div>
-        <div className="cs2-kpi cs2-kpi--cyan">
-          <span className="cs2-kpi__label">Package Food Cost %</span>
-          <span className="cs2-kpi__value">{result.foodCostPercent.toFixed(2)}%</span>
-          <span className="cs2-kpi__hint">Beverage Cost %: {result.beverageCostPercent.toFixed(2)}%</span>
-        </div>
-        <div className="cs2-kpi cs2-kpi--amber">
-          <span className="cs2-kpi__label">Break-Even Guests</span>
-          <span className="cs2-kpi__value">{result.breakEvenGuests ?? "N/A"}</span>
-          <span className="cs2-kpi__hint">
-            Target Margin Req. Price: {result.requiredSellingPriceForTargetMarginAed !== null ? `AED ${result.requiredSellingPriceForTargetMarginAed.toFixed(2)}` : "N/A"}
-          </span>
-        </div>
-      </div>
+      <CulinaryKpis
+        ariaLabel="Event P&L simulation metrics"
+        testId="pnl-kpis"
+        columns={5}
+        items={[
+          { id: "pnl-revenue", label: "Net Event Revenue", value: `AED ${result.netRevenueAed.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, hint: `AED ${result.revenuePerGuestAed.toFixed(2)} / guest`, tone: "blue", drillLabel: "Show the revenue vs cost chart", onClick: () => goTo("pnl-sim-chart") },
+          { id: "pnl-cost", label: "Total Event Cost", value: `AED ${result.totalEventCostAed.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, hint: `Food AED ${result.foodCostAed.toLocaleString()} · Bev AED ${result.beverageCostAed.toLocaleString()}`, tone: "rose", drillLabel: "Show the editable cost assumptions", onClick: () => goTo("pnl-sim-inputs") },
+          { id: "pnl-contribution", label: "Event Contribution", value: `AED ${result.eventContributionAed.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, hint: `Margin: ${result.contributionMarginPercent.toFixed(2)}%`, tone: "green", drillLabel: "Show the revenue vs cost chart", onClick: () => goTo("pnl-sim-chart") },
+          { id: "pnl-food-pct", label: "Package Food Cost %", value: `${result.foodCostPercent.toFixed(2)}%`, hint: `Beverage Cost %: ${result.beverageCostPercent.toFixed(2)}%`, tone: "sky", drillLabel: "Show the editable cost assumptions", onClick: () => goTo("pnl-sim-inputs") },
+          { id: "pnl-break-even", label: "Break-Even Guests", value: result.breakEvenGuests ?? "N/A", hint: `Target Margin Req. Price: ${result.requiredSellingPriceForTargetMarginAed !== null ? `AED ${result.requiredSellingPriceForTargetMarginAed.toFixed(2)}` : "N/A"}`, tone: "amber", drillLabel: "Show saved what-if scenarios", onClick: () => goTo("pnl-sim-scenarios") },
+        ]}
+      />
 
       <div className="cs2-grid-2">
-        <section className="cs2-card" aria-label="What-If Inputs">
+        <section className="cs2-card" id="pnl-sim-inputs" aria-label="What-If Inputs">
           <div className="cs2-card__head">
             <h3 className="cs2-card__title">Editable P&amp;L Assumptions</h3>
             <span className="cs2-badge cs2-badge--indigo">Max Food Cost @ Target: AED {result.maxAllowableFoodCostAed.toLocaleString()}</span>
@@ -186,7 +171,7 @@ const CulinaryPnlSimulatorWorkspace: React.FC = () => {
           </div>
         </section>
 
-        <section className="cs2-card" aria-label="P&L Waterfall Chart">
+        <section className="cs2-card" id="pnl-sim-chart" aria-label="P&L Waterfall Chart">
           <div className="cs2-card__head">
             <h3 className="cs2-card__title">Revenue vs Cost &amp; Event Contribution (AED)</h3>
             <span className="cs2-badge cs2-badge--demo">Live Recharts</span>
@@ -206,7 +191,7 @@ const CulinaryPnlSimulatorWorkspace: React.FC = () => {
       </div>
 
       {saved.length > 0 && (
-        <section className="cs2-card">
+        <section className="cs2-card" id="pnl-sim-scenarios">
           <div className="cs2-card__head">
             <h3 className="cs2-card__title">Saved What-If Scenarios</h3>
           </div>

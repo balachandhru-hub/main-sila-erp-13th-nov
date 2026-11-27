@@ -77,6 +77,7 @@ const SilaRecipeCatalogGrid: React.FC<SilaRecipeCatalogGridProps> = ({
       return (
         <RecipeCard
           key={row.id}
+          compact={variant === "compact"}
           title={row.name}
           code={row.recipeCode}
           statusLabel={recipeLabel(row.status)}

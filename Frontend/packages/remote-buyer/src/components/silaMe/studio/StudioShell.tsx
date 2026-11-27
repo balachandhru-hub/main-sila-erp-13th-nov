@@ -65,6 +65,8 @@ export interface StudioOverviewButtonProps {
   tooltip?: string;
   ariaLabel?: string;
   testId?: string;
+  /** Custom glyph (defaults to the dashboard grid icon). */
+  icon?: React.ReactNode;
 }
 
 export const StudioOverviewButton: React.FC<StudioOverviewButtonProps> = ({
@@ -73,6 +75,7 @@ export const StudioOverviewButton: React.FC<StudioOverviewButtonProps> = ({
   tooltip = "Return to Overview",
   ariaLabel = "Overview",
   testId = "studio-overview-btn",
+  icon,
 }) => (
   <button
     type="button"
@@ -83,7 +86,7 @@ export const StudioOverviewButton: React.FC<StudioOverviewButtonProps> = ({
     aria-pressed={active}
     data-testid={testId}
   >
-    <LayoutGrid size={18} strokeWidth={2} aria-hidden="true" />
+    {icon ?? <LayoutGrid size={18} strokeWidth={2} aria-hidden="true" />}
   </button>
 );
 
@@ -94,6 +97,8 @@ export interface StudioIntelligenceToggleProps {
   controlsId?: string;
   icon?: React.ReactNode;
   testId?: string;
+  /** Render as a square icon button (label kept for tooltip and screen readers). */
+  iconOnly?: boolean;
 }
 
 export const StudioIntelligenceToggle: React.FC<StudioIntelligenceToggleProps> = ({
@@ -103,24 +108,39 @@ export const StudioIntelligenceToggle: React.FC<StudioIntelligenceToggleProps> =
   controlsId,
   icon,
   testId = "studio-intelligence-toggle",
-}) => (
-  <button
-    type="button"
-    className={`sila-studio-intel-toggle ${expanded ? "is-expanded" : ""}`}
-    onClick={onClick}
-    aria-expanded={expanded}
-    aria-controls={controlsId}
-    data-testid={testId}
-  >
-    {icon ?? <Sparkles size={14} strokeWidth={2} aria-hidden="true" />}
-    <span>{label}</span>
-    {expanded ? (
-      <ChevronUp size={14} strokeWidth={2.2} aria-hidden="true" />
-    ) : (
-      <ChevronDown size={14} strokeWidth={2.2} aria-hidden="true" />
-    )}
-  </button>
-);
+  iconOnly = false,
+}) =>
+  iconOnly ? (
+    <button
+      type="button"
+      className={`sila-studio-overview-btn sila-studio-intel-icon ${expanded ? "is-active" : ""}`}
+      onClick={onClick}
+      aria-expanded={expanded}
+      aria-controls={controlsId}
+      aria-label={label}
+      title={label}
+      data-testid={testId}
+    >
+      {icon ?? <Sparkles size={18} strokeWidth={2} aria-hidden="true" />}
+    </button>
+  ) : (
+    <button
+      type="button"
+      className={`sila-studio-intel-toggle ${expanded ? "is-expanded" : ""}`}
+      onClick={onClick}
+      aria-expanded={expanded}
+      aria-controls={controlsId}
+      data-testid={testId}
+    >
+      {icon ?? <Sparkles size={14} strokeWidth={2} aria-hidden="true" />}
+      <span>{label}</span>
+      {expanded ? (
+        <ChevronUp size={14} strokeWidth={2.2} aria-hidden="true" />
+      ) : (
+        <ChevronDown size={14} strokeWidth={2.2} aria-hidden="true" />
+      )}
+    </button>
+  );
 
 export interface StudioActionItem {
   id: string;

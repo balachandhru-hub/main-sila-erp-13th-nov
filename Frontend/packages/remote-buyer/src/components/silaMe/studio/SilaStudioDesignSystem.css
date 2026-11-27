@@ -815,10 +815,6 @@
   gap: 0.8rem;
 }
 
-.sila-studio-card-grid--compact {
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 0.6rem;
-}
 
 @media (max-width: 1680px) {
   .sila-studio-card-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
@@ -827,17 +823,151 @@
   .sila-studio-card-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 @media (max-width: 1120px) {
-  .sila-studio-card-grid,
-  .sila-studio-card-grid--compact { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .sila-studio-card-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (max-width: 780px) {
-  .sila-studio-card-grid,
-  .sila-studio-card-grid--compact { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sila-studio-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 480px) {
-  .sila-studio-card-grid,
-  .sila-studio-card-grid--compact { grid-template-columns: 1fr; }
+  .sila-studio-card-grid { grid-template-columns: 1fr; }
 }
+
+/* Compact catalogue: dense thumbnail + detail rows so more recipes fit on one page. */
+.sila-studio-card-grid.sila-studio-card-grid--compact {
+  grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+  gap: 0.5rem;
+}
+@media (max-width: 600px) {
+  .sila-studio-card-grid.sila-studio-card-grid--compact { grid-template-columns: 1fr; }
+}
+
+.sila-studio-item-card--compact {
+  flex-direction: row;
+  align-items: stretch;
+  min-height: 92px;
+  border-radius: 9px;
+}
+
+.sila-studio-item-card--compact:hover { transform: none; }
+
+.sila-studio-item-card__media--thumb {
+  flex: 0 0 76px;
+  width: 76px;
+  aspect-ratio: auto;
+  align-self: stretch;
+  min-height: 92px;
+}
+
+.sila-studio-item-card__media--thumb .rstudio-picture,
+.sila-studio-item-card__media--thumb .rstudio-picture__frame {
+  width: 100%;
+  height: 100%;
+  min-height: 92px;
+  aspect-ratio: auto;
+}
+
+.sila-studio-item-card__media--thumb .rstudio-cover {
+  min-height: 0;
+  height: 100%;
+  padding: 0;
+  align-items: center;
+  justify-content: center;
+}
+
+.sila-studio-item-card__media--thumb .rstudio-cover__art {
+  width: 2.6rem;
+  height: 2.6rem;
+  align-self: center;
+}
+
+.sila-studio-item-card__media--thumb .rstudio-cover__caption { display: none; }
+
+.sila-studio-item-card__body--compact {
+  min-width: 0;
+  gap: 0.18rem;
+  padding: 0.42rem 0.55rem 0.45rem;
+}
+
+.sila-studio-item-card__compact-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.35rem;
+}
+
+.sila-studio-item-card--compact .sila-studio-item-card__title {
+  min-width: 0;
+  font-size: 0.8rem;
+  line-height: 1.22;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.sila-studio-item-card--compact .sila-studio-badge {
+  flex-shrink: 0;
+  font-size: 0.6rem;
+  padding: 0.08rem 0.4rem;
+}
+
+.sila-studio-item-card--compact .sila-studio-item-card__meta {
+  font-size: 0.67rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sila-studio-item-card__compact-stats {
+  display: flex;
+  gap: 0.5rem;
+  font-size: 0.66rem;
+  color: var(--sila-studio-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.sila-studio-item-card__compact-foot {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: auto;
+  min-width: 0;
+}
+
+.sila-studio-item-card__compact-cost {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--sila-studio-heading);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.sila-studio-item-card__compact-pos {
+  min-width: 0;
+  flex: 1 1 auto;
+  font-size: 0.64rem;
+  color: var(--sila-studio-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sila-studio-item-card__compact-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-left: auto;
+}
+
+.sila-studio-item-card--compact .sila-studio-btn--sm {
+  height: 22px;
+  padding: 0 0.45rem;
+  font-size: 0.68rem;
+}
+
+.sila-studio-item-card--compact .sila-studio-overflow { margin-left: 0; }
 
 .sila-studio-item-card {
   position: relative;
@@ -1179,3 +1309,75 @@
     width: 100vw !important;
   }
 }
+
+
+/* ==========================================================================
+   CLICKABLE KPI BOXES (drill-down to the data behind the number)
+   ========================================================================== */
+.sila-studio-kpi--clickable {
+  cursor: pointer;
+  transition: box-shadow 140ms ease, transform 140ms ease, border-color 140ms ease;
+}
+
+.sila-studio-kpi--clickable:hover {
+  border-color: var(--sila-studio-blue);
+  box-shadow: 0 4px 12px rgba(8, 123, 181, 0.14);
+  transform: translateY(-1px);
+}
+
+.sila-studio-kpi--clickable:focus-visible {
+  outline: 2px solid var(--sila-studio-blue);
+  outline-offset: 2px;
+}
+
+.sila-studio-kpi.is-selected {
+  border-color: var(--sila-studio-blue);
+  box-shadow: 0 0 0 2px rgba(8, 123, 181, 0.25);
+}
+
+/* ==========================================================================
+   SEGMENTED CONTROL (Grid / Compact / List)
+   ========================================================================== */
+.sila-studio-segmented {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid var(--sila-studio-border);
+  border-radius: 8px;
+  background: #ffffff;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.sila-studio-segmented__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  height: 32px;
+  padding: 0 0.6rem;
+  border: 0;
+  border-right: 1px solid var(--sila-studio-divider);
+  background: transparent;
+  color: var(--sila-studio-secondary);
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.sila-studio-segmented__btn:last-child { border-right: 0; }
+.sila-studio-segmented__btn:hover { background: var(--sila-studio-hover-bg); color: var(--sila-studio-heading); }
+.sila-studio-segmented__btn.is-active { background: var(--sila-studio-blue); color: #ffffff; }
+.sila-studio-segmented__btn:focus-visible { outline: 2px solid var(--sila-studio-blue); outline-offset: -2px; }
+
+.sila-studio-link {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--sila-studio-blue);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.sila-studio-link:hover { text-decoration: underline; }

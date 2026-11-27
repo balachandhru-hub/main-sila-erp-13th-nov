@@ -16,7 +16,7 @@ import {
   Users,
   UtensilsCrossed,
 } from "lucide-react";
-import { Loader, toastService } from "@vosox/shared-ui";
+import { toastService } from "@vosox/shared-ui";
 import {
   bulkImportMeMenuItems,
   compareMeScenarios,
@@ -745,7 +745,7 @@ const MeStudioWorkspace: React.FC<Props> = ({
     }
   };
 
-  if (loading && !ws) return <StudioLoadingState label="Loading ME Studio workspace..." />;
+  if (loading && !ws) return <StudioLoadingState message="Loading ME Studio workspace..." />;
   if (!ws) return null;
 
   const perms = ws.permissions;
@@ -981,6 +981,9 @@ const MeStudioWorkspace: React.FC<Props> = ({
       <StudioKPIBar ariaLabel="ME Studio metrics" testId="me-studio-kpis">
         <StudioKPICard
           label="Expected Guests"
+          onClick={() => void selectTab("PORTION_DEMAND")}
+          selected={activeTab === "PORTION_DEMAND"}
+          drillLabel="Open portion and demand"
           value={liveCalc.covers}
           tone="blue"
           badge="Planned"
@@ -988,6 +991,9 @@ const MeStudioWorkspace: React.FC<Props> = ({
         />
         <StudioKPICard
           label="Projected Revenue"
+          onClick={() => void selectTab("PERFORMANCE")}
+          selected={activeTab === "PERFORMANCE"}
+          drillLabel="Open menu performance"
           value={num(liveCalc.totalRev)}
           tone="sky"
           badge="Forecast"
@@ -995,6 +1001,9 @@ const MeStudioWorkspace: React.FC<Props> = ({
         />
         <StudioKPICard
           label="Total Food Cost"
+          onClick={() => void selectTab("COSTING")}
+          selected={activeTab === "COSTING"}
+          drillLabel="Open live costing"
           value={viewCost ? num(liveCalc.totalCost) : "Restricted"}
           tone="indigo"
           badge="Planned"
@@ -1002,6 +1011,9 @@ const MeStudioWorkspace: React.FC<Props> = ({
         />
         <StudioKPICard
           label="Cost Per Guest"
+          onClick={() => void selectTab("COSTING")}
+          selected={activeTab === "COSTING"}
+          drillLabel="Open live costing"
           value={viewCost ? num(liveCalc.costPerGuest) : "Restricted"}
           tone="lavender"
           badge="Planned"
@@ -1009,6 +1021,9 @@ const MeStudioWorkspace: React.FC<Props> = ({
         />
         <StudioKPICard
           label="Food Cost %"
+          onClick={() => void selectTab("COSTING")}
+          selected={activeTab === "COSTING"}
+          drillLabel="Open live costing"
           value={viewCost ? pct(liveCalc.fcPct) : "Restricted"}
           tone="amber"
           badge="Planned"
@@ -1016,6 +1031,9 @@ const MeStudioWorkspace: React.FC<Props> = ({
         />
         <StudioKPICard
           label="Contribution Margin"
+          onClick={() => void selectTab("COSTING")}
+          selected={activeTab === "COSTING"}
+          drillLabel="Open live costing"
           value={viewMargin ? num(liveCalc.cm) : "Restricted"}
           tone="green"
           badge="Planned"
@@ -1023,6 +1041,9 @@ const MeStudioWorkspace: React.FC<Props> = ({
         />
         <StudioKPICard
           label="Ingredient Readiness"
+          onClick={() => void selectTab("READINESS")}
+          selected={activeTab === "READINESS"}
+          drillLabel="Open ingredient readiness"
           value={pct(ws.liveIntelligence.ingredientReadinessPercent)}
           tone={ws.liveIntelligence.ingredientReadinessPercent >= 85 ? "green" : "rose"}
           badge="Actual"
@@ -1030,6 +1051,9 @@ const MeStudioWorkspace: React.FC<Props> = ({
         />
         <StudioKPICard
           label="AI Opportunities"
+          onClick={() => void selectTab("AI_OPTIMIZATION")}
+          selected={activeTab === "AI_OPTIMIZATION"}
+          drillLabel="Open AI optimization"
           value={ws.liveIntelligence.aiRecommendations.length}
           tone="blue"
           badge="Recommendation"

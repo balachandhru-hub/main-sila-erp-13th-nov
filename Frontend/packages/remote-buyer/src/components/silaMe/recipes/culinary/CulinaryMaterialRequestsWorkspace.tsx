@@ -28,6 +28,7 @@ import {
 } from "../../../../api/silaMe/silaCulinaryLifecycleApi";
 import { triggerBlobDownload } from "./culinaryRecipePlannerHelpers";
 import type { CulinaryWorkspaceKind } from "../silaRecipeRoutes";
+import { CulinaryKpis } from "./CulinaryWorkspaceKit";
 import "./CulinarySuite.css";
 
 interface Props {
@@ -61,6 +62,12 @@ const CulinaryMaterialRequestsWorkspace: React.FC<Props> = ({
 
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [typeFilter, setTypeFilter] = useState("ALL");
+  const showRequests = (status: string) => {
+    setStatusFilter(status);
+    setTypeFilter("ALL");
+    setSearch("");
+    window.setTimeout(() => document.getElementById("mrq-request-list")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+  };
   const [search, setSearch] = useState("");
   const [activeDraftId, setActiveDraftId] = useState<string>(selectedDraftId ?? "");
 
@@ -283,37 +290,25 @@ const CulinaryMaterialRequestsWorkspace: React.FC<Props> = ({
 
       {/* Dashboard KPI Strip */}
       {dashboard && (
-        <div className="cs2-kpi-grid" data-testid="mrq-dashboard-kpis">
-          <div className="cs2-kpi cs2-kpi--accent">
-            <span className="cs2-kpi__label">Total Requests</span>
-            <span className="cs2-kpi__value">{dashboard.totalRequests}</span>
-            <span className="cs2-kpi__hint">
-              {dashboard.isErpIntegratedTenant ? "ERP Integrated (Manual SAP Creation)" : "Standalone SILA Master"}
-            </span>
-          </div>
-          <div className="cs2-kpi cs2-kpi--warn">
-            <span className="cs2-kpi__label">Pending Approval</span>
-            <span className="cs2-kpi__value">{dashboard.pendingApprovalRequests}</span>
-            <span className="cs2-kpi__hint">Returned: {dashboard.returnedRequests}</span>
-          </div>
-          <div className="cs2-kpi cs2-kpi--cyan">
-            <span className="cs2-kpi__label">Creation / Sync Pending</span>
-            <span className="cs2-kpi__value">{dashboard.creationPendingRequests + dashboard.synchronizationPendingRequests}</span>
-            <span className="cs2-kpi__hint">Approved ready: {dashboard.approvedRequests}</span>
-          </div>
-          <div className="cs2-kpi cs2-kpi--emerald">
-            <span className="cs2-kpi__label">Available / Resolved</span>
-            <span className="cs2-kpi__value">{dashboard.resolvedRequests}</span>
-            <span className="cs2-kpi__hint">
-              Blocked drafts: {dashboard.recipesBlockedByMissingMaterials}
-              {dashboard.averageResolutionHours != null ? ` · Avg ${dashboard.averageResolutionHours}h` : ""}
-            </span>
-          </div>
-        </div>
+        <CulinaryKpis
+          ariaLabel="Material request metrics"
+          testId="mrq-dashboard-kpis"
+          columns={6}
+          items={[
+            { id: "mrq-total", label: "Total Requests", value: dashboard.totalRequests, hint: dashboard.isErpIntegratedTenant ? "ERP Integrated (Manual SAP Creation)" : "Standalone SILA Master", tone: "blue", drillLabel: "Show every material request", selected: statusFilter === "ALL", onClick: () => showRequests("ALL") },
+            { id: "mrq-draft", label: "Draft Requests", value: dashboard.draftRequests, tone: "lavender", drillLabel: "Show draft requests", selected: statusFilter === "DRAFT", onClick: () => showRequests("DRAFT") },
+            { id: "mrq-pending", label: "Pending Approval", value: dashboard.pendingApprovalRequests, tone: "amber", drillLabel: "Show requests pending approval", selected: statusFilter === "PENDING_APPROVAL", onClick: () => showRequests("PENDING_APPROVAL") },
+            { id: "mrq-returned", label: "Returned", value: dashboard.returnedRequests, tone: "rose", drillLabel: "Show requests returned for correction", selected: statusFilter === "RETURNED_FOR_CORRECTION", onClick: () => showRequests("RETURNED_FOR_CORRECTION") },
+            { id: "mrq-approved", label: "Approved", value: dashboard.approvedRequests, tone: "sky", drillLabel: "Show approved requests", selected: statusFilter === "APPROVED", onClick: () => showRequests("APPROVED") },
+            { id: "mrq-creation", label: "Creation / Sync Pending", value: dashboard.creationPendingRequests + dashboard.synchronizationPendingRequests, tone: "indigo", drillLabel: "Show requests pending creation in the ERP", selected: statusFilter === "CREATION_PENDING", onClick: () => showRequests("CREATION_PENDING") },
+            { id: "mrq-resolved", label: "Available / Resolved", value: dashboard.resolvedRequests, hint: dashboard.averageResolutionHours != null ? `Avg ${dashboard.averageResolutionHours}h` : undefined, tone: "green", drillLabel: "Show requests whose material is now available", selected: statusFilter === "MATERIAL_AVAILABLE", onClick: () => showRequests("MATERIAL_AVAILABLE") },
+            { id: "mrq-blocked", label: "Blocked Recipe Drafts", value: dashboard.recipesBlockedByMissingMaterials, tone: "rose", drillLabel: "Show recipe drafts waiting for materials", onClick: () => document.getElementById("mrq-handover")?.scrollIntoView({ behavior: "smooth", block: "start" }) },
+          ]}
+        />
       )}
 
       {/* Phase 1B Handover Consolidation Strip */}
-      <section className="cs2-card">
+      <section className="cs2-card" id="mrq-handover">
         <div className="cs2-card__head">
           <h3 className="cs2-card__title">Connect Waiting AI Recipe Drafts (Material Mapping → Requests)</h3>
           <div className="cs2-actions-row">
@@ -431,7 +426,7 @@ const CulinaryMaterialRequestsWorkspace: React.FC<Props> = ({
       )}
 
       {/* Filters & Export */}
-      <section className="cs2-card">
+      <section className="cs2-card" id="mrq-request-list">
         <div className="cs2-card__head">
           <div className="cs2-actions-row">
             <select className="sila-select" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>

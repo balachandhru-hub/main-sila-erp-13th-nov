@@ -700,3 +700,196 @@
   background: #eaf5ff;
   color: #087bb5;
 }
+
+/* ==========================================================================
+   Studio alignment: every workspace shares the Recipe Studio look & feel
+   ========================================================================== */
+.cs2-shell > .cs2-header,
+.cs2-shell > [data-testid] > .cs2-header:first-child {
+  padding: 14px 18px;
+  border: 1px solid var(--sila-studio-border, #c7dff4);
+  border-radius: 12px;
+  background: linear-gradient(180deg, #ffffff 0%, #f5faff 100%);
+}
+
+.cs2-header__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cs2-shell .sila-studio-subnav {
+  margin: 0;
+}
+
+.cs2-card-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #123354;
+}
+
+.cs2-row-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.cs2-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #123354;
+}
+
+.cs2-input,
+.cs2-field input:not([type="checkbox"]):not([type="radio"]),
+.cs2-field select,
+.cs2-field textarea {
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid #c7dff4;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #123354;
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.cs2-input:focus,
+.cs2-field input:focus,
+.cs2-field select:focus {
+  outline: none;
+  border-color: #087bb5;
+  box-shadow: 0 0 0 3px rgba(8, 123, 181, 0.14);
+}
+
+.cs2-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 13px;
+  border-radius: 8px;
+  border: 1px solid #c7dff4;
+  background: #ffffff;
+  color: #123354;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.cs2-btn:hover:not(:disabled) {
+  border-color: #087bb5;
+  background: #f5faff;
+}
+
+.cs2-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.cs2-btn-primary {
+  border-color: #087bb5;
+  background: #087bb5;
+  color: #ffffff;
+}
+
+.cs2-btn-primary:hover:not(:disabled) {
+  background: #066a9c;
+  border-color: #066a9c;
+}
+
+.cs2-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: 999px;
+  border: 1px solid #bbddf8;
+  background: #eaf5ff;
+  color: #087bb5;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.cs2-pill--warn {
+  border-color: #f3dbb6;
+  background: #fff6e8;
+  color: #b45309;
+}
+
+.cs2-alert {
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid #bbddf8;
+  background: #eaf5ff;
+  color: #123354;
+  font-size: 13px;
+}
+
+.cs2-alert--danger {
+  border-color: #f3cccc;
+  background: #fff1f1;
+  color: #b42318;
+}
+
+.cs2-alert--info {
+  border-color: #bbddf8;
+  background: #eaf5ff;
+}
+
+.cs2-kpi-card {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-height: 76px;
+  padding: 11px 13px;
+  border: 1px solid #bbddf8;
+  border-radius: 10px;
+  background: #eaf5ff;
+}
+
+.cs2-kpi-card > span {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #64748b;
+}
+
+.cs2-kpi-card > strong {
+  font-size: 21px;
+  font-weight: 700;
+  color: #123354;
+}
+
+.cs2-kpi-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.cs2-kpi-value {
+  font-size: 21px;
+  font-weight: 700;
+  color: #123354;
+}
+
+.cs2-empty-note[data-testid="prod-orders-empty"] {
+  padding: 18px;
+  border: 1px dashed #bbddf8;
+  border-radius: 10px;
+  text-align: center;
+}
+
+.cs2-card {
+  box-shadow: 0 1px 2px rgba(18, 51, 84, 0.04);
+}

@@ -36,6 +36,7 @@ import {
 } from "../../../../api/silaMe/silaCulinaryMaterialsApi";
 import { triggerBlobDownload } from "./culinaryRecipePlannerHelpers";
 import type { CulinaryWorkspaceKind } from "../silaRecipeRoutes";
+import { CulinaryKpis } from "./CulinaryWorkspaceKit";
 import "./CulinarySuite.css";
 
 interface CulinaryMaterialIntelligenceWorkspaceProps {
@@ -158,6 +159,11 @@ const CulinaryMaterialIntelligenceWorkspace: React.FC<
   const [subTab, setSubTab] = useState<MaterialSubTab>("table");
   const [filterKey, setFilterKey] = useState<FilterKey>("ALL");
   const [searchText, setSearchText] = useState("");
+  const openMappingRows = (key: FilterKey) => {
+    setFilterKey(key);
+    setSearchText("");
+    setSubTab("table");
+  };
   const [sortKey, setSortKey] = useState<SortKey>("REF");
   const [groupByStatus, setGroupByStatus] = useState(false);
 
@@ -918,50 +924,23 @@ const CulinaryMaterialIntelligenceWorkspace: React.FC<
           </section>
 
           {/* 10 Live KPI Cards (§28) */}
-          <div className="cs2-kpi-grid" data-testid="p1b-kpi-grid">
-            <div className="cs2-kpi">
-              <span className="cs2-kpi__label">Total Ingredients</span>
-              <span className="cs2-kpi__value">{workspace.kpis.totalIngredients}</span>
-            </div>
-            <div className="cs2-kpi">
-              <span className="cs2-kpi__label">Exact Matches</span>
-              <span className="cs2-kpi__value">{workspace.kpis.exactMatches}</span>
-            </div>
-            <div className="cs2-kpi">
-              <span className="cs2-kpi__label">Suggested Matches</span>
-              <span className="cs2-kpi__value">{workspace.kpis.suggestedMatches}</span>
-            </div>
-            <div className="cs2-kpi">
-              <span className="cs2-kpi__label">Confirmed Mappings</span>
-              <span className="cs2-kpi__value">{workspace.kpis.confirmedMappings}</span>
-            </div>
-            <div className="cs2-kpi">
-              <span className="cs2-kpi__label">Pending Review</span>
-              <span className="cs2-kpi__value">{workspace.kpis.pendingReview}</span>
-            </div>
-            <div className="cs2-kpi">
-              <span className="cs2-kpi__label">Missing Materials</span>
-              <span className="cs2-kpi__value">{workspace.kpis.missingMaterials}</span>
-            </div>
-            <div className="cs2-kpi">
-              <span className="cs2-kpi__label">UOM Conflicts</span>
-              <span className="cs2-kpi__value">{workspace.kpis.uomConflicts}</span>
-            </div>
-            <div className="cs2-kpi">
-              <span className="cs2-kpi__label">Spec Conflicts</span>
-              <span className="cs2-kpi__value">{workspace.kpis.specificationConflicts}</span>
-            </div>
-            <div className="cs2-kpi">
-              <span className="cs2-kpi__label">Stock Shortages</span>
-              <span className="cs2-kpi__value">{workspace.kpis.stockShortages}</span>
-            </div>
-            <div className="cs2-kpi">
-              <span className="cs2-kpi__label">Missing Prices</span>
-              <span className="cs2-kpi__value">
-                {workspace.canViewCost ? workspace.kpis.missingPrices : "Restricted"}
-              </span>
-            </div>
-          </div>
+          <CulinaryKpis
+            ariaLabel="Material intelligence metrics"
+            testId="p1b-kpi-grid"
+            columns={5}
+            items={[
+            { id: "mi-total", label: "Total Ingredients", value: workspace.kpis.totalIngredients, tone: "blue", drillLabel: "Show all ingredients", selected: subTab === "table" && filterKey === "ALL", onClick: () => openMappingRows("ALL") },
+            { id: "mi-exact", label: "Exact Matches", value: workspace.kpis.exactMatches, tone: "green", drillLabel: "Show exact matches", selected: subTab === "table" && filterKey === "EXACT", onClick: () => openMappingRows("EXACT") },
+            { id: "mi-suggested", label: "Suggested Matches", value: workspace.kpis.suggestedMatches, tone: "sky", drillLabel: "Show suggested matches", selected: subTab === "table" && filterKey === "SUGGESTED", onClick: () => openMappingRows("SUGGESTED") },
+            { id: "mi-confirmed", label: "Confirmed Mappings", value: workspace.kpis.confirmedMappings, tone: "green", drillLabel: "Show confirmed mappings", selected: subTab === "table" && filterKey === "CONFIRMED", onClick: () => openMappingRows("CONFIRMED") },
+            { id: "mi-pending", label: "Pending Review", value: workspace.kpis.pendingReview, tone: "amber", drillLabel: "Show ingredients pending review", selected: subTab === "table" && filterKey === "PENDING_REVIEW", onClick: () => openMappingRows("PENDING_REVIEW") },
+            { id: "mi-missing", label: "Missing Materials", value: workspace.kpis.missingMaterials, tone: "rose", drillLabel: "Show ingredients with no material", selected: subTab === "table" && filterKey === "MISSING", onClick: () => openMappingRows("MISSING") },
+            { id: "mi-uom", label: "UOM Conflicts", value: workspace.kpis.uomConflicts, tone: "amber", drillLabel: "Show UOM conflicts", selected: subTab === "table" && filterKey === "UOM_CONFLICT", onClick: () => openMappingRows("UOM_CONFLICT") },
+            { id: "mi-spec", label: "Spec Conflicts", value: workspace.kpis.specificationConflicts, tone: "lavender", drillLabel: "Show specification conflicts", selected: subTab === "table" && filterKey === "SPEC_CONFLICT", onClick: () => openMappingRows("SPEC_CONFLICT") },
+            { id: "mi-shortage", label: "Stock Shortages", value: workspace.kpis.stockShortages, tone: "rose", drillLabel: "Show stock shortages", selected: subTab === "table" && filterKey === "STOCK_SHORTAGE", onClick: () => openMappingRows("STOCK_SHORTAGE") },
+            { id: "mi-price", label: "Missing Prices", value: workspace.canViewCost ? workspace.kpis.missingPrices : "Restricted", tone: "indigo", drillLabel: "Show ingredients with missing prices", selected: subTab === "table" && filterKey === "MISSING_PRICE", onClick: () => openMappingRows("MISSING_PRICE") },
+            ]}
+          />
 
           {/* Sub-Tabs & Bulk Action Toolbar (§31, §39, §40) */}
           <div className="cs2-card">

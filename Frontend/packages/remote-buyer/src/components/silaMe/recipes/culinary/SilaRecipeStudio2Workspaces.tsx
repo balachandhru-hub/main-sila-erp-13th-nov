@@ -3,7 +3,7 @@ import { ArrowUpRight, Maximize2, Minimize2 } from "lucide-react";
 import type { SilaCulinaryAiFeatureFlags, SilaCulinaryAiStatus } from "../../../../api/silaMe/silaCulinaryAiApi";
 import type { SilaRecipeDashboard } from "../../../../api/silaMe/silaRecipeToolsApi";
 import type { SilaMePermissions } from "../../silaMePermissions";
-import type { CulinaryWorkspaceKind, SilaRecipeRoute } from "../silaRecipeRoutes";
+import type { CulinaryWorkspaceKind, SilaRecipeCatalogQuery, SilaRecipeRoute } from "../silaRecipeRoutes";
 import { StudioEmptyState } from "../../studio";
 import SilaRecipeStudio2Nav from "./SilaRecipeStudio2Nav";
 import CulinaryOverviewWorkspace from "./CulinaryOverviewWorkspace";
@@ -28,6 +28,8 @@ interface SilaRecipeStudio2WorkspacesProps {
   optionsPanelId?: string;
   onSelectRecipeRoute: (target: "list" | "legacy-upload" | CulinaryWorkspaceKind) => void;
   onNavigateGlobal?: (navKey: string) => void;
+  /** Opens Recipe Master with a status filter or a POS drill-down panel. */
+  onOpenRecipeView?: (query: SilaRecipeCatalogQuery) => void;
   onRefreshAiStatus: () => void;
 }
 
@@ -53,6 +55,7 @@ const SilaRecipeStudio2Workspaces: React.FC<SilaRecipeStudio2WorkspacesProps> = 
   optionsPanelId = "cs2-culinary-options-panel",
   onSelectRecipeRoute,
   onNavigateGlobal,
+  onOpenRecipeView,
   onRefreshAiStatus,
 }) => {
   const [handoverDraftId, setHandoverDraftId] = React.useState<string | null>(() => {
@@ -165,6 +168,7 @@ const SilaRecipeStudio2Workspaces: React.FC<SilaRecipeStudio2WorkspacesProps> = 
             demoEnabled={flags.demonstrationModeEnabled}
             onOpenWorkspace={onSelectRecipeRoute}
             onNavigateGlobal={onNavigateGlobal}
+            onOpenRecipeView={onOpenRecipeView}
           />
         );
       case "ai-planner":

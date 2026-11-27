@@ -160,6 +160,11 @@ const MeOperationalViews: React.FC<Props> = ({
   const [overrideReason, setOverrideReason] = useState("Confirmed hotel group dinner booking");
   const [posCsv, setPosCsv] = useState("PosCode,Quantity,Amount,BusinessDate\nGRILLED_CHICKEN_LARGE,24,720.00," + new Date().toISOString().slice(0, 10));
   const [costBasis, setCostBasis] = useState<"FOOD_COST_ONLY" | "VARIABLE_COST">("FOOD_COST_ONLY");
+  const [quadrantFilter, setQuadrantFilter] = useState<"" | "STAR" | "PLOW" | "PUZZLE" | "DOG">("");
+  const [posRowFilter, setPosRowFilter] = useState<"all" | "unmapped">("all");
+  const [consumptionFilter, setConsumptionFilter] = useState<"all" | "yield" | "waste" | "unexplained">("all");
+  const scrollToId = (id: string) =>
+    window.setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
   const [popThresh, setPopThresh] = useState("0.70");
   const [simForm, setSimForm] = useState({ scenarioName: "What-If Analysis", expectedCovers: "300", ingredientPriceChangePercent: "10", sellingPriceChangePercent: "0", portionSizeChangePercent: "0", discountPercent: "0" });
   const [simRes, setSimRes] = useState<WhatIfSimulationResult | null>(null);
@@ -682,11 +687,11 @@ const MeOperationalViews: React.FC<Props> = ({
             </div>
           </div>
           <StudioKPIBar ariaLabel="POS sales metrics">
-            <StudioKPICard label="Qty Sold" value={posSales.qtySold} tone="blue" badge="Actual" />
-            <StudioKPICard label="Gross Sales" value={num(posSales.grossRevenue)} tone="sky" badge="Actual" />
-            <StudioKPICard label="Discounts / Tax" value={`${num(posSales.discountTotal)} / ${num(posSales.taxTotal)}`} tone="amber" badge="Actual" />
-            <StudioKPICard label="Net Revenue" value={num(posSales.netRevenue)} tone="green" badge="Actual" />
-            <StudioKPICard label="Unmapped Lines" value={posSales.unmappedCount} tone={posSales.unmappedCount > 0 ? "rose" : "green"} badge="Actual" />
+            <StudioKPICard label="Qty Sold" value={posSales.qtySold} tone="blue" badge="Actual" drillLabel="Show all POS sales lines" selected={posRowFilter === "all"} onClick={() => { setPosRowFilter("all"); scrollToId("me-pos-table"); }} />
+            <StudioKPICard label="Gross Sales" value={num(posSales.grossRevenue)} tone="sky" badge="Actual" drillLabel="Show all POS sales lines" onClick={() => { setPosRowFilter("all"); scrollToId("me-pos-table"); }} />
+            <StudioKPICard label="Discounts / Tax" value={`${num(posSales.discountTotal)} / ${num(posSales.taxTotal)}`} tone="amber" badge="Actual" drillLabel="Show all POS sales lines" onClick={() => { setPosRowFilter("all"); scrollToId("me-pos-table"); }} />
+            <StudioKPICard label="Net Revenue" value={num(posSales.netRevenue)} tone="green" badge="Actual" drillLabel="Show all POS sales lines" onClick={() => { setPosRowFilter("all"); scrollToId("me-pos-table"); }} />
+            <StudioKPICard label="Unmapped Lines" value={posSales.unmappedCount} tone={posSales.unmappedCount > 0 ? "rose" : "green"} badge="Actual" drillLabel="Show POS lines without a mapped menu item" selected={posRowFilter === "unmapped"} onClick={() => { setPosRowFilter("unmapped"); scrollToId("me-pos-table"); }} />
           </StudioKPIBar>
           <div className="sme-row">
             <textarea className="sila-input" rows={2} style={{ flex: 1 }} value={posCsv} onChange={(e) => setPosCsv(e.target.value)} />
@@ -695,11 +700,19 @@ const MeOperationalViews: React.FC<Props> = ({
             </button>
           </div>
         </div>
-        <div className="sme-panel">
+        <div className="sme-panel" id="me-pos-table">
+          {posRowFilter === "unmapped" && (
+            <div className="sila-studio-chips" style={{ marginBottom: 8 }} aria-label="Active POS filter">
+              <span className="sila-studio-chip is-active">
+                <span>Showing unmapped lines</span>
+                <button type="button" aria-label="Clear POS filter" onClick={() => setPosRowFilter("all")}>×</button>
+              </span>
+            </div>
+          )}
           <table className="sila-table">
             <thead><tr><th>Txn ID</th><th>Date</th><th>POS Code</th><th>Menu Item</th><th>Qty</th><th>Gross</th><th>Net Rev</th><th>Flags</th><th>Status</th></tr></thead>
             <tbody>
-              {posSales.rows.map((r) => (
+              {posSales.rows.filter((r) => posRowFilter === "all" || r.status === "UNMAPPED").map((r) => (
                 <tr key={r.id}>
                   <td>{r.sourceTransactionId}</td>
                   <td>{r.businessDate.slice(0, 10)}</td>
@@ -819,16 +832,44 @@ const MeOperationalViews: React.FC<Props> = ({
           }
         >
           <div className="sme-quadrant-grid">
-            <div className="sme-quadrant sme-quadrant--star"><strong>STARS ({matrix.stars})</strong><div className="sme-muted">High Popularity &amp; High CM</div></div>
-            <div className="sme-quadrant sme-quadrant--plow"><strong>PLOWHORSES ({matrix.plowhorses})</strong><div className="sme-muted">High Popularity &amp; Low CM</div></div>
-            <div className="sme-quadrant sme-quadrant--puzzle"><strong>PUZZLES ({matrix.puzzles})</strong><div className="sme-muted">Low Popularity &amp; High CM</div></div>
-            <div className="sme-quadrant sme-quadrant--dog"><strong>DOGS ({matrix.dogs})</strong><div className="sme-muted">Low Popularity &amp; Low CM</div></div>
+            {(
+              [
+                ["STAR", "star", `STARS (${matrix.stars})`, "High Popularity & High CM"],
+                ["PLOW", "plow", `PLOWHORSES (${matrix.plowhorses})`, "High Popularity & Low CM"],
+                ["PUZZLE", "puzzle", `PUZZLES (${matrix.puzzles})`, "Low Popularity & High CM"],
+                ["DOG", "dog", `DOGS (${matrix.dogs})`, "Low Popularity & Low CM"],
+              ] as const
+            ).map(([key, cls, title, sub]) => (
+              <button
+                key={key}
+                type="button"
+                className={`sme-quadrant sme-quadrant--${cls} sme-quadrant--button${quadrantFilter === key ? " is-selected" : ""}`}
+                aria-pressed={quadrantFilter === key}
+                title={`Show ${title.split(" (")[0].toLowerCase()} only`}
+                data-testid={`me-quadrant-${key.toLowerCase()}`}
+                onClick={() => {
+                  setQuadrantFilter(quadrantFilter === key ? "" : key);
+                  scrollToId("me-matrix-table");
+                }}
+              >
+                <strong>{title}</strong>
+                <div className="sme-muted">{sub}</div>
+              </button>
+            ))}
           </div>
-          <div className="sila-studio-table-wrap">
+          {quadrantFilter && (
+            <div className="sila-studio-chips" aria-label="Active quadrant filter">
+              <span className="sila-studio-chip is-active">
+                <span>Showing {quadrantFilter === "PLOW" ? "PLOWHORSE" : quadrantFilter} dishes</span>
+                <button type="button" aria-label="Clear quadrant filter" onClick={() => setQuadrantFilter("")}>×</button>
+              </span>
+            </div>
+          )}
+          <div className="sila-studio-table-wrap" id="me-matrix-table">
             <table className="sila-table sila-tabular">
               <thead><tr><th>Dish</th><th>Category</th><th>Qty Sold</th><th>Net Rev</th><th>Mix %</th>{viewCost && <th>Cost/Portion</th>}{viewMargin && <th>Unit CM</th>}<th>Quadrant</th><th>Action</th></tr></thead>
               <tbody>
-                {matrix.rows.map((r) => (
+                {matrix.rows.filter((r) => !quadrantFilter || (r.classification ?? "").toUpperCase().startsWith(quadrantFilter)).map((r) => (
                   <tr key={r.menuItemId}>
                     <td><strong>{r.name}</strong></td>
                     <td>{r.category}</td>
@@ -870,17 +911,24 @@ const MeOperationalViews: React.FC<Props> = ({
           actions={<span className="sme-chip sme-chip--ok">Double-Counting Prevented</span>}
         >
           <StudioKPIBar ariaLabel="Consumption metrics">
-            <StudioKPICard label="Theoretical" value={consumption.theoretical.toFixed(2)} tone="blue" badge="Planned" />
-            <StudioKPICard label="Actual" value={consumption.actual.toFixed(2)} tone="sky" badge="Actual" />
-            <StudioKPICard label="Yield Loss" value={consumption.expectedYieldLoss.toFixed(2)} tone="amber" badge="Actual" />
-            <StudioKPICard label="Recorded Waste" value={consumption.recordedWaste.toFixed(2)} tone="rose" badge="Actual" />
-            <StudioKPICard label="Unexplained Var" value={consumption.unexplainedVariance.toFixed(2)} tone="indigo" badge="Actual" />
+            <StudioKPICard label="Theoretical" value={consumption.theoretical.toFixed(2)} tone="blue" badge="Planned" drillLabel="Show every ingredient" selected={consumptionFilter === "all"} onClick={() => { setConsumptionFilter("all"); scrollToId("me-consumption-table"); }} />
+            <StudioKPICard label="Actual" value={consumption.actual.toFixed(2)} tone="sky" badge="Actual" drillLabel="Show every ingredient" onClick={() => { setConsumptionFilter("all"); scrollToId("me-consumption-table"); }} />
+            <StudioKPICard label="Yield Loss" value={consumption.expectedYieldLoss.toFixed(2)} tone="amber" badge="Actual" drillLabel="Show ingredients with yield loss" selected={consumptionFilter === "yield"} onClick={() => { setConsumptionFilter("yield"); scrollToId("me-consumption-table"); }} />
+            <StudioKPICard label="Recorded Waste" value={consumption.recordedWaste.toFixed(2)} tone="rose" badge="Actual" drillLabel="Show ingredients with recorded waste" selected={consumptionFilter === "waste"} onClick={() => { setConsumptionFilter("waste"); scrollToId("me-consumption-table"); }} />
+            <StudioKPICard label="Unexplained Var" value={consumption.unexplainedVariance.toFixed(2)} tone="indigo" badge="Actual" drillLabel="Show ingredients with unexplained variance" selected={consumptionFilter === "unexplained"} onClick={() => { setConsumptionFilter("unexplained"); scrollToId("me-consumption-table"); }} />
           </StudioKPIBar>
-          <div className="sila-studio-table-wrap">
+          <div className="sila-studio-table-wrap" id="me-consumption-table">
             <table className="sila-table sila-tabular">
               <thead><tr><th>Ingredient</th><th>UOM</th><th>Theoretical</th><th>Actual</th><th>Yield Loss</th><th>Waste</th><th>Unexplained</th></tr></thead>
               <tbody>
-                {consumption.rows.map((r) => (
+                {consumption.rows
+                  .filter((r) =>
+                    consumptionFilter === "all" ||
+                    (consumptionFilter === "yield" && r.expectedYieldLossQty > 0) ||
+                    (consumptionFilter === "waste" && r.recordedWasteQty > 0) ||
+                    (consumptionFilter === "unexplained" && r.unexplainedVarianceQty !== 0)
+                  )
+                  .map((r) => (
                   <tr key={r.materialId}>
                     <td><strong>{r.materialName}</strong></td>
                     <td>{r.uom}</td>
@@ -913,10 +961,10 @@ const MeOperationalViews: React.FC<Props> = ({
           onToggleFullScreen={() => setFullscreenView((f) => !f)}
         >
           <StudioKPIBar ariaLabel="Cost and margin metrics">
-            <StudioKPICard label="Total Revenue" value={num(costMargin.totalRevenue)} tone="sky" badge="Actual" />
-            {viewCost && <StudioKPICard label="Total Food Cost" value={num(costMargin.totalFoodCost)} tone="blue" badge="Actual" />}
-            {viewCost && <StudioKPICard label="Food Cost %" value={pct(costMargin.overallFoodCostPercent)} tone="amber" badge="Actual" />}
-            {viewMargin && <StudioKPICard label="Contribution Margin" value={num(costMargin.totalContributionMargin)} tone="green" badge="Actual" />}
+            <StudioKPICard label="Total Revenue" value={num(costMargin.totalRevenue)} tone="sky" badge="Actual" drillLabel="Open POS sales" onClick={() => onNavigate("silaMenuPosSales")} />
+            {viewCost && <StudioKPICard label="Total Food Cost" value={num(costMargin.totalFoodCost)} tone="blue" badge="Actual" drillLabel="Open consumption analysis" onClick={() => onNavigate("silaMenuConsumption")} />}
+            {viewCost && <StudioKPICard label="Food Cost %" value={pct(costMargin.overallFoodCostPercent)} tone="amber" badge="Actual" drillLabel="Open menu performance by dish" onClick={() => onNavigate("silaMenuPerformance")} />}
+            {viewMargin && <StudioKPICard label="Contribution Margin" value={num(costMargin.totalContributionMargin)} tone="green" badge="Actual" drillLabel="Open menu performance by dish" onClick={() => onNavigate("silaMenuPerformance")} />}
           </StudioKPIBar>
           {costMargin.marginAlerts.map((a, i) => (
             <div key={i} className="sme-kpi-box" style={{ background: "#fff1f1", borderColor: "#f3cccc" }}>

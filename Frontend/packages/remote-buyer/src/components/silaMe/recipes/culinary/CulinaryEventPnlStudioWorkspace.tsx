@@ -45,6 +45,7 @@ import {
   DEMO_EVENT_PNL_BASE,
   type EventPnlInput,
 } from "./culinarySimulatorsMath";
+import { CulinaryKpis, CulinaryTabs } from "./CulinaryWorkspaceKit";
 import "./CulinarySuite.css";
 
 type PnlTab =
@@ -608,75 +609,33 @@ const CulinaryEventPnlStudioWorkspace: React.FC = () => {
         </div>
       )}
 
-      {/* 12 KPI Cards (§50) */}
-      <div className="cs2-kpi-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(175px, 1fr))" }}>
-        <div className="cs2-kpi">
-          <div className="cs2-kpi-label">Net Event Revenue</div>
-          <div className="cs2-kpi-value">{summary ? fmtNum(summary.netRevenue, ccy) : fmtNum(instantSim.netRevenueAed, ccy)}</div>
-        </div>
-        <div className="cs2-kpi">
-          <div className="cs2-kpi-label">Estimated Total Cost</div>
-          <div className="cs2-kpi-value">{summary ? fmtNum(summary.estimatedTotalCost, ccy) : fmtNum(instantSim.totalCostAed, ccy)}</div>
-        </div>
-        <div className="cs2-kpi">
-          <div className="cs2-kpi-label">Procurement Commitments</div>
-          <div className="cs2-kpi-value">{summary ? fmtNum(summary.attributableProcurementCommitment, ccy) : fmtNum(0, ccy)}</div>
-        </div>
-        <div className="cs2-kpi">
-          <div className="cs2-kpi-label">Forecast-at-Completion</div>
-          <div className="cs2-kpi-value">{summary ? fmtNum(summary.forecastAtCompletionCost, ccy) : fmtNum(instantSim.totalCostAed, ccy)}</div>
-        </div>
-        <div className="cs2-kpi">
-          <div className="cs2-kpi-label">Actual Verified Cost</div>
-          <div className="cs2-kpi-value">{summary ? fmtNum(summary.actualVerifiedCost, ccy) : fmtNum(0, ccy)}</div>
-        </div>
-        <div className="cs2-kpi">
-          <div className="cs2-kpi-label">Event Contribution</div>
-          <div className="cs2-kpi-value">{summary ? fmtNum(summary.contributionAfterOverhead, ccy) : fmtNum(instantSim.eventContributionAed, ccy)}</div>
-        </div>
-        <div className="cs2-kpi">
-          <div className="cs2-kpi-label">Contribution Margin</div>
-          <div className="cs2-kpi-value">{summary ? fmtPct(summary.contributionMarginPercent) : fmtPct(instantSim.contributionMarginPercent)}</div>
-        </div>
-        <div className="cs2-kpi">
-          <div className="cs2-kpi-label">Food Cost %</div>
-          <div className="cs2-kpi-value">{summary ? fmtPct(summary.foodCostPercent) : fmtPct(instantSim.foodCostPercent)}</div>
-        </div>
-        <div className="cs2-kpi">
-          <div className="cs2-kpi-label">Beverage Cost %</div>
-          <div className="cs2-kpi-value">{summary ? fmtPct(summary.beverageCostPercent) : fmtPct(instantSim.beverageCostPercent)}</div>
-        </div>
-        <div className="cs2-kpi">
-          <div className="cs2-kpi-label">Cost Per Guest</div>
-          <div className="cs2-kpi-value">{summary ? fmtNum(summary.costPerGuest, ccy) : fmtNum(instantSim.costPerGuestAed, ccy)}</div>
-        </div>
-        <div className="cs2-kpi">
-          <div className="cs2-kpi-label">Remaining Budget</div>
-          <div className="cs2-kpi-value">{summary ? fmtNum(summary.remainingBudget, ccy) : fmtNum(instantSim.costHeadroomAed, ccy)}</div>
-        </div>
-        <div className="cs2-kpi">
-          <div className="cs2-kpi-label">Target Margin Variance</div>
-          <div className="cs2-kpi-value">
-            {summary ? fmtPct(summary.targetMarginVariancePercent) : fmtPct(instantSim.contributionMarginPercent - simReq.targetContributionMarginPercent)}
-          </div>
-        </div>
-      </div>
+      <CulinaryTabs<PnlTab>
+        ariaLabel="Event P&L modules"
+        testId="pnl-tabs"
+        active={tab}
+        onChange={setTab}
+        tabs={TAB_ITEMS}
+      />
 
-      {/* 17 Contextual Tabs (§50) */}
-      <div className="cs2-nav-tabs" role="tablist">
-        {TAB_ITEMS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            role="tab"
-            aria-selected={tab === t.id}
-            className={`cs2-nav-tab ${tab === t.id ? "is-active" : ""}`}
-            onClick={() => setTab(t.id)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <CulinaryKpis
+        ariaLabel="Event P&L metrics"
+        testId="pnl-studio-kpis"
+        columns={6}
+        items={[
+          { id: "pnl-rev", label: "Net Event Revenue", value: summary ? fmtNum(summary.netRevenue, ccy) : fmtNum(instantSim.netRevenueAed, ccy), tone: "blue", drillLabel: "Open the revenue breakdown", selected: tab === "revenue", onClick: () => setTab("revenue") },
+          { id: "pnl-cost", label: "Estimated Total Cost", value: summary ? fmtNum(summary.estimatedTotalCost, ccy) : fmtNum(instantSim.totalCostAed, ccy), tone: "rose", drillLabel: "Open the estimated P&L", selected: tab === "estimated-pnl", onClick: () => setTab("estimated-pnl") },
+          { id: "pnl-proc", label: "Procurement Commitments", value: summary ? fmtNum(summary.attributableProcurementCommitment, ccy) : fmtNum(0, ccy), tone: "indigo", drillLabel: "Open procurement commitments", selected: tab === "procurement", onClick: () => setTab("procurement") },
+          { id: "pnl-fac", label: "Forecast-at-Completion", value: summary ? fmtNum(summary.forecastAtCompletionCost, ccy) : fmtNum(instantSim.totalCostAed, ccy), tone: "sky", drillLabel: "Open the forecast P&L", selected: tab === "forecast-pnl", onClick: () => setTab("forecast-pnl") },
+          { id: "pnl-actual", label: "Actual Verified Cost", value: summary ? fmtNum(summary.actualVerifiedCost, ccy) : fmtNum(0, ccy), tone: "amber", drillLabel: "Open the actual P&L", selected: tab === "actual-pnl", onClick: () => setTab("actual-pnl") },
+          { id: "pnl-contrib", label: "Event Contribution", value: summary ? fmtNum(summary.contributionAfterOverhead, ccy) : fmtNum(instantSim.eventContributionAed, ccy), tone: "green", drillLabel: "Open the estimated P&L", selected: tab === "estimated-pnl", onClick: () => setTab("estimated-pnl") },
+          { id: "pnl-margin", label: "Contribution Margin", value: summary ? fmtPct(summary.contributionMarginPercent) : fmtPct(instantSim.contributionMarginPercent), tone: "green", drillLabel: "Open the variance analysis", selected: tab === "variance", onClick: () => setTab("variance") },
+          { id: "pnl-food", label: "Food Cost %", value: summary ? fmtPct(summary.foodCostPercent) : fmtPct(instantSim.foodCostPercent), tone: "lavender", drillLabel: "Open food cost", selected: tab === "food-cost", onClick: () => setTab("food-cost") },
+          { id: "pnl-bev", label: "Beverage Cost %", value: summary ? fmtPct(summary.beverageCostPercent) : fmtPct(instantSim.beverageCostPercent), tone: "lavender", drillLabel: "Open beverage cost", selected: tab === "beverage-cost", onClick: () => setTab("beverage-cost") },
+          { id: "pnl-guest", label: "Cost Per Guest", value: summary ? fmtNum(summary.costPerGuest, ccy) : fmtNum(instantSim.costPerGuestAed, ccy), tone: "sky", drillLabel: "Open cost allocation", selected: tab === "allocation", onClick: () => setTab("allocation") },
+          { id: "pnl-budget", label: "Remaining Budget", value: summary ? fmtNum(summary.remainingBudget, ccy) : fmtNum(instantSim.costHeadroomAed, ccy), tone: "amber", drillLabel: "Open expenses", selected: tab === "expenses", onClick: () => setTab("expenses") },
+          { id: "pnl-tmv", label: "Target Margin Variance", value: summary ? fmtPct(summary.targetMarginVariancePercent) : fmtPct(instantSim.contributionMarginPercent - simReq.targetContributionMarginPercent), tone: "rose", drillLabel: "Open the variance analysis", selected: tab === "variance", onClick: () => setTab("variance") },
+        ]}
+      />
 
       {/* Tab Content */}
       {tab === "overview" && (

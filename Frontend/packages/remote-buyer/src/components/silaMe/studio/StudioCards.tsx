@@ -102,6 +102,95 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({
     };
   }, [menuOpen]);
 
+  const overflowMenu =
+    resolvedOverflow.length > 0 ? (
+      <div className="sila-studio-overflow" ref={menuRef}>
+        <button
+          type="button"
+          className="sila-studio-btn sila-studio-btn--sm"
+          aria-label={`More actions for ${title}`}
+          aria-expanded={menuOpen}
+          aria-haspopup="menu"
+          title="More Actions"
+          onClick={() => setMenuOpen((o) => !o)}
+        >
+          <MoreVertical size={14} aria-hidden="true" />
+        </button>
+        {menuOpen && (
+          <div className="sila-studio-overflow__menu" role="menu">
+            {resolvedOverflow.map((act) => (
+              <button
+                key={act.id}
+                type="button"
+                role="menuitem"
+                data-testid={act.testId}
+                className={`sila-studio-overflow__item ${act.danger ? "sila-studio-overflow__item--danger" : ""}`}
+                onClick={() => {
+                  setMenuOpen(false);
+                  act.onClick();
+                }}
+              >
+                {act.danger && <Trash2 size={13} aria-hidden="true" />}
+                <span>{act.label}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    ) : null;
+
+  if (compact) {
+    return (
+      <article className="sila-studio-item-card sila-studio-item-card--compact" role="listitem" data-testid="recipe-card-compact">
+        <button
+          type="button"
+          className="sila-studio-item-card__media sila-studio-item-card__media--thumb"
+          onClick={onView}
+          aria-label={`View ${title}`}
+        >
+          {media}
+        </button>
+        <div className="sila-studio-item-card__body sila-studio-item-card__body--compact">
+          <div className="sila-studio-item-card__compact-head">
+            <h3 className="sila-studio-item-card__title" title={title}>
+              <button type="button" className="sila-studio-item-card__title-btn" onClick={onView}>
+                {title}
+              </button>
+            </h3>
+            <span className={resolvedStatusClass}>{statusLabel}</span>
+          </div>
+          <p className="sila-studio-item-card__meta" title={resolvedMeta}>
+            {resolvedMeta}
+          </p>
+          <div className="sila-studio-item-card__compact-stats">
+            <span title="Version">{versionText}</span>
+            {resolvedIngredients && <span>{resolvedIngredients}</span>}
+            <span>{yieldText}</span>
+          </div>
+          <div className="sila-studio-item-card__compact-foot">
+            <span className="sila-studio-item-card__compact-cost" title="Cost / portion">
+              {resolvedCost}
+            </span>
+            <span className="sila-studio-item-card__compact-pos" title="Menu / POS">
+              {resolvedPos}
+            </span>
+            <span className="sila-studio-item-card__compact-actions">
+              <button type="button" className="sila-studio-btn sila-studio-btn--sm" onClick={onView}>
+                View
+              </button>
+              {onEdit && (
+                <button type="button" className="sila-studio-btn sila-studio-btn--primary sila-studio-btn--sm" onClick={onEdit}>
+                  Edit
+                </button>
+              )}
+              {overflowMenu}
+            </span>
+          </div>
+        </div>
+      </article>
+    );
+  }
+
   return (
     <article className="sila-studio-item-card" role="listitem">
       <button
@@ -152,41 +241,7 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({
               Edit
             </button>
           )}
-          {resolvedOverflow.length > 0 && (
-            <div className="sila-studio-overflow" ref={menuRef}>
-              <button
-                type="button"
-                className="sila-studio-btn sila-studio-btn--sm"
-                aria-label={`More actions for ${title}`}
-                aria-expanded={menuOpen}
-                aria-haspopup="menu"
-                title="More Actions"
-                onClick={() => setMenuOpen((o) => !o)}
-              >
-                <MoreVertical size={14} aria-hidden="true" />
-              </button>
-              {menuOpen && (
-                <div className="sila-studio-overflow__menu" role="menu">
-                  {resolvedOverflow.map((act) => (
-                    <button
-                      key={act.id}
-                      type="button"
-                      role="menuitem"
-                      data-testid={act.testId}
-                      className={`sila-studio-overflow__item ${act.danger ? "sila-studio-overflow__item--danger" : ""}`}
-                      onClick={() => {
-                        setMenuOpen(false);
-                        act.onClick();
-                      }}
-                    >
-                      {act.danger && <Trash2 size={13} aria-hidden="true" />}
-                      <span>{act.label}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+          {overflowMenu}
         </div>
       </div>
     </article>

@@ -91,7 +91,21 @@ export const parseSilaRecipePath = (pathname: string): SilaRecipeRoute => {
 
 export const silaRecipeOverviewPath = (): string => SILA_RECIPES_BASE;
 
-export const silaRecipeCatalogPath = (): string => `${SILA_RECIPES_BASE}/master`;
+export type SilaRecipeCatalogQuery = {
+  /** KPI drill-down panel: failed POS sale lines or today's posted consumption. */
+  view?: "failed-pos" | "posted-consumption";
+  /** DRAFT | PENDING_APPROVAL | APPROVED | INACTIVE | ACTIVE (selling). */
+  status?: string;
+};
+
+export const silaRecipeCatalogPath = (query?: SilaRecipeCatalogQuery): string => {
+  const base = `${SILA_RECIPES_BASE}/master`;
+  const params = new URLSearchParams();
+  if (query?.view) params.set("view", query.view);
+  if (query?.status) params.set("status", query.status);
+  const text = params.toString();
+  return text ? `${base}?${text}` : base;
+};
 
 export const silaRecipeNewPath = (): string => `${SILA_RECIPES_BASE}/new`;
 

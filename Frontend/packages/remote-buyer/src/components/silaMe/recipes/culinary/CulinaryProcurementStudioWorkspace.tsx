@@ -37,6 +37,7 @@ import {
   type SilaCulinarySimulateProcurementResult,
 } from "../../../../api/silaMe/silaCulinaryProcurementApi";
 import type { CulinaryWorkspaceKind } from "../silaRecipeRoutes";
+import { CulinaryKpis, CulinaryTabs } from "./CulinaryWorkspaceKit";
 import "./CulinarySuite.css";
 
 interface Props {
@@ -628,47 +629,6 @@ const CulinaryProcurementStudioWorkspace: React.FC<Props> = ({ onOpenWorkspace }
             <span className={`cs2-badge ${statusBadgeTone(activePlan.summary.status)}`}>{activePlan.summary.status}</span>
           </div>
 
-          <div className="cs2-kpi-grid" data-testid="proc-kpi-grid">
-            <div className="cs2-kpi cs2-kpi--accent">
-              <span className="cs2-kpi__label">Required Materials</span>
-              <span className="cs2-kpi__value">{activePlan.summary.requiredMaterialsCount}</span>
-              <span className="cs2-kpi__hint">Active reservations: {dashboard?.activeReservationsCount ?? activePlan.reservations.length}</span>
-            </div>
-            <div className="cs2-kpi cs2-kpi--emerald">
-              <span className="cs2-kpi__label">Fully Reserved</span>
-              <span className="cs2-kpi__value">{activePlan.summary.fullyReservedCount}</span>
-              <span className="cs2-kpi__hint">Physical readiness: {activePlan.summary.physicalReadinessPercent}%</span>
-            </div>
-            <div className="cs2-kpi cs2-kpi--cyan">
-              <span className="cs2-kpi__label">Incoming PO Covered</span>
-              <span className="cs2-kpi__value">{activePlan.summary.incomingPoCoveredCount}</span>
-              <span className="cs2-kpi__hint">Open linked POs: {dashboard?.openLinkedPos ?? 0}</span>
-            </div>
-            <div className="cs2-kpi cs2-kpi--cyan">
-              <span className="cs2-kpi__label">Transfer Covered</span>
-              <span className="cs2-kpi__value">{activePlan.summary.transferCoveredCount}</span>
-              <span className="cs2-kpi__hint">Projected readiness: {activePlan.summary.projectedReadinessPercent}%</span>
-            </div>
-            <div className="cs2-kpi cs2-kpi--amber">
-              <span className="cs2-kpi__label">Requiring Purchase</span>
-              <span className="cs2-kpi__value">{activePlan.summary.purchaseRequiredCount}</span>
-              <span className="cs2-kpi__hint">Pending approvals: {activePlan.summary.pendingApprovalCount}</span>
-            </div>
-            <div className="cs2-kpi cs2-kpi--rose">
-              <span className="cs2-kpi__label">Shortages / Delayed</span>
-              <span className="cs2-kpi__value">
-                {activePlan.summary.criticalShortageCount} / {activePlan.summary.delayedDeliveryCount}
-              </span>
-              <span className="cs2-kpi__hint">Open exceptions: {activePlan.exceptions.filter((x) => x.resolutionStatus === "OPEN").length}</span>
-            </div>
-            {activePlan.costsVisible && (
-              <div className="cs2-kpi cs2-kpi--accent">
-                <span className="cs2-kpi__label">Est. New Purchase ({activePlan.summary.currency})</span>
-                <span className="cs2-kpi__value">{fmtNum(activePlan.summary.estimatedNewPurchaseValue)}</span>
-                <span className="cs2-kpi__hint">Committed: {fmtNum(activePlan.summary.committedProcurementValue)}</span>
-              </div>
-            )}
-          </div>
         </div>
       ) : (
         <div className="cs2-card">
@@ -678,22 +638,32 @@ const CulinaryProcurementStudioWorkspace: React.FC<Props> = ({ onOpenWorkspace }
         </div>
       )}
 
-      {/* §45 Contextual Tabs */}
-      <div className="cs2-nav-tabs" role="tablist" aria-label="Procurement Studio tabs">
-        {PROC_TABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            role="tab"
-            aria-selected={tab === t.id}
-            data-testid={`proc-tab-${t.id}`}
-            className={`cs2-nav-tab${tab === t.id ? " is-active" : ""}`}
-            onClick={() => setTab(t.id)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <CulinaryTabs<ProcTab>
+        ariaLabel="Procurement Studio tabs"
+        testId="proc-tabs"
+        active={tab}
+        onChange={setTab}
+        tabs={PROC_TABS.map((t) => ({ ...t, testId: `proc-tab-${t.id}` }))}
+      />
+
+      {activePlan && (
+        <CulinaryKpis
+          ariaLabel="Procurement plan metrics"
+          testId="proc-kpi-grid"
+          columns={4}
+          items={[
+            { id: "proc-required", label: "Required Materials", value: activePlan.summary.requiredMaterialsCount, hint: `Active reservations: ${dashboard?.activeReservationsCount ?? activePlan.reservations.length}`, tone: "blue", drillLabel: "Show the coverage of every required material", selected: tab === "coverage" && statusFilter === "ALL", onClick: () => { setStatusFilter("ALL"); setSearchText(""); setTab("coverage"); } },
+            { id: "proc-reserved", label: "Fully Reserved", value: activePlan.summary.fullyReservedCount, hint: `Physical readiness: ${activePlan.summary.physicalReadinessPercent}%`, tone: "green", drillLabel: "Show stock reservations", selected: tab === "reservations", onClick: () => setTab("reservations") },
+            { id: "proc-incoming", label: "Incoming PO Covered", value: activePlan.summary.incomingPoCoveredCount, hint: `Open linked POs: ${dashboard?.openLinkedPos ?? 0}`, tone: "sky", drillLabel: "Show incoming purchase orders", selected: tab === "incoming-pos", onClick: () => setTab("incoming-pos") },
+            { id: "proc-transfer", label: "Transfer Covered", value: activePlan.summary.transferCoveredCount, hint: `Projected readiness: ${activePlan.summary.projectedReadinessPercent}%`, tone: "indigo", drillLabel: "Show internal transfers", selected: tab === "transfers", onClick: () => setTab("transfers") },
+            { id: "proc-purchase", label: "Requiring Purchase", value: activePlan.summary.purchaseRequiredCount, hint: `Pending approvals: ${activePlan.summary.pendingApprovalCount}`, tone: "amber", drillLabel: "Show purchase recommendations", selected: tab === "purchases", onClick: () => setTab("purchases") },
+            { id: "proc-shortages", label: "Shortages / Delayed", value: `${activePlan.summary.criticalShortageCount} / ${activePlan.summary.delayedDeliveryCount}`, hint: `Open exceptions: ${activePlan.exceptions.filter((x) => x.resolutionStatus === "OPEN").length}`, tone: "rose", drillLabel: "Show procurement exceptions", selected: tab === "exceptions", onClick: () => setTab("exceptions") },
+            ...(activePlan.costsVisible
+              ? [{ id: "proc-est-purchase", label: `Est. New Purchase (${activePlan.summary.currency})`, value: fmtNum(activePlan.summary.estimatedNewPurchaseValue), hint: `Committed: ${fmtNum(activePlan.summary.committedProcurementValue)}`, tone: "lavender" as const, drillLabel: "Show purchase recommendations", onClick: () => setTab("purchases") }]
+              : []),
+          ]}
+        />
+      )}
 
       {/* TAB 1: COVERAGE OVERVIEW (§46) */}
       {tab === "coverage" && activePlan && (
