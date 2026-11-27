@@ -306,6 +306,7 @@ const SilaMenuEngineeringApp: React.FC<Props> = ({ navKey, permissions, canManag
             <MenuReportsPanel filter={filter} onClose={() => setShowReports(false)} />
           ) : isStudio ? (
             <MeStudioWorkspace
+              initialPlanId={activeMenuPlanId}
               propertyId={filter.propertyId}
               outletLocationId={filter.outletLocationId}
               operatingMode={operatingMode}
@@ -323,6 +324,10 @@ const SilaMenuEngineeringApp: React.FC<Props> = ({ navKey, permissions, canManag
               lookups={lookups}
               permissions={effectivePerms}
               operatingMode={operatingMode}
+              onOpenInStudio={(planId) => {
+                if (planId) setActiveMenuPlanId(planId);
+                onNavigate("silaMenuStudio");
+              }}
               onNavigate={onNavigate}
             />
           )}

@@ -5,9 +5,25 @@ import type { MenuDemand, MenuFilter, MenuInsight, MenuLookups, MenuRequirementR
 
 const BASE = "/api/v1/buyer/sila/me-studio";
 
+export interface MenuEngineeringFeatureFlagsDto {
+  menuEngineering: boolean;
+  meStudio: boolean;
+  aiMenuIntelligence: boolean;
+  predictiveForecasting: boolean;
+  mathematicalOptimization: boolean;
+  culinaryDigitalTwin: boolean;
+  autonomousAgents: boolean;
+  silaVoice: boolean;
+  posIntegration: boolean;
+  pmsIntegration: boolean;
+  enterpriseNotifications: boolean;
+  mobileCulinaryOperations: boolean;
+}
+
 export interface MeStudioPermissionsDto {
   menuEngineeringEnabled: boolean;
   meStudioEnabled: boolean;
+  featureFlags?: MenuEngineeringFeatureFlagsDto;
   viewMeStudio: boolean;
   createMenu: boolean;
   editDraftMenu: boolean;
@@ -46,7 +62,7 @@ export interface MenuItemEnhanced {
   netSellingPrice?: number | null;
   taxInclusiveSellingPrice?: number | null;
   linkedRecipeId?: string | null;
-  linkedRecipeName?: string | null;
+  recipeName?: string | null;
   approvedRecipeVersion?: number | null;
   recipeCombinationJson?: string | null;
   defaultPortionQty: number;
@@ -72,7 +88,7 @@ export interface MenuItemEnhanced {
   contributionMargin?: number | null;
   historicalSalesQty: number;
   popularityIndex?: number | null;
-  engineeringClassification?: string | null;
+  matrixClassification?: string | null;
   ingredientAvailabilityStatus: string;
 }
 
@@ -317,6 +333,7 @@ export interface MenuEngineeringSetupDto {
   propertyId?: string | null;
   menuEngineeringEnabled: boolean;
   meStudioEnabled: boolean;
+  featureFlags?: MenuEngineeringFeatureFlagsDto;
   defaultMealParticipation: number;
   defaultItemParticipation: number;
   defaultBufferPercentage: number;
@@ -544,6 +561,7 @@ export interface CostMarginAnalysisDto {
   totalFoodCost?: number | null;
   overallFoodCostPercent?: number | null;
   totalContributionMargin?: number | null;
+  disclaimer?: string;
 }
 
 export interface MenuPurchasePlanDto {
@@ -690,6 +708,55 @@ export interface SilaStoreMenuMobileDto {
   ingredientReadiness: MenuRequirementRow[];
   pendingApprovals: MenuPlanEnhanced[];
 }
+
+export interface CustomerDataTemplateDto {
+  entityType: string;
+  title: string;
+  fileName: string;
+  columns: string[];
+  sampleCsv: string;
+}
+
+export interface CustomerDataImportPreviewResultDto {
+  entityType: string;
+  totalRows: number;
+  validRows: number;
+  warningRows: number;
+  errorRows: number;
+  duplicateRows: number;
+  protectedApprovedRows: number;
+  readyToCommit: boolean;
+  rows: { rowNumber: number; key: string; status: string; message: string; parsedFields: Record<string, string | null> }[];
+}
+
+export interface CustomerDataImportCommitResultDto {
+  auditId: string;
+  entityType: string;
+  createdCount: number;
+  updatedCount: number;
+  skippedCount: number;
+  errorCount: number;
+  messages: string[];
+  importedAtUtc: string;
+}
+
+export interface CustomerDataMigrationAuditDto {
+  id: string;
+  entityType: string;
+  createdCount: number;
+  updatedCount: number;
+  skippedCount: number;
+  errorCount: number;
+  importedAtUtc: string;
+  summary: string;
+}
+
+export const getMeMigrationTemplates = () => get<CustomerDataTemplateDto[]>("/data-migration/templates");
+export const previewMeDataMigration = (dto: { entityType: string; format?: string; payload: string; propertyId?: string; allowOverwriteApproved?: boolean }) =>
+  post<CustomerDataImportPreviewResultDto>("/data-migration/preview", dto);
+export const commitMeDataMigration = (dto: { entityType: string; format?: string; payload: string; propertyId?: string; allowOverwriteApproved?: boolean }) =>
+  post<CustomerDataImportCommitResultDto>("/data-migration/commit", dto);
+export const getMeDataMigrationAudits = () => get<CustomerDataMigrationAuditDto[]>("/data-migration/audits");
 
 export const getMeReportCatalog = () => get<MenuEngineeringReportItem[]>("/reports");
 export const exportMeReport = (reportKey: string, format = "CSV", filter: MenuFilter = {}) =>

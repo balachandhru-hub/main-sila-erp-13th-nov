@@ -74,6 +74,7 @@ import {
 } from "../../../api/silaMe/menuEngineeringAutonomousApi";
 
 interface Props {
+  initialPlanId?: string;
   propertyId?: string;
   outletLocationId?: string;
   operatingMode?: AiOperatingMode;
@@ -112,6 +113,7 @@ const num = (v?: number | null, d = 2) => (v == null ? "—" : v.toFixed(d));
 const pct = (v?: number | null) => (v == null ? "—" : `${v.toFixed(1)}%`);
 
 const MeStudioWorkspace: React.FC<Props> = ({
+  initialPlanId,
   propertyId,
   outletLocationId,
   operatingMode = "AI_ASSISTED",
@@ -124,7 +126,10 @@ const MeStudioWorkspace: React.FC<Props> = ({
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<StudioTab>("DESIGN");
   const [bottomExpanded, setBottomExpanded] = useState(true);
-  const [selectedPlanId, setSelectedPlanId] = useState<string>("");
+  const [selectedPlanId, setSelectedPlanId] = useState<string>(initialPlanId ?? "");
+  const [isDirty, setIsDirty] = useState(false);
+  const [recoverableDraft, setRecoverableDraft] = useState<{ savedAt: string; draftName: string; lines: MenuPlanLineEnhanced[]; draftCovers: string } | null>(null);
+  const hydratingRef = useRef(false);
 
   // Library filters
   const [libSearch, setLibSearch] = useState("");
@@ -200,6 +205,7 @@ const MeStudioWorkspace: React.FC<Props> = ({
 
   const hydrateFromPlan = useCallback((p?: MenuPlanEnhanced | null) => {
     if (!p) return;
+    hydratingRef.current = true;
     setSelectedPlanId(p.id);
     onActiveContextChange?.(p.id, undefined);
     setDraftName(p.name);
@@ -216,6 +222,19 @@ const MeStudioWorkspace: React.FC<Props> = ({
     setDraftVersion(p.versionNumber);
     if (p.categoriesOrder?.length) setCategoriesOrder(p.categoriesOrder);
     setLines(p.lines || []);
+    setIsDirty(false);
+    try {
+      const cached = window.localStorage.getItem(`sila_me_studio_draft_${p.id}`);
+      if (cached) {
+        const parsed = JSON.parse(cached) as { savedAt: string; draftName: string; lines: MenuPlanLineEnhanced[]; draftCovers: string };
+        setRecoverableDraft(parsed);
+      } else {
+        setRecoverableDraft(null);
+      }
+    } catch {
+      setRecoverableDraft(null);
+    }
+    window.setTimeout(() => { hydratingRef.current = false; }, 0);
     void getProactiveMenuHealth(p.id, propertyId).then(setProactiveHealth).catch(() => setProactiveHealth(null));
   }, [propertyId]);
 
@@ -236,8 +255,33 @@ const MeStudioWorkspace: React.FC<Props> = ({
   );
 
   useEffect(() => {
-    void loadWorkspace(selectedPlanId || undefined);
-  }, [propertyId]); // eslint-disable-line react-hooks/exhaustive-deps
+    void loadWorkspace(initialPlanId || selectedPlanId || undefined);
+  }, [propertyId, initialPlanId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Track unsaved edits + persist local draft recovery + warn on browser unload
+  useEffect(() => {
+    if (hydratingRef.current || loading || !ws) return;
+    setIsDirty(true);
+    try {
+      const key = `sila_me_studio_draft_${selectedPlanId || "new"}`;
+      window.localStorage.setItem(
+        key,
+        JSON.stringify({ savedAt: new Date().toISOString(), draftName, draftCovers, lines })
+      );
+    } catch {
+      // ignore storage quota errors
+    }
+  }, [draftName, draftType, draftMeal, draftDate, draftCovers, draftTargetFc, draftTargetCm, draftDietary, draftNotes, lines]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (!isDirty) return;
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [isDirty]);
 
   // Debounced live simulation preview when draft covers or lines change
   useEffect(() => {
@@ -268,7 +312,7 @@ const MeStudioWorkspace: React.FC<Props> = ({
       if (libDietary && !(it.dietaryTags ?? "").toLowerCase().includes(libDietary.toLowerCase())) return false;
       if (libAllergenExcl && (it.allergenNotes ?? "").toLowerCase().includes(libAllergenExcl.toLowerCase())) return false;
       if (libAvailOnly && it.ingredientAvailabilityStatus !== "READY" && !it.isAvailable) return false;
-      if (libClass && it.engineeringClassification !== libClass) return false;
+      if (libClass && it.matrixClassification !== libClass) return false;
       if (libMaxCost && !Number.isNaN(maxC) && (it.costPerPortion ?? 0) > maxC) return false;
       return true;
     });
@@ -306,7 +350,7 @@ const MeStudioWorkspace: React.FC<Props> = ({
       menuItemName: dish.name,
       menuItemCode: dish.menuItemCode,
       recipeLinkStatus: dish.linkedRecipeId ? "LINKED" : "MISSING",
-      recipeName: dish.linkedRecipeName,
+      recipeName: dish.recipeName,
       imagePath: dish.imagePath,
       allergenNotes: dish.allergenNotes,
       categoryName: cat,
@@ -387,6 +431,10 @@ const MeStudioWorkspace: React.FC<Props> = ({
           ? `Published version preserved; created controlled Draft v${saved.versionNumber}.`
           : `Saved ${saved.name} (v${saved.versionNumber}).`
       );
+      setIsDirty(false);
+      setRecoverableDraft(null);
+      try { window.localStorage.removeItem(`sila_me_studio_draft_${selectedPlanId || "new"}`); } catch { /* ignore */ }
+      try { window.localStorage.removeItem(`sila_me_studio_draft_${saved.id}`); } catch { /* ignore */ }
       await loadWorkspace(saved.id);
     } catch (e) {
       toastService.error(e instanceof Error ? e.message : "Could not save menu.");
@@ -472,6 +520,7 @@ const MeStudioWorkspace: React.FC<Props> = ({
             <span className="sme-chip">{draftStatus} • v{draftVersion}</span>
             <span className="sme-chip sme-chip--ok">{lines.length} Dishes</span>
             <span className="sme-chip">{draftType.replace(/_/g, " ")}</span>
+            {isDirty && <span className="sme-chip sme-chip--warn">Unsaved Changes</span>}
           </div>
         </div>
         <div className="sme-hero__actions">
@@ -536,6 +585,41 @@ const MeStudioWorkspace: React.FC<Props> = ({
           )}
         </div>
       </div>
+
+      {recoverableDraft && (
+        <div className="sme-kpi-box" style={{ background: "#fffbeb", borderColor: "#f59e0b", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+          <span>
+            <strong>Local Draft Available:</strong> Unsaved edits for "{recoverableDraft.draftName}" saved at{" "}
+            {new Date(recoverableDraft.savedAt).toLocaleString()}.
+          </span>
+          <div style={{ display: "flex", gap: "0.45rem" }}>
+            <button
+              type="button"
+              className="sila-btn sila-btn--primary"
+              onClick={() => {
+                setDraftName(recoverableDraft.draftName);
+                setDraftCovers(recoverableDraft.draftCovers);
+                setLines(recoverableDraft.lines);
+                setIsDirty(true);
+                setRecoverableDraft(null);
+                toastService.info("Recovered local draft into Studio canvas.");
+              }}
+            >
+              Restore Local Draft
+            </button>
+            <button
+              type="button"
+              className="sila-btn sila-btn--secondary"
+              onClick={() => {
+                try { window.localStorage.removeItem(`sila_me_studio_draft_${selectedPlanId || "new"}`); } catch { /* ignore */ }
+                setRecoverableDraft(null);
+              }}
+            >
+              Discard Draft
+            </button>
+          </div>
+        </div>
+      )}
 
       {operatingMode !== "MANUAL" && perms.useAiMenuIntelligence && (
         <AiMultiAgentCommandBar
@@ -712,10 +796,10 @@ const MeStudioWorkspace: React.FC<Props> = ({
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", gap: "0.25rem" }}>
                     <strong style={{ fontSize: "0.84rem", color: "#0f172a" }}>{dish.name}</strong>
-                    {dish.engineeringClassification && <span className="sme-chip">{dish.engineeringClassification}</span>}
+                    {dish.matrixClassification && <span className="sme-chip">{dish.matrixClassification}</span>}
                   </div>
                   <div className="sme-muted">
-                    {dish.category || "Mains"} • {dish.linkedRecipeName ? `Recipe: ${dish.linkedRecipeName}` : "No recipe linked"}
+                    {dish.category || "Mains"} • {dish.recipeName ? `Recipe: ${dish.recipeName}` : "No recipe linked"}
                   </div>
                   <div className="sme-muted">
                     Sell: {num(dish.sellingPrice)} {viewCost ? `• Cost: ${num(dish.costPerPortion)}` : ""} {viewMargin ? `• CM: ${num(dish.contributionMargin)}` : ""}
@@ -1657,11 +1741,28 @@ const MeStudioWorkspace: React.FC<Props> = ({
                   <button
                     type="button"
                     className="sila-btn sila-btn--secondary"
-                    onClick={async () => setCompareResult(await compareMeScenarios(compareIds))}
+                    onClick={async () => {
+                      const ids = compareIds.length > 0 ? compareIds : (ws.scenarios ?? []).slice(0, 4).map((x) => x.id);
+                      setCompareResult(await compareMeScenarios(ids));
+                    }}
                   >
                     Compare Legacy Scenarios
                   </button>
                 </div>
+                {(ws.scenarios ?? []).length > 0 && (
+                  <div style={{ display: "flex", gap: "0.45rem", flexWrap: "wrap", marginTop: "0.4rem" }}>
+                    {(ws.scenarios ?? []).map((sc) => (
+                      <label key={sc.id} className="sme-chip" style={{ cursor: "pointer" }}>
+                        <input
+                          type="checkbox"
+                          checked={compareIds.includes(sc.id)}
+                          onChange={(e) => setCompareIds((prev) => (e.target.checked ? [...prev, sc.id] : prev.filter((id) => id !== sc.id)))}
+                        />{" "}
+                        {sc.scenarioName}
+                      </label>
+                    ))}
+                  </div>
+                )}
                 {simResult && (
                   <div className="sme-kpi-box">
                     <div className="sme-muted">{simResult.demandAssumptionDisclosure}</div>
@@ -1683,8 +1784,9 @@ const MeStudioWorkspace: React.FC<Props> = ({
                           <td>{num(s.expectedRevenue)}</td>
                           {viewCost && <td>{pct(s.foodCostPercent)}</td>}
                           {viewMargin && <td>{num(s.contributionMargin)}</td>}
-                          <td>
+                          <td style={{ display: "flex", gap: "0.3rem", flexWrap: "wrap" }}>
                             <button type="button" className="sila-btn sila-btn--secondary" onClick={async () => { await setMePreferredScenario(s.id); await loadWorkspace(selectedPlanId || undefined); }}>Preferred</button>
+                            <button type="button" className="sila-btn sila-btn--secondary" onClick={async () => { const d = await convertMeScenarioToDraft(s.id); toastService.success(`Converted to draft ${d.name}`); await loadWorkspace(d.id); }}>Convert to Draft</button>
                           </td>
                         </tr>
                       ))}

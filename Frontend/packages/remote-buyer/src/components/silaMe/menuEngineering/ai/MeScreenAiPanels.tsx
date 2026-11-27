@@ -655,28 +655,38 @@ export const SetupWizardAiPanel: React.FC<{ propertyId?: string }> = ({ property
     <div className="sme-panel" style={{ background: "#f8fbff", borderColor: "#bfdbfe" }}>
       <div className="sme-panel__header">
         <div>
-          <AiValueTag kind="AI_RECOMMENDATION" /> <strong>10-Step AI Setup Readiness Wizard &amp; Threshold Advisor</strong>
+          <AiValueTag kind="AI_RECOMMENDATION" /> <strong>20-Step Customer Onboarding &amp; Readiness Wizard</strong>
         </div>
         <button
           type="button"
           className="sila-btn sila-btn--primary"
           onClick={async () => setWiz(await getMeSetupWizard(propertyId))}
         >
-          Run 10-Step Readiness Audit
+          Run 20-Step Readiness Audit
         </button>
       </div>
       {wiz && (
         <div className="sme-list">
           <div className="sme-muted">
             Overall Readiness Score: <strong>{wiz.overallReadinessScore.toFixed(1)}%</strong> ·{" "}
-            {wiz.adminApprovalRequiredToApply ? "Administrator approval required before applying threshold changes." : "Ready"}
+            Completed: <strong>{wiz.completedCount ?? wiz.steps.filter((s) => s.status === "READY").length}</strong> ·{" "}
+            Pending: <strong>{wiz.pendingCount ?? wiz.steps.filter((s) => s.status === "NEEDS_ATTENTION").length}</strong> ·{" "}
+            Blocked: <strong>{wiz.blockedCount ?? wiz.steps.filter((s) => s.status === "BLOCKED").length}</strong> ·{" "}
+            {wiz.adminApprovalRequiredToApply ? "Admin approval required to apply thresholds." : "Ready"}
           </div>
+          {(wiz.validationErrors?.length ?? 0) > 0 && (
+            <div className="sme-kpi-box" style={{ background: "#fef2f2", borderColor: "#fecaca" }}>
+              <strong>Validation Errors ({wiz.validationErrors!.length})</strong>
+              {wiz.validationErrors!.map((err, i) => <div key={i} className="sme-muted">• {err}</div>)}
+            </div>
+          )}
           <div className="sme-grid">
             {wiz.steps.map((s) => (
               <div key={s.stepNumber} className="sme-kpi-box">
-                <strong>{s.stepNumber}. {s.stepName}</strong>
+                <strong>{s.stepNumber}. {s.stepName} {s.isOptional ? "(Optional)" : ""}</strong>
                 <div>Score: <strong>{s.readinessPercent.toFixed(0)}%</strong> ({s.status})</div>
                 <div className="sme-muted">{s.detail}</div>
+                {s.requiredAction && <div className="sme-muted" style={{ color: "#b45309" }}>Action: {s.requiredAction}</div>}
               </div>
             ))}
           </div>

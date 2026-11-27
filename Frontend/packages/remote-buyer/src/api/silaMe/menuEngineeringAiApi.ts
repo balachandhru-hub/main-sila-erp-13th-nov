@@ -359,8 +359,23 @@ export interface MeProactiveAlert {
 
 export interface MeSetupWizardReadiness {
   overallReadinessScore: number;
-  steps: { stepNumber: number; stepName: string; readinessPercent: number; status: string; detail: string }[];
+  totalSteps?: number;
+  completedCount?: number;
+  pendingCount?: number;
+  blockedCount?: number;
+  steps: {
+    stepNumber: number;
+    stepName: string;
+    category?: string;
+    isOptional?: boolean;
+    readinessPercent: number;
+    status: string;
+    detail: string;
+    requiredAction?: string | null;
+  }[];
   suggestedThresholds: { settingKey: string; currentValue: string; suggestedValue: string; rationale: string }[];
+  validationErrors?: string[];
+  requiredActions?: string[];
   adminApprovalRequiredToApply: boolean;
 }
 

@@ -3,22 +3,26 @@ import { Loader, toastService } from "@vosox/shared-ui";
 import {
   bulkImportMeMenuItems,
   bulkPriceMeMenuItems,
+  commitMeDataMigration,
   copyMeMenuItem,
   createMeDraftPurchaseRec,
   exportMeReport,
   getMeAiIntelligence,
   getMeConsumption,
   getMeCostMargin,
+  getMeDataMigrationAudits,
   getMeDemand,
   getMeMenuItems,
   getMeMenuItemVersions,
   getMeMenuPlans,
+  getMeMigrationTemplates,
   getMePerformanceMatrix,
   getMePortions,
   getMePosMapping,
   getMePosSales,
   getMePurchasePlan,
   getMeSetup,
+  previewMeDataMigration,
   recordMePortionSample,
   runMeSimulation,
   saveMeDemandOverride,
@@ -29,7 +33,11 @@ import {
   type AiMenuIntelligenceDto,
   type ConsumptionVarianceDetailDto,
   type CostMarginAnalysisDto,
+  type CustomerDataImportPreviewResultDto,
+  type CustomerDataMigrationAuditDto,
+  type CustomerDataTemplateDto,
   type DemandForecastBoard,
+  type MenuEngineeringFeatureFlagsDto,
   type MenuEngineeringSetupDto,
   type MenuItemEnhanced,
   type MenuPerformanceMatrixDto,
@@ -64,8 +72,39 @@ interface Props {
   lookups?: MenuLookups;
   permissions: MeStudioPermissionsDto;
   operatingMode?: AiOperatingMode;
+  onOpenInStudio?: (planId?: string) => void;
   onNavigate: (key: string) => void;
 }
+
+const DEFAULT_FEATURE_FLAGS: MenuEngineeringFeatureFlagsDto = {
+  menuEngineering: true,
+  meStudio: true,
+  aiMenuIntelligence: true,
+  predictiveForecasting: true,
+  mathematicalOptimization: true,
+  culinaryDigitalTwin: true,
+  autonomousAgents: true,
+  silaVoice: true,
+  posIntegration: true,
+  pmsIntegration: true,
+  enterpriseNotifications: true,
+  mobileCulinaryOperations: true,
+};
+
+const FEATURE_FLAG_LABELS: { key: keyof MenuEngineeringFeatureFlagsDto; label: string }[] = [
+  { key: "menuEngineering", label: "Menu Engineering Core" },
+  { key: "meStudio", label: "ME Studio Workspace" },
+  { key: "aiMenuIntelligence", label: "AI Menu Intelligence" },
+  { key: "predictiveForecasting", label: "Predictive Forecasting" },
+  { key: "mathematicalOptimization", label: "Mathematical Optimization" },
+  { key: "culinaryDigitalTwin", label: "Culinary Digital Twin" },
+  { key: "autonomousAgents", label: "Autonomous Agents" },
+  { key: "silaVoice", label: "SILA Voice" },
+  { key: "posIntegration", label: "POS Integration" },
+  { key: "pmsIntegration", label: "PMS Integration" },
+  { key: "enterpriseNotifications", label: "Enterprise Notifications" },
+  { key: "mobileCulinaryOperations", label: "Mobile Culinary Operations" },
+];
 
 const num = (v?: number | null, d = 2) => (v == null ? "—" : v.toFixed(d));
 const pct = (v?: number | null) => (v == null ? "—" : `${v.toFixed(1)}%`);
@@ -76,6 +115,7 @@ const MeOperationalViews: React.FC<Props> = ({
   lookups,
   permissions,
   operatingMode = "AI_ASSISTED",
+  onOpenInStudio,
   onNavigate,
 }) => {
   const [loading, setLoading] = useState(true);
@@ -109,6 +149,14 @@ const MeOperationalViews: React.FC<Props> = ({
   const [simForm, setSimForm] = useState({ scenarioName: "What-If Analysis", expectedCovers: "300", ingredientPriceChangePercent: "10", sellingPriceChangePercent: "0", portionSizeChangePercent: "0", discountPercent: "0" });
   const [simRes, setSimRes] = useState<WhatIfSimulationResult | null>(null);
   const [mappingDraft, setMappingDraft] = useState<Record<string, { menuItemId: string; mappingType: string; portionMultiplier: string; comboParentCode: string; modifierCode: string }>>({});
+  const [itemSearch, setItemSearch] = useState("");
+  const [itemCatFilter, setItemCatFilter] = useState("");
+  const [migTemplates, setMigTemplates] = useState<CustomerDataTemplateDto[]>([]);
+  const [migEntityType, setMigEntityType] = useState("MENU_ITEMS");
+  const [migCsv, setMigCsv] = useState("");
+  const [migAllowOverwrite, setMigAllowOverwrite] = useState(false);
+  const [migPreview, setMigPreview] = useState<CustomerDataImportPreviewResultDto | null>(null);
+  const [migAudits, setMigAudits] = useState<CustomerDataMigrationAuditDto[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -151,9 +199,18 @@ const MeOperationalViews: React.FC<Props> = ({
         case "silaMenuWhatIf":
           setPlans(await getMeMenuPlans({}));
           break;
-        case "silaMenuSetup":
-          setSetup(await getMeSetup(filter.propertyId));
+        case "silaMenuSetup": {
+          const [s, tpls, auds] = await Promise.all([
+            getMeSetup(filter.propertyId),
+            getMeMigrationTemplates().catch(() => []),
+            getMeDataMigrationAudits().catch(() => []),
+          ]);
+          setSetup(s);
+          setMigTemplates(tpls);
+          setMigAudits(auds);
+          if (tpls.length > 0 && !migCsv) setMigCsv(tpls[0].sampleCsv);
           break;
+        }
       }
     } catch (e) {
       toastService.error(e instanceof Error ? e.message : "Could not load view.");
@@ -268,27 +325,62 @@ const MeOperationalViews: React.FC<Props> = ({
         )}
 
         <div className="sme-panel">
+          <div className="sme-row" style={{ marginBottom: "0.75rem", flexWrap: "wrap" }}>
+            <input
+              className="sila-input"
+              style={{ flex: 1, minWidth: "14rem" }}
+              placeholder="Search menu items by code, name, cuisine…"
+              value={itemSearch}
+              onChange={(e) => setItemSearch(e.target.value)}
+            />
+            <select className="sila-input" value={itemCatFilter} onChange={(e) => setItemCatFilter(e.target.value)}>
+              <option value="">All Categories</option>
+              {Array.from(new Set(items.map((x) => x.category).filter(Boolean))).map((c) => (
+                <option key={c} value={c!}>{c}</option>
+              ))}
+            </select>
+          </div>
           <table className="sila-table">
             <thead>
               <tr><th>Select</th><th>Code</th><th>Dish</th><th>Category</th><th>Recipe</th><th>Net Price</th>{viewCost && <th>Cost</th>}{viewCost && <th>FC %</th>}{viewMargin && <th>Margin</th>}<th>Status</th><th>Actions</th></tr>
             </thead>
             <tbody>
-              {items.map((it) => (
+              {items
+                .filter((it) => {
+                  const q = itemSearch.trim().toLowerCase();
+                  if (q && !it.name.toLowerCase().includes(q) && !it.menuItemCode.toLowerCase().includes(q) && !(it.cuisine ?? "").toLowerCase().includes(q)) return false;
+                  if (itemCatFilter && it.category !== itemCatFilter) return false;
+                  return true;
+                })
+                .map((it) => (
                 <tr key={it.id}>
                   <td><input type="checkbox" checked={selectedItemIds.includes(it.id!)} onChange={(e) => setSelectedItemIds((p) => (e.target.checked ? [...p, it.id!] : p.filter((x) => x !== it.id)))} /></td>
                   <td>{it.menuItemCode}</td>
                   <td><strong>{it.name}</strong><div className="sme-muted">{it.cuisine} • {it.dietaryTags || "Standard"}</div></td>
                   <td>{it.category}</td>
-                  <td>{it.linkedRecipeName || "Unlinked"}</td>
+                  <td>{it.recipeName || "Unlinked"}</td>
                   <td>{num(it.netSellingPrice ?? it.sellingPrice)}</td>
                   {viewCost && <td>{num(it.costPerPortion)}</td>}
                   {viewCost && <td>{pct(it.foodCostPercent)}</td>}
                   {viewMargin && <td>{num(it.contributionMargin)}</td>}
-                  <td><span className="sme-chip">{it.approvalStatus} v{it.versionNumber}</span></td>
+                  <td><span className="sme-chip">{it.status} • {it.approvalStatus} v{it.versionNumber}</span></td>
                   <td style={{ display: "flex", gap: "0.3rem", flexWrap: "wrap" }}>
                     <button type="button" className="sila-btn sila-btn--secondary" onClick={() => setEditItem(it)}>Edit</button>
                     {permissions.manageMenuItems && (
                       <button type="button" className="sila-btn sila-btn--secondary" onClick={async () => { await copyMeMenuItem(it.id!); toastService.success("Copied item."); await load(); }}>Copy</button>
+                    )}
+                    {permissions.manageMenuItems && it.status !== "INACTIVE" && (
+                      <button
+                        type="button"
+                        className="sila-btn sila-btn--secondary"
+                        onClick={async () => {
+                          await saveMeMenuItem({ ...it, status: "INACTIVE", isAvailable: false });
+                          toastService.success(`Deactivated ${it.name}.`);
+                          await load();
+                        }}
+                      >
+                        Deactivate
+                      </button>
                     )}
                     <button type="button" className="sila-btn sila-btn--secondary" onClick={async () => setVersions(await getMeMenuItemVersions(it.id!))}>History</button>
                   </td>
@@ -321,7 +413,7 @@ const MeOperationalViews: React.FC<Props> = ({
             <button type="button" className="sila-btn sila-btn--secondary" onClick={() => setPlannerView(plannerView === "CALENDAR" ? "LIST" : "CALENDAR")}>
               {plannerView === "CALENDAR" ? "List View" : "Calendar View"}
             </button>
-            <button type="button" className="sila-btn sila-btn--primary" onClick={() => onNavigate("silaMenuStudio")}>Open in ME Studio</button>
+            <button type="button" className="sila-btn sila-btn--primary" onClick={() => (onOpenInStudio ? onOpenInStudio(plans[0]?.id) : onNavigate("silaMenuStudio"))}>Open in ME Studio</button>
           </div>
         </div>
         {plannerView === "CALENDAR" ? (
@@ -332,17 +424,22 @@ const MeOperationalViews: React.FC<Props> = ({
                 <strong>{p.name}</strong>
                 <div className="sme-muted">{p.serviceFormat} • {p.expectedCovers ?? p.expectedGuests} covers</div>
                 <span className="sme-chip">{p.status} v{p.versionNumber}</span>
-                {p.status === "APPROVED" && permissions.publishMenu && (
-                  <button type="button" className="sila-btn sila-btn--secondary" onClick={async () => { await transitionMeMenuPlan(p.id, "PUBLISHED", "Published from Menu Planner", true); toastService.success("Published & authorized production handoff."); await load(); }}>
-                    Publish
+                <div style={{ display: "flex", gap: "0.3rem", marginTop: "0.35rem", flexWrap: "wrap" }}>
+                  <button type="button" className="sila-btn sila-btn--secondary" onClick={() => (onOpenInStudio ? onOpenInStudio(p.id) : onNavigate("silaMenuStudio"))}>
+                    Open in Studio
                   </button>
-                )}
+                  {p.status === "APPROVED" && permissions.publishMenu && (
+                    <button type="button" className="sila-btn sila-btn--secondary" onClick={async () => { await transitionMeMenuPlan(p.id, "PUBLISHED", "Published from Menu Planner", true); toastService.success("Published & authorized production handoff."); await load(); }}>
+                      Publish
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
           </div>
         ) : (
           <table className="sila-table">
-            <thead><tr><th>Plan</th><th>Type</th><th>Meal Period</th><th>Date</th><th>Covers</th><th>Dishes</th><th>Status</th></tr></thead>
+            <thead><tr><th>Plan</th><th>Type</th><th>Meal Period</th><th>Date</th><th>Covers</th><th>Dishes</th><th>Status</th><th>Action</th></tr></thead>
             <tbody>
               {plans.map((p) => (
                 <tr key={p.id}>
@@ -353,6 +450,11 @@ const MeOperationalViews: React.FC<Props> = ({
                   <td>{p.expectedCovers ?? p.expectedGuests}</td>
                   <td>{p.lines.length}</td>
                   <td>{p.status} v{p.versionNumber}</td>
+                  <td>
+                    <button type="button" className="sila-btn sila-btn--secondary" onClick={() => (onOpenInStudio ? onOpenInStudio(p.id) : onNavigate("silaMenuStudio"))}>
+                      Open in Studio
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -703,6 +805,9 @@ const MeOperationalViews: React.FC<Props> = ({
         )}
         <div className="sme-panel">
           <h2 className="sme-panel__title">Cost &amp; Margin Analysis</h2>
+          <div className="sme-muted" style={{ marginBottom: "0.65rem" }}>
+            {costMargin.disclaimer || "Contribution Margin equals Net Revenue minus Applicable Variable Costs (not Net Profit). Estimated costs are clearly separated from actual production costs."}
+          </div>
           <div className="sme-grid">
             <div className="sme-kpi-box"><div className="sme-kpi-box__label">Total Revenue</div><div className="sme-kpi-box__val">{num(costMargin.totalRevenue)}</div></div>
             {viewCost && <div className="sme-kpi-box"><div className="sme-kpi-box__label">Total Food Cost</div><div className="sme-kpi-box__val">{num(costMargin.totalFoodCost)}</div></div>}
@@ -899,6 +1004,154 @@ const MeOperationalViews: React.FC<Props> = ({
             {setup.history.slice(0, 5).map((h) => <div key={h.id} className="sme-muted">v{h.configVersion} • {h.changeSummary} ({new Date(h.changedAtUtc).toLocaleString()})</div>)}
           </div>
         )}
+        </div>
+
+        {/* 12 INDEPENDENT FEATURE FLAGS */}
+        <div className="sme-panel">
+          <div className="sme-panel__header">
+            <h2 className="sme-panel__title">Independent Feature Flags (Tenant / Property Release Control)</h2>
+            {permissions.manageMenuSetup && (
+              <button
+                type="button"
+                className="sila-btn sila-btn--primary"
+                onClick={async () => {
+                  const saved = await saveMeSetup(setup);
+                  setSetup(saved);
+                  toastService.success(`Saved feature flags (v${saved.configVersion}).`);
+                }}
+              >
+                Save Feature Flags
+              </button>
+            )}
+          </div>
+          <div className="sme-muted" style={{ marginBottom: "0.6rem" }}>
+            Procurement V1 remains fully operational when all 12 Menu Engineering flags are disabled.
+          </div>
+          <div className="sme-grid">
+            {FEATURE_FLAG_LABELS.map(({ key, label }) => {
+              const flags = setup.featureFlags ?? DEFAULT_FEATURE_FLAGS;
+              return (
+                <label key={key} className="sme-kpi-box" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}>
+                  <span><strong>{label}</strong></span>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(flags[key])}
+                    disabled={!permissions.manageMenuSetup}
+                    onChange={(e) => {
+                      const nextFlags = { ...flags, [key]: e.target.checked };
+                      setSetup({
+                        ...setup,
+                        menuEngineeringEnabled: key === "menuEngineering" ? e.target.checked : setup.menuEngineeringEnabled,
+                        meStudioEnabled: key === "meStudio" ? e.target.checked : setup.meStudioEnabled,
+                        featureFlags: nextFlags,
+                      });
+                    }}
+                  />
+                </label>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* STAGED CUSTOMER DATA MIGRATION */}
+        <div className="sme-panel">
+          <div className="sme-panel__header">
+            <h2 className="sme-panel__title">Staged Customer Data Migration &amp; Import Templates</h2>
+            <div style={{ display: "flex", gap: "0.45rem", flexWrap: "wrap" }}>
+              <select
+                className="sila-input"
+                value={migEntityType}
+                onChange={(e) => {
+                  const nextType = e.target.value;
+                  setMigEntityType(nextType);
+                  setMigPreview(null);
+                  const tpl = migTemplates.find((t) => t.entityType === nextType);
+                  if (tpl) setMigCsv(tpl.sampleCsv);
+                }}
+              >
+                {(migTemplates.length > 0 ? migTemplates : [{ entityType: "MENU_ITEMS", title: "Menu Items", fileName: "template_menu_items.csv", columns: [], sampleCsv: "" }]).map((t) => (
+                  <option key={t.entityType} value={t.entityType}>{t.title}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="sila-btn sila-btn--secondary"
+                onClick={() => {
+                  const tpl = migTemplates.find((t) => t.entityType === migEntityType);
+                  if (!tpl) return;
+                  const blob = new Blob([tpl.sampleCsv], { type: "text/csv;charset=utf-8" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = tpl.fileName;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+              >
+                Download Excel/CSV Template
+              </button>
+            </div>
+          </div>
+          <textarea
+            className="sila-input"
+            rows={5}
+            style={{ width: "100%", fontFamily: "monospace", fontSize: "0.82rem" }}
+            value={migCsv}
+            onChange={(e) => setMigCsv(e.target.value)}
+            placeholder="Paste CSV rows matching the selected template…"
+          />
+          <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap", marginTop: "0.5rem" }}>
+            <label style={{ display: "flex", gap: "0.35rem", alignItems: "center" }}>
+              <input type="checkbox" checked={migAllowOverwrite} onChange={(e) => setMigAllowOverwrite(e.target.checked)} />
+              <span>Authorize overwrite of existing approved master data (requires Setup Admin permission)</span>
+            </label>
+            <button
+              type="button"
+              className="sila-btn sila-btn--secondary"
+              onClick={async () => {
+                const res = await previewMeDataMigration({ entityType: migEntityType, format: "CSV", payload: migCsv, propertyId: filter.propertyId, allowOverwriteApproved: migAllowOverwrite });
+                setMigPreview(res);
+              }}
+            >
+              Preview &amp; Validate
+            </button>
+            {permissions.manageMenuSetup && (
+              <button
+                type="button"
+                className="sila-btn sila-btn--primary"
+                disabled={!migPreview}
+                onClick={async () => {
+                  const res = await commitMeDataMigration({ entityType: migEntityType, format: "CSV", payload: migCsv, propertyId: filter.propertyId, allowOverwriteApproved: migAllowOverwrite });
+                  toastService.success(`Committed ${res.createdCount} created, ${res.updatedCount} updated, ${res.skippedCount} skipped.`);
+                  setMigAudits(await getMeDataMigrationAudits());
+                  setMigPreview(null);
+                }}
+              >
+                Commit Staged Import
+              </button>
+            )}
+          </div>
+          {migPreview && (
+            <div className="sme-kpi-box" style={{ marginTop: "0.6rem" }}>
+              <strong>Preview Summary:</strong> Total {migPreview.totalRows} • Valid {migPreview.validRows} • Warnings {migPreview.warningRows} • Errors {migPreview.errorRows} • Duplicates {migPreview.duplicateRows} • Protected Approved {migPreview.protectedApprovedRows}
+              <table className="sila-table" style={{ marginTop: "0.4rem" }}>
+                <thead><tr><th>Row</th><th>Key</th><th>Status</th><th>Detail</th></tr></thead>
+                <tbody>
+                  {migPreview.rows.slice(0, 15).map((r) => (
+                    <tr key={r.rowNumber}><td>{r.rowNumber}</td><td>{r.key}</td><td>{r.status}</td><td>{r.message}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {migAudits.length > 0 && (
+            <div className="sme-kpi-box" style={{ marginTop: "0.6rem" }}>
+              <strong>Import Audit History</strong>
+              {migAudits.slice(0, 5).map((a) => (
+                <div key={a.id} className="sme-muted">{a.entityType} • {a.summary} ({new Date(a.importedAtUtc).toLocaleString()})</div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     );
