@@ -104,6 +104,46 @@ from app.schemas.financial_engine import (
     MenuCostingRequest,
     MenuCostingResponse,
 )
+from app.engines.analytics_advanced import (
+    analyze_consumption_variance,
+    analyze_menu_engineering,
+    analyze_reverse_price_impact,
+    analyze_substitutions,
+    analyze_waste,
+    answer_culinary_copilot,
+    benchmark_properties,
+    forecast_demand,
+    optimize_buffet,
+    optimize_event_packages,
+    optimize_menu_milp as optimize_menu_phase3b_milp,
+    simulate_what_if,
+)
+from app.schemas.analytics_engine import (
+    BuffetOptimizeRequest,
+    BuffetOptimizeResponse,
+    ConsumptionVarianceRequest,
+    ConsumptionVarianceResponse,
+    CopilotQueryRequest,
+    CopilotQueryResponse,
+    DemandForecastRequest,
+    DemandForecastResponse,
+    EventPackageOptimizeRequest,
+    EventPackageOptimizeResponse,
+    MenuEngineeringAnalyzeRequest,
+    MenuEngineeringAnalyzeResponse,
+    MenuOptimizationRequest,
+    MenuOptimizationResponse,
+    PropertyBenchmarkRequest,
+    PropertyBenchmarkResponse,
+    ReversePriceImpactRequest,
+    ReversePriceImpactResponse,
+    SubstitutionAnalysisRequest,
+    SubstitutionAnalysisResponse,
+    WasteAnalyzeRequest,
+    WasteAnalyzeResponse,
+    WhatIfSimulationRequest,
+    WhatIfSimulationResponse,
+)
 from app.schemas.recipe_ai import (
     ExtractedDocumentResult,
     GeneratedRecipeResponse,
@@ -481,6 +521,70 @@ def post_financial_price_impact(req: MaterialPriceImpactRequest) -> MaterialPric
 @app.post("/v1/financial/analyze", response_model=FinancialAiAnalyzeResponse)
 async def post_financial_analyze(req: FinancialAiAnalyzeRequest) -> FinancialAiAnalyzeResponse:
     return await analyze_financial_with_ai(req)
+
+
+# ==================== PHASE 3B ADVANCED CULINARY ANALYTICS & OPTIMIZATION ENDPOINTS ====================
+
+
+@app.post("/v1/analytics/menu-engineering", response_model=MenuEngineeringAnalyzeResponse)
+def post_analytics_menu_engineering(req: MenuEngineeringAnalyzeRequest) -> MenuEngineeringAnalyzeResponse:
+    return analyze_menu_engineering(req)
+
+
+@app.post("/v1/analytics/consumption-variance", response_model=ConsumptionVarianceResponse)
+def post_analytics_consumption_variance(req: ConsumptionVarianceRequest) -> ConsumptionVarianceResponse:
+    return analyze_consumption_variance(req)
+
+
+@app.post("/v1/analytics/price-impact", response_model=ReversePriceImpactResponse)
+def post_analytics_price_impact(req: ReversePriceImpactRequest) -> ReversePriceImpactResponse:
+    return analyze_reverse_price_impact(req)
+
+
+@app.post("/v1/analytics/simulate", response_model=WhatIfSimulationResponse)
+def post_analytics_simulate(req: WhatIfSimulationRequest) -> WhatIfSimulationResponse:
+    return simulate_what_if(req)
+
+
+@app.post("/v1/analytics/optimize-menu", response_model=MenuOptimizationResponse)
+def post_analytics_optimize_menu(req: MenuOptimizationRequest) -> MenuOptimizationResponse:
+    return optimize_menu_phase3b_milp(req)
+
+
+@app.post("/v1/analytics/substitutions", response_model=SubstitutionAnalysisResponse)
+def post_analytics_substitutions(req: SubstitutionAnalysisRequest) -> SubstitutionAnalysisResponse:
+    return analyze_substitutions(req)
+
+
+@app.post("/v1/analytics/buffet-optimize", response_model=BuffetOptimizeResponse)
+def post_analytics_buffet_optimize(req: BuffetOptimizeRequest) -> BuffetOptimizeResponse:
+    return optimize_buffet(req)
+
+
+@app.post("/v1/analytics/event-optimize", response_model=EventPackageOptimizeResponse)
+def post_analytics_event_optimize(req: EventPackageOptimizeRequest) -> EventPackageOptimizeResponse:
+    return optimize_event_packages(req)
+
+
+@app.post("/v1/analytics/forecast", response_model=DemandForecastResponse)
+def post_analytics_forecast(req: DemandForecastRequest) -> DemandForecastResponse:
+    return forecast_demand(req)
+
+
+@app.post("/v1/analytics/waste", response_model=WasteAnalyzeResponse)
+def post_analytics_waste(req: WasteAnalyzeRequest) -> WasteAnalyzeResponse:
+    return analyze_waste(req)
+
+
+@app.post("/v1/analytics/benchmark", response_model=PropertyBenchmarkResponse)
+def post_analytics_benchmark(req: PropertyBenchmarkRequest) -> PropertyBenchmarkResponse:
+    return benchmark_properties(req)
+
+
+@app.post("/v1/analytics/copilot", response_model=CopilotQueryResponse)
+def post_analytics_copilot(req: CopilotQueryRequest) -> CopilotQueryResponse:
+    return answer_culinary_copilot(req)
+
 
 
 
