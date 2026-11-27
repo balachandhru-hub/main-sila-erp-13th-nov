@@ -16,6 +16,7 @@ using Buyer.Application.Services.Integration;
 using Buyer.Application.Features.Queries.GetOrganizationProfile;
 using Buyer.Application.Features.Shared;
 using Buyer.Application.Features.Shared.MenuEngineering;
+using Buyer.Application.Features.Shared.MenuEngineering.Ai;
 using Buyer.Infrastructure.Contracts.IRepository;
 using Buyer.Infrastructure.Repository;
 using Buyer.Application.Contracts;
@@ -169,6 +170,7 @@ namespace Buyer.API.Extensions
             _ = services.AddScoped<ISilaCulinaryProductionService, SilaCulinaryProductionService>();
             _ = services.AddScoped<ISilaCulinaryReconciliationService, SilaCulinaryReconciliationService>();
             _ = services.AddScoped<IMenuEngineeringStudioService, MenuEngineeringStudioService>();
+            _ = services.AddScoped<IMenuEngineeringAiOrchestratorService, MenuEngineeringAiOrchestratorService>();
             _ = services.AddControllers().AddJsonOptions(options =>
             {
                 // Empty JSON strings must not 400 Guid? model binding (PO flex write payloads).
