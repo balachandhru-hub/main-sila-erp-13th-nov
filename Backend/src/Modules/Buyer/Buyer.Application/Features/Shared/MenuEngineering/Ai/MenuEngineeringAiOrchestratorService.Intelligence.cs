@@ -541,13 +541,82 @@ namespace Buyer.Application.Features.Shared.MenuEngineering.Ai
                     break;
             }
 
+            List<MenuEngineeringActionItem> pendingActions = await _db.MenuEngineeringActionItem.AsNoTracking()
+                .Where(x => x.BuyerId == ctx.Buyer.Id && x.IsActive && x.ApprovalStatus == "PENDING")
+                .OrderBy(x => x.SequenceOrder)
+                .Take(8)
+                .ToListAsync(ct);
+
+            MenuEngineeringExecutiveBriefing? latestBriefing = await _db.MenuEngineeringExecutiveBriefing.AsNoTracking()
+                .Where(x => x.BuyerId == ctx.Buyer.Id && x.IsActive && (propertyId == null || x.PropertyId == propertyId || x.PropertyId == null))
+                .OrderByDescending(x => x.BusinessDateUtc)
+                .FirstOrDefaultAsync(ct);
+
+            ExecutiveBriefingDto? briefingDto = latestBriefing is null
+                ? new ExecutiveBriefingDto
+                {
+                    Persona = persona,
+                    PropertyId = propertyId,
+                    BusinessDateUtc = DateTime.UtcNow.Date,
+                    Headline = $"{persona.Replace("_", " ")} Daily Intelligence Briefing",
+                    KeyHighlights = highlights,
+                    DeliveryChannel = "SILA_STORE",
+                    DeliveryStatus = "LIVE"
+                }
+                : new ExecutiveBriefingDto
+                {
+                    Id = latestBriefing.Id,
+                    Persona = latestBriefing.Persona,
+                    PropertyId = latestBriefing.PropertyId,
+                    BusinessDateUtc = latestBriefing.BusinessDateUtc,
+                    Headline = $"{latestBriefing.Persona.Replace("_", " ")} Daily Intelligence Briefing",
+                    KeyHighlights = highlights,
+                    DeliveryChannel = "SILA_STORE",
+                    DeliveryStatus = latestBriefing.DeliveryStatus
+                };
+
+            List<ActionItemDto> pendingApprovalDtos = pendingActions.Select(a => new ActionItemDto
+            {
+                Id = a.Id,
+                ActionPlanId = a.ActionPlanId,
+                SequenceOrder = a.SequenceOrder,
+                DependsOnActionId = a.DependsOnActionId,
+                AgentId = a.AgentId,
+                ToolId = a.ToolId,
+                ActionType = a.ActionType,
+                Title = a.Title,
+                RiskClassification = a.RiskClassification,
+                PolicyDecision = a.PolicyDecision,
+                PolicyReason = a.PolicyReason,
+                FinancialImpact = ctx.Perms.ViewMenuMargin ? a.FinancialImpact : 0m,
+                TargetObjectType = a.TargetObjectType,
+                TargetObjectId = a.TargetObjectId,
+                TargetObjectVersion = a.TargetObjectVersion,
+                ApprovalStatus = a.ApprovalStatus,
+                ApprovalChannel = a.ApprovalChannel,
+                ApprovedAtUtc = a.ApprovedAtUtc,
+                ExecutionStatus = a.ExecutionStatus,
+                ExecutedAtUtc = a.ExecutedAtUtc,
+                ExternalReference = a.ExternalReference,
+                ResultSummary = a.ResultJson
+            }).ToList();
+
+            List<string> assignedTasks = pendingActions.Select(a => $"[{a.RiskClassification}] {a.Title} ({a.ApprovalStatus})").ToList();
+            if (assignedTasks.Count == 0 && alerts.Count > 0)
+            {
+                assignedTasks = alerts.Take(4).Select(a => $"Review {a.Severity} alert: {a.Title}").ToList();
+            }
+
             return new SilaStoreRoleIntelligenceDto
             {
                 RolePersona = persona,
                 RoleAlerts = alerts.Take(6).ToList(),
                 RoleRecommendations = recs.Take(6).ToList(),
                 Highlights = highlights,
-                QuickActions = quickActions
+                QuickActions = quickActions,
+                DailyBriefing = briefingDto,
+                PendingApprovals = pendingApprovalDtos,
+                AssignedTasks = assignedTasks
             };
         }
     }

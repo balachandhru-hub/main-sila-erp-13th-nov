@@ -243,6 +243,91 @@ namespace Buyer.Application.Features.Shared.MenuEngineering.Ai
                 RiskLevel = "HIGH",
                 RequiresApprovalForMutations = true,
                 OutputSchema = nameof(MeSetupWizardReadinessDto)
+            },
+            new()
+            {
+                AgentId = "RECIPE_INTELLIGENCE_AGENT",
+                DisplayName = "Autonomous Recipe Intelligence Agent",
+                EquivalentExistingAgent = "SilaCulinaryRecipeService / ME.3 Dependency Graph",
+                SupportedIntents = { "MONITOR_RECIPE_COST", "CASCADE_PRICE_SHOCK", "PROPOSE_APPROVED_SUBSTITUTION", "CHECK_ALLERGEN_SAFETY" },
+                RequiredPermissions = { "VIEW_SILA_ME_STUDIO", "VIEW_SILA_MENU_COST" },
+                AuthorizedTools = { "RetrieveApprovedRecipes", "EvaluateIngredientPriceShock", "CaptureDigitalTwinSnapshot", "ValidateDietaryAllergens" },
+                DataDependencies = { "Recipe", "RecipeIngredient", "MenuItem", "MenuPlan", "SilaCulinaryEvent" },
+                MaxSteps = 6,
+                TokenBudget = 3500,
+                TimeoutSeconds = 25,
+                ModelTier = "ADVANCED",
+                RiskLevel = "MEDIUM",
+                RequiresApprovalForMutations = true,
+                OutputSchema = nameof(TwinDependencyAnalysisResultDto)
+            },
+            new()
+            {
+                AgentId = "INVENTORY_INTELLIGENCE_AGENT",
+                DisplayName = "Autonomous Inventory Intelligence Agent",
+                EquivalentExistingAgent = "InventoryBalance / ME.3 FEFO Optimizer",
+                SupportedIntents = { "PREDICT_STOCKOUT_DATE", "DETECT_EXPIRY_RISK", "RECOMMEND_FEFO_UTILIZATION", "RECOMMEND_STOCK_TRANSFER" },
+                RequiredPermissions = { "VIEW_SILA_ME_STUDIO" },
+                AuthorizedTools = { "RetrieveInventoryAvailability", "RetrieveIncomingSupply", "RunInventoryDrivenOptimizer" },
+                DataDependencies = { "InventoryBalance", "PurchaseOrder", "MenuPlanLine", "SilaCulinaryEvent" },
+                MaxSteps = 5,
+                TokenBudget = 3000,
+                TimeoutSeconds = 25,
+                ModelTier = "LIGHTWEIGHT",
+                RiskLevel = "MEDIUM",
+                RequiresApprovalForMutations = true,
+                OutputSchema = nameof(MePhase3InventoryMenuResultDto)
+            },
+            new()
+            {
+                AgentId = "PRODUCTION_INTELLIGENCE_AGENT",
+                DisplayName = "Autonomous Production Intelligence Agent",
+                EquivalentExistingAgent = "SilaCulinaryProductionService",
+                SupportedIntents = { "DETECT_CAPACITY_CONFLICTS", "RECOMMEND_BATCH_SIZES", "OPTIMIZE_KITCHEN_ALLOCATION" },
+                RequiredPermissions = { "VIEW_SILA_ME_STUDIO" },
+                AuthorizedTools = { "IdentifyProductionConstraints", "RunOperationalStressTest", "CaptureDigitalTwinSnapshot" },
+                DataDependencies = { "SilaCulinaryKitchen", "SilaCulinaryWorkstation", "SilaCulinaryProductionPlan", "MenuPlan" },
+                MaxSteps = 5,
+                TokenBudget = 3000,
+                TimeoutSeconds = 25,
+                ModelTier = "LIGHTWEIGHT",
+                RiskLevel = "MEDIUM",
+                RequiresApprovalForMutations = true,
+                OutputSchema = nameof(MePhase3ProductionFeasibilityDto)
+            },
+            new()
+            {
+                AgentId = "WASTE_INTELLIGENCE_AGENT",
+                DisplayName = "Autonomous Waste Intelligence Agent",
+                EquivalentExistingAgent = "SilaCulinaryReconciliationService / ME.3 Waste Predictor",
+                SupportedIntents = { "DETECT_RECURRING_WASTE", "RECOMMEND_SMALLER_BATCHES", "QUANTIFY_WASTE_REDUCTION" },
+                RequiredPermissions = { "VIEW_SILA_ME_STUDIO" },
+                AuthorizedTools = { "PredictFoodWasteCategories", "DetectConsumptionAnomalies", "CalculatePortionsAndDemand" },
+                DataDependencies = { "SilaCulinaryWasteEvent", "SilaCulinaryFoodLeftover", "SilaCulinaryPortionSample", "MenuPlanLine" },
+                MaxSteps = 5,
+                TokenBudget = 3000,
+                TimeoutSeconds = 25,
+                ModelTier = "LIGHTWEIGHT",
+                RiskLevel = "LOW",
+                RequiresApprovalForMutations = true,
+                OutputSchema = nameof(MeWastePredictResultDto)
+            },
+            new()
+            {
+                AgentId = "EVENT_INTELLIGENCE_AGENT",
+                DisplayName = "Autonomous Event Intelligence Agent",
+                EquivalentExistingAgent = "SilaCulinaryEventMenuService / ME.3 Monte Carlo",
+                SupportedIntents = { "EVALUATE_EVENT_READINESS", "CASCADE_GUEST_COUNT_CHANGE", "ASSESS_EVENT_BUDGET_RISK" },
+                RequiredPermissions = { "VIEW_SILA_ME_STUDIO", "RUN_SILA_MENU_SIMULATION" },
+                AuthorizedTools = { "CaptureDigitalTwinSnapshot", "RunMonteCarloSimulation", "RunOperationalStressTest", "GenerateConsolidatedActionPlan" },
+                DataDependencies = { "SilaCulinaryEvent", "SilaCulinaryEventSession", "PmsDemandSnapshot", "MenuPlan" },
+                MaxSteps = 8,
+                TokenBudget = 4500,
+                TimeoutSeconds = 30,
+                ModelTier = "ADVANCED",
+                RiskLevel = "MEDIUM",
+                RequiresApprovalForMutations = true,
+                OutputSchema = nameof(ActionPlanDto)
             }
         };
 

@@ -17,6 +17,7 @@ using Buyer.Application.Features.Queries.GetOrganizationProfile;
 using Buyer.Application.Features.Shared;
 using Buyer.Application.Features.Shared.MenuEngineering;
 using Buyer.Application.Features.Shared.MenuEngineering.Ai;
+using Buyer.Application.Features.Shared.MenuEngineering.Autonomous;
 using Buyer.Application.Features.Shared.MenuEngineering.Twin;
 using Buyer.Infrastructure.Contracts.IRepository;
 using Buyer.Infrastructure.Repository;
@@ -173,6 +174,7 @@ namespace Buyer.API.Extensions
             _ = services.AddScoped<IMenuEngineeringStudioService, MenuEngineeringStudioService>();
             _ = services.AddScoped<IMenuEngineeringAiOrchestratorService, MenuEngineeringAiOrchestratorService>();
             _ = services.AddScoped<IMenuEngineeringDigitalTwinService, MenuEngineeringDigitalTwinService>();
+            _ = services.AddScoped<IMenuEngineeringAutonomousService, MenuEngineeringAutonomousService>();
             _ = services.AddControllers().AddJsonOptions(options =>
             {
                 // Empty JSON strings must not 400 Guid? model binding (PO flex write payloads).
@@ -271,6 +273,13 @@ namespace Buyer.API.Extensions
                     .ForJob(posSalesPullJobKey)
                     .WithIdentity($"{nameof(PosSalesPullJob)}Trigger")
                     .WithCronSchedule(config[Common.SCHEDULER_POS_PULL_CRON]!));
+
+                JobKey meAutonomousJobKey = new JobKey(nameof(MenuEngineeringAutonomousJob));
+                _ = quartz.AddJob<MenuEngineeringAutonomousJob>(options => options.WithIdentity(meAutonomousJobKey));
+                _ = quartz.AddTrigger(options => options
+                    .ForJob(meAutonomousJobKey)
+                    .WithIdentity($"{nameof(MenuEngineeringAutonomousJob)}Trigger")
+                    .WithCronSchedule(config["Scheduler:MenuEngineeringAutonomousCron"] ?? "0 0/15 * * * ?"));
             });
             _ = services.AddQuartzHostedService(options => options.WaitForJobsToComplete = true);
 
