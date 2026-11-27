@@ -15,6 +15,7 @@ from app.engines.menu_planner import (
     semantic_search_recipes,
 )
 from app.engines.mrp import EventMrpRequest, EventMrpResult, calculate_event_mrp
+from app.engines.mrp_advanced import analyze_mrp_with_ai, explode_mrp, optimize_mrp_batches
 from app.engines.normalization import convert_physical_quantity, normalize_ingredient_text
 from app.engines.pnl import EventPnlRequest, EventPnlResult, calculate_event_pnl
 from app.engines.recipe_costing import calculate_recipe_costing, optimize_recipe_costing
@@ -62,6 +63,14 @@ from app.schemas.material_ai import (
     MaterialSearchRequest,
     SubstitutionSuggestRequest,
     SubstitutionSuggestResponse,
+)
+from app.schemas.mrp_engine import (
+    MrpAiAnalyzeRequest,
+    MrpAiAnalyzeResponse,
+    MrpExplodeRequest,
+    MrpExplodeResponse,
+    MrpOptimizeRequest,
+    MrpOptimizeResponse,
 )
 from app.schemas.recipe_ai import (
     ExtractedDocumentResult,
@@ -376,5 +385,23 @@ def post_optimize_event_menu(req: MenuOptimizeRequest) -> MenuOptimizeResponse:
 @app.post("/v1/menus/generate", response_model=MenuGenerateResponse)
 async def post_generate_event_menu(req: MenuGenerateRequest) -> MenuGenerateResponse:
     return await generate_ai_menu(req)
+
+
+# ==================== PHASE 2B EVENT MRP ENGINE ENDPOINTS ====================
+
+
+@app.post("/v1/mrp/explode", response_model=MrpExplodeResponse)
+def post_explode_mrp(req: MrpExplodeRequest) -> MrpExplodeResponse:
+    return explode_mrp(req)
+
+
+@app.post("/v1/mrp/optimize", response_model=MrpOptimizeResponse)
+def post_optimize_mrp(req: MrpOptimizeRequest) -> MrpOptimizeResponse:
+    return optimize_mrp_batches(req)
+
+
+@app.post("/v1/mrp/analyze", response_model=MrpAiAnalyzeResponse)
+async def post_analyze_mrp(req: MrpAiAnalyzeRequest) -> MrpAiAnalyzeResponse:
+    return await analyze_mrp_with_ai(req)
 
 

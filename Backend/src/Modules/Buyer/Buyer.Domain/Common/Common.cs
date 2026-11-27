@@ -321,6 +321,7 @@ namespace Buyer.Domain.Common
                 // ---- SILA ME release 2
                 public const string SILA_APPROVAL_TYPE_RECIPE = "RECIPE";
                 public const string SILA_APPROVAL_TYPE_EVENT_PLAN = "EVENT_PLAN";
+                public const string SILA_APPROVAL_TYPE_EVENT_MRP = "EVENT_MRP";
                 public const string SILA_APPROVAL_TYPE_MATERIAL_REQUEST = "MATERIAL_REQUEST";
                 public const string SILA_APPROVAL_TYPE_MATERIAL_PRICE = "MATERIAL_PRICE";
                 public const string SILA_APPROVAL_TYPE_ITO = "ITO";
@@ -477,6 +478,26 @@ namespace Buyer.Domain.Common
                 public const string SILA_AUDIT_CULINARY_EVENT_REVISION = "EVENT_REVISION_CREATED";
                 public const string SILA_AUDIT_CULINARY_EVENT_BASELINE = "EVENT_BASELINE_ESTABLISHED";
                 public const string SILA_AUDIT_CULINARY_EVENT_READY_MRP = "EVENT_READY_FOR_MRP";
+                public const string SILA_REF_CULINARY_MRP = "CULINARY_MRP";
+                public const string SILA_AUDIT_CULINARY_MRP_CREATED = "MRP_RUN_CREATED";
+                public const string SILA_AUDIT_CULINARY_MRP_STARTED = "MRP_CALCULATION_STARTED";
+                public const string SILA_AUDIT_CULINARY_MRP_EXPLODED = "RECIPE_EXPLOSION_COMPLETED";
+                public const string SILA_AUDIT_CULINARY_MRP_EXPLODE_FAIL = "RECIPE_EXPLOSION_FAILED";
+                public const string SILA_AUDIT_CULINARY_MRP_CONSOLIDATED = "MATERIAL_CONSOLIDATION_COMPLETED";
+                public const string SILA_AUDIT_CULINARY_MRP_VAL_FAIL = "MATERIAL_VALIDATION_FAILED";
+                public const string SILA_AUDIT_CULINARY_MRP_STOCK_DONE = "STOCK_COMPARISON_COMPLETED";
+                public const string SILA_AUDIT_CULINARY_MRP_COST_DONE = "MRP_COSTING_COMPLETED";
+                public const string SILA_AUDIT_CULINARY_MRP_SCENARIO = "MRP_SCENARIO_CREATED";
+                public const string SILA_AUDIT_CULINARY_MRP_AI_REQ = "AI_ANALYSIS_REQUESTED";
+                public const string SILA_AUDIT_CULINARY_MRP_AI_DONE = "AI_ANALYSIS_COMPLETED";
+                public const string SILA_AUDIT_CULINARY_MRP_EX_RESOLVED = "MRP_EXCEPTION_RESOLVED";
+                public const string SILA_AUDIT_CULINARY_MRP_SUBMITTED = "MRP_SUBMITTED_FOR_APPROVAL";
+                public const string SILA_AUDIT_CULINARY_MRP_APPROVED = "MRP_APPROVED";
+                public const string SILA_AUDIT_CULINARY_MRP_REJECTED = "MRP_REJECTED";
+                public const string SILA_AUDIT_CULINARY_MRP_RETURNED = "MRP_RETURNED_FOR_CORRECTION";
+                public const string SILA_AUDIT_CULINARY_MRP_REVISION = "MRP_REVISION_CREATED";
+                public const string SILA_AUDIT_CULINARY_MRP_RELEASED = "MRP_RELEASED_FOR_PLANNING";
+                public const string SILA_AUDIT_CULINARY_MRP_HANDOVER = "PROCUREMENT_HANDOVER_GENERATED";
                 public const string HTTP_CLIENT_CULINARY_AI = "sila-culinary-ai";
                 public const string HTTP_CLIENT_CULINARY_ENGINE = "sila-culinary-engine";
                 public static readonly string CULINARY_ENGINE_URL = "InterCallService:CulinaryEngineUrl";

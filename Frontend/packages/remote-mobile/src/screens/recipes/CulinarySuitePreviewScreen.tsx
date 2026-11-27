@@ -59,6 +59,16 @@ import {
   type SilaCulinaryEventSimulationResult,
   type SilaCulinaryMaterialPreviewLine,
 } from '../../../../remote-buyer/src/api/silaMe/silaCulinaryEventMenuApi';
+import {
+  decideMrpApproval,
+  getMrpRun,
+  listMrpRuns,
+  simulateMrpRun,
+  submitMrpForApproval,
+  type SilaCulinaryMrpRunDetail,
+  type SilaCulinaryMrpRunSummary,
+  type SilaCulinaryMrpSimulationResult,
+} from '../../../../remote-buyer/src/api/silaMe/silaCulinaryMrpApi';
 import { scaleDraftLocally } from '../../../../remote-buyer/src/components/silaMe/recipes/culinary/culinaryRecipePlannerHelpers';
 import {
   calculateRecipeScaling,
@@ -71,7 +81,7 @@ import { useGo } from '../../navigation';
 import { errorText, useLoad } from '../../useLoad';
 import './recipeStudio.css';
 
-type MobileTab = 'generate' | 'draft' | 'materials' | 'lifecycle' | 'events' | 'history' | 'demo';
+type MobileTab = 'generate' | 'draft' | 'materials' | 'lifecycle' | 'events' | 'mrp' | 'history' | 'demo';
 
 /**
  * Phase 1A + Phase 1B Mobile Culinary Intelligence — responsive chef AI recipe generation,
@@ -141,6 +151,33 @@ const CulinarySuitePreviewScreen: React.FC = () => {
   const [mobileEventSimGuests, setMobileEventSimGuests] = useState(500);
   const [mobileEventSim, setMobileEventSim] = useState<SilaCulinaryEventSimulationResult | null>(null);
   const [eventsLoading, setEventsLoading] = useState(false);
+
+  // Phase 2B Mobile Event MRP state (chef-friendly, cost-permission gated, zero procurement transactions)
+  const [mobileMrpRuns, setMobileMrpRuns] = useState<SilaCulinaryMrpRunSummary[]>([]);
+  const [activeMobileMrp, setActiveMobileMrp] = useState<SilaCulinaryMrpRunDetail | null>(null);
+  const [mrpLoading, setMrpLoading] = useState(false);
+  const [mrpMatQuery, setMrpMatQuery] = useState('');
+  const [mrpGuestScalePct, setMrpGuestScalePct] = useState(100);
+  const [mrpBufferPct, setMrpBufferPct] = useState(0);
+  const [mrpSimResult, setMrpSimResult] = useState<SilaCulinaryMrpSimulationResult | null>(null);
+
+  const handleOpenMrpTab = async () => {
+    setTab('mrp');
+    setMrpLoading(true);
+    try {
+      const list = await listMrpRuns({ includeSimulations: true });
+      setMobileMrpRuns(list);
+      const target = activeMobileMrp ? list.find((r) => r.id === activeMobileMrp.id) ?? list[0] : list[0];
+      if (target) {
+        setActiveMobileMrp(await getMrpRun(target.id));
+        setMrpSimResult(null);
+      }
+    } catch (err) {
+      setErrMsg(errorText(err));
+    } finally {
+      setMrpLoading(false);
+    }
+  };
 
   const handleOpenEventsTab = async () => {
     setTab('events');
@@ -499,6 +536,9 @@ const CulinarySuitePreviewScreen: React.FC = () => {
               </button>
               <button type="button" className={`rs-tab ${tab === 'events' ? 'rs-tab--on' : ''}`} onClick={handleOpenEventsTab}>
                 Events{mobileEvents.length > 0 ? ` (${mobileEvents.length})` : ''}
+              </button>
+              <button type="button" className={`rs-tab ${tab === 'mrp' ? 'rs-tab--on' : ''}`} onClick={handleOpenMrpTab}>
+                Event MRP{mobileMrpRuns.length > 0 ? ` (${mobileMrpRuns.length})` : ''}
               </button>
               <button type="button" className={`rs-tab ${tab === 'history' ? 'rs-tab--on' : ''}`} onClick={() => setTab('history')}>
                 History ({draftsLoad.data?.length ?? 0})
@@ -1277,6 +1317,171 @@ const CulinarySuitePreviewScreen: React.FC = () => {
                           >
                             Approve
                           </button>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </section>
+            )}
+
+            {tab === 'mrp' && (
+              <section className="sm-card" data-testid="mobile-p2b-mrp">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                  <h2 style={{ margin: 0 }}>Event MRP Studio</h2>
+                  <button type="button" className="sm-btn" onClick={handleOpenMrpTab} disabled={mrpLoading}>
+                    {mrpLoading ? 'Loading...' : 'Refresh'}
+                  </button>
+                </div>
+                {mobileMrpRuns.length === 0 ? (
+                  <p className="sm-meta">No Event MRP runs yet. Calculate an MRP baseline in SILA Cloud Recipe Studio or preview the Demo tab.</p>
+                ) : (
+                  <>
+                    <div className="sm-field">
+                      <label htmlFor="m-p2b-run">Select MRP Run</label>
+                      <select
+                        id="m-p2b-run"
+                        value={activeMobileMrp?.id ?? ''}
+                        onChange={async (e) => {
+                          setActiveMobileMrp(await getMrpRun(e.target.value));
+                          setMrpSimResult(null);
+                        }}
+                      >
+                        {mobileMrpRuns.map((r) => (
+                          <option key={r.id} value={r.id}>
+                            {r.mrpCode} v{r.versionNumber} — {r.name} ({r.status})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    {activeMobileMrp && (
+                      <div style={{ marginTop: '0.6rem', display: 'grid', gap: '0.55rem' }}>
+                        <p className="sm-meta" style={{ margin: 0 }}>
+                          <strong>{activeMobileMrp.totalRecipes}</strong> recipes · <strong>{activeMobileMrp.totalUniqueMaterials}</strong> materials ·{' '}
+                          <span style={{ color: activeMobileMrp.shortageCount > 0 ? '#b91c1c' : '#0f766e', fontWeight: 600 }}>
+                            {activeMobileMrp.shortageCount} shortage(s)
+                          </span>
+                          {activeMobileMrp.missingMappingCount > 0 ? ` · ${activeMobileMrp.missingMappingCount} missing map` : ''}
+                        </p>
+                        {activeMobileMrp.costVisible && activeMobileMrp.estimatedRequirementValue != null && (
+                          <p className="sm-meta" style={{ margin: 0 }}>
+                            Est. Req. Value: <strong>{activeMobileMrp.currency} {activeMobileMrp.estimatedRequirementValue.toLocaleString()}</strong>
+                          </p>
+                        )}
+                        <div className="sm-field">
+                          <label htmlFor="m-p2b-search">Search Materials</label>
+                          <input
+                            id="m-p2b-search"
+                            value={mrpMatQuery}
+                            onChange={(e) => setMrpMatQuery(e.target.value)}
+                            placeholder="Filter by material or recipe..."
+                          />
+                        </div>
+                        <div className="sm-field">
+                          <label htmlFor="m-p2b-scale">Simulate Guest Scale ({mrpGuestScalePct}%) &amp; Buffer ({mrpBufferPct}%)</label>
+                          <input
+                            id="m-p2b-scale"
+                            type="range"
+                            min={50}
+                            max={180}
+                            step={5}
+                            value={mrpGuestScalePct}
+                            onChange={(e) => setMrpGuestScalePct(Number(e.target.value))}
+                          />
+                          <input
+                            type="range"
+                            min={0}
+                            max={20}
+                            step={1}
+                            value={mrpBufferPct}
+                            onChange={(e) => setMrpBufferPct(Number(e.target.value))}
+                          />
+                          <button
+                            type="button"
+                            className="sm-btn"
+                            onClick={async () => {
+                              const res = await simulateMrpRun(activeMobileMrp.id, {
+                                guestScaleFactor: mrpGuestScalePct / 100,
+                                additionalAllowancePercent: 0,
+                                bufferPercent: mrpBufferPct,
+                                yieldOverridePercent: 0,
+                                priceIncreasePercent: 0,
+                                preparedStockMode: 'ADJUSTED_SCENARIO',
+                                lineOverrides: [],
+                              });
+                              setMrpSimResult(res);
+                            }}
+                          >
+                            Simulate MRP
+                          </button>
+                          {mrpSimResult && (
+                            <p className="sm-meta" style={{ marginTop: '0.3rem' }}>
+                              Simulated Guests: <strong>{mrpSimResult.plannedGuests}</strong> · Shortages: <strong>{mrpSimResult.shortageCount}</strong>
+                            </p>
+                          )}
+                        </div>
+                        <ul className="sm-list">
+                          {(mrpSimResult?.simulatedLines ?? activeMobileMrp.lines)
+                            .filter((l) => {
+                              const q = mrpMatQuery.trim().toLowerCase();
+                              if (!q) return true;
+                              return (
+                                l.materialDescription.toLowerCase().includes(q) ||
+                                (l.materialCode ?? '').toLowerCase().includes(q) ||
+                                l.contributingRecipes.some((r) => r.toLowerCase().includes(q))
+                              );
+                            })
+                            .slice(0, 15)
+                            .map((l) => (
+                              <li key={l.id} className="sm-row" style={{ padding: '0.4rem 0' }}>
+                                <div>
+                                  <strong>{l.materialDescription}</strong>
+                                  <div className="sm-meta">
+                                    {l.contributingRecipes.slice(0, 2).join(', ')} · Due {l.requiredDateBucket}
+                                  </div>
+                                </div>
+                                <div style={{ textAlign: 'right' }}>
+                                  <strong>{l.grossQty} {l.baseUom}</strong>
+                                  <div className="sm-meta" style={{ color: (l.indicativeCurrentShortageQty ?? 0) > 0 ? '#b91c1c' : '#0f766e' }}>
+                                    {!l.isResolvedMaterial
+                                      ? 'Missing Map'
+                                      : l.eligibleStockQty == null
+                                        ? 'Stock Unknown'
+                                        : (l.indicativeCurrentShortageQty ?? 0) > 0
+                                          ? `Short ${l.indicativeCurrentShortageQty} ${l.baseUom}`
+                                          : 'Covered'}
+                                  </div>
+                                </div>
+                              </li>
+                            ))}
+                        </ul>
+                        <div className="sm-actions">
+                          {activeMobileMrp.status === 'CALCULATED' && activeMobileMrp.readiness?.canSubmitForApproval && (
+                            <button
+                              type="button"
+                              className="sm-btn sm-btn--primary"
+                              onClick={async () => {
+                                const updated = await submitMrpForApproval(activeMobileMrp.id);
+                                setActiveMobileMrp(updated);
+                                setStatusMsg(`Submitted ${updated.mrpCode} for approval.`);
+                              }}
+                            >
+                              Submit MRP Approval
+                            </button>
+                          )}
+                          {activeMobileMrp.status === 'PENDING_APPROVAL' && (
+                            <button
+                              type="button"
+                              className="sm-btn sm-btn--primary"
+                              onClick={async () => {
+                                const updated = await decideMrpApproval(activeMobileMrp.id, 'APPROVE', 'Approved via Mobile');
+                                setActiveMobileMrp(updated);
+                                setStatusMsg(`Approved ${updated.mrpCode}.`);
+                              }}
+                            >
+                              Approve MRP
+                            </button>
+                          )}
                         </div>
                       </div>
                     )}
