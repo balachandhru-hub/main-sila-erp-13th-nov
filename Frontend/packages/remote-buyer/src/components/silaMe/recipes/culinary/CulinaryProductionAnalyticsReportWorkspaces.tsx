@@ -1,17 +1,4 @@
 import React, { useEffect, useState } from "react";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Legend,
-  Line,
-  LineChart,
-  ReferenceLine,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 import { toastService } from "@vosox/shared-ui";
 import {
   listCulinaryRecipeDrafts,
@@ -27,6 +14,12 @@ import {
   listCulinaryEvents,
   type SilaCulinaryEvent,
 } from "../../../../api/silaMe/silaCulinaryEventMenuApi";
+import {
+  exportCulinaryAnalyticsReport,
+  getCulinaryAnalyticsReportCatalog,
+  type SilaCulinaryAnalyticsReportCatalogItem,
+} from "../../../../api/silaMe/silaCulinaryAnalyticsApi";
+import CulinaryAnalyticsStudioWorkspace from "./CulinaryAnalyticsStudioWorkspace";
 import { triggerBlobDownload } from "./culinaryRecipePlannerHelpers";
 import "./CulinarySuite.css";
 
@@ -42,15 +35,6 @@ const DEMO_PRODUCTION_TIMELINE = [
   { window: "14:00–18:00", startPct: 43, widthPct: 29, kitchen: "Hot Kitchen", task: "Main course cooking", status: "Chef Validation Req." },
   { window: "17:00–19:00", startPct: 64, widthPct: 14, kitchen: "Banquet Team", task: "Buffet setup", status: "Pre-Service" },
   { window: "19:00–22:00", startPct: 78, widthPct: 22, kitchen: "Banquet Kitchen", task: "Service & replenishment (Service 19:00)", status: "Live Service" },
-];
-
-const DEMO_MONTHLY_FINANCIALS = [
-  { month: "Jan", revenue: 450000, cost: 285000, foodCostPct: 32.0 },
-  { month: "Feb", revenue: 580000, cost: 350000, foodCostPct: 30.5 },
-  { month: "Mar", revenue: 720000, cost: 430000, foodCostPct: 29.0 },
-  { month: "Apr", revenue: 650000, cost: 380000, foodCostPct: 27.5 },
-  { month: "May", revenue: 850000, cost: 480000, foodCostPct: 27.0 },
-  { month: "Jun", revenue: 920000, cost: 520000, foodCostPct: 26.8 },
 ];
 
 const RECIPE_REPORTS = [
@@ -73,6 +57,24 @@ const EVENT_REPORTS = [
   "22. Event Approval Report", "23. Event Transaction History",
 ];
 
+const DEFAULT_PHASE3B_REPORTS: SilaCulinaryAnalyticsReportCatalogItem[] = [
+  { reportCode: "MENU_ENGINEERING", name: "1. Menu Engineering Report", description: "STAR / PLOWHORSE / PUZZLE / DOG quadrants & thresholds.", formats: ["EXCEL", "CSV", "PDF"] },
+  { reportCode: "MENU_ITEM_PROFITABILITY", name: "2. Menu Item Profitability Report", description: "Gross/net price, variable costs, CM & fully loaded profit.", formats: ["EXCEL", "CSV", "PDF"] },
+  { reportCode: "FOOD_COST_ANALYSIS", name: "3. Food Cost Analysis Report", description: "Actual vs target food cost %, cost & revenue per cover.", formats: ["EXCEL", "CSV", "PDF"] },
+  { reportCode: "INGREDIENT_PRICE_VARIANCE", name: "4. Ingredient Price Variance Report", description: "Reverse dependency price shock across sub-recipes & events.", formats: ["EXCEL", "CSV", "PDF"] },
+  { reportCode: "RECIPE_COST_MOVEMENT", name: "5. Recipe Cost Movement Report", description: "Effective-dated recipe version cost changes.", formats: ["EXCEL", "CSV", "PDF"] },
+  { reportCode: "CONSUMPTION_VARIANCE", name: "6. Consumption Variance Report", description: "Theoretical vs reconciled actual consumption isolating wastage.", formats: ["EXCEL", "CSV", "PDF"] },
+  { reportCode: "BUFFET_EFFICIENCY", name: "7. Buffet Efficiency Report", description: "Initial batch, replenishment timing, leftovers & holding compliance.", formats: ["EXCEL", "CSV", "PDF"] },
+  { reportCode: "FOOD_WASTE_ANALYSIS", name: "8. Food Waste Analysis Report", description: "10 waste classifications by ingredient, outlet & cover.", formats: ["EXCEL", "CSV", "PDF"] },
+  { reportCode: "EVENT_PROFITABILITY", name: "9. Event Profitability Report", description: "Banquet & catering package P&L comparison.", formats: ["EXCEL", "CSV", "PDF"] },
+  { reportCode: "DEMAND_FORECAST", name: "10. Demand Forecast Report", description: "Forecast covers, prediction intervals & rolling backtest MAE/WAPE.", formats: ["EXCEL", "CSV", "PDF"] },
+  { reportCode: "PROPERTY_BENCHMARKING", name: "11. Property Benchmarking Report", description: "FX-normalized multi-property comparison.", formats: ["EXCEL", "CSV", "PDF"] },
+  { reportCode: "AI_RECOMMENDATION", name: "12. AI Recommendation Report", description: "Prioritized culinary actions with approval & evidence status.", formats: ["EXCEL", "CSV", "PDF"] },
+  { reportCode: "POTENTIAL_SAVINGS", name: "13. Potential Savings Report", description: "Approved and pending savings pipeline across engines.", formats: ["EXCEL", "CSV", "PDF"] },
+  { reportCode: "REALIZED_SAVINGS", name: "14. Realized Savings Report", description: "Implemented recommendations tracking expected vs realized impact.", formats: ["EXCEL", "CSV", "PDF"] },
+  { reportCode: "WHAT_IF_COMPARISON", name: "15. What-if Scenario Comparison Report", description: "Baseline vs Scenario A/B/C & AI-recommended snapshots.", formats: ["EXCEL", "CSV", "PDF"] },
+];
+
 const CulinaryProductionAnalyticsReportWorkspaces: React.FC<Props> = ({ mode }) => {
   const [drafts, setDrafts] = useState<CulinaryRecipeDraftSummary[]>([]);
   const [reportDraftId, setReportDraftId] = useState("");
@@ -80,6 +82,8 @@ const CulinaryProductionAnalyticsReportWorkspaces: React.FC<Props> = ({ mode }) 
   const [eventsList, setEventsList] = useState<SilaCulinaryEvent[]>([]);
   const [reportEventId, setReportEventId] = useState("");
   const [eventReportCode, setEventReportCode] = useState("EVENT_SUMMARY");
+  const [phase3BCatalog, setPhase3BCatalog] = useState<SilaCulinaryAnalyticsReportCatalogItem[]>(DEFAULT_PHASE3B_REPORTS);
+  const [phase3BReportCode, setPhase3BReportCode] = useState("MENU_ENGINEERING");
   const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
@@ -94,6 +98,12 @@ const CulinaryProductionAnalyticsReportWorkspaces: React.FC<Props> = ({ mode }) 
       .then((list) => {
         setEventsList(list);
         if (list.length > 0 && !reportEventId) setReportEventId(list[0].id);
+      })
+      .catch(() => {});
+    getCulinaryAnalyticsReportCatalog()
+      .then((cat) => {
+        setPhase3BCatalog(cat);
+        if (cat.length > 0) setPhase3BReportCode(cat[0].reportCode);
       })
       .catch(() => {});
   }, [mode]);
@@ -179,100 +189,65 @@ const CulinaryProductionAnalyticsReportWorkspaces: React.FC<Props> = ({ mode }) 
   }
 
   if (mode === "analytics") {
-    return (
-      <div className="cs2-shell" data-testid="culinary-analytics-workspace">
-        <div className="cs2-header">
-          <div>
-            <h2 className="cs2-title">Culinary Analytics — Demonstration Dashboard (§61–§64)</h2>
-            <p className="cs2-subtitle">
-              Executive hospitality intelligence across Recipe Performance, Event Revenue &amp; Cost, and Food Cost % vs 28% target.
-            </p>
-          </div>
-          <span className="cs2-badge cs2-badge--demo">Illustrative Demo Data · Phase 3B</span>
-        </div>
-
-        <div className="cs2-banner" role="status">
-          <div>
-            <strong>DEMONSTRATION ANALYTICS — CLEARLY ISOLATED FROM LIVE CUSTOMER PERFORMANCE</strong>
-            <div>Live multi-event and POS-linked profitability analytics activate in Phase 3B.</div>
-          </div>
-          <span className="cs2-badge cs2-badge--demo">§64 Demo Dataset</span>
-        </div>
-
-        <div className="cs2-kpi-grid">
-          <div className="cs2-kpi cs2-kpi--accent">
-            <span className="cs2-kpi__label">Published Recipes (Demo)</span>
-            <span className="cs2-kpi__value">1,248</span>
-          </div>
-          <div className="cs2-kpi cs2-kpi--cyan">
-            <span className="cs2-kpi__label">Upcoming Events (Demo)</span>
-            <span className="cs2-kpi__value">24</span>
-          </div>
-          <div className="cs2-kpi cs2-kpi--emerald">
-            <span className="cs2-kpi__label">Avg Food Cost (Demo)</span>
-            <span className="cs2-kpi__value">26.8%</span>
-            <span className="cs2-kpi__hint">Target: 28.0%</span>
-          </div>
-          <div className="cs2-kpi cs2-kpi--emerald">
-            <span className="cs2-kpi__label">Event Contribution Margin</span>
-            <span className="cs2-kpi__value">42.5%</span>
-          </div>
-        </div>
-
-        <div className="cs2-grid-2">
-          <section className="cs2-card">
-            <div className="cs2-card__head">
-              <h3 className="cs2-card__title">Monthly Revenue vs Cost (AED · Demo)</h3>
-            </div>
-            <div style={{ width: "100%", height: 270 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={DEMO_MONTHLY_FINANCIALS}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis dataKey="month" />
-                  <YAxis />
-                  <Tooltip formatter={(v: unknown) => `AED ${Number(v).toLocaleString()}`} />
-                  <Legend />
-                  <Bar dataKey="revenue" name="Revenue (AED)" fill="#4f46e5" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="cost" name="Cost (AED)" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </section>
-
-          <section className="cs2-card">
-            <div className="cs2-card__head">
-              <h3 className="cs2-card__title">Food Cost % Trend vs 28% Target (Demo)</h3>
-            </div>
-            <div style={{ width: "100%", height: 270 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={DEMO_MONTHLY_FINANCIALS}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis dataKey="month" />
-                  <YAxis domain={[24, 34]} />
-                  <Tooltip formatter={(v: unknown) => `${v}%`} />
-                  <ReferenceLine y={28} stroke="#dc2626" strokeDasharray="4 4" label="28% Target" />
-                  <Line type="monotone" dataKey="foodCostPct" name="Food Cost %" stroke="#4f46e5" strokeWidth={3} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </section>
-        </div>
-      </div>
-    );
+    return <CulinaryAnalyticsStudioWorkspace />;
   }
+
+  const handleExportPhase3BReport = async (format: "CSV" | "EXCEL" | "PDF") => {
+    setExporting(true);
+    try {
+      const res = await exportCulinaryAnalyticsReport(phase3BReportCode, format);
+      const blob = new Blob([res.content], { type: res.contentType });
+      triggerBlobDownload(blob, res.fileName);
+      toastService.success(`Exported ${res.fileName}`);
+    } catch (err: unknown) {
+      toastService.error(err instanceof Error ? err.message : "Phase 3B export failed.");
+    } finally {
+      setExporting(false);
+    }
+  };
 
   return (
     <div className="cs2-shell" data-testid="culinary-reports-workspace">
       <div className="cs2-header">
         <div>
-          <h2 className="cs2-title">Recipe Report Studio (Phase 1C Live Exports)</h2>
+          <h2 className="cs2-title">Culinary Intelligence Report Studio (Phase 1C – 3B Live)</h2>
           <p className="cs2-subtitle">
-            Generate formula-injection-safe Excel, CSV, and PDF reports for Recipe Costing, Readiness, Approval Packages,
-            Material Creation Requests, and Phase 1C Lifecycle. Event Reports activate in Phase 2A–3B.
+            Generate formula-injection-safe Excel, CSV, and PDF reports across Recipe Costing, Events, Menu Engineering, Consumption Variance, Waste, Benchmarking &amp; Savings.
           </p>
         </div>
-        <span className="cs2-badge cs2-badge--live">Phase 1C Recipe Reports Live</span>
+        <span className="cs2-badge cs2-badge--live">Phase 3B Reports Live</span>
       </div>
+
+      <section className="cs2-card">
+        <div className="cs2-card__head">
+          <h3 className="cs2-card__title">Export Live Phase 3B Culinary Intelligence Reports (15 Reports)</h3>
+          <span className="cs2-badge cs2-badge--live">RBAC &amp; Formula-Safe</span>
+        </div>
+        <div className="cs2-form-grid">
+          <div className="sila-field">
+            <label className="sila-label">Phase 3B Report</label>
+            <select className="sila-select" value={phase3BReportCode} onChange={(e) => setPhase3BReportCode(e.target.value)}>
+              {phase3BCatalog.map((c) => (
+                <option key={c.reportCode} value={c.reportCode}>
+                  {c.name}
+                </option>
+              ))}
+              {phase3BCatalog.length === 0 && <option value="MENU_ENGINEERING">1. Menu Engineering Report</option>}
+            </select>
+          </div>
+          <div className="sila-field" style={{ display: "flex", alignItems: "flex-end", gap: 6 }}>
+            <button type="button" className="sila-btn sila-btn--sm sila-btn--primary" disabled={exporting} onClick={() => void handleExportPhase3BReport("EXCEL")}>
+              Export Excel
+            </button>
+            <button type="button" className="sila-btn sila-btn--sm sila-btn--secondary" disabled={exporting} onClick={() => void handleExportPhase3BReport("CSV")}>
+              CSV
+            </button>
+            <button type="button" className="sila-btn sila-btn--sm sila-btn--secondary" disabled={exporting} onClick={() => void handleExportPhase3BReport("PDF")}>
+              PDF
+            </button>
+          </div>
+        </div>
+      </section>
 
       <section className="cs2-card">
         <div className="cs2-card__head">

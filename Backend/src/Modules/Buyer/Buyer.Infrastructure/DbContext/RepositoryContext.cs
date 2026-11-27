@@ -192,6 +192,12 @@ namespace Buyer.Infrastructure.DbContext
         public DbSet<SilaCulinaryEventExpenseLine> SilaCulinaryEventExpenseLine { get; set; }
         public DbSet<SilaCulinaryFinancialException> SilaCulinaryFinancialException { get; set; }
         public DbSet<SilaCulinaryFinancialScenario> SilaCulinaryFinancialScenario { get; set; }
+        public DbSet<SilaCulinaryAnalyticsConfig> SilaCulinaryAnalyticsConfig { get; set; }
+        public DbSet<SilaCulinarySimulation> SilaCulinarySimulation { get; set; }
+        public DbSet<SilaCulinaryOptimizationJob> SilaCulinaryOptimizationJob { get; set; }
+        public DbSet<SilaCulinaryRecommendation> SilaCulinaryRecommendation { get; set; }
+        public DbSet<SilaCulinaryWasteRecord> SilaCulinaryWasteRecord { get; set; }
+        public DbSet<SilaCulinaryAnalyticsAudit> SilaCulinaryAnalyticsAudit { get; set; }
 
 
         protected override void OnModelCreating(Microsoft.EntityFrameworkCore.ModelBuilder modelBuilder)
@@ -544,6 +550,16 @@ namespace Buyer.Infrastructure.DbContext
             _ = modelBuilder.Entity<SilaCulinaryEventExpenseLine>().HasIndex(a => new { a.BuyerId, a.EventFinancialPlanId, a.Category });
             _ = modelBuilder.Entity<SilaCulinaryFinancialException>().HasIndex(a => new { a.BuyerId, a.EventFinancialPlanId, a.ResolutionStatus });
             _ = modelBuilder.Entity<SilaCulinaryFinancialScenario>().HasIndex(a => new { a.BuyerId, a.EventFinancialPlanId });
+            _ = modelBuilder.Entity<SilaCulinaryAnalyticsConfig>().HasIndex(a => new { a.BuyerId, a.PropertyId }).IsUnique();
+            _ = modelBuilder.Entity<SilaCulinarySimulation>().HasIndex(a => new { a.BuyerId, a.SimulationCode }).IsUnique();
+            _ = modelBuilder.Entity<SilaCulinaryOptimizationJob>().HasIndex(a => new { a.BuyerId, a.JobCode }).IsUnique();
+            _ = modelBuilder.Entity<SilaCulinaryOptimizationJob>().HasIndex(a => new { a.BuyerId, a.Status });
+            _ = modelBuilder.Entity<SilaCulinaryRecommendation>().HasIndex(a => new { a.BuyerId, a.RecommendationCode }).IsUnique();
+            _ = modelBuilder.Entity<SilaCulinaryRecommendation>().HasIndex(a => new { a.BuyerId, a.DeduplicationKey });
+            _ = modelBuilder.Entity<SilaCulinaryRecommendation>().HasIndex(a => new { a.BuyerId, a.Status });
+            _ = modelBuilder.Entity<SilaCulinaryWasteRecord>().HasIndex(a => new { a.BuyerId, a.WasteNumber }).IsUnique();
+            _ = modelBuilder.Entity<SilaCulinaryWasteRecord>().HasIndex(a => new { a.BuyerId, a.IdempotencyKey });
+            _ = modelBuilder.Entity<SilaCulinaryAnalyticsAudit>().HasIndex(a => new { a.BuyerId, a.ExecutedAtUtc });
 
             base.OnModelCreating(modelBuilder);
 

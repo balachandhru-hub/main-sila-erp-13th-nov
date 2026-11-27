@@ -89,6 +89,14 @@ import {
   type SilaCulinaryMobileFinancialSummary,
   type SilaCulinarySimulateFinancialResult,
 } from '../../../../remote-buyer/src/api/silaMe/silaCulinaryFinancialApi';
+import {
+  decideCulinaryRecommendation,
+  getMobileCulinaryOpsSummary,
+  queryCulinaryCopilot,
+  recordCulinaryWaste,
+  type SilaCulinaryCopilotResponse,
+  type SilaCulinaryMobileOpsSummary,
+} from '../../../../remote-buyer/src/api/silaMe/silaCulinaryAnalyticsApi';
 import { scaleDraftLocally } from '../../../../remote-buyer/src/components/silaMe/recipes/culinary/culinaryRecipePlannerHelpers';
 import {
   calculateRecipeScaling,
@@ -101,7 +109,7 @@ import { useGo } from '../../navigation';
 import { errorText, useLoad } from '../../useLoad';
 import './recipeStudio.css';
 
-type MobileTab = 'generate' | 'draft' | 'materials' | 'lifecycle' | 'events' | 'mrp' | 'procurement' | 'pnl' | 'history' | 'demo';
+type MobileTab = 'generate' | 'draft' | 'materials' | 'lifecycle' | 'events' | 'mrp' | 'procurement' | 'pnl' | 'analytics' | 'history' | 'demo';
 
 /**
  * Phase 1A + Phase 1B Mobile Culinary Intelligence — responsive chef AI recipe generation,
@@ -193,6 +201,28 @@ const CulinarySuitePreviewScreen: React.FC = () => {
   const [mobileFinLoading, setMobileFinLoading] = useState(false);
   const [mobileFinGuests, setMobileFinGuests] = useState(500);
   const [mobileFinSim, setMobileFinSim] = useState<SilaCulinarySimulateFinancialResult | null>(null);
+
+  // Phase 3B Mobile Operational Culinary Intelligence state (covers, waste/deviation sync, buffet replenishment, role-safe Copilot)
+  const [opsSummary, setOpsSummary] = useState<SilaCulinaryMobileOpsSummary | null>(null);
+  const [opsLoading, setOpsLoading] = useState(false);
+  const [mobWasteIng, setMobWasteIng] = useState('');
+  const [mobWasteCat, setMobWasteCat] = useState('PRODUCTION_WASTE');
+  const [mobWasteQty, setMobWasteQty] = useState(1.5);
+  const [mobCopilotQ, setMobCopilotQ] = useState('What should we prioritize for today prep and waste control?');
+  const [mobCopilotAns, setMobCopilotAns] = useState<SilaCulinaryCopilotResponse | null>(null);
+
+  const handleOpenOpsTab = async () => {
+    setTab('analytics');
+    setOpsLoading(true);
+    try {
+      const summary = await getMobileCulinaryOpsSummary();
+      setOpsSummary(summary);
+    } catch (err) {
+      setErrMsg(errorText(err));
+    } finally {
+      setOpsLoading(false);
+    }
+  };
 
   const handleOpenPnlTab = async () => {
     setTab('pnl');
@@ -614,6 +644,9 @@ const CulinarySuitePreviewScreen: React.FC = () => {
               </button>
               <button type="button" className={`rs-tab ${tab === 'pnl' ? 'rs-tab--on' : ''}`} onClick={handleOpenPnlTab}>
                 Event P&amp;L
+              </button>
+              <button type="button" className={`rs-tab ${tab === 'analytics' ? 'rs-tab--on' : ''}`} onClick={handleOpenOpsTab}>
+                Daily Ops
               </button>
               <button type="button" className={`rs-tab ${tab === 'history' ? 'rs-tab--on' : ''}`} onClick={() => setTab('history')}>
                 History ({draftsLoad.data?.length ?? 0})
@@ -1877,6 +1910,138 @@ const CulinarySuitePreviewScreen: React.FC = () => {
                   </>
                 ) : (
                   <p className="sm-meta">No event financial plan found yet. Create a plan in Cloud Event P&amp;L Studio.</p>
+                )}
+              </section>
+            )}
+
+            {tab === 'analytics' && (
+              <section className="sm-card" data-testid="mobile-culinary-ops">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
+                  <h2 style={{ margin: 0 }}>Daily Culinary Ops (Phase 3B)</h2>
+                  <button type="button" className="sm-btn" disabled={opsLoading} onClick={handleOpenOpsTab}>
+                    {opsLoading ? 'Syncing...' : 'Sync'}
+                  </button>
+                </div>
+                {opsSummary && (
+                  <>
+                    <div className="sm-grid" style={{ gap: '0.5rem', marginBottom: '0.75rem' }}>
+                      <div className="sm-kpi">
+                        <span>Expected Covers</span>
+                        <strong>{opsSummary.dailyExpectedCovers}</strong>
+                      </div>
+                      <div className="sm-kpi">
+                        <span>Shortage / Waste Alerts</span>
+                        <strong>{opsSummary.activeShortageAlerts} / {opsSummary.activeWasteAlerts}</strong>
+                      </div>
+                      <div className="sm-kpi">
+                        <span>Approval Tasks</span>
+                        <strong>{opsSummary.pendingApprovalTasks}</strong>
+                      </div>
+                      {opsSummary.canViewCosts && (
+                        <div className="sm-kpi">
+                          <span>Daily Food Cost %</span>
+                          <strong>{opsSummary.dailyFoodCostPercent ?? '—'}% (Target {opsSummary.targetFoodCostPercent}%)</strong>
+                        </div>
+                      )}
+                    </div>
+                    <div className="sm-meta" style={{ marginBottom: '0.6rem' }}>
+                      <strong>Production &amp; Buffet Guidance:</strong>
+                      <ul style={{ margin: '0.25rem 0', paddingLeft: '1.1rem' }}>
+                        {opsSummary.productionRecommendations.map((x) => <li key={x}>{x}</li>)}
+                        {opsSummary.buffetReplenishmentNotes.map((x) => <li key={x}>{x}</li>)}
+                        {opsSummary.eventProductionSummaries.map((x) => <li key={x}>{x}</li>)}
+                      </ul>
+                    </div>
+
+                    <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '0.6rem', marginTop: '0.6rem' }}>
+                      <strong style={{ fontSize: '0.85rem' }}>Record Kitchen Waste / Deviation (Approval-Gated)</strong>
+                      <div className="sm-grid" style={{ gap: '0.4rem', marginTop: '0.4rem' }}>
+                        <input className="sm-input" placeholder="Ingredient" value={mobWasteIng} onChange={(e) => setMobWasteIng(e.target.value)} />
+                        <select className="sm-input" value={mobWasteCat} onChange={(e) => setMobWasteCat(e.target.value)}>
+                          <option value="PRODUCTION_WASTE">Production Waste</option>
+                          <option value="OVERPRODUCTION">Overproduction</option>
+                          <option value="BUFFET_LEFTOVERS">Buffet Leftovers</option>
+                          <option value="SPOILAGE">Spoilage</option>
+                          <option value="YIELD_LOSS">Yield Loss / Deviation</option>
+                        </select>
+                        <input className="sm-input" type="number" value={mobWasteQty} onChange={(e) => setMobWasteQty(Number(e.target.value))} />
+                        <button
+                          type="button"
+                          className="sm-btn sm-btn--primary"
+                          onClick={async () => {
+                            if (!mobWasteIng.trim()) return;
+                            try {
+                              await recordCulinaryWaste({
+                                mealPeriod: 'All Day',
+                                wasteCategory: mobWasteCat,
+                                ingredientName: mobWasteIng,
+                                quantity: mobWasteQty,
+                                uom: 'KG',
+                                estimatedCost: 0,
+                                coversServed: Math.max(1, Math.round(opsSummary.dailyExpectedCovers)),
+                                sourceChannel: 'MOBILE',
+                                idempotencyKey: `MOB-${Date.now()}-${mobWasteIng.trim()}`,
+                              });
+                              setStatusMsg(`Logged ${mobWasteCat} for ${mobWasteIng} (pending approval).`);
+                              setMobWasteIng('');
+                            } catch (err) {
+                              setErrMsg(errorText(err));
+                            }
+                          }}
+                        >
+                          Submit Waste Log
+                        </button>
+                      </div>
+                    </div>
+
+                    {opsSummary.chefRecommendations.length > 0 && (
+                      <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '0.6rem', marginTop: '0.6rem' }}>
+                        <strong style={{ fontSize: '0.85rem' }}>Chef Recommendations</strong>
+                        {opsSummary.chefRecommendations.map((r) => (
+                          <div key={r.id} className="sm-row" style={{ padding: '0.35rem 0' }}>
+                            <div>
+                              <strong style={{ fontSize: '0.8rem' }}>{r.title}</strong>
+                              <div className="sm-meta">{r.proposedAction} ({r.status})</div>
+                            </div>
+                            {opsSummary.canViewCosts && r.status === 'NEW' && (
+                              <button
+                                type="button"
+                                className="sm-btn"
+                                onClick={async () => {
+                                  await decideCulinaryRecommendation(r.id, { status: 'APPROVED', comment: 'Approved on Mobile' });
+                                  await handleOpenOpsTab();
+                                }}
+                              >
+                                Approve
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '0.6rem', marginTop: '0.6rem' }}>
+                      <strong style={{ fontSize: '0.85rem' }}>Mobile Culinary Copilot</strong>
+                      <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.35rem' }}>
+                        <input className="sm-input" style={{ flex: 1 }} value={mobCopilotQ} onChange={(e) => setMobCopilotQ(e.target.value)} />
+                        <button
+                          type="button"
+                          className="sm-btn"
+                          onClick={async () => {
+                            const ans = await queryCulinaryCopilot({ question: mobCopilotQ, contextModule: 'MOBILE_DAILY_OPS' });
+                            setMobCopilotAns(ans);
+                          }}
+                        >
+                          Ask
+                        </button>
+                      </div>
+                      {mobCopilotAns && (
+                        <p className="sm-meta" style={{ marginTop: '0.4rem' }}>
+                          {mobCopilotAns.directAnswer} — <em>{mobCopilotAns.recommendedAction}</em>
+                        </p>
+                      )}
+                    </div>
+                  </>
                 )}
               </section>
             )}
