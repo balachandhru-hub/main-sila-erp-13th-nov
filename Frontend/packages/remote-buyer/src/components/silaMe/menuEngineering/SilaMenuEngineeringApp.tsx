@@ -1,19 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Activity,
   BarChart3,
   BookOpen,
   CalendarRange,
+  Bot,
+  ChefHat,
   ClipboardList,
   DollarSign,
   FileBarChart2,
-  FlaskConical,
-  LayoutGrid,
-  Play,
   Plus,
   Save,
   Settings,
-  ShoppingBag,
   Sparkles,
   UtensilsCrossed,
 } from "lucide-react";
@@ -39,6 +36,7 @@ import {
   StudioActionBar,
   StudioFilterBar,
   StudioHeroPanel,
+  StudioIntelligenceToggle,
   StudioOverviewButton,
   StudioShell,
   StudioSubNavigation,
@@ -119,34 +117,23 @@ const ME_NAV_GROUPS: StudioNavGroup[] = [
     ],
   },
   {
-    id: "consumption",
-    label: "Consumption",
-    icon: <Activity size={14} aria-hidden="true" />,
-    items: [{ id: "silaMenuConsumption", label: "Consumption Analysis" }],
-  },
-  {
-    id: "cost-margin",
-    label: "Cost & Margin",
+    id: "cost-consumption",
+    label: "Cost & Consumption",
     icon: <DollarSign size={14} aria-hidden="true" />,
-    items: [{ id: "silaMenuCost", label: "Cost & Margin Analysis" }],
+    items: [
+      { id: "silaMenuCost", label: "Cost & Margin Analysis" },
+      { id: "silaMenuConsumption", label: "Consumption Analysis" },
+      { id: "silaMenuRecommendations", label: "Purchase Recommendations" },
+    ],
   },
   {
-    id: "purchasing",
-    label: "Purchasing",
-    icon: <ShoppingBag size={14} aria-hidden="true" />,
-    items: [{ id: "silaMenuRecommendations", label: "Purchase Recommendations" }],
-  },
-  {
-    id: "ai-intel",
-    label: "AI Intelligence",
+    id: "ai-simulation",
+    label: "AI & Simulation",
     icon: <Sparkles size={14} aria-hidden="true" />,
-    items: [{ id: "silaMenuIntelligence", label: "AI Menu Intelligence" }],
-  },
-  {
-    id: "simulation",
-    label: "Simulation",
-    icon: <FlaskConical size={14} aria-hidden="true" />,
-    items: [{ id: "silaMenuWhatIf", label: "What-If Simulation" }],
+    items: [
+      { id: "silaMenuIntelligence", label: "AI Menu Intelligence" },
+      { id: "silaMenuWhatIf", label: "What-If Simulation" },
+    ],
   },
   {
     id: "setup",
@@ -211,6 +198,7 @@ const SilaMenuEngineeringApp: React.FC<Props> = ({
   const [studioSnapshot, setStudioSnapshot] = useState<MeStudioHeroSnapshot | null>(null);
   const studioCommandHandlerRef = useRef<((cmd: MeStudioHeroCommand) => void) | null>(null);
   const [operationalActionTick, setOperationalActionTick] = useState<number>(0);
+  const [showOptions, setShowOptions] = useState<boolean>(() => navKey !== "silaMenuStudio" && navKey !== "silaMenuDashboard");
 
   const normalizedKey: ViewKey = navKey === "silaMenuDashboard" ? "silaMenuStudio" : navKey;
   const activeGroupId = resolveGroupForKey(normalizedKey);
@@ -298,6 +286,10 @@ const SilaMenuEngineeringApp: React.FC<Props> = ({
 
   const isStudio = normalizedKey === "silaMenuStudio";
 
+  useEffect(() => {
+    if (!isStudio) setShowOptions(true);
+  }, [isStudio, normalizedKey]);
+
   const selectedPropertyName = useMemo(
     () => lookups?.properties.find((p) => p.id === propertyId)?.name ?? "All Properties",
     [lookups?.properties, propertyId]
@@ -354,16 +346,6 @@ const SilaMenuEngineeringApp: React.FC<Props> = ({
           testId: "me-hero-optimize-ai",
         });
       }
-      if (effectivePerms.runMenuSimulation) {
-        items.push({
-          id: "me-compare-scenarios",
-          label: "Compare Scenarios",
-          icon: <Play size={14} aria-hidden="true" />,
-          variant: "secondary",
-          onClick: () => dispatchStudioCommand("compare-scenarios"),
-          testId: "me-hero-compare",
-        });
-      }
       if (studioSnapshot?.selectedPlanId && (effectivePerms.approveMenu || effectivePerms.editDraftMenu)) {
         items.push({
           id: "me-submit-approval",
@@ -404,32 +386,12 @@ const SilaMenuEngineeringApp: React.FC<Props> = ({
       }
     }
 
-    items.push({
-      id: "me-reports",
-      label: showReports ? "Close Reports" : "Reports (22)",
-      icon: <FileBarChart2 size={14} aria-hidden="true" />,
-      variant: "secondary",
-      onClick: () => setShowReports((s) => !s),
-      testId: "me-hero-reports",
-    });
-
-    items.push({
-      id: "me-copilot",
-      label: copilotOpen ? "Close AI Copilot" : "AI Copilot",
-      icon: <Sparkles size={14} aria-hidden="true" />,
-      variant: "secondary",
-      onClick: () => setCopilotOpen((o) => !o),
-      testId: "me-ai-copilot-toggle",
-    });
-
     return items;
   }, [
-    copilotOpen,
     effectivePerms.approveMenu,
     effectivePerms.createMenu,
     effectivePerms.editDraftMenu,
     effectivePerms.manageMenuItems,
-    effectivePerms.runMenuSimulation,
     effectivePerms.useAiMenuIntelligence,
     isStudio,
     normalizedKey,
@@ -536,70 +498,95 @@ const SilaMenuEngineeringApp: React.FC<Props> = ({
           ) : undefined
         }
         topRight={
-          <div style={{ display: "inline-flex", alignItems: "center", gap: "0.45rem" }}>
-            <button
-              type="button"
-              className="sila-studio-btn sila-studio-btn--secondary"
+          <>
+            <StudioOverviewButton
+              active={false}
+              tooltip="Open Recipe Studio"
+              ariaLabel="Open Recipe Studio"
+              testId="me-recipe-studio-btn"
+              icon={<ChefHat size={18} strokeWidth={2} aria-hidden="true" />}
               onClick={() => {
                 onNavigate("silaRecipes");
                 toastService.info("Opened Recipe Studio (Culinary Master)");
               }}
-              title="Open Recipe Studio"
-            >
-              <LayoutGrid size={14} aria-hidden="true" />
-              <span>Recipe Studio</span>
-            </button>
+            />
+            <StudioOverviewButton
+              active={showReports}
+              tooltip={showReports ? "Close Reports" : "Reports (22)"}
+              ariaLabel={showReports ? "Close Reports" : "Open Reports"}
+              testId="me-hero-reports"
+              icon={<FileBarChart2 size={18} strokeWidth={2} aria-hidden="true" />}
+              onClick={() => setShowReports((r) => !r)}
+            />
+            <StudioOverviewButton
+              active={copilotOpen}
+              tooltip={copilotOpen ? "Close AI Copilot" : "AI Copilot"}
+              ariaLabel={copilotOpen ? "Close AI Copilot" : "Open AI Copilot"}
+              testId="me-ai-copilot-toggle"
+              icon={<Bot size={18} strokeWidth={2} aria-hidden="true" />}
+              onClick={() => setCopilotOpen((o) => !o)}
+            />
+            <StudioIntelligenceToggle
+              iconOnly
+              label="Menu Engineering Intelligence"
+              expanded={showOptions}
+              controlsId="me-options-panel"
+              testId="me-options-toggle"
+              icon={<Sparkles size={18} strokeWidth={2} />}
+              onClick={() => setShowOptions((o) => !o)}
+            />
             <StudioOverviewButton
               active={isStudio && !showReports}
-              tooltip="Return to ME Studio Overview"
-              ariaLabel="Menu Engineering Overview"
+              tooltip="Return to ME Studio"
+              ariaLabel="Return to ME Studio"
+              testId="me-overview-button"
               onClick={() => {
                 setShowReports(false);
                 onNavigate("silaMenuStudio");
               }}
-              testId="me-overview-button"
             />
-          </div>
+          </>
         }
         actions={<StudioActionBar actions={heroActions} ariaLabel="Menu Engineering actions" />}
       />
 
-      {/* ROW 3: Single-line 9-Group Menu Engineering Navigation */}
-      <StudioTopNavigation
-        groups={ME_NAV_GROUPS}
-        activeGroupId={activeGroupId}
-        activeItemId={showReports ? undefined : normalizedKey}
-        onSelectGroup={(group) => {
-          setShowReports(false);
-          const first = group.items?.[0];
-          if (first) onNavigate(first.id);
-        }}
-        onSelectItem={(itemId: string) => {
-          setShowReports(false);
-          onNavigate(itemId);
-        }}
-        ariaLabel="Menu Engineering navigation"
-        rightSlot={
-          <span
-            className={`sila-studio-badge ${
-              aiStatus?.aiProviderAvailable ? "sila-studio-badge--success" : "sila-studio-badge--info"
-            }`}
-          >
-            {aiStatusLabel}
-          </span>
-        }
-      />
-
-      {/* ROW 4: Contextual Submenu (shown when selected group has > 1 item) */}
-      {activeGroup.items && activeGroup.items.length > 1 && (
-        <StudioSubNavigation
-          items={submenuItems}
-          onSelect={(id: string) => {
-            setShowReports(false);
-            onNavigate(id);
-          }}
-          ariaLabel={`${activeGroup.label} submenu`}
-        />
+      {showOptions && (
+        <div id="me-options-panel" data-testid="me-options-panel">
+          <StudioTopNavigation
+            groups={ME_NAV_GROUPS}
+            activeGroupId={activeGroupId}
+            activeItemId={showReports ? undefined : normalizedKey}
+            onSelectGroup={(group) => {
+              setShowReports(false);
+              const first = group.items?.[0];
+              if (first) onNavigate(first.id);
+            }}
+            onSelectItem={(itemId: string) => {
+              setShowReports(false);
+              onNavigate(itemId);
+            }}
+            ariaLabel="Menu Engineering navigation"
+            rightSlot={
+              <span
+                className={`sila-studio-badge ${
+                  aiStatus?.aiProviderAvailable ? "sila-studio-badge--success" : "sila-studio-badge--info"
+                }`}
+              >
+                {aiStatusLabel}
+              </span>
+            }
+          />
+          {activeGroup.items && activeGroup.items.length > 1 && (
+            <StudioSubNavigation
+              items={submenuItems}
+              onSelect={(id: string) => {
+                setShowReports(false);
+                onNavigate(id);
+              }}
+              ariaLabel={`${activeGroup.label} submenu`}
+            />
+          )}
+        </div>
       )}
 
       {/* ROW 5: Compact Global Filter Toolbar */}

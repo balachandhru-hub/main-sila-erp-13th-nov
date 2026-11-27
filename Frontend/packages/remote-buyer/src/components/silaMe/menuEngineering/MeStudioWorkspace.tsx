@@ -955,18 +955,6 @@ const MeStudioWorkspace: React.FC<Props> = ({
             <button
               type="button"
               className="sila-studio-btn sila-studio-btn--secondary sila-studio-btn--sm"
-              onClick={() => {
-                setReplaceLineIndex(null);
-                setDishLibraryOpen((o) => !o);
-              }}
-              data-testid="me-studio-open-library"
-            >
-              <BookOpen size={13} aria-hidden="true" />
-              <span>{dishLibraryOpen ? "Close Dish Library" : "Open Dish Library"}</span>
-            </button>
-            <button
-              type="button"
-              className="sila-studio-btn sila-studio-btn--secondary sila-studio-btn--sm"
               onClick={() => setIsFullScreen((f) => !f)}
               data-testid="me-studio-fullscreen-toggle"
             >
