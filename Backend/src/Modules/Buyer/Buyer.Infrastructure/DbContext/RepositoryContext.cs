@@ -169,6 +169,12 @@ namespace Buyer.Infrastructure.DbContext
         public DbSet<SilaCulinaryMaterialRequestHistory> SilaCulinaryMaterialRequestHistory { get; set; }
         public DbSet<SilaCulinaryCostingSnapshot> SilaCulinaryCostingSnapshot { get; set; }
         public DbSet<SilaCulinaryRecipeLifecycle> SilaCulinaryRecipeLifecycle { get; set; }
+        public DbSet<SilaCulinaryEvent> SilaCulinaryEvent { get; set; }
+        public DbSet<SilaCulinaryEventSession> SilaCulinaryEventSession { get; set; }
+        public DbSet<SilaCulinaryEventTemplate> SilaCulinaryEventTemplate { get; set; }
+        public DbSet<SilaCulinaryMenu> SilaCulinaryMenu { get; set; }
+        public DbSet<SilaCulinaryMenuLine> SilaCulinaryMenuLine { get; set; }
+        public DbSet<SilaCulinaryEventRevision> SilaCulinaryEventRevision { get; set; }
 
 
         protected override void OnModelCreating(Microsoft.EntityFrameworkCore.ModelBuilder modelBuilder)
@@ -482,6 +488,16 @@ namespace Buyer.Infrastructure.DbContext
                 .WithMany()
                 .HasForeignKey(x => x.MaterialRequestId)
                 .OnDelete(DeleteBehavior.NoAction);
+
+            _ = modelBuilder.Entity<SilaCulinaryEvent>().HasIndex(a => new { a.BuyerId, a.EventCode }).IsUnique();
+            _ = modelBuilder.Entity<SilaCulinaryEvent>().HasIndex(a => new { a.BuyerId, a.StartDateUtc, a.EndDateUtc });
+            _ = modelBuilder.Entity<SilaCulinaryEvent>().HasIndex(a => new { a.BuyerId, a.Status });
+            _ = modelBuilder.Entity<SilaCulinaryEventSession>().HasIndex(a => new { a.BuyerId, a.EventId, a.SessionDateUtc });
+            _ = modelBuilder.Entity<SilaCulinaryEventTemplate>().HasIndex(a => new { a.BuyerId, a.TemplateCode }).IsUnique();
+            _ = modelBuilder.Entity<SilaCulinaryMenu>().HasIndex(a => new { a.BuyerId, a.MenuCode }).IsUnique();
+            _ = modelBuilder.Entity<SilaCulinaryMenu>().HasIndex(a => new { a.BuyerId, a.EventId });
+            _ = modelBuilder.Entity<SilaCulinaryMenuLine>().HasIndex(a => new { a.BuyerId, a.MenuId, a.SortOrder });
+            _ = modelBuilder.Entity<SilaCulinaryEventRevision>().HasIndex(a => new { a.BuyerId, a.EventId, a.RevisionNumber });
 
             base.OnModelCreating(modelBuilder);
 

@@ -158,6 +158,12 @@ namespace Buyer.Infrastructure.Contracts.IRepository
         ISilaCulinaryMaterialRequestHistoryRepository SilaCulinaryMaterialRequestHistory { get; }
         ISilaCulinaryCostingSnapshotRepository SilaCulinaryCostingSnapshot { get; }
         ISilaCulinaryRecipeLifecycleRepository SilaCulinaryRecipeLifecycle { get; }
+        ISilaCulinaryEventRepository SilaCulinaryEvent { get; }
+        ISilaCulinaryEventSessionRepository SilaCulinaryEventSession { get; }
+        ISilaCulinaryEventTemplateRepository SilaCulinaryEventTemplate { get; }
+        ISilaCulinaryMenuRepository SilaCulinaryMenu { get; }
+        ISilaCulinaryMenuLineRepository SilaCulinaryMenuLine { get; }
+        ISilaCulinaryEventRevisionRepository SilaCulinaryEventRevision { get; }
         bool Save();
         Task<bool> SaveAsync();
     }

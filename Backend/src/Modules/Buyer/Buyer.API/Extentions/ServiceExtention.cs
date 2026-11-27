@@ -160,6 +160,7 @@ namespace Buyer.API.Extensions
             _ = services.AddScoped<ISilaCulinaryRecipeService, SilaCulinaryRecipeService>();
             _ = services.AddScoped<ISilaCulinaryMaterialService, SilaCulinaryMaterialService>();
             _ = services.AddScoped<ISilaCulinaryLifecycleService, SilaCulinaryLifecycleService>();
+            _ = services.AddScoped<ISilaCulinaryEventMenuService, SilaCulinaryEventMenuService>();
             _ = services.AddControllers().AddJsonOptions(options =>
             {
                 // Empty JSON strings must not 400 Guid? model binding (PO flex write payloads).

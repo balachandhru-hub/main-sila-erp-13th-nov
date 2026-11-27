@@ -6,6 +6,10 @@ import {
   type SilaCulinaryLifecycleDashboard,
   type SilaCulinaryMaterialRequestDashboard,
 } from "../../../../api/silaMe/silaCulinaryLifecycleApi";
+import {
+  getEventDashboard,
+  type SilaCulinaryEventDashboard,
+} from "../../../../api/silaMe/silaCulinaryEventMenuApi";
 import type { CulinaryWorkspaceKind } from "../silaRecipeRoutes";
 import "./CulinarySuite.css";
 
@@ -51,11 +55,13 @@ const CulinaryOverviewWorkspace: React.FC<CulinaryOverviewWorkspaceProps> = ({
   const [eventTypeFilter, setEventTypeFilter] = useState("ALL");
   const [lifecycleDash, setLifecycleDash] = useState<SilaCulinaryLifecycleDashboard | null>(null);
   const [mrqDash, setMrqDash] = useState<SilaCulinaryMaterialRequestDashboard | null>(null);
+  const [eventDash, setEventDash] = useState<SilaCulinaryEventDashboard | null>(null);
 
   useEffect(() => {
     if (demoMode) return;
     getLifecycleDashboard().then(setLifecycleDash).catch(() => {});
     getMaterialRequestDashboard().then(setMrqDash).catch(() => {});
+    getEventDashboard().then(setEventDash).catch(() => {});
   }, [demoMode]);
 
   return (
@@ -191,8 +197,10 @@ const CulinaryOverviewWorkspace: React.FC<CulinaryOverviewWorkspaceProps> = ({
         </div>
         <div className="cs2-kpi cs2-kpi--accent">
           <span className="cs2-kpi__label">Upcoming Events</span>
-          <span className="cs2-kpi__value">{demoMode ? DEMO_OVERVIEW_METRICS.upcomingEvents : "0"}</span>
-          <span className="cs2-kpi__hint">Activates in Phase 2A</span>
+          <span className="cs2-kpi__value">{demoMode ? DEMO_OVERVIEW_METRICS.upcomingEvents : (eventDash?.upcomingEvents ?? 0)}</span>
+          <span className="cs2-kpi__hint">
+            {demoMode ? "Illustrative demo" : `Approved: ${eventDash?.approvedEvents ?? 0} · MRP Ready: ${eventDash?.readyForMrpEvents ?? 0}`}
+          </span>
         </div>
         <div className="cs2-kpi cs2-kpi--rose">
           <span className="cs2-kpi__label">Events w/ Material Shortages</span>

@@ -71,6 +71,15 @@ namespace Buyer.Application.Features.Shared
                 case Common.SILA_REF_CULINARY_RECIPE_LIFECYCLE:
                     return await repository.SilaCulinaryRecipeLifecycle.FindByCondition(x => x.BuyerId == buyerId && ids.Contains(x.Id))
                         .ToDictionaryAsync(x => x.Id, x => x.ProductionRecipeCode ?? $"DRAFT-{x.ApprovedDraftRevision}", cancellationToken);
+                case Common.SILA_REF_CULINARY_EVENT:
+                    return await repository.SilaCulinaryEvent.FindByCondition(x => x.BuyerId == buyerId && ids.Contains(x.Id))
+                        .ToDictionaryAsync(x => x.Id, x => x.EventCode, cancellationToken);
+                case Common.SILA_REF_CULINARY_MENU:
+                    return await repository.SilaCulinaryMenu.FindByCondition(x => x.BuyerId == buyerId && ids.Contains(x.Id))
+                        .ToDictionaryAsync(x => x.Id, x => x.MenuCode, cancellationToken);
+                case Common.SILA_REF_CULINARY_EVENT_TEMPLATE:
+                    return await repository.SilaCulinaryEventTemplate.FindByCondition(x => x.BuyerId == buyerId && ids.Contains(x.Id))
+                        .ToDictionaryAsync(x => x.Id, x => x.TemplateCode, cancellationToken);
                 case Common.SILA_REF_GRN:
                     return await repository.GoodsReceipt.FindByCondition(x => x.BuyerId == buyerId && ids.Contains(x.Id))
                         .ToDictionaryAsync(x => x.Id, x => x.GrnNumber, cancellationToken);

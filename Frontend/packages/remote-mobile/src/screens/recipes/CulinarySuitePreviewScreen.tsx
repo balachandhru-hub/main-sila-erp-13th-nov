@@ -46,6 +46,19 @@ import {
   type SilaCulinaryMaterialRequest,
   type SilaCulinaryRecipeReadiness,
 } from '../../../../remote-buyer/src/api/silaMe/silaCulinaryLifecycleApi';
+import {
+  decideCulinaryEventApproval,
+  getCulinaryEvent,
+  getCulinaryEventMaterialPreview,
+  getCulinaryEventReadiness,
+  listCulinaryEvents,
+  simulateCulinaryEvent,
+  submitCulinaryEventForApproval,
+  type SilaCulinaryEvent,
+  type SilaCulinaryEventReadiness,
+  type SilaCulinaryEventSimulationResult,
+  type SilaCulinaryMaterialPreviewLine,
+} from '../../../../remote-buyer/src/api/silaMe/silaCulinaryEventMenuApi';
 import { scaleDraftLocally } from '../../../../remote-buyer/src/components/silaMe/recipes/culinary/culinaryRecipePlannerHelpers';
 import {
   calculateRecipeScaling,
@@ -58,7 +71,7 @@ import { useGo } from '../../navigation';
 import { errorText, useLoad } from '../../useLoad';
 import './recipeStudio.css';
 
-type MobileTab = 'generate' | 'draft' | 'materials' | 'lifecycle' | 'history' | 'demo';
+type MobileTab = 'generate' | 'draft' | 'materials' | 'lifecycle' | 'events' | 'history' | 'demo';
 
 /**
  * Phase 1A + Phase 1B Mobile Culinary Intelligence — responsive chef AI recipe generation,
@@ -119,6 +132,40 @@ const CulinarySuitePreviewScreen: React.FC = () => {
   // Phase 0 Demo fallback tab state
   const [demoServings, setDemoServings] = useState(10);
   const [guests, setGuests] = useState(500);
+
+  // Phase 2A Mobile Event & Menu Planner state
+  const [mobileEvents, setMobileEvents] = useState<SilaCulinaryEvent[]>([]);
+  const [selectedMobileEvent, setSelectedMobileEvent] = useState<SilaCulinaryEvent | null>(null);
+  const [mobileEventReadiness, setMobileEventReadiness] = useState<SilaCulinaryEventReadiness | null>(null);
+  const [mobileEventStock, setMobileEventStock] = useState<SilaCulinaryMaterialPreviewLine[]>([]);
+  const [mobileEventSimGuests, setMobileEventSimGuests] = useState(500);
+  const [mobileEventSim, setMobileEventSim] = useState<SilaCulinaryEventSimulationResult | null>(null);
+  const [eventsLoading, setEventsLoading] = useState(false);
+
+  const handleOpenEventsTab = async () => {
+    setTab('events');
+    setEventsLoading(true);
+    try {
+      const list = await listCulinaryEvents();
+      setMobileEvents(list);
+      const target = selectedMobileEvent ? list.find((e) => e.id === selectedMobileEvent.id) ?? list[0] : list[0];
+      if (target) {
+        const detail = await getCulinaryEvent(target.id);
+        setSelectedMobileEvent(detail);
+        setMobileEventSimGuests(detail.guaranteedGuests);
+        const [rd, st] = await Promise.all([
+          getCulinaryEventReadiness(detail.id),
+          getCulinaryEventMaterialPreview(detail.id),
+        ]);
+        setMobileEventReadiness(rd);
+        setMobileEventStock(st);
+      }
+    } catch (err) {
+      setErrMsg(errorText(err));
+    } finally {
+      setEventsLoading(false);
+    }
+  };
 
   const flags = statusLoad.data?.featureFlags ?? DEFAULT_CULINARY_FEATURE_FLAGS;
 
@@ -449,6 +496,9 @@ const CulinarySuitePreviewScreen: React.FC = () => {
               </button>
               <button type="button" className={`rs-tab ${tab === 'lifecycle' ? 'rs-tab--on' : ''}`} onClick={handleOpenLifecycleTab}>
                 Cost &amp; Publish
+              </button>
+              <button type="button" className={`rs-tab ${tab === 'events' ? 'rs-tab--on' : ''}`} onClick={handleOpenEventsTab}>
+                Events{mobileEvents.length > 0 ? ` (${mobileEvents.length})` : ''}
               </button>
               <button type="button" className={`rs-tab ${tab === 'history' ? 'rs-tab--on' : ''}`} onClick={() => setTab('history')}>
                 History ({draftsLoad.data?.length ?? 0})
@@ -1105,6 +1155,134 @@ const CulinarySuitePreviewScreen: React.FC = () => {
                   </>
                 )}
               </>
+            )}
+
+            {tab === 'events' && (
+              <section className="sm-card">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                  <h2 style={{ margin: 0 }}>Event &amp; Menu Planner</h2>
+                  <button type="button" className="sm-btn" onClick={handleOpenEventsTab} disabled={eventsLoading}>
+                    {eventsLoading ? 'Loading...' : 'Refresh'}
+                  </button>
+                </div>
+                {mobileEvents.length === 0 ? (
+                  <p className="sm-meta">No events created yet. Create events in SILA Cloud Recipe Studio.</p>
+                ) : (
+                  <>
+                    <div className="sm-field">
+                      <label htmlFor="m-p2a-ev">Select Event</label>
+                      <select
+                        id="m-p2a-ev"
+                        value={selectedMobileEvent?.id ?? ''}
+                        onChange={async (e) => {
+                          const detail = await getCulinaryEvent(e.target.value);
+                          setSelectedMobileEvent(detail);
+                          setMobileEventSimGuests(detail.guaranteedGuests);
+                          const [rd, st] = await Promise.all([
+                            getCulinaryEventReadiness(detail.id),
+                            getCulinaryEventMaterialPreview(detail.id),
+                          ]);
+                          setMobileEventReadiness(rd);
+                          setMobileEventStock(st);
+                        }}
+                      >
+                        {mobileEvents.map((ev) => (
+                          <option key={ev.id} value={ev.id}>
+                            {ev.eventCode} — {ev.name} ({ev.status})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    {selectedMobileEvent && (
+                      <div style={{ marginTop: '0.6rem', display: 'grid', gap: '0.5rem' }}>
+                        <p className="sm-meta" style={{ margin: 0 }}>
+                          <strong>{selectedMobileEvent.startDateUtc.slice(0, 10)}</strong> · {selectedMobileEvent.venueName || 'Venue TBD'} ·{' '}
+                          {selectedMobileEvent.planningGuests} planned guests · {selectedMobileEvent.serviceStyle}
+                        </p>
+                        {selectedMobileEvent.costVisible && (
+                          <p className="sm-meta" style={{ margin: 0 }}>
+                            Est. Menu Cost: <strong>{selectedMobileEvent.currency} {(selectedMobileEvent.totalEstimatedMenuCost ?? 0).toFixed(2)}</strong>
+                          </p>
+                        )}
+                        <div className="sm-field">
+                          <label htmlFor="m-p2a-sim">Simulate Guests: <strong>{mobileEventSimGuests}</strong></label>
+                          <input
+                            id="m-p2a-sim"
+                            type="range"
+                            min={20}
+                            max={1500}
+                            step={10}
+                            value={mobileEventSimGuests}
+                            onChange={(e) => setMobileEventSimGuests(Number(e.target.value))}
+                          />
+                          <button
+                            type="button"
+                            className="sm-btn"
+                            style={{ marginTop: '0.35rem' }}
+                            onClick={async () => {
+                              const res = await simulateCulinaryEvent(selectedMobileEvent.id, {
+                                guaranteedGuests: mobileEventSimGuests,
+                                expectedGuests: mobileEventSimGuests,
+                                lineOverrides: [],
+                              });
+                              setMobileEventSim(res);
+                            }}
+                          >
+                            Simulate Event Cost &amp; Portions
+                          </button>
+                          {mobileEventSim && (
+                            <p className="sm-meta" style={{ marginTop: '0.3rem' }}>
+                              Planning Guests: <strong>{mobileEventSim.planningGuests}</strong>
+                              {selectedMobileEvent.costVisible && mobileEventSim.totalMenuCost != null
+                                ? ` · Est. Menu Cost: ${mobileEventSim.currency} ${mobileEventSim.totalMenuCost.toFixed(2)}`
+                                : ''}
+                            </p>
+                          )}
+                        </div>
+                        {mobileEventReadiness && (
+                          <p className="sm-meta" style={{ margin: 0 }}>
+                            Readiness: {mobileEventReadiness.passedCount} pass · {mobileEventReadiness.warningCount} warn · {mobileEventReadiness.blockedCount} block
+                          </p>
+                        )}
+                        {mobileEventStock.length > 0 && (
+                          <ul className="sm-list">
+                            {mobileEventStock.slice(0, 5).map((st, idx) => (
+                              <li key={idx} className="sm-row" style={{ padding: '0.25rem 0' }}>
+                                <span>{st.ingredientName}</span>
+                                <span>{st.requiredQty} {st.recipeUom} ({st.stockIndicator})</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                        <div className="sm-actions">
+                          <button
+                            type="button"
+                            className="sm-btn sm-btn--primary"
+                            onClick={async () => {
+                              const updated = await submitCulinaryEventForApproval(selectedMobileEvent.id);
+                              setSelectedMobileEvent(updated);
+                              setStatusMsg(`Submitted ${updated.eventCode} for approval.`);
+                            }}
+                          >
+                            Submit Approval
+                          </button>
+                          <button
+                            type="button"
+                            className="sm-btn"
+                            onClick={async () => {
+                              const updated = await decideCulinaryEventApproval(selectedMobileEvent.id, 'APPROVE', 'Approved on mobile');
+                              setSelectedMobileEvent(updated);
+                              setStatusMsg(`Approved ${updated.eventCode}.`);
+                            }}
+                          >
+                            Approve
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </section>
             )}
 
             {tab === 'history' && (
