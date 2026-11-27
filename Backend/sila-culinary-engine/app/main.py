@@ -118,6 +118,16 @@ from app.engines.analytics_advanced import (
     optimize_menu_milp as optimize_menu_phase3b_milp,
     simulate_what_if,
 )
+from app.engines.production_scheduler import (
+    allocate_central_kitchen_batch,
+    optimize_kitchen_schedule,
+)
+from app.schemas.production_engine import (
+    CentralKitchenAllocateRequest,
+    CentralKitchenAllocateResponse,
+    ProductionScheduleRequest,
+    ProductionScheduleResponse,
+)
 from app.schemas.analytics_engine import (
     BuffetOptimizeRequest,
     BuffetOptimizeResponse,
@@ -584,6 +594,22 @@ def post_analytics_benchmark(req: PropertyBenchmarkRequest) -> PropertyBenchmark
 @app.post("/v1/analytics/copilot", response_model=CopilotQueryResponse)
 def post_analytics_copilot(req: CopilotQueryRequest) -> CopilotQueryResponse:
     return answer_culinary_copilot(req)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 4A — Kitchen Production Scheduling & Central Kitchen Allocation
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@app.post("/v1/production/schedule", response_model=ProductionScheduleResponse)
+def post_production_schedule(req: ProductionScheduleRequest) -> ProductionScheduleResponse:
+    return optimize_kitchen_schedule(req)
+
+
+@app.post("/v1/production/central-kitchen-allocate", response_model=CentralKitchenAllocateResponse)
+def post_production_central_kitchen_allocate(req: CentralKitchenAllocateRequest) -> CentralKitchenAllocateResponse:
+    return allocate_central_kitchen_batch(req)
+
 
 
 
