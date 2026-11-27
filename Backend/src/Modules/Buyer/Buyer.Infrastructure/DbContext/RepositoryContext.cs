@@ -159,6 +159,11 @@ namespace Buyer.Infrastructure.DbContext
         public DbSet<SilaCulinaryRecipeDraft> SilaCulinaryRecipeDraft { get; set; }
         public DbSet<SilaCulinaryRecipeRevision> SilaCulinaryRecipeRevision { get; set; }
         public DbSet<SilaCulinaryAiUsageLog> SilaCulinaryAiUsageLog { get; set; }
+        public DbSet<SilaCulinaryMaterialMapping> SilaCulinaryMaterialMapping { get; set; }
+        public DbSet<SilaCulinaryMaterialMappingHistory> SilaCulinaryMaterialMappingHistory { get; set; }
+        public DbSet<SilaCulinaryMaterialAlias> SilaCulinaryMaterialAlias { get; set; }
+        public DbSet<SilaCulinaryMaterialFeedback> SilaCulinaryMaterialFeedback { get; set; }
+        public DbSet<SilaCulinaryMaterialIndexState> SilaCulinaryMaterialIndexState { get; set; }
 
 
         protected override void OnModelCreating(Microsoft.EntityFrameworkCore.ModelBuilder modelBuilder)
@@ -362,6 +367,18 @@ namespace Buyer.Infrastructure.DbContext
             _ = modelBuilder.Entity<SilaCulinaryRecipeRevision>().HasIndex(a => new { a.DraftId, a.RevisionNumber }).IsUnique();
             _ = modelBuilder.Entity<SilaCulinaryAiUsageLog>().HasIndex(a => a.IsActive);
             _ = modelBuilder.Entity<SilaCulinaryAiUsageLog>().HasIndex(a => new { a.BuyerId, a.DateCreated });
+            _ = modelBuilder.Entity<SilaCulinaryMaterialMapping>().HasIndex(a => a.IsActive);
+            _ = modelBuilder.Entity<SilaCulinaryMaterialMapping>().HasIndex(a => new { a.BuyerId, a.DraftId, a.IngredientTempRef }).IsUnique();
+            _ = modelBuilder.Entity<SilaCulinaryMaterialMapping>().HasIndex(a => new { a.BuyerId, a.MappingStatus });
+            _ = modelBuilder.Entity<SilaCulinaryMaterialMappingHistory>().HasIndex(a => a.IsActive);
+            _ = modelBuilder.Entity<SilaCulinaryMaterialMappingHistory>().HasIndex(a => new { a.BuyerId, a.DraftId, a.IngredientTempRef });
+            _ = modelBuilder.Entity<SilaCulinaryMaterialAlias>().HasIndex(a => a.IsActive);
+            _ = modelBuilder.Entity<SilaCulinaryMaterialAlias>().HasIndex(a => new { a.BuyerId, a.NormalizedAlias, a.PropertyId });
+            _ = modelBuilder.Entity<SilaCulinaryMaterialAlias>().HasIndex(a => new { a.BuyerId, a.ApprovalStatus });
+            _ = modelBuilder.Entity<SilaCulinaryMaterialFeedback>().HasIndex(a => a.IsActive);
+            _ = modelBuilder.Entity<SilaCulinaryMaterialFeedback>().HasIndex(a => new { a.BuyerId, a.FeedbackType });
+            _ = modelBuilder.Entity<SilaCulinaryMaterialIndexState>().HasIndex(a => a.IsActive);
+            _ = modelBuilder.Entity<SilaCulinaryMaterialIndexState>().HasIndex(a => a.BuyerId).IsUnique();
             _ = modelBuilder.Entity<RecipeSubstitutionProposal>().HasIndex(a => a.IsActive);
             _ = modelBuilder.Entity<RecipeSubstitutionProposal>().HasIndex(a => new { a.BuyerId, a.ProposalNumber }).IsUnique();
             _ = modelBuilder.Entity<RecipeSubstitutionProposal>().HasIndex(a => new { a.BuyerId, a.Status });

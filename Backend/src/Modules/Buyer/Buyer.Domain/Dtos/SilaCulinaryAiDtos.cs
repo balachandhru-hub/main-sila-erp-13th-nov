@@ -74,6 +74,7 @@ namespace Buyer.Domain.Dtos
         public string PromptVersion { get; set; } = "culinary-recipe-v1.0";
         public Dictionary<string, string> TaskRouting { get; set; } = new();
         public SilaCulinaryAiFeatureFlagsDto FeatureFlags { get; set; } = new();
+        public SilaCulinaryMaterialConfigDto MaterialConfig { get; set; } = new();
         public string? LastTestProvider { get; set; }
         public string? LastTestStatus { get; set; }
         public string? LastTestMessage { get; set; }
@@ -109,6 +110,29 @@ namespace Buyer.Domain.Dtos
         public string FallbackPolicy { get; set; } = "NONE";
         public Dictionary<string, string>? TaskRouting { get; set; }
         public SilaCulinaryAiFeatureFlagsDto? FeatureFlags { get; set; }
+        public SilaCulinaryMaterialConfigDto? MaterialConfig { get; set; }
+    }
+
+    public class SilaCulinaryMaterialConfigDto
+    {
+        public bool ExactMatchingEnabled { get; set; } = true;
+        public bool AliasMatchingEnabled { get; set; } = true;
+        public bool FuzzyMatchingEnabled { get; set; } = true;
+        public bool SemanticMatchingEnabled { get; set; } = true;
+        public bool AdvancedRerankingEnabled { get; set; } = true;
+        public bool LlmAssistedMatchingEnabled { get; set; } = false;
+        public int CandidateRetrievalLimit { get; set; } = 15;
+        public int CandidateDisplayLimit { get; set; } = 5;
+        public double FuzzyThreshold { get; set; } = 70.0;
+        public double SemanticThreshold { get; set; } = 0.66;
+        public double AutoSuggestThreshold { get; set; } = 0.72;
+        public double AmbiguityGapThreshold { get; set; } = 0.04;
+        public bool MandatoryChefReview { get; set; } = true;
+        public string EmbeddingModel { get; set; } = "BAAI/bge-small-en-v1.5";
+        public string RerankingModel { get; set; } = "Xenova/ms-marco-MiniLM-L-6-v2";
+        public string ExecutionDevice { get; set; } = "cpu";
+        public int EmbeddingBatchSize { get; set; } = 32;
+        public int MaxIngredientsPerBulk { get; set; } = 100;
     }
 
     public class SilaCulinaryAiConnectionTestRequestDto

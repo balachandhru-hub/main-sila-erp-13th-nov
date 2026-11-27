@@ -54,6 +54,14 @@ namespace Buyer.Application.Features.Shared
                 case Common.SILA_REF_CULINARY_RECIPE_DRAFT:
                     return await repository.SilaCulinaryRecipeDraft.FindByCondition(x => x.BuyerId == buyerId && ids.Contains(x.Id))
                         .ToDictionaryAsync(x => x.Id, x => x.DraftReference, cancellationToken);
+                case Common.SILA_REF_CULINARY_MATERIAL_MAP:
+                    return await repository.SilaCulinaryRecipeDraft.FindByCondition(x => x.BuyerId == buyerId && ids.Contains(x.Id))
+                        .ToDictionaryAsync(x => x.Id, x => x.DraftReference, cancellationToken);
+                case Common.SILA_REF_CULINARY_MATERIAL_ALIAS:
+                    return await repository.SilaCulinaryMaterialAlias.FindByCondition(x => x.BuyerId == buyerId && ids.Contains(x.Id))
+                        .ToDictionaryAsync(x => x.Id, x => $"{x.AliasText} -> {x.MaterialCode}", cancellationToken);
+                case Common.SILA_REF_CULINARY_MATERIAL_INDEX:
+                    return ids.ToDictionary(id => id, _ => "MAT-INDEX");
                 case Common.SILA_REF_GRN:
                     return await repository.GoodsReceipt.FindByCondition(x => x.BuyerId == buyerId && ids.Contains(x.Id))
                         .ToDictionaryAsync(x => x.Id, x => x.GrnNumber, cancellationToken);

@@ -81,6 +81,10 @@ namespace Buyer.Application.Features.Commands.SaveSilaCulinaryAiConfig
             entity.FallbackPolicy = SilaCulinaryAiSettings.NormalizeFallback(input.FallbackPolicy);
             entity.TaskRoutingJson = SilaCulinaryAiSettings.SerializeTaskRouting(input.TaskRouting);
             entity.FeatureFlagsJson = SilaCulinaryAiSettings.SerializeFeatureFlags(input.FeatureFlags);
+            if (input.MaterialConfig != null)
+            {
+                entity.MaterialConfigJson = SilaCulinaryAiSettings.SerializeMaterialConfig(input.MaterialConfig);
+            }
             entity.IsActive = true;
 
             if (isNew)

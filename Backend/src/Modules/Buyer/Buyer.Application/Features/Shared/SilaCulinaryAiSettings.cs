@@ -148,6 +148,37 @@ namespace Buyer.Application.Features.Shared
             }
         }
 
+        public static SilaCulinaryMaterialConfigDto ParseMaterialConfig(string? json)
+        {
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                return new SilaCulinaryMaterialConfigDto();
+            }
+            try
+            {
+                return JsonSerializer.Deserialize<SilaCulinaryMaterialConfigDto>(json, JsonOptions)
+                    ?? new SilaCulinaryMaterialConfigDto();
+            }
+            catch
+            {
+                return new SilaCulinaryMaterialConfigDto();
+            }
+        }
+
+        public static string SerializeMaterialConfig(SilaCulinaryMaterialConfigDto? cfg)
+        {
+            SilaCulinaryMaterialConfigDto value = cfg ?? new SilaCulinaryMaterialConfigDto();
+            value.CandidateRetrievalLimit = Math.Clamp(value.CandidateRetrievalLimit, 3, 50);
+            value.CandidateDisplayLimit = Math.Clamp(value.CandidateDisplayLimit, 1, 15);
+            value.FuzzyThreshold = Math.Clamp(value.FuzzyThreshold, 30.0, 99.0);
+            value.SemanticThreshold = Math.Clamp(value.SemanticThreshold, 0.25, 0.99);
+            value.AutoSuggestThreshold = Math.Clamp(value.AutoSuggestThreshold, 0.30, 0.99);
+            value.AmbiguityGapThreshold = Math.Clamp(value.AmbiguityGapThreshold, 0.0, 0.40);
+            value.EmbeddingBatchSize = Math.Clamp(value.EmbeddingBatchSize, 4, 256);
+            value.MaxIngredientsPerBulk = Math.Clamp(value.MaxIngredientsPerBulk, 5, 500);
+            return JsonSerializer.Serialize(value, JsonOptions);
+        }
+
         public static Dictionary<string, string> ParseTaskRouting(string? json)
         {
             if (string.IsNullOrWhiteSpace(json))
@@ -226,6 +257,7 @@ namespace Buyer.Application.Features.Shared
             FallbackPolicy = FALLBACK_NONE,
             TaskRoutingJson = SerializeTaskRouting(null),
             FeatureFlagsJson = SerializeFeatureFlags(null),
+            MaterialConfigJson = SerializeMaterialConfig(null),
         };
 
         public static SilaCulinaryAiConfigDto ToDto(
@@ -294,6 +326,7 @@ namespace Buyer.Application.Features.Shared
                 PromptVersion = PROMPT_VERSION_V1,
                 TaskRouting = ParseTaskRouting(cfg.TaskRoutingJson),
                 FeatureFlags = ParseFeatureFlags(cfg.FeatureFlagsJson),
+                MaterialConfig = ParseMaterialConfig(cfg.MaterialConfigJson),
                 LastTestProvider = cfg.LastTestProvider,
                 LastTestStatus = cfg.LastTestStatus,
                 LastTestMessage = cfg.LastTestMessage,

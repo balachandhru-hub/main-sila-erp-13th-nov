@@ -80,6 +80,9 @@ namespace Buyer.Domain.Entities
         /// <summary>JSON object controlling Recipe Studio 2.0 Phase 0 feature flags.</summary>
         public string? FeatureFlagsJson { get; set; }
 
+        /// <summary>JSON object storing Phase 1B Material Intelligence thresholds, models, and review policies.</summary>
+        public string? MaterialConfigJson { get; set; }
+
         [MaxLength(30)]
         public string? LastTestProvider { get; set; }
 

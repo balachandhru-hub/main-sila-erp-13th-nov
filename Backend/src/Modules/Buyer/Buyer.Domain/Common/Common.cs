@@ -394,6 +394,30 @@ namespace Buyer.Domain.Common
                 public const string SILA_AUDIT_CULINARY_RECIPE_CANCELLED = "CULINARY_RECIPE_DRAFT_CANCELLED";
                 public const string SILA_AUDIT_CULINARY_RECIPE_DUPLICATED = "CULINARY_RECIPE_DRAFT_DUPLICATED";
                 public const string SILA_AUDIT_CULINARY_RECIPE_RESTORED = "CULINARY_RECIPE_DRAFT_RESTORED";
+
+                // Phase 1B Material Intelligence references and audit actions
+                public const string SILA_REF_CULINARY_MATERIAL_MAP = "CULINARY_MATERIAL_MAPPING";
+                public const string SILA_REF_CULINARY_MATERIAL_ALIAS = "CULINARY_MATERIAL_ALIAS";
+                public const string SILA_REF_CULINARY_MATERIAL_INDEX = "CULINARY_MATERIAL_INDEX";
+                public const string SILA_AUDIT_CULINARY_MAT_REQUESTED = "MATERIAL_MATCHING_REQUESTED";
+                public const string SILA_AUDIT_CULINARY_MAT_EXACT = "MATERIAL_EXACT_MATCH_IDENTIFIED";
+                public const string SILA_AUDIT_CULINARY_MAT_ALIAS = "MATERIAL_ALIAS_MATCH_IDENTIFIED";
+                public const string SILA_AUDIT_CULINARY_MAT_FUZZY = "MATERIAL_FUZZY_MATCHING_COMPLETED";
+                public const string SILA_AUDIT_CULINARY_MAT_SEMANTIC = "MATERIAL_SEMANTIC_MATCHING_COMPLETED";
+                public const string SILA_AUDIT_CULINARY_MAT_RERANKED = "MATERIAL_CANDIDATE_RERANKED";
+                public const string SILA_AUDIT_CULINARY_MAT_AI = "MATERIAL_AI_MATCHING_INVOKED";
+                public const string SILA_AUDIT_CULINARY_MAT_CONFIRMED = "MATERIAL_MAPPING_CONFIRMED";
+                public const string SILA_AUDIT_CULINARY_MAT_REJECTED = "MATERIAL_MAPPING_REJECTED";
+                public const string SILA_AUDIT_CULINARY_MAT_REVISED = "MATERIAL_MAPPING_REVISED";
+                public const string SILA_AUDIT_CULINARY_MAT_UOM_CONFLICT = "MATERIAL_UOM_CONFLICT_IDENTIFIED";
+                public const string SILA_AUDIT_CULINARY_MAT_SPEC_CONFLICT = "MATERIAL_SPEC_CONFLICT_IDENTIFIED";
+                public const string SILA_AUDIT_CULINARY_MAT_MISSING = "MATERIAL_MISSING_IDENTIFIED";
+                public const string SILA_AUDIT_CULINARY_MAT_REQ_DRAFT = "MATERIAL_REQUEST_DRAFT_PREPARED";
+                public const string SILA_AUDIT_CULINARY_MAT_SUB_SUGGESTED = "MATERIAL_SUBSTITUTION_SUGGESTED";
+                public const string SILA_AUDIT_CULINARY_MAT_SUB_ACCEPTED = "MATERIAL_SUBSTITUTION_ACCEPTED";
+                public const string SILA_AUDIT_CULINARY_MAT_INDEX_START = "MATERIAL_INDEX_BUILD_STARTED";
+                public const string SILA_AUDIT_CULINARY_MAT_INDEX_DONE = "MATERIAL_INDEX_BUILD_COMPLETED";
+                public const string SILA_AUDIT_CULINARY_MAT_INDEX_FAIL = "MATERIAL_INDEX_BUILD_FAILED";
                 public const string HTTP_CLIENT_CULINARY_AI = "sila-culinary-ai";
                 public const string HTTP_CLIENT_CULINARY_ENGINE = "sila-culinary-engine";
                 public static readonly string CULINARY_ENGINE_URL = "InterCallService:CulinaryEngineUrl";
