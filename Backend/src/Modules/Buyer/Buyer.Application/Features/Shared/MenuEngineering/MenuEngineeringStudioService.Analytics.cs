@@ -827,7 +827,8 @@ namespace Buyer.Application.Features.Shared.MenuEngineering
                 TotalRevenue = Math.Round(rev, 2),
                 TotalFoodCost = ctx.Perms.ViewMenuCost ? Math.Round(cost, 2) : null,
                 OverallFoodCostPercent = ctx.Perms.ViewMenuCost && rev > 0 ? Math.Round(cost / rev * 100m, 2) : null,
-                TotalContributionMargin = ctx.Perms.ViewMenuMargin ? Math.Round(rev - cost, 2) : null
+                TotalContributionMargin = ctx.Perms.ViewMenuMargin ? Math.Round(rev - cost, 2) : null,
+                Disclaimer = "Contribution Margin = Net Revenue - Applicable Variable Costs (not Net Profit). Current recipe estimates are not actual ledger consumption costs."
             };
         }
 
@@ -868,8 +869,9 @@ namespace Buyer.Application.Features.Shared.MenuEngineering
 
                     foreach (RecipeIngredient ing in rec.Ingredients.Where(i => i.MaterialId != null))
                     {
+                        decimal portionSize = l.PortionSize is > 0m ? l.PortionSize.Value : (mi?.DefaultPortionQty is > 0m ? mi.DefaultPortionQty : 1m);
                         decimal per = rec.ServingQty > 0 ? ing.Quantity / rec.ServingQty : ing.Quantity;
-                        decimal gross = portions * per * yieldFactor;
+                        decimal gross = portions * portionSize * per * yieldFactor;
                         var key = (ing.MaterialId!.Value, ing.Uom);
                         if (need.TryGetValue(key, out var cur))
                             need[key] = (cur.Qty + gross, cur.RequiredDate < plan.BusinessDate ? cur.RequiredDate : plan.BusinessDate, cur.PlanName);
@@ -887,10 +889,44 @@ namespace Buyer.Application.Features.Shared.MenuEngineering
                 : (await _db.InventoryBalance.Where(b => b.BuyerId == ctx.Buyer.Id && b.IsActive && matIds.Contains(b.MaterialId) && ctx.ScopeIds.Contains(b.LocationId)).ToListAsync(ct))
                     .GroupBy(b => b.MaterialId).ToDictionary(g => g.Key, g => g.Sum(r => r.OnHandQty));
 
+            HashSet<Guid> blockedLocationIds = ctx.Scope
+                .Where(loc => loc.InventoryEnabled == false || string.Equals(loc.LocationType, "BLOCKED", StringComparison.OrdinalIgnoreCase) || string.Equals(loc.LocationType, "QUARANTINE", StringComparison.OrdinalIgnoreCase))
+                .Select(loc => loc.Id)
+                .ToHashSet();
+
+            Dictionary<Guid, decimal> blockedByMat = matIds.Count == 0 || blockedLocationIds.Count == 0
+                ? new()
+                : (await _db.InventoryBalance.Where(b => b.BuyerId == ctx.Buyer.Id && b.IsActive && matIds.Contains(b.MaterialId) && blockedLocationIds.Contains(b.LocationId)).ToListAsync(ct))
+                    .GroupBy(b => b.MaterialId).ToDictionary(g => g.Key, g => g.Sum(r => Math.Max(0m, r.OnHandQty)));
+
+            string[] activeReservationStatuses = ["PROPOSED", "PENDING_APPROVAL", "ACTIVE", "PARTIALLY_FULFILLED", "RELEASE_PENDING"];
             Dictionary<Guid, decimal> reservedByMat = matIds.Count == 0
                 ? new()
-                : (await _db.SilaCulinaryStockReservation.Where(r => r.BuyerId == ctx.Buyer.Id && r.IsActive && matIds.Contains(r.MaterialId)).ToListAsync(ct))
-                    .GroupBy(r => r.MaterialId).ToDictionary(g => g.Key, g => g.Sum(r => r.ReservedQty));
+                : (await _db.SilaCulinaryStockReservation
+                        .Where(r => r.BuyerId == ctx.Buyer.Id && r.IsActive && matIds.Contains(r.MaterialId) && activeReservationStatuses.Contains(r.Status))
+                        .ToListAsync(ct))
+                    .GroupBy(r => r.MaterialId)
+                    .ToDictionary(g => g.Key, g => g.Sum(r => Math.Max(0m, r.ReservedQty - r.FulfilledQty - r.ReleasedQty)));
+
+            List<GoodsReceiptItem> grnExpiryItems = matIds.Count == 0 || ctx.ScopeIds.Count == 0
+                ? new()
+                : await _db.GoodsReceiptItem.Include(i => i.GoodsReceipt)
+                    .Where(i => i.IsActive && i.GoodsReceipt.BuyerId == ctx.Buyer.Id && i.GoodsReceipt.IsActive
+                                && ctx.ScopeIds.Contains(i.GoodsReceipt.LocationId) && i.MaterialId != null && matIds.Contains(i.MaterialId.Value) && i.ExpiryDate != null)
+                    .ToListAsync(ct);
+
+            List<MaterialUomConversion> uomConversions = matIds.Count == 0
+                ? new()
+                : await _db.MaterialUomConversion
+                    .Where(u => u.BuyerId == ctx.Buyer.Id && u.IsActive && matIds.Contains(u.MaterialId))
+                    .ToListAsync(ct);
+
+            List<SilaCulinaryProcurementLine> procLineDefaults = matIds.Count == 0
+                ? new()
+                : await _db.SilaCulinaryProcurementLine
+                    .Where(p => p.BuyerId == ctx.Buyer.Id && p.IsActive && p.MaterialId != null && matIds.Contains(p.MaterialId.Value))
+                    .OrderByDescending(p => p.DateCreated)
+                    .ToListAsync(ct);
 
             // Time-phased open POs: only count supply arriving on or before RequiredDate!
             HashSet<string> matCodes = materials.Values.Select(m => m.MaterialCode).Where(c => !string.IsNullOrWhiteSpace(c)).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -913,7 +949,11 @@ namespace Buyer.Application.Features.Shared.MenuEngineering
                 DateTime reqDate = kv.Value.RequiredDate;
                 decimal onHand = onHandByMat.GetValueOrDefault(matId);
                 decimal reserved = reservedByMat.GetValueOrDefault(matId);
-                decimal eligibleAvail = Math.Max(0m, onHand - reserved);
+                decimal blocked = blockedByMat.GetValueOrDefault(matId);
+                decimal expired = Math.Min(onHand, grnExpiryItems
+                    .Where(g => g.MaterialId == matId && g.ExpiryDate!.Value.Date <= reqDate.Date)
+                    .Sum(g => Math.Max(0m, g.AcceptedQty - g.ReversedQty)));
+                decimal eligibleAvail = Math.Max(0m, onHand - reserved - blocked - expired);
 
                 materials.TryGetValue(matId, out ItemBuyerMaster? mat);
                 string? mCode = mat?.MaterialCode;
@@ -925,7 +965,17 @@ namespace Buyer.Application.Features.Shared.MenuEngineering
 
                 decimal netShort = Math.Max(0m, grossNeed - eligibleAvail - onTimePo);
                 decimal? unitCost = ctx.Perms.ViewMenuCost ? mat?.UnitCost : null;
-                decimal recQty = Math.Ceiling(netShort);
+
+                SilaCulinaryProcurementLine? procPref = procLineDefaults.FirstOrDefault(p => p.MaterialId == matId);
+                MaterialUomConversion? orderPackConv = mat != null && !string.IsNullOrWhiteSpace(mat.OrderUnitOfMeasure)
+                    ? uomConversions.FirstOrDefault(u => u.MaterialId == matId && string.Equals(u.FromUom, mat.OrderUnitOfMeasure, StringComparison.OrdinalIgnoreCase) && string.Equals(u.ToUom, kv.Key.Uom, StringComparison.OrdinalIgnoreCase))
+                    : null;
+                decimal? packSize = procPref?.PackSizeQty is > 0m ? procPref.PackSizeQty : (orderPackConv?.Factor is > 0m ? orderPackConv.Factor : null);
+                decimal? moq = procPref?.MoqQty is > 0m ? procPref.MoqQty : null;
+
+                decimal safePack = packSize is > 0m ? packSize.Value : 1m;
+                decimal effectiveNeed = Math.Max(netShort, moq ?? 0m);
+                decimal recQty = netShort <= 0m ? 0m : Math.Ceiling(effectiveNeed / safePack) * safePack;
 
                 rows.Add(new MenuPurchasePlanRowDto
                 {
@@ -935,16 +985,20 @@ namespace Buyer.Application.Features.Shared.MenuEngineering
                     Requirement = grossNeed,
                     Available = onHand,
                     ReservedStock = reserved,
+                    BlockedStock = blocked,
+                    ExpiringStock = expired,
                     EligibleAvailable = eligibleAvail,
                     OpenPo = onTimePo,
                     EligibleIncomingOnTime = onTimePo,
                     LateOpenPoExcluded = latePo,
                     NetRequirement = Math.Round(netShort, 4),
                     Shortage = Math.Round(netShort, 4),
+                    PackSize = packSize,
+                    MinimumOrderQty = moq,
                     RecommendedPurchaseQty = recQty,
                     ContractPrice = unitCost,
                     EstimatedPurchaseCost = unitCost != null ? Math.Round(recQty * unitCost.Value, 2) : null,
-                    RecommendedSupplier = matPos.FirstOrDefault()?.PurchaseOrder.SupplierName,
+                    RecommendedSupplier = matPos.FirstOrDefault()?.PurchaseOrder.SupplierName ?? procPref?.RecommendedSupplierName,
                     RelatedPlan = kv.Value.PlanName,
                     RequiredDate = reqDate,
                     Reason = latePo > 0 ? "MENU_PLAN (Late PO excluded)" : "MENU_PLAN",

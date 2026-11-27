@@ -383,7 +383,11 @@ namespace Buyer.Application.Features.Shared.MenuEngineering.Ai
             AiContext ctx = await BuildContextAsync(organizationId, Guid.Empty, roleId, propertyId, ct);
             MenuEngineeringPermissions.EnsureAllowed(ctx.Perms.ViewMeStudio || ctx.Perms.ManageMenuSetup, "Access denied", "Permission required.");
 
-            int outlets = ctx.Scope.Count;
+            int properties = await _db.BuyerProperty.CountAsync(p => p.BuyerId == ctx.Buyer.Id && p.IsActive, ct);
+            int outlets = ctx.Scope.Count(l => l.SalesEnabled || l.LocationType == Buyer.Domain.Common.Common.SILA_LOCATION_OUTLET || l.LocationType == Buyer.Domain.Common.Common.SILA_LOCATION_VENUE);
+            int kitchens = ctx.Scope.Count(l => l.ConsumptionEnabled != false && !string.Equals(l.LocationType, Buyer.Domain.Common.Common.SILA_LOCATION_VENUE, StringComparison.OrdinalIgnoreCase));
+            int totalIngredients = await _db.ItemBuyerMaster.CountAsync(i => i.BuyerId == ctx.Buyer.Id && i.IsActive, ct);
+            int activeSuppliers = await _db.SilaSupplier.CountAsync(s => s.BuyerId == ctx.Buyer.Id && s.IsActive, ct);
             int totalRecipes = await _db.Recipe.CountAsync(r => r.BuyerId == ctx.Buyer.Id && r.IsActive, ct);
             int approvedRecipes = await _db.Recipe.CountAsync(r => r.BuyerId == ctx.Buyer.Id && r.IsActive && r.Status == "APPROVED", ct);
             int menuItems = await _db.MenuItem.CountAsync(m => m.BuyerId == ctx.Buyer.Id && m.IsActive, ct);
@@ -391,23 +395,52 @@ namespace Buyer.Application.Features.Shared.MenuEngineering.Ai
             int posTxns = await _db.PosSalesTransaction.CountAsync(s => s.BuyerId == ctx.Buyer.Id && s.IsActive, ct);
             int totalMaps = await _db.MenuPosMapping.CountAsync(m => m.BuyerId == ctx.Buyer.Id && m.IsActive, ct);
             int approvedMaps = await _db.MenuPosMapping.CountAsync(m => m.BuyerId == ctx.Buyer.Id && m.IsActive && m.MenuItemId != null, ct);
+            int pmsSnaps = await _db.PmsDemandSnapshot.CountAsync(p => p.BuyerId == ctx.Buyer.Id && p.IsActive, ct);
+            int invBalances = await _db.InventoryBalance.CountAsync(b => b.BuyerId == ctx.Buyer.Id && b.IsActive && b.OnHandQty > 0, ct);
+            int evalCount = await _db.MenuEngineeringModelEvaluation.CountAsync(e => e.BuyerId == ctx.Buyer.Id && e.IsActive, ct);
+            int activeAgents = await _db.MenuEngineeringAgentRun.CountAsync(a => a.BuyerId == ctx.Buyer.Id && a.IsActive, ct);
 
             decimal pct(int num, int den) => den == 0 ? (num > 0 ? 100m : 0m) : Math.Min(100m, Math.Round(100m * num / den, 1));
             string st(decimal p) => p >= 80m ? "READY" : p >= 35m ? "NEEDS_ATTENTION" : "BLOCKED";
 
+            bool aiLive = IsAiProviderEnabled(ctx);
+            bool notifReady = ctx.Settings.TeamsNotificationsEnabled || !string.IsNullOrWhiteSpace(ctx.Settings.EventScheduleConfigJson);
+
             List<MeSetupWizardStepDto> steps = new()
             {
-                new() { StepNumber = 1, StepName = "Property & Outlet Readiness", ReadinessPercent = outlets > 0 ? 100m : 0m, Status = outlets > 0 ? "READY" : "BLOCKED", Detail = $"{outlets} authorized location(s) configured." },
-                new() { StepNumber = 2, StepName = "Recipe Master Readiness", ReadinessPercent = pct(approvedRecipes, Math.Max(1, totalRecipes)), Status = st(pct(approvedRecipes, Math.Max(1, totalRecipes))), Detail = $"{approvedRecipes} approved / {totalRecipes} total recipes." },
-                new() { StepNumber = 3, StepName = "Menu Item Readiness", ReadinessPercent = menuItems > 0 ? 100m : 20m, Status = menuItems > 0 ? "READY" : "NEEDS_ATTENTION", Detail = $"{menuItems} active menu items in catalog." },
-                new() { StepNumber = 4, StepName = "Ingredient Costing Readiness", ReadinessPercent = costedItems > 0 ? 90m : 20m, Status = costedItems > 0 ? "READY" : "NEEDS_ATTENTION", Detail = $"{costedItems} ingredients with unit costs." },
-                new() { StepNumber = 5, StepName = "POS Integration Readiness", ReadinessPercent = posTxns > 0 ? 100m : 30m, Status = posTxns > 0 ? "READY" : "NEEDS_ATTENTION", Detail = $"{posTxns} POS transactions synced." },
-                new() { StepNumber = 6, StepName = "POS Mapping Readiness", ReadinessPercent = pct(approvedMaps, Math.Max(1, totalMaps)), Status = st(pct(approvedMaps, Math.Max(1, totalMaps))), Detail = $"{approvedMaps} mapped / {totalMaps} POS codes." },
-                new() { StepNumber = 7, StepName = "Historical Data Readiness", ReadinessPercent = posTxns >= 15 ? 100m : posTxns > 0 ? 60m : 15m, Status = posTxns >= 15 ? "READY" : "NEEDS_ATTENTION", Detail = $"{posTxns} historical observations available." },
-                new() { StepNumber = 8, StepName = "Forecasting Readiness", ReadinessPercent = posTxns >= 5 ? 90m : 45m, Status = posTxns >= 5 ? "READY" : "NEEDS_ATTENTION", Detail = "Backtest selector & cold-start fallback configured." },
-                new() { StepNumber = 9, StepName = "AI Configuration Readiness", ReadinessPercent = IsAiProviderEnabled(ctx) ? 100m : 65m, Status = IsAiProviderEnabled(ctx) ? "READY" : "NEEDS_ATTENTION", Detail = $"Provider mode: {ctx.AiConfig?.OperatingMode ?? "LOCAL"}." },
-                new() { StepNumber = 10, StepName = "Approval & Governance Readiness", ReadinessPercent = 100m, Status = "READY", Detail = "RBAC, financial redaction, and draft-only AI mutation controls active." }
+                new() { StepNumber = 1, StepName = "Customer Configuration", Category = "TENANT", ReadinessPercent = 100m, Status = "READY", Detail = $"Buyer tenant '{ctx.Buyer.OrganizationName}' configured (Currency: {ctx.Settings.DefaultCurrency})." },
+                new() { StepNumber = 2, StepName = "Property Configuration", Category = "TENANT", ReadinessPercent = properties > 0 ? 100m : 0m, Status = properties > 0 ? "READY" : "BLOCKED", Detail = $"{properties} active property/properties.", RequiredAction = properties > 0 ? null : "Configure at least one BuyerProperty." },
+                new() { StepNumber = 3, StepName = "Outlet Configuration", Category = "TENANT", ReadinessPercent = outlets > 0 ? 100m : 35m, Status = outlets > 0 ? "READY" : "NEEDS_ATTENTION", Detail = $"{outlets} outlet location(s) authorized.", RequiredAction = outlets > 0 ? null : "Assign outlet locations under Property Setup." },
+                new() { StepNumber = 4, StepName = "Kitchen Configuration", Category = "TENANT", ReadinessPercent = kitchens > 0 ? 100m : 0m, Status = kitchens > 0 ? "READY" : "BLOCKED", Detail = $"{kitchens} kitchen/production location(s) configured.", RequiredAction = kitchens > 0 ? null : "Add at least one kitchen/store location." },
+                new() { StepNumber = 5, StepName = "Ingredient Master Readiness", Category = "MASTER_DATA", ReadinessPercent = totalIngredients > 0 ? 100m : 0m, Status = totalIngredients > 0 ? "READY" : "BLOCKED", Detail = $"{totalIngredients} active ingredients in ItemBuyerMaster.", RequiredAction = totalIngredients > 0 ? null : "Import or create ingredients via Customer Data Migration." },
+                new() { StepNumber = 6, StepName = "Supplier Master Readiness", Category = "MASTER_DATA", ReadinessPercent = activeSuppliers > 0 ? 100m : 40m, Status = activeSuppliers > 0 ? "READY" : "NEEDS_ATTENTION", Detail = $"{activeSuppliers} active approved supplier(s).", RequiredAction = activeSuppliers > 0 ? null : "Import approved suppliers before generating POs." },
+                new() { StepNumber = 7, StepName = "Recipe Master Readiness", Category = "MASTER_DATA", ReadinessPercent = pct(approvedRecipes, Math.Max(1, totalRecipes)), Status = st(pct(approvedRecipes, Math.Max(1, totalRecipes))), Detail = $"{approvedRecipes} approved / {totalRecipes} total recipes.", RequiredAction = approvedRecipes > 0 ? null : "Approve at least one recipe before publishing menus." },
+                new() { StepNumber = 8, StepName = "Menu Item Readiness", Category = "MASTER_DATA", ReadinessPercent = menuItems > 0 ? 100m : 20m, Status = menuItems > 0 ? "READY" : "NEEDS_ATTENTION", Detail = $"{menuItems} active menu items in catalog.", RequiredAction = menuItems > 0 ? null : "Create or import menu items." },
+                new() { StepNumber = 9, StepName = "Ingredient Costing Readiness", Category = "FINANCE", ReadinessPercent = totalIngredients > 0 ? pct(costedItems, totalIngredients) : 0m, Status = totalIngredients > 0 ? st(pct(costedItems, totalIngredients)) : "BLOCKED", Detail = $"{costedItems} / {totalIngredients} ingredients have unit costs.", RequiredAction = costedItems > 0 ? null : "Populate ingredient unit costs for accurate food cost %." },
+                new() { StepNumber = 10, StepName = "POS Configuration", Category = "INTEGRATION", IsOptional = true, ReadinessPercent = !string.IsNullOrWhiteSpace(ctx.Settings.PosSyncScheduleCron) ? 100m : 50m, Status = !string.IsNullOrWhiteSpace(ctx.Settings.PosSyncScheduleCron) ? "READY" : "NEEDS_ATTENTION", Detail = $"POS sync schedule: {ctx.Settings.PosSyncScheduleCron} (max retries {ctx.Settings.PosRetryMaxAttempts})." },
+                new() { StepNumber = 11, StepName = "POS Mapping Readiness", Category = "INTEGRATION", IsOptional = true, ReadinessPercent = totalMaps == 0 ? 60m : pct(approvedMaps, totalMaps), Status = totalMaps == 0 ? "NEEDS_ATTENTION" : st(pct(approvedMaps, totalMaps)), Detail = $"{approvedMaps} mapped / {totalMaps} POS codes.", RequiredAction = approvedMaps == totalMaps ? null : "Review unmapped POS codes in POS Mapping." },
+                new() { StepNumber = 12, StepName = "PMS Configuration (Optional)", Category = "INTEGRATION", IsOptional = true, ReadinessPercent = pmsSnaps > 0 ? 100m : 75m, Status = pmsSnaps > 0 ? "READY" : "READY", Detail = pmsSnaps > 0 ? $"{pmsSnaps} OPERA PMS occupancy snapshot(s) active." : "Optional PMS integration not required for standalone restaurant operations." },
+                new() { StepNumber = 13, StepName = "Inventory Configuration", Category = "OPERATIONS", ReadinessPercent = invBalances > 0 ? 100m : 45m, Status = invBalances > 0 ? "READY" : "NEEDS_ATTENTION", Detail = $"{invBalances} stocked inventory balance rows available.", RequiredAction = invBalances > 0 ? null : "Record opening stock counts or GRN receipts." },
+                new() { StepNumber = 14, StepName = "Historical Data Readiness", Category = "ANALYTICS", IsOptional = true, ReadinessPercent = posTxns >= 15 ? 100m : posTxns > 0 ? 65m : 40m, Status = posTxns >= 15 ? "READY" : "NEEDS_ATTENTION", Detail = $"{posTxns} historical POS sales observations available." },
+                new() { StepNumber = 15, StepName = "Forecasting Configuration", Category = "ANALYTICS", ReadinessPercent = evalCount > 0 || posTxns >= 5 ? 100m : 65m, Status = evalCount > 0 || posTxns >= 5 ? "READY" : "NEEDS_ATTENTION", Detail = $"Method: {ctx.Settings.ForecastMethod}, Horizon: {ctx.Settings.ForecastHorizonDays}d, Threshold: {ctx.Settings.ForecastAccuracyThresholdPercent:0}%." },
+                new() { StepNumber = 16, StepName = "AI Provider Configuration", Category = "AI_GOVERNANCE", IsOptional = true, ReadinessPercent = aiLive ? 100m : 70m, Status = aiLive ? "READY" : "NEEDS_ATTENTION", Detail = $"Provider mode: {ctx.AiConfig?.OperatingMode ?? "LOCAL"} (Manual deterministic fallback always active)." },
+                new() { StepNumber = 17, StepName = "Agent Enablement", Category = "AI_GOVERNANCE", ReadinessPercent = !ctx.Settings.AutonomousModePaused ? 100m : 60m, Status = !ctx.Settings.AutonomousModePaused ? "READY" : "NEEDS_ATTENTION", Detail = $"Autonomous mode {(ctx.Settings.AutonomousModePaused ? "PAUSED" : "ACTIVE")}; {activeAgents} recorded agent run(s)." },
+                new() { StepNumber = 18, StepName = "Approval Configuration", Category = "GOVERNANCE", ReadinessPercent = ctx.Settings.RequireApprovalOnPublish ? 100m : 80m, Status = "READY", Detail = $"Publish approval={(ctx.Settings.RequireApprovalOnPublish ? "Required" : "Optional")}, FC trigger={ctx.Settings.ApprovalFoodCostThresholdPercent:0}%." },
+                new() { StepNumber = 19, StepName = "Notification Configuration", Category = "GOVERNANCE", IsOptional = true, ReadinessPercent = notifReady ? 100m : 80m, Status = "READY", Detail = $"Teams alerts={(ctx.Settings.TeamsNotificationsEnabled ? "Enabled" : "In-app cockpit only")}." },
             };
+
+            int blockedCore = steps.Count(s => !s.IsOptional && s.Status == "BLOCKED");
+            decimal coreAvg = Math.Round(steps.Where(s => !s.IsOptional).Average(s => s.ReadinessPercent), 1);
+            steps.Add(new()
+            {
+                StepNumber = 20,
+                StepName = "Production Readiness Assessment",
+                Category = "GO_LIVE",
+                ReadinessPercent = blockedCore > 0 ? Math.Min(65m, coreAvg) : coreAvg,
+                Status = blockedCore > 0 ? "BLOCKED" : coreAvg >= 80m ? "READY" : "NEEDS_ATTENTION",
+                Detail = blockedCore > 0 ? $"{blockedCore} mandatory core step(s) blocked before go-live." : $"All mandatory core checks passed ({coreAvg:0.0}% average readiness).",
+                RequiredAction = blockedCore > 0 ? "Resolve blocked mandatory steps 1-9, 13, 15, 17, 18." : null
+            });
 
             List<MeAiSuggestedThresholdDto> suggestions = new()
             {
@@ -420,8 +453,14 @@ namespace Buyer.Application.Features.Shared.MenuEngineering.Ai
             return new MeSetupWizardReadinessDto
             {
                 OverallReadinessScore = Math.Round(steps.Average(s => s.ReadinessPercent), 1),
+                TotalSteps = steps.Count,
+                CompletedCount = steps.Count(s => s.Status == "READY"),
+                PendingCount = steps.Count(s => s.Status == "NEEDS_ATTENTION"),
+                BlockedCount = steps.Count(s => s.Status == "BLOCKED"),
                 Steps = steps,
                 SuggestedThresholds = suggestions,
+                ValidationErrors = steps.Where(s => s.Status == "BLOCKED").Select(s => $"Step {s.StepNumber} ({s.StepName}): {s.Detail}").ToList(),
+                RequiredActions = steps.Where(s => !string.IsNullOrWhiteSpace(s.RequiredAction)).Select(s => $"Step {s.StepNumber}: {s.RequiredAction}").ToList(),
                 AdminApprovalRequiredToApply = true
             };
         }

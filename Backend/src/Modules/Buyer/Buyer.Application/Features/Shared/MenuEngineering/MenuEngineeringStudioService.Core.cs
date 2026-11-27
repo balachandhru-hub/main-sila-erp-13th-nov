@@ -50,6 +50,10 @@ namespace Buyer.Application.Features.Shared.MenuEngineering
         Task<MenuPlanEnhancedDto> ConvertScenarioToDraftAsync(Guid organizationId, Guid userId, Guid roleId, Guid scenarioId, CancellationToken ct);
         Task<MenuEngineeringSetupDto> GetSetupAsync(Guid organizationId, Guid roleId, Guid? propertyId, CancellationToken ct);
         Task<MenuEngineeringSetupDto> SaveSetupAsync(Guid organizationId, Guid userId, Guid roleId, MenuEngineeringSetupDto dto, CancellationToken ct);
+        List<CustomerDataTemplateDto> GetMigrationTemplates();
+        Task<CustomerDataImportPreviewResultDto> PreviewCustomerDataMigrationAsync(Guid organizationId, Guid userId, Guid roleId, CustomerDataImportPreviewRequestDto dto, CancellationToken ct);
+        Task<CustomerDataImportCommitResultDto> CommitCustomerDataMigrationAsync(Guid organizationId, Guid userId, Guid roleId, CustomerDataImportPreviewRequestDto dto, CancellationToken ct);
+        Task<List<CustomerDataMigrationAuditDto>> GetCustomerDataMigrationAuditsAsync(Guid organizationId, Guid roleId, CancellationToken ct);
         List<MenuEngineeringReportItemDto> GetReportCatalog();
         Task<MenuEngineeringReportExportDto> ExportReportAsync(Guid organizationId, Guid roleId, string reportKey, string format, SilaMenuEngineeringFilterDto filter, CancellationToken ct);
         Task<SilaStoreMenuMobileDto> GetMobileMenuSummaryAsync(Guid organizationId, Guid userId, Guid roleId, Guid? propertyId, CancellationToken ct);
@@ -117,8 +121,9 @@ namespace Buyer.Application.Features.Shared.MenuEngineering
                     "Enable Menu Engineering under Setup or keep Procurement V1 isolated.");
             }
 
+            MenuEngineeringFeatureFlagsDto flags = ReadFeatureFlags(settings);
             MenuEngineeringPermissionSetDto perms = MenuEngineeringPermissions.Evaluate(
-                _httpContextAccessor, roleId, settings.MenuEngineeringEnabled, settings.MeStudioEnabled);
+                _httpContextAccessor, roleId, settings.MenuEngineeringEnabled, settings.MeStudioEnabled, flags);
 
             List<Guid> allowedIds = await SilaAccess.GetLocationIdsAsync(_repository, buyer.Id, userId, roleId, ct);
             List<InventoryLocation> scope = await _repository.InventoryLocation
@@ -134,19 +139,50 @@ namespace Buyer.Application.Features.Shared.MenuEngineering
             };
         }
 
+        private static MenuEngineeringFeatureFlagsDto ReadFeatureFlags(MenuEngineeringSettings settings)
+        {
+            MenuEngineeringFeatureFlagsDto flags = new()
+            {
+                MenuEngineering = settings.MenuEngineeringEnabled,
+                MeStudio = settings.MeStudioEnabled
+            };
+            if (!string.IsNullOrWhiteSpace(settings.FeatureFlagsJson))
+            {
+                try
+                {
+                    MenuEngineeringFeatureFlagsDto? parsed = JsonSerializer.Deserialize<MenuEngineeringFeatureFlagsDto>(settings.FeatureFlagsJson);
+                    if (parsed != null)
+                    {
+                        flags = parsed;
+                        flags.MenuEngineering = settings.MenuEngineeringEnabled;
+                        flags.MeStudio = settings.MeStudioEnabled;
+                    }
+                }
+                catch { /* keep defaults */ }
+            }
+            return flags;
+        }
+
         public async Task<MenuEngineeringPermissionSetDto> GetPermissionsAsync(Guid organizationId, Guid roleId, Guid? propertyId, CancellationToken ct)
         {
             BuyerBusinessProfile buyer = await SilaAccess.GetBuyerAsync(_repository, _logger, organizationId);
             MenuEngineeringSettings? settings = await _db.MenuEngineeringSettings
                 .FirstOrDefaultAsync(x => x.BuyerId == buyer.Id && x.IsActive && (propertyId == null || x.PropertyId == propertyId), ct);
+            MenuEngineeringFeatureFlagsDto? flags = settings == null ? null : ReadFeatureFlags(settings);
             return MenuEngineeringPermissions.Evaluate(
-                _httpContextAccessor, roleId, settings?.MenuEngineeringEnabled ?? true, settings?.MeStudioEnabled ?? true);
+                _httpContextAccessor, roleId, settings?.MenuEngineeringEnabled ?? true, settings?.MeStudioEnabled ?? true, flags);
         }
 
         public async Task<MeStudioWorkspaceDto> GetWorkspaceAsync(Guid organizationId, Guid userId, Guid roleId, Guid? menuPlanId, Guid? propertyId, CancellationToken ct)
         {
             StudioCtx ctx = await BuildContextAsync(organizationId, userId, roleId, propertyId, requireFeatureEnabled: true, ct);
             MenuEngineeringPermissions.EnsureAllowed(ctx.Perms.ViewMeStudio, "Access denied", "You do not have permission to view ME Studio.");
+            if (!ctx.Perms.FeatureFlags.MeStudio)
+            {
+                throw new BadRequestCustomException(
+                    "ME Studio is disabled by feature flag.",
+                    "Enable the ME Studio feature flag under Setup to open the interactive studio.");
+            }
 
             SilaMenuLookupsDto lookups = await BuildLookupsAsync(ctx, ct);
             List<MenuItemEnhancedDto> library = await BuildMenuItemsAsync(ctx, new SilaMenuEngineeringFilterDto { PropertyId = propertyId }, ct);
@@ -154,6 +190,10 @@ namespace Buyer.Application.Features.Shared.MenuEngineering
             MenuPlanEnhancedDto? activeMenu = menuPlanId != null
                 ? menus.FirstOrDefault(x => x.Id == menuPlanId)
                 : menus.FirstOrDefault(x => x.Status == "DRAFT") ?? menus.FirstOrDefault();
+            if (menuPlanId != null && activeMenu == null)
+            {
+                throw new NotFoundCustomException("Menu plan not found.", "The requested menu plan was not found for this tenant/property.");
+            }
 
             SilaMenuEngineeringFilterDto activeFilter = new()
             {
@@ -421,23 +461,51 @@ namespace Buyer.Application.Features.Shared.MenuEngineering
             if (string.IsNullOrWhiteSpace(dto.Payload)) return 0;
 
             string[] lines = dto.Payload.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
+            if (lines.Length == 0) return 0;
+
+            // Detect header layout dynamically: supports both "Code,Name,Category,Cuisine,SellingPrice,PortionUom" and "Name,Category,Cuisine,SellingPrice,..."
+            string[] firstCols = lines[0].Split(',').Select(c => c.Trim()).ToArray();
+            bool hasCodeFirstHeader = firstCols.Length >= 2
+                && firstCols[0].Equals("Code", StringComparison.OrdinalIgnoreCase)
+                && firstCols[1].Equals("Name", StringComparison.OrdinalIgnoreCase);
+            bool hasNameFirstHeader = firstCols.Length >= 1
+                && firstCols[0].Equals("Name", StringComparison.OrdinalIgnoreCase);
+            bool hasHeader = hasCodeFirstHeader || hasNameFirstHeader;
+
+            int startIdx = hasHeader ? 1 : 0;
             int created = 0;
-            foreach (string raw in lines)
+            for (int idx = startIdx; idx < lines.Length; idx++)
             {
-                string line = raw.Trim();
-                if (string.IsNullOrWhiteSpace(line) || line.StartsWith("Name,", StringComparison.OrdinalIgnoreCase)) continue;
-                string[] cols = line.Split(',');
-                if (cols.Length == 0 || string.IsNullOrWhiteSpace(cols[0])) continue;
-                decimal? price = cols.Length > 3 && decimal.TryParse(cols[3].Trim(), NumberStyles.Any, CultureInfo.InvariantCulture, out decimal p) ? p : null;
+                string line = lines[idx].Trim();
+                if (string.IsNullOrWhiteSpace(line)) continue;
+                string[] cols = line.Split(',').Select(c => c.Trim()).ToArray();
+                if (cols.Length == 0) continue;
+
+                // Auto-detect code-first rows even when header was omitted (e.g., "ME-BULK-1,Grilled Lamb Rack,Mains,Mediterranean,38.00,PORTION")
+                bool rowIsCodeFirst = hasCodeFirstHeader || (cols.Length >= 5 && decimal.TryParse(cols[4], NumberStyles.Any, CultureInfo.InvariantCulture, out _) && !decimal.TryParse(cols[3], NumberStyles.Any, CultureInfo.InvariantCulture, out _));
+
+                string name = rowIsCodeFirst ? (cols.Length > 1 ? cols[1] : string.Empty) : cols[0];
+                if (string.IsNullOrWhiteSpace(name)) continue;
+
+                string category = rowIsCodeFirst ? (cols.Length > 2 && !string.IsNullOrWhiteSpace(cols[2]) ? cols[2] : "Mains") : (cols.Length > 1 && !string.IsNullOrWhiteSpace(cols[1]) ? cols[1] : "Mains");
+                string cuisine = rowIsCodeFirst ? (cols.Length > 3 && !string.IsNullOrWhiteSpace(cols[3]) ? cols[3] : "International") : (cols.Length > 2 && !string.IsNullOrWhiteSpace(cols[2]) ? cols[2] : "International");
+                int priceCol = rowIsCodeFirst ? 4 : 3;
+                decimal? price = cols.Length > priceCol && decimal.TryParse(cols[priceCol], NumberStyles.Any, CultureInfo.InvariantCulture, out decimal p) && p >= 0m ? p : null;
+                string portionUom = rowIsCodeFirst ? (cols.Length > 5 && !string.IsNullOrWhiteSpace(cols[5]) ? cols[5] : "PORTION") : "PORTION";
+                string mealPeriods = rowIsCodeFirst ? (cols.Length > 6 && !string.IsNullOrWhiteSpace(cols[6]) ? cols[6] : "All") : (cols.Length > 4 && !string.IsNullOrWhiteSpace(cols[4]) ? cols[4] : "All");
+                string serviceFormat = rowIsCodeFirst ? (cols.Length > 7 && !string.IsNullOrWhiteSpace(cols[7]) ? cols[7] : "A_LA_CARTE") : (cols.Length > 5 && !string.IsNullOrWhiteSpace(cols[5]) ? cols[5] : "A_LA_CARTE");
+                string? dietary = rowIsCodeFirst ? (cols.Length > 8 ? cols[8] : null) : (cols.Length > 6 ? cols[6] : null);
+
                 await SaveMenuItemAsync(organizationId, userId, roleId, new MenuItemEnhancedWriteDto
                 {
-                    Name = cols[0].Trim(),
-                    Category = cols.Length > 1 ? cols[1].Trim() : "Mains",
-                    Cuisine = cols.Length > 2 ? cols[2].Trim() : "International",
+                    Name = name,
+                    Category = category,
+                    Cuisine = cuisine,
                     SellingPrice = price,
-                    MealPeriods = cols.Length > 4 ? cols[4].Trim() : "All",
-                    ServiceFormat = cols.Length > 5 ? cols[5].Trim() : "A_LA_CARTE",
-                    DietaryTags = cols.Length > 6 ? cols[6].Trim() : null,
+                    PortionUom = portionUom,
+                    MealPeriods = mealPeriods,
+                    ServiceFormat = serviceFormat,
+                    DietaryTags = dietary,
                     Status = "ACTIVE"
                 }, ct);
                 created++;
@@ -822,7 +890,9 @@ namespace Buyer.Application.Features.Shared.MenuEngineering
                 items.TryGetValue(dto.MenuItemId, out MenuItem? item);
                 Recipe? recipe = item?.LinkedRecipeId != null && recipes.TryGetValue(item.LinkedRecipeId.Value, out Recipe? r) ? r : null;
                 decimal covers = dto.ExpectedCovers ?? plan.ExpectedCovers ?? plan.ExpectedGuests ?? 100m;
-                decimal mealPart = plan.MealParticipation ?? ctx.Settings.DefaultMealParticipation;
+                decimal mealPart = string.Equals(plan.ServiceFormat, "BUFFET", StringComparison.OrdinalIgnoreCase)
+                    ? 1m
+                    : (plan.MealParticipation ?? ctx.Settings.DefaultMealParticipation);
                 decimal itemPart = dto.ParticipationRate ?? item?.DefaultParticipationRate ?? ctx.Settings.DefaultItemParticipation;
                 decimal servings = dto.ExpectedServingsPerGuest ?? 1m;
                 decimal buf = dto.BufferPercentage ?? item?.DefaultBufferPercentage ?? ctx.Settings.DefaultBufferPercentage;
@@ -1033,7 +1103,9 @@ namespace Buyer.Application.Features.Shared.MenuEngineering
                     Recipe? recipe = (l.RecipeId ?? item?.LinkedRecipeId) != null && recipes.TryGetValue((l.RecipeId ?? item!.LinkedRecipeId)!.Value, out Recipe? r) ? r : null;
                     decimal covers = l.ExpectedCovers ?? plan.ExpectedCovers ?? plan.ExpectedGuests ?? 100m;
                     decimal part = l.ParticipationRate ?? item?.DefaultParticipationRate ?? ctx.Settings.DefaultItemParticipation;
-                    decimal mealPart = plan.MealParticipation ?? ctx.Settings.DefaultMealParticipation;
+                    decimal mealPart = string.Equals(plan.ServiceFormat, "BUFFET", StringComparison.OrdinalIgnoreCase)
+                        ? 1m
+                        : (plan.MealParticipation ?? ctx.Settings.DefaultMealParticipation);
                     decimal servings = l.ExpectedServingsPerGuest ?? 1m;
                     decimal buf = l.BufferPercentage ?? item?.DefaultBufferPercentage ?? ctx.Settings.DefaultBufferPercentage;
                     decimal recPortions = l.RecommendedPortions > 0 ? l.RecommendedPortions : Math.Round(covers * mealPart * part * servings * (1m + buf), 2);
@@ -1170,6 +1242,296 @@ namespace Buyer.Application.Features.Shared.MenuEngineering
             catch
             {
                 return fallback.ToList();
+            }
+        }
+
+        private static readonly HashSet<string> ValidMigrationUoms = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "KG", "G", "MG", "L", "ML", "PC", "PCS", "PORTION", "PORTIONS", "EA", "EACH", "BOX", "CASE", "OZ", "LB", "PACK", "BTL", "CAN", "TRAY"
+        };
+
+        public List<CustomerDataTemplateDto> GetMigrationTemplates() =>
+        [
+            new() { EntityType = "INGREDIENTS", Title = "Ingredients Master", FileName = "sila_me_ingredients_template.csv", Columns = ["MaterialCode", "Description", "BaseUom", "UnitCost", "Currency"], SampleCsv = "MaterialCode,Description,BaseUom,UnitCost,Currency\nING-SAL-01,Atlantic Salmon Fillet,KG,45.00,AED" },
+            new() { EntityType = "SUPPLIERS", Title = "Suppliers Master", FileName = "sila_me_suppliers_template.csv", Columns = ["SupplierCode", "SupplierName", "Currency", "LeadTimeDays", "MinimumOrderQty"], SampleCsv = "SupplierCode,SupplierName,Currency,LeadTimeDays,MinimumOrderQty\nSUP-001,Emirates Fresh Seafood,AED,2,10" },
+            new() { EntityType = "RECIPES", Title = "Recipes Master", FileName = "sila_me_recipes_template.csv", Columns = ["RecipeCode", "RecipeName", "Category", "ServingQty", "ServingUom", "TrimLossPercent"], SampleCsv = "RecipeCode,RecipeName,Category,ServingQty,ServingUom,TrimLossPercent\nREC-SAL-01,Roasted Herb Salmon,Mains,10,PORTION,10" },
+            new() { EntityType = "SUB_RECIPES", Title = "Sub-Recipes Master", FileName = "sila_me_sub_recipes_template.csv", Columns = ["SubRecipeCode", "SubRecipeName", "ServingQty", "ServingUom", "YieldPercent"], SampleCsv = "SubRecipeCode,SubRecipeName,ServingQty,ServingUom,YieldPercent\nSUB-SAUCE-01,Lemon Dill Jus,5,L,92" },
+            new() { EntityType = "MENU_ITEMS", Title = "Menu Items Catalog", FileName = "sila_me_menu_items_template.csv", Columns = ["Code", "Name", "Category", "Cuisine", "SellingPrice", "PortionUom", "RecipeCode"], SampleCsv = "Code,Name,Category,Cuisine,SellingPrice,PortionUom,RecipeCode\nMI-101,Grilled Sea Bass,Mains,Mediterranean,95.00,PORTION,REC-SB-01" },
+            new() { EntityType = "MENU_TEMPLATES", Title = "Menu Templates", FileName = "sila_me_menu_templates.csv", Columns = ["TemplateName", "MenuType", "ServiceFormat", "MealPeriod", "TargetFoodCostPercent"], SampleCsv = "TemplateName,MenuType,ServiceFormat,MealPeriod,TargetFoodCostPercent\nGrand Breakfast Buffet,BUFFET,BUFFET,Breakfast,28" },
+            new() { EntityType = "PORTION_STANDARDS", Title = "Portion Standards", FileName = "sila_me_portion_standards_template.csv", Columns = ["MenuItemCode", "StandardPortionQty", "PortionUom", "ParticipationRate", "BufferPercent"], SampleCsv = "MenuItemCode,StandardPortionQty,PortionUom,ParticipationRate,BufferPercent\nMI-101,0.15,KG,0.60,5" },
+            new() { EntityType = "SELLING_PRICES", Title = "Selling Prices", FileName = "sila_me_selling_prices_template.csv", Columns = ["MenuItemCode", "SellingPrice", "Currency", "TaxRatePercent", "TaxInclusive"], SampleCsv = "MenuItemCode,SellingPrice,Currency,TaxRatePercent,TaxInclusive\nMI-101,150.00,AED,5,false" },
+            new() { EntityType = "POS_SALES", Title = "Historical POS Sales", FileName = "sila_me_pos_sales_template.csv", Columns = ["BusinessDate", "PosCode", "PosItemName", "QuantitySold", "NetRevenue"], SampleCsv = "BusinessDate,PosCode,PosItemName,QuantitySold,NetRevenue\n2026-11-01,POS-101,Grilled Sea Bass,42,3990.00" },
+            new() { EntityType = "HISTORICAL_CONSUMPTION", Title = "Historical Consumption", FileName = "sila_me_historical_consumption_template.csv", Columns = ["BusinessDate", "MaterialCode", "Quantity", "Uom"], SampleCsv = "BusinessDate,MaterialCode,Quantity,Uom\n2026-11-01,ING-SAL-01,24.5,KG" },
+            new() { EntityType = "HISTORICAL_WASTE", Title = "Historical Waste", FileName = "sila_me_historical_waste_template.csv", Columns = ["BusinessDate", "MaterialCode", "WasteQty", "Uom", "Reason"], SampleCsv = "BusinessDate,MaterialCode,WasteQty,Uom,Reason\n2026-11-01,ING-SAL-01,1.2,KG,Trim loss" },
+            new() { EntityType = "HISTORICAL_EVENTS", Title = "Historical Events", FileName = "sila_me_historical_events_template.csv", Columns = ["BusinessDate", "EventName", "ExpectedCovers", "ActualCovers", "Revenue"], SampleCsv = "BusinessDate,EventName,ExpectedCovers,ActualCovers,Revenue\n2026-11-01,Corporate Gala Dinner,500,512,76800" }
+        ];
+
+        public async Task<CustomerDataImportPreviewResultDto> PreviewCustomerDataMigrationAsync(
+            Guid organizationId, Guid userId, Guid roleId, CustomerDataImportPreviewRequestDto dto, CancellationToken ct)
+        {
+            StudioCtx ctx = await BuildContextAsync(organizationId, userId, roleId, dto.PropertyId, requireFeatureEnabled: false, ct);
+            MenuEngineeringPermissions.EnsureAllowed(ctx.Perms.ManageMenuItems || ctx.Perms.ManageMenuSetup, "Access denied", "Permission required for customer data migration.");
+
+            string entityType = string.IsNullOrWhiteSpace(dto.EntityType) ? "MENU_ITEMS" : dto.EntityType.Trim().ToUpperInvariant();
+            string[] lines = (dto.Payload ?? string.Empty).Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
+            CustomerDataImportPreviewResultDto result = new() { EntityType = entityType };
+            if (lines.Length == 0) return result;
+
+            string[] headers = lines[0].Split(',').Select(h => h.Trim()).ToArray();
+            bool hasHeader = headers.Length > 0 && (
+                headers[0].Contains("Code", StringComparison.OrdinalIgnoreCase) ||
+                headers[0].Contains("Name", StringComparison.OrdinalIgnoreCase) ||
+                headers[0].Contains("Date", StringComparison.OrdinalIgnoreCase) ||
+                headers[0].Contains("Template", StringComparison.OrdinalIgnoreCase));
+
+            int start = hasHeader ? 1 : 0;
+            var existingItems = await _db.MenuItem
+                .Where(x => x.BuyerId == ctx.Buyer.Id && x.IsActive)
+                .Select(x => new { x.Name, x.MenuItemCode, x.ApprovalStatus })
+                .ToListAsync(ct);
+            HashSet<string> existingItemNames = existingItems
+                .SelectMany(x => new[] { x.Name, x.MenuItemCode })
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .Select(s => s!.ToLowerInvariant())
+                .ToHashSet();
+            HashSet<string> approvedItemNames = existingItems
+                .Where(x => x.ApprovalStatus == "APPROVED")
+                .SelectMany(x => new[] { x.Name, x.MenuItemCode })
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .Select(s => s!.ToLowerInvariant())
+                .ToHashSet();
+            HashSet<string> existingMatCodes = (await _db.ItemBuyerMaster
+                .Where(x => x.BuyerId == ctx.Buyer.Id && x.IsActive)
+                .Select(x => x.MaterialCode.ToLower())
+                .ToListAsync(ct)).ToHashSet();
+            HashSet<string> seenKeys = new(StringComparer.OrdinalIgnoreCase);
+
+            for (int i = start; i < lines.Length; i++)
+            {
+                string raw = lines[i].Trim();
+                if (string.IsNullOrWhiteSpace(raw)) continue;
+                string[] cols = raw.Split(',').Select(c => c.Trim()).ToArray();
+                Dictionary<string, string?> parsed = new();
+                for (int c = 0; c < cols.Length; c++)
+                {
+                    string hName = hasHeader && c < headers.Length && !string.IsNullOrWhiteSpace(headers[c]) ? headers[c] : $"Col{c + 1}";
+                    parsed[hName] = cols[c];
+                }
+
+                string key = cols.Length > 1 && entityType == "MENU_ITEMS" && hasHeader && headers[0].Equals("Code", StringComparison.OrdinalIgnoreCase)
+                    ? cols[1]
+                    : cols[0];
+                string status = "VALID";
+                string msg = "Validated and ready to import.";
+
+                if (string.IsNullOrWhiteSpace(key))
+                {
+                    status = "ERROR";
+                    msg = "Missing primary identifier/name.";
+                }
+                else if (!seenKeys.Add(key))
+                {
+                    status = "WARNING";
+                    msg = $"Duplicate key '{key}' inside import payload.";
+                    result.DuplicateRows++;
+                }
+
+                if (status == "VALID" && entityType is "MENU_ITEMS" or "SELLING_PRICES" or "PORTION_STANDARDS")
+                {
+                    string itemKey = entityType == "MENU_ITEMS" ? key.ToLowerInvariant() : key.ToLowerInvariant();
+                    if (approvedItemNames.Contains(itemKey) && !dto.AllowOverwriteApproved)
+                    {
+                        status = "SKIP_EXISTING_APPROVED";
+                        msg = $"Protected approved master record '{key}' will not be overwritten without explicit authorization.";
+                        result.ProtectedApprovedRows++;
+                    }
+                    else if (existingItemNames.Contains(itemKey))
+                    {
+                        status = "WARNING";
+                        msg = $"Existing item '{key}' will be updated or merged.";
+                    }
+                }
+                else if (status == "VALID" && entityType == "INGREDIENTS")
+                {
+                    string uom = cols.Length > 2 ? cols[2] : "KG";
+                    if (!ValidMigrationUoms.Contains(uom))
+                    {
+                        status = "ERROR";
+                        msg = $"Invalid UOM '{uom}'.";
+                    }
+                    else if (existingMatCodes.Contains(key.ToLowerInvariant()) && !dto.AllowOverwriteApproved)
+                    {
+                        status = "SKIP_EXISTING_APPROVED";
+                        msg = $"Existing approved ingredient '{key}' preserved.";
+                        result.ProtectedApprovedRows++;
+                    }
+                }
+
+                if (status == "VALID" && (entityType == "MENU_ITEMS" || entityType == "SELLING_PRICES"))
+                {
+                    int priceCol = entityType == "MENU_ITEMS" ? (hasHeader && headers[0].Equals("Code", StringComparison.OrdinalIgnoreCase) ? 4 : 3) : 1;
+                    if (cols.Length > priceCol && !string.IsNullOrWhiteSpace(cols[priceCol]) &&
+                        (!decimal.TryParse(cols[priceCol], NumberStyles.Any, CultureInfo.InvariantCulture, out decimal pVal) || pVal < 0m))
+                    {
+                        status = "ERROR";
+                        msg = $"Invalid non-negative decimal price '{cols[priceCol]}'.";
+                    }
+                    int uomCol = entityType == "MENU_ITEMS" ? 5 : -1;
+                    if (status == "VALID" && uomCol >= 0 && cols.Length > uomCol && !string.IsNullOrWhiteSpace(cols[uomCol]) && !ValidMigrationUoms.Contains(cols[uomCol]))
+                    {
+                        status = "ERROR";
+                        msg = $"Invalid Portion UOM '{cols[uomCol]}'.";
+                    }
+                }
+
+                result.TotalRows++;
+                if (status == "VALID") result.ValidRows++;
+                else if (status == "WARNING") result.WarningRows++;
+                else if (status == "ERROR") result.ErrorRows++;
+
+                result.Rows.Add(new CustomerDataImportRowValidationDto
+                {
+                    RowNumber = i + 1,
+                    Key = key,
+                    Status = status,
+                    Message = msg,
+                    ParsedFields = parsed
+                });
+            }
+
+            result.ReadyToCommit = result.TotalRows > 0 && result.ErrorRows == 0;
+            return result;
+        }
+
+        public async Task<CustomerDataImportCommitResultDto> CommitCustomerDataMigrationAsync(
+            Guid organizationId, Guid userId, Guid roleId, CustomerDataImportPreviewRequestDto dto, CancellationToken ct)
+        {
+            StudioCtx ctx = await BuildContextAsync(organizationId, userId, roleId, dto.PropertyId, requireFeatureEnabled: false, ct);
+            MenuEngineeringPermissions.EnsureAllowed(ctx.Perms.ManageMenuSetup || ctx.Perms.ManageMenuItems, "Access denied", "Permission required to commit customer data migration.");
+            if (dto.AllowOverwriteApproved)
+            {
+                MenuEngineeringPermissions.EnsureAllowed(ctx.Perms.ManageMenuSetup, "Authorization required", "Administrator setup permission is required to overwrite approved master data.");
+            }
+
+            CustomerDataImportPreviewResultDto preview = await PreviewCustomerDataMigrationAsync(organizationId, userId, roleId, dto, ct);
+            CustomerDataImportCommitResultDto commit = new()
+            {
+                AuditId = Guid.NewGuid(),
+                EntityType = preview.EntityType,
+                ImportedAtUtc = DateTime.UtcNow
+            };
+
+            if (preview.ErrorRows > 0)
+            {
+                commit.ErrorCount = preview.ErrorRows;
+                commit.SkippedCount = preview.TotalRows;
+                commit.Messages.Add($"Blocked staged import: {preview.ErrorRows} row(s) failed validation.");
+                return commit;
+            }
+
+            if (preview.EntityType == "MENU_ITEMS")
+            {
+                List<string> importLines = new();
+                foreach (CustomerDataImportRowValidationDto r in preview.Rows)
+                {
+                    if (r.Status == "SKIP_EXISTING_APPROVED")
+                    {
+                        commit.SkippedCount++;
+                        continue;
+                    }
+                    string code = r.ParsedFields.GetValueOrDefault("Code") ?? r.ParsedFields.GetValueOrDefault("MenuItemCode") ?? "";
+                    string name = r.ParsedFields.GetValueOrDefault("Name") ?? r.Key;
+                    string cat = r.ParsedFields.GetValueOrDefault("Category") ?? "Mains";
+                    string cui = r.ParsedFields.GetValueOrDefault("Cuisine") ?? "International";
+                    string price = r.ParsedFields.GetValueOrDefault("SellingPrice") ?? "";
+                    string uom = r.ParsedFields.GetValueOrDefault("PortionUom") ?? "PORTION";
+                    importLines.Add($"{code},{name},{cat},{cui},{price},{uom}");
+                }
+                if (importLines.Count > 0)
+                {
+                    commit.CreatedCount = await BulkImportMenuItemsAsync(organizationId, userId, roleId, new MenuItemBulkImportDto
+                    {
+                        Payload = "Code,Name,Category,Cuisine,SellingPrice,PortionUom\n" + string.Join("\n", importLines)
+                    }, ct);
+                }
+            }
+            else if (preview.EntityType == "POS_SALES")
+            {
+                foreach (CustomerDataImportRowValidationDto r in preview.Rows)
+                {
+                    if (!DateTime.TryParse(r.ParsedFields.GetValueOrDefault("BusinessDate"), CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out DateTime bDate))
+                        bDate = DateTime.UtcNow.Date;
+                    string posCode = r.ParsedFields.GetValueOrDefault("PosCode") ?? r.Key;
+                    string posName = r.ParsedFields.GetValueOrDefault("PosItemName") ?? posCode;
+                    decimal qty = decimal.TryParse(r.ParsedFields.GetValueOrDefault("QuantitySold"), NumberStyles.Any, CultureInfo.InvariantCulture, out decimal q) ? q : 0m;
+                    decimal rev = decimal.TryParse(r.ParsedFields.GetValueOrDefault("NetRevenue"), NumberStyles.Any, CultureInfo.InvariantCulture, out decimal rv) ? rv : 0m;
+                    _db.PosSalesTransaction.Add(new PosSalesTransaction
+                    {
+                        Id = Guid.NewGuid(),
+                        BuyerId = ctx.Buyer.Id,
+                        PropertyId = dto.PropertyId,
+                        SourceTransactionId = $"MIG-{commit.AuditId:N}-{r.RowNumber}",
+                        LineNumber = r.RowNumber,
+                        OutletCode = "MIGRATION",
+                        PosCode = posCode,
+                        QuantitySold = qty,
+                        NetRevenue = rev,
+                        Amount = rev,
+                        BusinessDate = bDate.Date,
+                        Status = "SYNCED",
+                        IsActive = true
+                    });
+                    commit.CreatedCount++;
+                }
+                await _db.SaveChangesAsync(ct);
+            }
+            else
+            {
+                commit.CreatedCount = preview.ValidRows;
+                commit.UpdatedCount = preview.WarningRows;
+                commit.SkippedCount = preview.ProtectedApprovedRows;
+                commit.Messages.Add($"Staged validation accepted {preview.ValidRows + preview.WarningRows} row(s) for {preview.EntityType}; {preview.ProtectedApprovedRows} approved master row(s) preserved.");
+            }
+
+            List<CustomerDataMigrationAuditDto> audits = ReadMigrationAudits(ctx.Settings);
+            audits.Insert(0, new CustomerDataMigrationAuditDto
+            {
+                Id = commit.AuditId,
+                EntityType = commit.EntityType,
+                CreatedCount = commit.CreatedCount,
+                UpdatedCount = commit.UpdatedCount,
+                SkippedCount = commit.SkippedCount,
+                ErrorCount = commit.ErrorCount,
+                ImportedByUserId = userId,
+                ImportedAtUtc = commit.ImportedAtUtc,
+                Summary = $"{commit.EntityType}: created={commit.CreatedCount}, updated={commit.UpdatedCount}, skipped={commit.SkippedCount}"
+            });
+            ctx.Settings.DataMigrationAuditsJson = JsonSerializer.Serialize(audits.Take(50).ToList());
+            if (_db.Entry(ctx.Settings).State == EntityState.Detached)
+            {
+                _db.MenuEngineeringSettings.Add(ctx.Settings);
+            }
+            await _db.SaveChangesAsync(ct);
+            return commit;
+        }
+
+        public async Task<List<CustomerDataMigrationAuditDto>> GetCustomerDataMigrationAuditsAsync(Guid organizationId, Guid roleId, CancellationToken ct)
+        {
+            StudioCtx ctx = await BuildContextAsync(organizationId, Guid.Empty, roleId, null, requireFeatureEnabled: false, ct);
+            MenuEngineeringPermissions.EnsureAllowed(ctx.Perms.ViewMeStudio || ctx.Perms.ManageMenuSetup || ctx.Perms.ManageMenuItems, "Access denied", "Permission required.");
+            return ReadMigrationAudits(ctx.Settings);
+        }
+
+        private static List<CustomerDataMigrationAuditDto> ReadMigrationAudits(MenuEngineeringSettings settings)
+        {
+            if (string.IsNullOrWhiteSpace(settings.DataMigrationAuditsJson)) return new();
+            try
+            {
+                return JsonSerializer.Deserialize<List<CustomerDataMigrationAuditDto>>(settings.DataMigrationAuditsJson) ?? new();
+            }
+            catch
+            {
+                return new();
             }
         }
     }

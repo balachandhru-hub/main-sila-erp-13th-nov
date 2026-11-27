@@ -768,75 +768,148 @@ namespace Buyer.Application.Features.Shared.MenuEngineering.Ai
                 {
                     ["CHKN"] = "chicken",
                     ["CHK"] = "chicken",
+                    ["CHIX"] = "chicken",
                     ["GRL"] = "grilled",
+                    ["GRLD"] = "grilled",
                     ["SLMN"] = "salmon",
                     ["SLM"] = "salmon",
                     ["LRG"] = "large",
                     ["SML"] = "small",
                     ["REG"] = "regular",
                     ["EX"] = "extra",
+                    ["XTRA"] = "extra",
                     ["SAUCE"] = "sauce",
                     ["SC"] = "sauce",
                     ["BRG"] = "burger",
+                    ["BGR"] = "burger",
                     ["SLD"] = "salad",
                     ["CAES"] = "caesar",
                     ["MNG"] = "mango",
-                    ["CHZ"] = "cheese"
+                    ["CHZ"] = "cheese",
+                    ["LMB"] = "lamb",
+                    ["TRFL"] = "truffle",
+                    ["RST"] = "roasted",
+                    ["STR"] = "steak",
+                    ["STK"] = "steak",
+                    ["CMB"] = "combo"
                 };
 
-                HashSet<string> ExpandTokens(string text)
+                HashSet<string> stopWords = new(StringComparer.OrdinalIgnoreCase)
+                {
+                    "large", "small", "regular", "extra", "sauce", "combo", "meal", "platter", "with", "no", "add", "mod"
+                };
+
+                int Levenshtein(string a, string b)
+                {
+                    int n = a.Length, m = b.Length;
+                    int[,] d = new int[n + 1, m + 1];
+                    for (int i = 0; i <= n; i++) d[i, 0] = i;
+                    for (int j = 0; j <= m; j++) d[0, j] = j;
+                    for (int i = 1; i <= n; i++)
+                        for (int j = 1; j <= m; j++)
+                        {
+                            int cost = a[i - 1] == b[j - 1] ? 0 : 1;
+                            d[i, j] = Math.Min(Math.Min(d[i - 1, j] + 1, d[i, j - 1] + 1), d[i - 1, j - 1] + cost);
+                        }
+                    return d[n, m];
+                }
+
+                List<string> ExpandTokens(string text)
                 {
                     return System.Text.RegularExpressions.Regex.Split(text.ToLowerInvariant(), @"[^a-z0-9]+")
                         .Where(t => t.Length > 0)
                         .Select(t => abbr.TryGetValue(t, out string? full) ? full : t)
-                        .ToHashSet();
+                        .Distinct()
+                        .ToList();
+                }
+
+                decimal TokenSim(string a, string b)
+                {
+                    if (string.Equals(a, b, StringComparison.OrdinalIgnoreCase)) return 1.0m;
+                    if (a.Length >= 4 && b.Length >= 4 && (a.StartsWith(b) || b.StartsWith(a))) return 0.85m;
+                    int maxLen = Math.Max(a.Length, b.Length);
+                    if (maxLen < 4) return 0m;
+                    int dist = Levenshtein(a, b);
+                    if (dist <= 2) return Math.Max(0.60m, 1.0m - (decimal)dist / maxLen);
+                    return 0m;
                 }
 
                 foreach (var u in unmappedItems)
                 {
-                    HashSet<string> posTokens = ExpandTokens(u.pos_description);
-                    MenuItem? best = null;
-                    decimal bestScore = 0m;
+                    List<string> rawPosTokens = ExpandTokens(u.pos_description);
+                    List<string> contentPosTokens = rawPosTokens.Where(t => !stopWords.Contains(t)).ToList();
+                    if (contentPosTokens.Count == 0) contentPosTokens = rawPosTokens;
 
+                    List<(MenuItem Item, decimal Score, bool ExactRef)> ranked = new();
                     foreach (MenuItem mi in items)
                     {
                         if (mi.PosItemReference != null && mi.PosItemReference.Equals(u.pos_code, StringComparison.OrdinalIgnoreCase))
                         {
-                            best = mi;
-                            bestScore = 0.99m;
-                            break;
+                            ranked.Add((mi, 0.99m, true));
+                            continue;
                         }
-                        HashSet<string> itemTokens = ExpandTokens(mi.Name);
-                        if (itemTokens.Count == 0) continue;
-                        int overlap = itemTokens.Count(t => posTokens.Contains(t));
-                        decimal score = (decimal)overlap / itemTokens.Count;
-                        if (score > bestScore && overlap > 0)
+                        if (string.Equals(mi.Name, u.pos_description, StringComparison.OrdinalIgnoreCase) ||
+                            string.Equals(mi.MenuItemCode, u.pos_code, StringComparison.OrdinalIgnoreCase))
                         {
-                            bestScore = Math.Min(0.92m, Math.Round(0.55m + score * 0.35m, 2));
-                            best = mi;
+                            ranked.Add((mi, 0.98m, true));
+                            continue;
+                        }
+
+                        List<string> itemTokens = ExpandTokens(mi.Name).Where(t => !stopWords.Contains(t)).ToList();
+                        if (itemTokens.Count == 0) continue;
+
+                        decimal matchedSum = 0m;
+                        foreach (string itTok in itemTokens)
+                        {
+                            decimal bestTok = contentPosTokens.Select(pt => TokenSim(itTok, pt)).DefaultIfEmpty(0m).Max();
+                            matchedSum += bestTok;
+                        }
+                        decimal recall = matchedSum / itemTokens.Count;
+                        decimal precision = contentPosTokens.Count > 0
+                            ? contentPosTokens.Select(pt => itemTokens.Select(it => TokenSim(pt, it)).DefaultIfEmpty(0m).Max()).Sum() / contentPosTokens.Count
+                            : recall;
+                        decimal f1 = (recall + precision) > 0m ? (2m * recall * precision) / (recall + precision) : 0m;
+                        if (f1 >= 0.35m)
+                        {
+                            decimal conf = Math.Min(0.95m, Math.Round(0.45m + f1 * 0.49m, 2));
+                            ranked.Add((mi, conf, false));
                         }
                     }
 
-                    bool exact = bestScore >= 0.98m;
-                    bool isLarge = posTokens.Contains("large");
-                    bool isSmall = posTokens.Contains("small");
-                    bool hasExtraSauce = u.pos_description.Contains("EX SAUCE", StringComparison.OrdinalIgnoreCase) || (posTokens.Contains("extra") && posTokens.Contains("sauce"));
+                    ranked = ranked.OrderByDescending(x => x.Score).ThenBy(x => x.Item.Name).ToList();
+                    var top = ranked.FirstOrDefault();
+                    var second = ranked.Skip(1).FirstOrDefault();
+                    bool isAmbiguous = top.Item != null && second.Item != null && !top.ExactRef && (top.Score - second.Score) <= 0.06m;
+                    bool lowConf = top.Item == null || top.Score < 0.72m;
+
+                    bool isLarge = rawPosTokens.Contains("large");
+                    bool isSmall = rawPosTokens.Contains("small");
+                    bool isCombo = rawPosTokens.Contains("combo") || rawPosTokens.Contains("platter") || rawPosTokens.Contains("meal");
+                    bool hasExtraSauce = u.pos_description.Contains("EX SAUCE", StringComparison.OrdinalIgnoreCase) || (rawPosTokens.Contains("extra") && rawPosTokens.Contains("sauce"));
+                    bool abstain = isAmbiguous || lowConf;
 
                     queue.Add(new AiPosMappingCandidateRowDto
                     {
                         PosCode = u.pos_code,
                         PosDescription = u.pos_description,
                         ObservedQuantity = u.observed_qty,
-                        CandidateMenuItemId = best?.Id,
-                        CandidateMenuItemName = best?.Name,
-                        CandidateRecipeId = best?.LinkedRecipeId,
-                        Confidence = best != null ? bestScore : 0.25m,
+                        CandidateMenuItemId = abstain ? null : top.Item?.Id,
+                        CandidateMenuItemName = top.Item?.Name,
+                        CandidateRecipeId = abstain ? null : top.Item?.LinkedRecipeId,
+                        Confidence = top.Item != null ? top.Score : 0.25m,
                         SuggestedPortionMultiplier = isLarge ? 1.5m : isSmall ? 0.75m : 1.0m,
                         SuggestedSizeVariant = isLarge ? "Large" : isSmall ? "Small" : "Regular",
-                        SuggestedModifier = hasExtraSauce ? "Extra Sauce" : null,
-                        AdditionalRecipeHint = hasExtraSauce ? "Approved signature sauce recipe" : null,
-                        MatchingEvidence = exact ? "Exact POS Item Reference match" : best != null ? "Tokenized abbreviation & semantic match" : "No high-confidence match",
-                        RequiresHumanReview = !exact
+                        SuggestedModifier = isCombo ? "COMBO_PARENT (De-duplicate components)" : hasExtraSauce ? "Extra Sauce" : null,
+                        AdditionalRecipeHint = isCombo ? "Prevent double-counting combo parent + component recipes" : hasExtraSauce ? "Approved signature sauce recipe" : null,
+                        MatchingEvidence = top.ExactRef
+                            ? "Exact POS Item Reference / Name match"
+                            : isAmbiguous
+                                ? $"Ambiguous top candidates ({top.Item?.Name} {top.Score:0.00} vs {second.Item?.Name} {second.Score:0.00}) — abstained for human review"
+                                : top.Item != null
+                                    ? "Abbreviation + fuzzy Levenshtein semantic match"
+                                    : "No confident match — abstained for human review",
+                        RequiresHumanReview = !top.ExactRef || isAmbiguous || lowConf || isCombo,
+                        Alternatives = ranked.Take(3).Select(r => $"{r.Item.Name} ({r.Score:0.00})").ToList()
                     });
                 }
             }
@@ -1137,6 +1210,12 @@ namespace Buyer.Application.Features.Shared.MenuEngineering.Ai
         private async Task<AiNlSimulationResultDto> RunNlSimulationInternalAsync(
             AiContext ctx, Guid userId, Guid roleId, AiNlSimulationRequestDto request, CancellationToken ct)
         {
+            if (IsAdversarialPrompt(request.Command))
+            {
+                throw new BadRequestCustomException(
+                    "Simulation command rejected by SILA AI Governance.",
+                    "Prompt injection, approval bypass, or external exfiltration instructions are prohibited.");
+            }
             string cleanCmd = SanitizeText(request.Command);
             PythonParseCommandResponse? parsed = await PostPythonAiAsync<object, PythonParseCommandResponse>(
                 "/v1/me-ai/parse-command", new { command = cleanCmd }, ct);

@@ -671,6 +671,14 @@ namespace Buyer.Application.Features.Shared.MenuEngineering
                 RequireApprovalOnPublish = s.RequireApprovalOnPublish,
                 ApprovalRoles = ReadList(s.ApprovalRolesJson, DefaultApprovalRoles),
                 ConfigVersion = s.ConfigVersion,
+                AutonomousModePaused = s.AutonomousModePaused,
+                AutomatedExecutionDisabled = s.AutomatedExecutionDisabled,
+                MaxConcurrentJobs = s.MaxConcurrentJobs,
+                DailyAiTokenBudget = s.DailyAiTokenBudget,
+                MonthlyAiBudgetUsd = s.MonthlyAiBudgetUsd,
+                TeamsNotificationsEnabled = s.TeamsNotificationsEnabled,
+                TeamsWebhookUrl = s.TeamsWebhookUrl,
+                FeatureFlags = ReadFeatureFlags(s),
                 History = history
             };
         }
@@ -681,11 +689,43 @@ namespace Buyer.Application.Features.Shared.MenuEngineering
             MenuEngineeringPermissions.EnsureAllowed(ctx.Perms.ManageMenuSetup, "Access denied", "Permission required to manage Menu Engineering setup.");
 
             MenuEngineeringSettings s = ctx.Settings;
+            if (dto.PropertyId != null && s.PropertyId == null)
+            {
+                s = new MenuEngineeringSettings
+                {
+                    Id = Guid.NewGuid(),
+                    BuyerId = ctx.Buyer.Id,
+                    PropertyId = dto.PropertyId,
+                    IsActive = true,
+                    ConfigVersion = 0
+                };
+                _db.MenuEngineeringSettings.Add(s);
+            }
+            else if (_db.Entry(s).State == EntityState.Detached)
+            {
+                _db.MenuEngineeringSettings.Add(s);
+            }
             string prevJson = JsonSerializer.Serialize(ToSetupDto(s, new()));
 
             s.PropertyId = dto.PropertyId;
-            s.MenuEngineeringEnabled = dto.MenuEngineeringEnabled;
-            s.MeStudioEnabled = dto.MeStudioEnabled;
+            MenuEngineeringFeatureFlagsDto flags = dto.FeatureFlags ?? new MenuEngineeringFeatureFlagsDto();
+            // Keep top-level booleans and FeatureFlags synchronized regardless of which side the caller toggled
+            s.MenuEngineeringEnabled = dto.MenuEngineeringEnabled && flags.MenuEngineering;
+            if (!dto.MenuEngineeringEnabled && flags.MenuEngineering) s.MenuEngineeringEnabled = false;
+            else if (dto.MenuEngineeringEnabled && !flags.MenuEngineering) s.MenuEngineeringEnabled = flags.MenuEngineering;
+            s.MeStudioEnabled = dto.MeStudioEnabled && flags.MeStudio;
+            if (!dto.MeStudioEnabled && flags.MeStudio) s.MeStudioEnabled = false;
+            else if (dto.MeStudioEnabled && !flags.MeStudio) s.MeStudioEnabled = flags.MeStudio;
+            flags.MenuEngineering = s.MenuEngineeringEnabled;
+            flags.MeStudio = s.MeStudioEnabled;
+            s.FeatureFlagsJson = JsonSerializer.Serialize(flags);
+            s.AutonomousModePaused = dto.AutonomousModePaused;
+            s.AutomatedExecutionDisabled = dto.AutomatedExecutionDisabled;
+            s.MaxConcurrentJobs = dto.MaxConcurrentJobs > 0 ? dto.MaxConcurrentJobs : 4;
+            s.DailyAiTokenBudget = dto.DailyAiTokenBudget > 0 ? dto.DailyAiTokenBudget : 250000;
+            s.MonthlyAiBudgetUsd = dto.MonthlyAiBudgetUsd > 0 ? dto.MonthlyAiBudgetUsd : 100m;
+            s.TeamsNotificationsEnabled = dto.TeamsNotificationsEnabled;
+            s.TeamsWebhookUrl = dto.TeamsWebhookUrl;
             if (dto.ServiceFormats.Count > 0) s.ServiceFormatsJson = JsonSerializer.Serialize(dto.ServiceFormats);
             if (dto.Cuisines.Count > 0) s.CuisinesJson = JsonSerializer.Serialize(dto.Cuisines);
             if (dto.DietaryTags.Count > 0) s.DietaryTagsJson = JsonSerializer.Serialize(dto.DietaryTags);

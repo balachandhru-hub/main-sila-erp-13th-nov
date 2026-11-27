@@ -160,5 +160,10 @@ namespace Buyer.Domain.Entities
         public string? TeamsWebhookUrl { get; set; }
 
         public string? EventScheduleConfigJson { get; set; }
+
+        // Phase ME.5: 12 independent capability feature flags + staged customer data migration audit trail
+        public string? FeatureFlagsJson { get; set; }
+
+        public string? DataMigrationAuditsJson { get; set; }
     }
 }

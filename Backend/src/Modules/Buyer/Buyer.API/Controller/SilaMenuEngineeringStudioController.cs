@@ -193,6 +193,25 @@ namespace Buyer.API.Controllers
         public async Task<IActionResult> SaveSetup([FromBody] MenuEngineeringSetupDto dto, CancellationToken ct = default)
             => Ok(await _service.SaveSetupAsync(GetOrganizationId(), GetUserId(), GetRoleId(), dto, ct));
 
+        [HttpGet("data-migration/templates")]
+        [ApiAuthorization(AnyOf = MeReadPerms)]
+        public IActionResult GetMigrationTemplates() => Ok(_service.GetMigrationTemplates());
+
+        [HttpPost("data-migration/preview")]
+        [ApiAuthorization(AnyOf = MeReadPerms)]
+        public async Task<IActionResult> PreviewDataMigration([FromBody] CustomerDataImportPreviewRequestDto dto, CancellationToken ct = default)
+            => Ok(await _service.PreviewCustomerDataMigrationAsync(GetOrganizationId(), GetUserId(), GetRoleId(), dto, ct));
+
+        [HttpPost("data-migration/commit")]
+        [ApiAuthorization(AnyOf = MeReadPerms)]
+        public async Task<IActionResult> CommitDataMigration([FromBody] CustomerDataImportPreviewRequestDto dto, CancellationToken ct = default)
+            => Ok(await _service.CommitCustomerDataMigrationAsync(GetOrganizationId(), GetUserId(), GetRoleId(), dto, ct));
+
+        [HttpGet("data-migration/audits")]
+        [ApiAuthorization(AnyOf = MeReadPerms)]
+        public async Task<IActionResult> GetDataMigrationAudits(CancellationToken ct = default)
+            => Ok(await _service.GetCustomerDataMigrationAuditsAsync(GetOrganizationId(), GetRoleId(), ct));
+
         [HttpGet("reports")]
         [ApiAuthorization(AnyOf = MeReadPerms)]
         public IActionResult GetReportCatalog() => Ok(_service.GetReportCatalog());

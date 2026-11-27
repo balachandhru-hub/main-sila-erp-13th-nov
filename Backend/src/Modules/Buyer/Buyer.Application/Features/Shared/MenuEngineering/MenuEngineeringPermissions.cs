@@ -16,8 +16,17 @@ namespace Buyer.Application.Features.Shared.MenuEngineering
             IHttpContextAccessor? httpContextAccessor,
             Guid roleId,
             bool menuEngineeringEnabled = true,
-            bool meStudioEnabled = true)
+            bool meStudioEnabled = true,
+            MenuEngineeringFeatureFlagsDto? featureFlags = null)
         {
+            MenuEngineeringFeatureFlagsDto resolvedFlags = featureFlags ?? new MenuEngineeringFeatureFlagsDto
+            {
+                MenuEngineering = menuEngineeringEnabled,
+                MeStudio = meStudioEnabled
+            };
+            resolvedFlags.MenuEngineering = menuEngineeringEnabled;
+            resolvedFlags.MeStudio = meStudioEnabled;
+
             HashSet<string>? codes = ReadPermissionCodes(httpContextAccessor);
             bool hasExplicitCodes = codes is { Count: > 0 };
 
@@ -38,7 +47,8 @@ namespace Buyer.Application.Features.Shared.MenuEngineering
                 return new MenuEngineeringPermissionSetDto
                 {
                     MenuEngineeringEnabled = menuEngineeringEnabled,
-                    MeStudioEnabled = meStudioEnabled
+                    MeStudioEnabled = meStudioEnabled,
+                    FeatureFlags = resolvedFlags
                 };
             }
 
@@ -52,6 +62,7 @@ namespace Buyer.Application.Features.Shared.MenuEngineering
             {
                 MenuEngineeringEnabled = menuEngineeringEnabled,
                 MeStudioEnabled = meStudioEnabled,
+                FeatureFlags = resolvedFlags,
                 ViewMeStudio = HasAny("VIEW_SILA_ME_STUDIO") || legacyView || !isApProcessor,
                 CreateMenu = HasAny("CREATE_SILA_MENU") || legacyManage || isAdmin || isFnb || isStoreMgr || isOutletMgr || isCostController,
                 EditDraftMenu = HasAny("EDIT_SILA_DRAFT_MENU") || legacyManage || isAdmin || isFnb || isStoreMgr || isOutletMgr || isCostController,

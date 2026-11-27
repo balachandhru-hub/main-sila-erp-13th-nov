@@ -1,9 +1,26 @@
 namespace Buyer.Domain.Dtos
 {
+    public class MenuEngineeringFeatureFlagsDto
+    {
+        public bool MenuEngineering { get; set; } = true;
+        public bool MeStudio { get; set; } = true;
+        public bool AiMenuIntelligence { get; set; } = true;
+        public bool PredictiveForecasting { get; set; } = true;
+        public bool MathematicalOptimization { get; set; } = true;
+        public bool CulinaryDigitalTwin { get; set; } = true;
+        public bool AutonomousAgents { get; set; } = true;
+        public bool SilaVoice { get; set; } = true;
+        public bool PosIntegration { get; set; } = true;
+        public bool PmsIntegration { get; set; } = true;
+        public bool EnterpriseNotifications { get; set; } = true;
+        public bool MobileCulinaryOperations { get; set; } = true;
+    }
+
     public class MenuEngineeringPermissionSetDto
     {
         public bool MenuEngineeringEnabled { get; set; } = true;
         public bool MeStudioEnabled { get; set; } = true;
+        public MenuEngineeringFeatureFlagsDto FeatureFlags { get; set; } = new();
         public bool ViewMeStudio { get; set; }
         public bool CreateMenu { get; set; }
         public bool EditDraftMenu { get; set; }
@@ -513,6 +530,7 @@ namespace Buyer.Domain.Dtos
         public decimal? TotalFoodCost { get; set; }
         public decimal? OverallFoodCostPercent { get; set; }
         public decimal? TotalContributionMargin { get; set; }
+        public string Disclaimer { get; set; } = "Contribution Margin = Net Revenue - Applicable Variable Costs (not Net Profit).";
     }
 
     public class MenuPurchasePlanRowDto : SilaMenuRequirementRowDto
@@ -706,7 +724,80 @@ namespace Buyer.Domain.Dtos
         public List<string> ApprovalRoles { get; set; } = new();
         public int ConfigVersion { get; set; } = 1;
         public string? ChangeSummary { get; set; }
+        public bool AutonomousModePaused { get; set; }
+        public bool AutomatedExecutionDisabled { get; set; }
+        public int MaxConcurrentJobs { get; set; } = 4;
+        public int DailyAiTokenBudget { get; set; } = 250000;
+        public decimal MonthlyAiBudgetUsd { get; set; } = 100.00m;
+        public bool TeamsNotificationsEnabled { get; set; }
+        public string? TeamsWebhookUrl { get; set; }
+        public MenuEngineeringFeatureFlagsDto FeatureFlags { get; set; } = new();
         public List<MenuEngineeringConfigHistoryDto> History { get; set; } = new();
+    }
+
+    public class CustomerDataTemplateDto
+    {
+        public string EntityType { get; set; } = string.Empty;
+        public string Title { get; set; } = string.Empty;
+        public string FileName { get; set; } = string.Empty;
+        public List<string> Columns { get; set; } = new();
+        public string SampleCsv { get; set; } = string.Empty;
+    }
+
+    public class CustomerDataImportPreviewRequestDto
+    {
+        public string EntityType { get; set; } = "MENU_ITEMS";
+        public string Format { get; set; } = "CSV";
+        public string Payload { get; set; } = string.Empty;
+        public Guid? PropertyId { get; set; }
+        public bool AllowOverwriteApproved { get; set; }
+    }
+
+    public class CustomerDataImportRowValidationDto
+    {
+        public int RowNumber { get; set; }
+        public string Key { get; set; } = string.Empty;
+        public string Status { get; set; } = "VALID"; // VALID | WARNING | ERROR | SKIP_EXISTING_APPROVED
+        public string Message { get; set; } = string.Empty;
+        public Dictionary<string, string?> ParsedFields { get; set; } = new();
+    }
+
+    public class CustomerDataImportPreviewResultDto
+    {
+        public string EntityType { get; set; } = string.Empty;
+        public int TotalRows { get; set; }
+        public int ValidRows { get; set; }
+        public int WarningRows { get; set; }
+        public int ErrorRows { get; set; }
+        public int DuplicateRows { get; set; }
+        public int ProtectedApprovedRows { get; set; }
+        public bool ReadyToCommit { get; set; }
+        public List<CustomerDataImportRowValidationDto> Rows { get; set; } = new();
+    }
+
+    public class CustomerDataImportCommitResultDto
+    {
+        public Guid AuditId { get; set; }
+        public string EntityType { get; set; } = string.Empty;
+        public int CreatedCount { get; set; }
+        public int UpdatedCount { get; set; }
+        public int SkippedCount { get; set; }
+        public int ErrorCount { get; set; }
+        public List<string> Messages { get; set; } = new();
+        public DateTime ImportedAtUtc { get; set; }
+    }
+
+    public class CustomerDataMigrationAuditDto
+    {
+        public Guid Id { get; set; }
+        public string EntityType { get; set; } = string.Empty;
+        public int CreatedCount { get; set; }
+        public int UpdatedCount { get; set; }
+        public int SkippedCount { get; set; }
+        public int ErrorCount { get; set; }
+        public Guid? ImportedByUserId { get; set; }
+        public DateTime ImportedAtUtc { get; set; }
+        public string Summary { get; set; } = string.Empty;
     }
 
     public class MenuEngineeringConfigHistoryDto

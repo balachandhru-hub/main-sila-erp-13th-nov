@@ -540,8 +540,14 @@ namespace Buyer.Domain.Dtos
     public class MeSetupWizardReadinessDto
     {
         public decimal OverallReadinessScore { get; set; }
+        public int TotalSteps { get; set; }
+        public int CompletedCount { get; set; }
+        public int PendingCount { get; set; }
+        public int BlockedCount { get; set; }
         public List<MeSetupWizardStepDto> Steps { get; set; } = new();
         public List<MeAiSuggestedThresholdDto> SuggestedThresholds { get; set; } = new();
+        public List<string> ValidationErrors { get; set; } = new();
+        public List<string> RequiredActions { get; set; } = new();
         public bool AdminApprovalRequiredToApply { get; set; } = true;
     }
 
@@ -549,9 +555,12 @@ namespace Buyer.Domain.Dtos
     {
         public int StepNumber { get; set; }
         public string StepName { get; set; } = string.Empty;
+        public string Category { get; set; } = "CORE";
+        public bool IsOptional { get; set; }
         public decimal ReadinessPercent { get; set; }
         public string Status { get; set; } = "READY"; // READY | NEEDS_ATTENTION | BLOCKED
         public string Detail { get; set; } = string.Empty;
+        public string? RequiredAction { get; set; }
     }
 
     public class MeAiSuggestedThresholdDto

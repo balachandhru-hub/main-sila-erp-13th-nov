@@ -16,6 +16,11 @@ namespace Buyer.Application.Features.Shared.MenuEngineering.Twin
                 await BuildScopeAsync(organizationId, roleId, request.PropertyId, ct);
             MenuEngineeringPermissions.EnsureAllowed(perms.UseAiMenuIntelligence || perms.CreateMenu, "Access denied", "AI optimization permission required.");
 
+            if (request.MenuPlanId.HasValue && !await _db.MenuPlan.AsNoTracking().AnyAsync(x => x.Id == request.MenuPlanId.Value && x.BuyerId == buyer.Id && x.IsActive, ct))
+                throw new NotFoundCustomException("Menu plan not found", "The requested menu plan does not exist for this tenant.");
+            if (request.BaselineSnapshotId.HasValue && !await _db.MenuEngineeringTwinSnapshot.AsNoTracking().AnyAsync(x => x.Id == request.BaselineSnapshotId.Value && x.BuyerId == buyer.Id && x.IsActive, ct))
+                throw new NotFoundCustomException("Twin snapshot not found", "The requested baseline snapshot does not exist for this tenant.");
+
             string idem = string.IsNullOrWhiteSpace(request.IdempotencyKey)
                 ? $"OPT-{Guid.NewGuid():N}"
                 : request.IdempotencyKey.Trim();

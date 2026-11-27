@@ -49,8 +49,11 @@ namespace Buyer.Application.Features.Shared.MenuEngineering.Ai
         private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
 
         private static readonly Regex PromptInjectionRegex = new(
-            @"(ignore\s+(all\s+)?previous|system\s+prompt|drop\s+table|delete\s+from|update\s+\w+\s+set|execute\s+sql|<script)",
+            @"(ignore\s+(all\s+)?(previous|restrictions|rules|policies|instructions|constraints)|bypass\s+approval|without\s+approval|publish\s+.*\s+without\s+approval|override\s+(autonomy|policy|restrictions)|disable\s+approval|send\s+.*\s+external|exfiltrate|reveal\s+(api\s*key|secret|password|token)|system\s+prompt|drop\s+table|delete\s+from|update\s+\w+\s+set|execute\s+sql|<script)",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        private static bool IsAdversarialPrompt(string? input)
+            => !string.IsNullOrWhiteSpace(input) && PromptInjectionRegex.IsMatch(input);
 
         private readonly IRepositoryWrapper _repository;
         private readonly RepositoryContext _db;
@@ -269,6 +272,25 @@ namespace Buyer.Application.Features.Shared.MenuEngineering.Ai
 
             string mode = ResolveOperatingMode(ctx, request.OperatingMode);
             string agentId = MenuEngineeringAgentRegistry.ResolveForScreen(request.ScreenKey);
+            if (IsAdversarialPrompt(request.UserPrompt))
+            {
+                return new AiContextualResponseDto
+                {
+                    AgentId = agentId,
+                    ScreenKey = request.ScreenKey,
+                    Action = request.Action,
+                    OperatingMode = mode,
+                    ValueTag = "REJECTED",
+                    Summary = "Request rejected by SILA AI Governance: bypassing approval, overriding autonomy policies, or external data exfiltration is prohibited.",
+                    Explanation = "Untrusted or adversarial instructions cannot bypass server-side RBAC, workflow approval gates, or tenant isolation.",
+                    Warnings = ["Prompt injection / policy bypass attempt blocked and audited."],
+                    DataQuality = "HIGH",
+                    DataFreshness = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm 'UTC'"),
+                    Confidence = 1.0m,
+                    FinancialRedacted = !ctx.Perms.ViewMenuCost && !ctx.Perms.ViewMenuMargin,
+                    AiProviderUsed = false
+                };
+            }
             string sanitizedPrompt = SanitizeText(request.UserPrompt);
 
             if (mode == "MANUAL")
@@ -551,6 +573,12 @@ namespace Buyer.Application.Features.Shared.MenuEngineering.Ai
             }
 
             DateTime started = DateTime.UtcNow;
+            if (IsAdversarialPrompt(request.Objective))
+            {
+                throw new BadRequestCustomException(
+                    "Request rejected by SILA AI Governance.",
+                    "Prompt injection, approval bypass, or external exfiltration instructions are prohibited.");
+            }
             string cleanObjective = SanitizeText(request.Objective);
             if (string.IsNullOrWhiteSpace(cleanObjective))
             {
