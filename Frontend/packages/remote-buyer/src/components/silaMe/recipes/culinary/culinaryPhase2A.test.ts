@@ -101,7 +101,7 @@ assert.ok(navSrc.includes('badge: "Phase 2A Live"'));
 const wrapperSrc = read("CulinaryMenuEventWorkspaces.tsx");
 assert.ok(wrapperSrc.includes("<CulinaryMenuStudioWorkspace"));
 assert.ok(wrapperSrc.includes("<CulinaryEventPlannerWorkspace"));
-assert.ok(wrapperSrc.includes("Phase 2C Preview"));
+assert.ok(wrapperSrc.includes("<CulinaryProcurementStudioWorkspace"));
 
 // 4. Mobile screen covers Phase 2A Event Planner without admin AI settings/secrets
 const mobileSrc = read("../../../../../../remote-mobile/src/screens/recipes/CulinarySuitePreviewScreen.tsx");

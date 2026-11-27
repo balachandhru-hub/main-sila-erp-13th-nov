@@ -106,6 +106,12 @@ namespace Buyer.Infrastructure.Repository
         private ISilaCulinaryMrpExceptionRepository? _silaCulinaryMrpException;
         private ISilaCulinaryMrpScenarioRepository? _silaCulinaryMrpScenario;
         private ISilaCulinaryMrpSnapshotRepository? _silaCulinaryMrpSnapshot;
+        private ISilaCulinaryProcurementPlanRepository? _silaCulinaryProcurementPlan;
+        private ISilaCulinaryProcurementLineRepository? _silaCulinaryProcurementLine;
+        private ISilaCulinaryStockReservationRepository? _silaCulinaryStockReservation;
+        private ISilaCulinaryProcurementAllocationRepository? _silaCulinaryProcurementAllocation;
+        private ISilaCulinaryProcurementExceptionRepository? _silaCulinaryProcurementException;
+        private ISilaCulinaryProcurementScenarioRepository? _silaCulinaryProcurementScenario;
         private IBuyerBusinessProfileRepository _buyerBusinessProfileRepository;
         private IBuyerCategoryRepository _buyerCategoryRepository;
         private IAssetRepository _assetRepository;
@@ -1784,6 +1790,60 @@ namespace Buyer.Infrastructure.Repository
             {
                 _silaCulinaryMrpSnapshot ??= new SilaCulinaryMrpSnapshotRepository(_context);
                 return _silaCulinaryMrpSnapshot;
+            }
+        }
+
+        public ISilaCulinaryProcurementPlanRepository SilaCulinaryProcurementPlan
+        {
+            get
+            {
+                _silaCulinaryProcurementPlan ??= new SilaCulinaryProcurementPlanRepository(_context);
+                return _silaCulinaryProcurementPlan;
+            }
+        }
+
+        public ISilaCulinaryProcurementLineRepository SilaCulinaryProcurementLine
+        {
+            get
+            {
+                _silaCulinaryProcurementLine ??= new SilaCulinaryProcurementLineRepository(_context);
+                return _silaCulinaryProcurementLine;
+            }
+        }
+
+        public ISilaCulinaryStockReservationRepository SilaCulinaryStockReservation
+        {
+            get
+            {
+                _silaCulinaryStockReservation ??= new SilaCulinaryStockReservationRepository(_context);
+                return _silaCulinaryStockReservation;
+            }
+        }
+
+        public ISilaCulinaryProcurementAllocationRepository SilaCulinaryProcurementAllocation
+        {
+            get
+            {
+                _silaCulinaryProcurementAllocation ??= new SilaCulinaryProcurementAllocationRepository(_context);
+                return _silaCulinaryProcurementAllocation;
+            }
+        }
+
+        public ISilaCulinaryProcurementExceptionRepository SilaCulinaryProcurementException
+        {
+            get
+            {
+                _silaCulinaryProcurementException ??= new SilaCulinaryProcurementExceptionRepository(_context);
+                return _silaCulinaryProcurementException;
+            }
+        }
+
+        public ISilaCulinaryProcurementScenarioRepository SilaCulinaryProcurementScenario
+        {
+            get
+            {
+                _silaCulinaryProcurementScenario ??= new SilaCulinaryProcurementScenarioRepository(_context);
+                return _silaCulinaryProcurementScenario;
             }
         }
 

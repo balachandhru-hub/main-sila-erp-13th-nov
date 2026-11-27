@@ -180,6 +180,12 @@ namespace Buyer.Infrastructure.DbContext
         public DbSet<SilaCulinaryMrpException> SilaCulinaryMrpException { get; set; }
         public DbSet<SilaCulinaryMrpScenario> SilaCulinaryMrpScenario { get; set; }
         public DbSet<SilaCulinaryMrpSnapshot> SilaCulinaryMrpSnapshot { get; set; }
+        public DbSet<SilaCulinaryProcurementPlan> SilaCulinaryProcurementPlan { get; set; }
+        public DbSet<SilaCulinaryProcurementLine> SilaCulinaryProcurementLine { get; set; }
+        public DbSet<SilaCulinaryStockReservation> SilaCulinaryStockReservation { get; set; }
+        public DbSet<SilaCulinaryProcurementAllocation> SilaCulinaryProcurementAllocation { get; set; }
+        public DbSet<SilaCulinaryProcurementException> SilaCulinaryProcurementException { get; set; }
+        public DbSet<SilaCulinaryProcurementScenario> SilaCulinaryProcurementScenario { get; set; }
 
 
         protected override void OnModelCreating(Microsoft.EntityFrameworkCore.ModelBuilder modelBuilder)
@@ -511,6 +517,19 @@ namespace Buyer.Infrastructure.DbContext
             _ = modelBuilder.Entity<SilaCulinaryMrpException>().HasIndex(a => new { a.BuyerId, a.MrpRunId, a.ResolutionStatus });
             _ = modelBuilder.Entity<SilaCulinaryMrpScenario>().HasIndex(a => new { a.BuyerId, a.MrpRunId });
             _ = modelBuilder.Entity<SilaCulinaryMrpSnapshot>().HasIndex(a => new { a.BuyerId, a.MrpRunId, a.VersionNumber });
+            _ = modelBuilder.Entity<SilaCulinaryProcurementPlan>().HasIndex(a => new { a.BuyerId, a.PlanCode }).IsUnique();
+            _ = modelBuilder.Entity<SilaCulinaryProcurementPlan>().HasIndex(a => new { a.BuyerId, a.MrpRunId, a.Status });
+            _ = modelBuilder.Entity<SilaCulinaryProcurementPlan>().HasIndex(a => new { a.BuyerId, a.IdempotencyKey });
+            _ = modelBuilder.Entity<SilaCulinaryProcurementLine>().HasIndex(a => new { a.BuyerId, a.ProcurementPlanId, a.MaterialCode });
+            _ = modelBuilder.Entity<SilaCulinaryStockReservation>().HasIndex(a => new { a.BuyerId, a.ReservationCode }).IsUnique();
+            _ = modelBuilder.Entity<SilaCulinaryStockReservation>().HasIndex(a => new { a.BuyerId, a.LocationId, a.MaterialId, a.Status });
+            _ = modelBuilder.Entity<SilaCulinaryStockReservation>().HasIndex(a => new { a.BuyerId, a.EventId, a.Status });
+            _ = modelBuilder.Entity<SilaCulinaryProcurementAllocation>().HasIndex(a => new { a.BuyerId, a.ProcurementPlanId, a.AllocationType });
+            _ = modelBuilder.Entity<SilaCulinaryProcurementAllocation>().HasIndex(a => new { a.BuyerId, a.PurchaseOrderItemId, a.Status });
+            _ = modelBuilder.Entity<SilaCulinaryProcurementAllocation>().HasIndex(a => new { a.BuyerId, a.InternalTransferOrderId, a.Status });
+            _ = modelBuilder.Entity<SilaCulinaryProcurementAllocation>().HasIndex(a => new { a.BuyerId, a.IdempotencyKey });
+            _ = modelBuilder.Entity<SilaCulinaryProcurementException>().HasIndex(a => new { a.BuyerId, a.ProcurementPlanId, a.ResolutionStatus });
+            _ = modelBuilder.Entity<SilaCulinaryProcurementScenario>().HasIndex(a => new { a.BuyerId, a.ProcurementPlanId });
 
             base.OnModelCreating(modelBuilder);
 
