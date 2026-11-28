@@ -26,5 +26,8 @@ namespace Buyer.Domain.Dtos
         public string? PlantCode { get; set; }
         /// <summary>SAP storage location code of the location, when mapped.</summary>
         public string? StorageLocationCode { get; set; }
+        /// <summary>On hand valued at the Item Master unit cost, for the location.</summary>
+        public decimal StockValue { get; set; }
+        public string? StockCurrency { get; set; }
     }
 }

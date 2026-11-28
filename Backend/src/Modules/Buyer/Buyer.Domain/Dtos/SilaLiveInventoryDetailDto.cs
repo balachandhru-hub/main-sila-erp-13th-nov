@@ -12,6 +12,8 @@ namespace Buyer.Domain.Dtos
         public decimal OnHandQty { get; set; }
         public decimal InTransitQty { get; set; }
         public List<SilaLiveInventoryLocationDto> Locations { get; set; } = new();
+        /// <summary>Codes of active recipes that use the material (at most 8).</summary>
+        public List<string> LinkedRecipes { get; set; } = new();
         /// <summary>The location the recommendation is for (the requested one, else the caller's first location).</summary>
         public Guid? CurrentLocationId { get; set; }
         public decimal RequiredQty { get; set; }

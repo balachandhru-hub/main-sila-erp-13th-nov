@@ -314,9 +314,10 @@ namespace Buyer.API.Controllers
             [FromQuery] Guid? locationId,
             [FromQuery] string? health = null,
             [FromQuery] int index = 0,
-            [FromQuery] int limit = 20)
+            [FromQuery] int limit = 20,
+            [FromQuery] string? productClass = null)
         {
-            _logger.LogDebug($"Searching live inventory. Search: {search}, LocationId: {locationId}, Health: {health}, Index: {index}");
+            _logger.LogDebug($"Searching live inventory. Search: {search}, LocationId: {locationId}, Health: {health}, Index: {index}, Class: {productClass}");
             List<SilaLiveInventoryRowDto> result = await _mediator.Send(new GetSilaLiveInventoryQuery
             {
                 OrganizationId = GetOrganizationId(),
@@ -325,6 +326,7 @@ namespace Buyer.API.Controllers
                 Search = search,
                 LocationId = locationId,
                 Health = health,
+                ProductClass = productClass,
                 Index = index,
                 Limit = limit
             });

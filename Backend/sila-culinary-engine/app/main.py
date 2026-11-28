@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import FastAPI, File, HTTPException, Response, UploadFile
 from pydantic import BaseModel
 from app.agents.recipe_agent import RecipeIntelligenceAgent
+from app.engines.bottle_vision import BottleVisionResult, analyze_bottle
 from app.engines.documents import extract_recipe_document, validate_and_prepare_dish_image
 from app.engines.material_eval import run_material_evaluation
 from app.engines.material_index import get_index_manager
@@ -426,6 +427,29 @@ async def post_prepare_dish_image(file: UploadFile = File(...)) -> dict:
         content = await file.read()
         b64, mime, w, h = validate_and_prepare_dish_image(file.filename or "dish.jpg", content)
         return {"base64": b64, "mime_type": mime, "width": w, "height": h}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+class BottleLevelHttpRequest(BaseModel):
+    image_base64: str
+    mime_type: str | None = None
+    nominal_ml: float | None = None
+    description: str | None = None
+    provider_config: ProviderRuntimeConfig | None = None
+
+
+@app.post("/v1/inventory/bottle-level", response_model=BottleVisionResult)
+async def post_bottle_level(req: BottleLevelHttpRequest) -> BottleVisionResult:
+    import base64
+    import binascii
+
+    try:
+        content = base64.b64decode(req.image_base64, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="The bottle photo is not valid base64.") from exc
+    try:
+        return await analyze_bottle(content, req.nominal_ml, req.description, req.provider_config, req.mime_type)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

@@ -21,5 +21,16 @@ namespace Buyer.Domain.Dtos
         public decimal? ReorderPoint { get; set; }
         /// <summary>Last ledger movement at the scoped location (or newest across locations).</summary>
         public DateTime? LastMovementOn { get; set; }
+        public string? MaterialGroup { get; set; }
+        /// <summary>BEVERAGE | FOOD | MINIBAR | TOBACCO | GENERAL, derived from the Item Master and the location.</summary>
+        public string ProductClass { get; set; } = "GENERAL";
+        public string? Barcode { get; set; }
+        public decimal? UnitCost { get; set; }
+        public string? Currency { get; set; }
+        /// <summary>Par level at the scoped location, when maintained.</summary>
+        public decimal? ParLevel { get; set; }
+        public decimal? MaximumStock { get; set; }
+        /// <summary>Quantity issued out of the scoped location on each of the last 7 days, oldest first.</summary>
+        public List<decimal> Last7DayIssues { get; set; } = new();
     }
 }

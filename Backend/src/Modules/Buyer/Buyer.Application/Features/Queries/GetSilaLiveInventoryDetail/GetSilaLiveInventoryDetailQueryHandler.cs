@@ -134,6 +134,13 @@ namespace Buyer.Application.Features.Queries.GetSilaLiveInventoryDetail
                 ExpiryManaged = material.ExpiryManaged,
                 SerialManaged = material.SerialManaged
             };
+            result.LinkedRecipes = await _repository.RecipeIngredient
+                .FindByCondition(x => x.MaterialId == material.Id && x.IsActive && x.Recipe.IsActive && x.Recipe.BuyerId == buyer.Id)
+                .Select(x => x.Recipe.RecipeCode)
+                .Distinct()
+                .OrderBy(x => x)
+                .Take(8)
+                .ToListAsync(cancellationToken);
             SilaLiveRecommendation.Apply(result, locations, request.CurrentLocationId, request.RequiredQty ?? 0, policy.Enabled);
             SilaLiveStockFigures.ApplyStocking(result, stockingRows, policy.Enabled);
 
