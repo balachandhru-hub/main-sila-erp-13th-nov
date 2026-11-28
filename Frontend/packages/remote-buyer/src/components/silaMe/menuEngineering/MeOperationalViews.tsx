@@ -134,6 +134,7 @@ const MeOperationalViews: React.FC<Props> = ({
   const [fullscreenView, setFullscreenView] = useState(false);
   const itemFormRef = useRef<HTMLDivElement | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [items, setItems] = useState<MenuItemEnhanced[]>([]);
   const [plans, setPlans] = useState<MenuPlanEnhanced[]>([]);
   const [portions, setPortions] = useState<PortionPlanRow[]>([]);
@@ -180,6 +181,7 @@ const MeOperationalViews: React.FC<Props> = ({
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       switch (navKey) {
         case "silaMenuItems":
@@ -233,7 +235,9 @@ const MeOperationalViews: React.FC<Props> = ({
         }
       }
     } catch (e) {
-      toastService.error(e instanceof Error ? e.message : "Could not load view.");
+      const message = e instanceof Error ? e.message : "Could not load view.";
+      setLoadError(message);
+      toastService.error(message);
     } finally {
       setLoading(false);
     }
@@ -1006,6 +1010,11 @@ const MeOperationalViews: React.FC<Props> = ({
             ))}
           </tbody>
         </table>
+        {purchasePlan.rows.length === 0 && (
+          <div className="sme-muted" data-testid="me-purchase-plan-empty">
+            No menu-driven purchase requirements for the selected dates. Add menu plans with linked recipes to generate time-phased recommendations.
+          </div>
+        )}
       </div>
     );
   }
@@ -1325,6 +1334,20 @@ const MeOperationalViews: React.FC<Props> = ({
             </div>
           )}
         </div>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="sme-panel" role="alert" data-testid="me-view-load-error">
+        <div className="sme-panel__header">
+          <h2 className="sme-panel__title">This view could not be loaded</h2>
+          <button type="button" className="sila-btn sila-btn--primary" onClick={() => void load()}>
+            Retry
+          </button>
+        </div>
+        <div className="sme-muted">{loadError}</div>
       </div>
     );
   }
