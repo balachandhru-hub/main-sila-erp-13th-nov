@@ -8,6 +8,7 @@ import {
   ClipboardList,
   DollarSign,
   FileBarChart2,
+  LayoutGrid,
   Plus,
   Save,
   Settings,
@@ -45,6 +46,7 @@ import {
   type StudioNavGroup,
   type StudioSubNavItem,
 } from "../studio";
+import { RspButton, RspHeader, RspIconButton } from "../recipes/SilaRecipeStudioProto";
 import MeStudioWorkspace, { type MeStudioHeroSnapshot } from "./MeStudioWorkspace";
 import MeOperationalViews from "./MeOperationalViews";
 import MenuReportsPanel from "./MenuReportsPanel";
@@ -428,7 +430,7 @@ const SilaMenuEngineeringApp: React.FC<Props> = ({
 
   if (!effectivePerms.menuEngineeringEnabled && normalizedKey !== "silaMenuSetup") {
     return (
-      <StudioShell>
+      <StudioShell className="rsp-page rsp-stack">
         <StudioHeroPanel
           title="Menu Engineering"
           subtitle="Intelligent Menu Engineering Workspace"
@@ -462,18 +464,19 @@ const SilaMenuEngineeringApp: React.FC<Props> = ({
   }
 
   return (
-    <StudioShell>
-      {/* ROW 2: Shared Ice-Blue Studio Hero Panel */}
-      <StudioHeroPanel
+    <StudioShell className="rsp-page rsp-stack">
+      <RspHeader
         title={isStudio && !showReports ? "ME Studio" : "Menu Engineering"}
         subtitle={
           isStudio && !showReports
             ? "AI-Powered Menu Design & Optimization"
             : `Intelligent Menu Engineering Workspace${showReports ? " · Reports" : ` · ${SCREEN_TITLES[normalizedKey] ?? ""}`}`
         }
-        titleAdornment={
+        testId="me-studio-header"
+        ariaLabel="Menu Engineering actions"
+        adornment={
           isStudio && !showReports && studioSnapshot ? (
-            <div style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", flexWrap: "wrap" }}>
+            <>
               <span className="sila-studio-badge sila-studio-badge--info">{selectedPropertyName}</span>
               <span className="sila-studio-badge sila-studio-badge--neutral">{selectedOutletName}</span>
               <span className="sila-studio-badge sila-studio-badge--info">
@@ -494,60 +497,73 @@ const SilaMenuEngineeringApp: React.FC<Props> = ({
               {studioSnapshot.isDirty && (
                 <span className="sila-studio-badge sila-studio-badge--warning">Unsaved changes</span>
               )}
-            </div>
+            </>
           ) : undefined
         }
-        topRight={
+        actions={
           <>
-            <StudioOverviewButton
-              active={false}
-              tooltip="Open Recipe Studio"
-              ariaLabel="Open Recipe Studio"
-              testId="me-recipe-studio-btn"
-              icon={<ChefHat size={18} strokeWidth={2} aria-hidden="true" />}
-              onClick={() => {
-                onNavigate("silaRecipes");
-                toastService.info("Opened Recipe Studio (Culinary Master)");
-              }}
-            />
-            <StudioOverviewButton
-              active={showReports}
-              tooltip={showReports ? "Close Reports" : "Reports (22)"}
-              ariaLabel={showReports ? "Close Reports" : "Open Reports"}
-              testId="me-hero-reports"
-              icon={<FileBarChart2 size={18} strokeWidth={2} aria-hidden="true" />}
-              onClick={() => setShowReports((r) => !r)}
-            />
-            <StudioOverviewButton
-              active={copilotOpen}
-              tooltip={copilotOpen ? "Close AI Copilot" : "AI Copilot"}
-              ariaLabel={copilotOpen ? "Close AI Copilot" : "Open AI Copilot"}
-              testId="me-ai-copilot-toggle"
-              icon={<Bot size={18} strokeWidth={2} aria-hidden="true" />}
-              onClick={() => setCopilotOpen((o) => !o)}
-            />
-            <StudioIntelligenceToggle
-              iconOnly
-              label="Menu Engineering Intelligence"
-              expanded={showOptions}
-              controlsId="me-options-panel"
-              testId="me-options-toggle"
-              icon={<Sparkles size={18} strokeWidth={2} />}
-              onClick={() => setShowOptions((o) => !o)}
-            />
-            <StudioOverviewButton
+            <RspIconButton
+              label={isStudio && !showReports ? "Return to ME Studio" : "Return to ME Studio"}
               active={isStudio && !showReports}
-              tooltip="Return to ME Studio"
-              ariaLabel="Return to ME Studio"
               testId="me-overview-button"
               onClick={() => {
                 setShowReports(false);
                 onNavigate("silaMenuStudio");
               }}
-            />
+            >
+              <LayoutGrid size={18} aria-hidden="true" />
+            </RspIconButton>
+            <RspIconButton
+              label={showOptions ? "Hide Menu Engineering Intelligence" : "Menu Engineering Intelligence"}
+              active={showOptions}
+              expanded={showOptions}
+              controlsId="me-options-panel"
+              testId="me-options-toggle"
+              onClick={() => setShowOptions((o) => !o)}
+            >
+              <Sparkles size={18} aria-hidden="true" />
+            </RspIconButton>
+            <RspIconButton
+              label={copilotOpen ? "Close AI Copilot" : "AI Copilot"}
+              active={copilotOpen}
+              testId="me-ai-copilot-toggle"
+              onClick={() => setCopilotOpen((o) => !o)}
+            >
+              <Bot size={18} aria-hidden="true" />
+            </RspIconButton>
+            <RspIconButton
+              label={showReports ? "Close Reports" : "Reports (22)"}
+              active={showReports}
+              testId="me-hero-reports"
+              onClick={() => setShowReports((r) => !r)}
+            >
+              <FileBarChart2 size={18} aria-hidden="true" />
+            </RspIconButton>
+            <RspIconButton
+              label="Open Recipe Studio"
+              testId="me-recipe-studio-btn"
+              onClick={() => {
+                onNavigate("silaRecipes");
+                toastService.info("Opened Recipe Studio (Culinary Master)");
+              }}
+            >
+              <ChefHat size={18} aria-hidden="true" />
+            </RspIconButton>
+            {heroActions.map((action) => (
+              <RspButton
+                key={action.id}
+                tone={action.id === "me-optimize-ai" ? "ai" : action.variant === "primary" ? "primary" : "glass"}
+                testId={action.testId}
+                disabled={action.disabled}
+                title={action.title}
+                onClick={action.onClick}
+              >
+                {action.icon}
+                {action.label}
+              </RspButton>
+            ))}
           </>
         }
-        actions={<StudioActionBar actions={heroActions} ariaLabel="Menu Engineering actions" />}
       />
 
       {showOptions && (

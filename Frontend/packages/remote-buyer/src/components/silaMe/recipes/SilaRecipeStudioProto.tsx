@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   ArrowUpRight,
   CheckCircle2,
+  ChefHat,
   ChevronDown,
   ChevronRight,
   Eye,
@@ -22,9 +23,9 @@ import { getRecipe } from "../../../api/silaMe/silaRecipeApi";
 import type { SilaRecipeDetail, SilaRecipeListItem } from "../../../api/silaMe/silaRecipeApi";
 import { costPerServing, formatCost, formatPercent, formatQty, recipeLabel } from "./recipeFormat";
 import { formatProductClassLabel } from "./recipeHospitality";
-import SilaRecipeCatalogGrid from "./SilaRecipeCatalogGrid";
 import SilaRecipePicture from "./SilaRecipePicture";
 import "./SilaRecipeStudioProto.css";
+import "./SilaStudioProtoTheme.css";
 
 export type RspViewMode = "grid" | "compact" | "list";
 
@@ -34,17 +35,21 @@ const cx = (...parts: Array<string | false | null | undefined>) => parts.filter(
 /* Header                                                              */
 /* ------------------------------------------------------------------ */
 
-export const RspHeader: React.FC<{ title: string; subtitle: string; actions: React.ReactNode }> = ({
-  title,
-  subtitle,
-  actions,
-}) => (
-  <header className="rsp-header" data-testid="recipe-studio-header">
-    <div>
+export const RspHeader: React.FC<{
+  title: string;
+  subtitle: string;
+  actions: React.ReactNode;
+  adornment?: React.ReactNode;
+  testId?: string;
+  ariaLabel?: string;
+}> = ({ title, subtitle, actions, adornment, testId = "recipe-studio-header", ariaLabel = "Recipe Studio actions" }) => (
+  <header className="rsp-header" data-testid={testId}>
+    <div className="rsp-header__main">
       <h1 className="rsp-title">{title}</h1>
       <p className="rsp-subtitle">{subtitle}</p>
+      {adornment ? <div className="rsp-adornment">{adornment}</div> : null}
     </div>
-    <div className="rsp-actions" role="toolbar" aria-label="Recipe Studio actions">
+    <div className="rsp-actions" role="toolbar" aria-label={ariaLabel}>
       {actions}
     </div>
   </header>
@@ -498,16 +503,59 @@ const RspStatusBadge: React.FC<{ status: string }> = ({ status }) => (
   <span className={`rsp-badge rsp-badge--${statusTone(status)}`}>{recipeLabel(status)}</span>
 );
 
-const RspMedia: React.FC<{ row: SilaRecipeListItem }> = ({ row }) => (
-  <SilaRecipePicture
-    recipeId={row.id}
-    hasPicture={Boolean(row.hasPicture)}
-    placeholderTitle={row.name}
-    placeholderCategory={row.category}
-    placeholderFamily={row.familyName}
-    variant="catalog"
-    locked
-  />
+const monogramOf = (name: string) => {
+  const words = name.replace(/[^A-Za-z0-9 ]/g, " ").split(/\s+/).filter(Boolean);
+  if (words.length === 0) return "--";
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return (words[0][0] + words[1][0]).toUpperCase();
+};
+
+const meshOf = (row: SilaRecipeListItem) => {
+  const format = (row.recipeFormat ?? "").toUpperCase();
+  if (format === "SUB_RECIPE") return "rsp-mesh--amber";
+  if (format === "BATCH_RECIPE") return "rsp-mesh--teal";
+  return "rsp-mesh--spirits";
+};
+
+/** Card / drawer visual: real photograph when present, otherwise the prototype mesh with a monogram tile. */
+const RspMedia: React.FC<{ row: SilaRecipeListItem }> = ({ row }) =>
+  row.hasPicture ? (
+    <SilaRecipePicture
+      recipeId={row.id}
+      hasPicture
+      placeholderTitle={row.name}
+      placeholderCategory={row.category}
+      placeholderFamily={row.familyName}
+      variant="catalog"
+      locked
+    />
+  ) : (
+    <div className={cx("rsp-placeholder", meshOf(row))}>
+      <div className="rsp-placeholder__tile">
+        <ChefHat size={18} aria-hidden="true" />
+        <span>{monogramOf(row.name)}</span>
+      </div>
+      <span className="rsp-placeholder__family">{row.familyName || row.category || "Recipe"}</span>
+    </div>
+  );
+
+/** 44px rounded thumbnail used by compact cards and list rows (prototype `w-11 h-11 rounded-xl`). */
+const RspThumb: React.FC<{ row: SilaRecipeListItem }> = ({ row }) => (
+  <div className={cx("rsp-thumb", !row.hasPicture && meshOf(row))}>
+    {row.hasPicture ? (
+      <SilaRecipePicture
+        recipeId={row.id}
+        hasPicture
+        placeholderTitle={row.name}
+        placeholderCategory={row.category}
+        placeholderFamily={row.familyName}
+        variant="catalog"
+        locked
+      />
+    ) : (
+      <span className="rsp-thumb__mono">{monogramOf(row.name)}</span>
+    )}
+  </div>
 );
 
 interface RspCatalogProps {
@@ -632,9 +680,7 @@ const RspRow: React.FC<{ row: SilaRecipeListItem } & Omit<RspCatalogProps, "rows
       onKeyDown={activateOnKey(() => onOpen(row))}
     >
       <div className="rsp-row__main">
-        <div className="rsp-thumb">
-          <RspMedia row={row} />
-        </div>
+        <RspThumb row={row} />
         <div style={{ minWidth: 0 }}>
           <div className="rsp-row__head">
             <h3 className="rsp-row__title" title={row.name}>
@@ -670,31 +716,55 @@ const RspRow: React.FC<{ row: SilaRecipeListItem } & Omit<RspCatalogProps, "rows
   );
 };
 
+const RspCompactCard: React.FC<{ row: SilaRecipeListItem; onOpen: (row: SilaRecipeListItem) => void }> = ({ row, onOpen }) => {
+  const cost = portionCostOf(row);
+  const pos = posOf(row);
+  const tone = statusTone(row.status);
+  return (
+    <article
+      className="rsp-glass rsp-compact"
+      role="listitem"
+      tabIndex={0}
+      data-testid="recipe-compact-card"
+      aria-label={`${row.name}, ${recipeLabel(row.status)}`}
+      onClick={() => onOpen(row)}
+      onKeyDown={activateOnKey(() => onOpen(row))}
+    >
+      <div className="rsp-compact__head">
+        <div className="rsp-compact__id">
+          <RspThumb row={row} />
+          <div className="rsp-compact__text">
+            <h3 className="rsp-compact__title" title={row.name}>
+              {row.name}
+            </h3>
+            <p className="rsp-compact__meta">
+              {[typeLabel(row), `${row.ingredientCount} ingr`, `${formatQty(row.servingQty)} ${row.servingUom}`].filter(Boolean).join(" • ")}
+            </p>
+          </div>
+        </div>
+        <span className={`rsp-compact__dot rsp-compact__dot--${tone}`} title={recipeLabel(row.status)} aria-label={recipeLabel(row.status)} />
+      </div>
+      <div className="rsp-compact__foot">
+        <span className="rsp-compact__cost">
+          {cost == null ? "Cost pending" : formatCost(cost, row.currency)} <span>/ por</span>
+        </span>
+        <span className="rsp-compact__pos" title={pos}>
+          {pos || "—"}
+        </span>
+      </div>
+    </article>
+  );
+};
+
 export const RspCatalog: React.FC<RspCatalogProps> = (props) => {
   const { rows, viewMode, canManage, onOpen, onEdit, onDelete } = props;
-  if (viewMode === "compact") {
-    return (
-      <SilaRecipeCatalogGrid
-        rows={rows}
-        canManage={canManage}
-        variant="compact"
-        onOpen={(id) => {
-          const row = rows.find((item) => item.id === id);
-          if (row) onOpen(row);
-        }}
-        onEdit={(id) => {
-          const row = rows.find((item) => item.id === id);
-          if (row) onEdit(row);
-        }}
-        onDelete={onDelete}
-      />
-    );
-  }
   return (
-    <div className={cx("rsp-grid", viewMode === "list" && "rsp-grid--list")} role="list" data-testid="recipe-catalog">
+    <div className={cx("rsp-grid", viewMode === "compact" && "rsp-grid--compact", viewMode === "list" && "rsp-grid--list")} role="list" data-testid="recipe-catalog">
       {rows.map((row) =>
         viewMode === "list" ? (
           <RspRow key={row.id} row={row} canManage={canManage} onOpen={onOpen} onEdit={onEdit} onDelete={onDelete} />
+        ) : viewMode === "compact" ? (
+          <RspCompactCard key={row.id} row={row} onOpen={onOpen} />
         ) : (
           <RspCard key={row.id} row={row} canManage={canManage} onOpen={onOpen} onEdit={onEdit} onDelete={onDelete} />
         ),

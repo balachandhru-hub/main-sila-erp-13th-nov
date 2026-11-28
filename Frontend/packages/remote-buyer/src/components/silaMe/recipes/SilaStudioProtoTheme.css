@@ -1,0 +1,556 @@
+/* ==========================================================================
+   SILA Recipe Studio prototype theme, applied to every screen inside `.rsp-page`
+   (Recipe Studio, Culinary Intelligence workspaces, Menu Engineering, ME Studio).
+   Re-skins the shared `sila-studio-*`, `cs2-*`, `sme-*` and global `sila-*` controls
+   so they use the prototype's neutral glass borders, white tiles, rounded-2xl panels,
+   rounded-xl controls and sky gradient actions. Markup, handlers and test ids are untouched.
+   ========================================================================== */
+
+.rsp-page {
+  --sila-studio-border: rgba(15, 23, 42, 0.08);
+  --sila-studio-border-interactive: #cbd5e1;
+  --sila-studio-divider: #f1f5f9;
+  --sila-studio-heading: #0f172a;
+  --sila-studio-secondary: #64748b;
+  --sila-studio-blue: #0284c7;
+  --sila-studio-blue-hover: #0369a1;
+  --sila-studio-nav-active-bg: #f0f9ff;
+  --sila-studio-hover-bg: #f8fafc;
+  --sila-studio-hero-bg: transparent;
+  --sila-studio-hero-border: #bae6fd;
+  --sila-studio-success: #059669;
+  --sila-studio-warning: #d97706;
+  --sila-studio-error: #e11d48;
+  --rsp-glass-bg: rgba(255, 255, 255, 0.82);
+  --rsp-glass-border: rgba(15, 23, 42, 0.07);
+  color: #0f172a;
+}
+
+/* ---------- Glass surfaces (rounded-2xl) ---------- */
+.rsp-page :is(
+    .sila-studio-nav-panel,
+    .sila-studio-filter-bar,
+    .sila-studio-panel,
+    .sila-studio-fullscreen-bar,
+    .cs2-card,
+    .cs2-nav-bar,
+    .cs2-step-card,
+    .cs2-footer-bar,
+    .sme-panel,
+    .sme-ai-cmd-bar,
+    .sme-ai-mode-bar,
+    .sme-dish-card,
+    .sme-cat-group,
+    .sme-canvas-line,
+    .sme-quadrant,
+    .sme-calendar,
+    .sme-ai-response-box,
+    .sme-ai-preview-box
+  ) {
+  background: var(--rsp-glass-bg);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  border: 1px solid var(--rsp-glass-border);
+  border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px -12px rgba(15, 23, 42, 0.08);
+}
+
+.rsp-page .cs2-card,
+.rsp-page .sila-studio-panel,
+.rsp-page .sme-panel {
+  padding: 1.1rem 1.25rem;
+}
+
+.rsp-page :is(.sila-studio-panel__header, .cs2-card__head, .sme-panel__header) {
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.rsp-page :is(.sila-studio-panel__title, .cs2-card__title, .cs2-card-title, .sme-panel__title) {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #0f172a;
+}
+
+.rsp-page :is(.sila-studio-panel__subtitle, .cs2-subtitle, .sme-muted, .cs2-brand-subtitle) {
+  color: #64748b;
+}
+
+/* ---------- Page header inside workspaces ---------- */
+.rsp-page .cs2-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #0f172a;
+}
+
+/* ---------- KPI tiles: white glass, uppercase eyebrow, bold value ---------- */
+.rsp-page :is(
+    .sila-studio-kpi,
+    .sila-studio-kpi--blue,
+    .sila-studio-kpi--green,
+    .sila-studio-kpi--lavender,
+    .sila-studio-kpi--amber,
+    .sila-studio-kpi--rose,
+    .sila-studio-kpi--indigo,
+    .sila-studio-kpi--sky,
+    .cs2-kpi,
+    .cs2-kpi--accent,
+    .cs2-kpi--cyan,
+    .cs2-kpi--emerald,
+    .cs2-kpi--amber,
+    .cs2-kpi--rose,
+    .sme-kpi-box,
+    .sme-kpi-mini
+  ) {
+  background: var(--rsp-glass-bg);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  border: 1px solid var(--rsp-glass-border);
+  border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px -12px rgba(15, 23, 42, 0.08);
+  transition: box-shadow 200ms ease, transform 200ms ease;
+}
+
+.rsp-page :is(.sila-studio-kpi, .cs2-kpi, .sme-kpi-box):is(button, [role="button"], .is-clickable):hover,
+.rsp-page :is(.sila-studio-kpi, .cs2-kpi, .sme-kpi-box):is(button, [role="button"]):focus-visible {
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05), 0 16px 32px -14px rgba(2, 132, 199, 0.28);
+  border-color: #bae6fd;
+}
+
+.rsp-page :is(.sila-studio-kpi--rose, .cs2-kpi--rose) {
+  border-color: rgba(244, 63, 94, 0.28);
+  box-shadow: 0 0 0 1px rgba(244, 63, 94, 0.06), 0 8px 24px -12px rgba(244, 63, 94, 0.3);
+}
+
+.rsp-page :is(.sila-studio-kpi.is-selected, .sila-studio-kpi[aria-pressed="true"], .cs2-kpi.is-selected) {
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.25);
+}
+
+.rsp-page :is(.sila-studio-kpi__label, .cs2-kpi__label, .cs2-kpi-label, .sme-kpi-box__label) {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.rsp-page :is(.sila-studio-kpi__value, .cs2-kpi__value, .cs2-kpi-value, .sme-kpi-box__val) {
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #0f172a;
+}
+
+.rsp-page :is(.sila-studio-kpi__hint, .cs2-kpi__hint) {
+  color: #64748b;
+}
+
+.rsp-page :is(.sila-studio-kpi__icon, .sila-studio-kpi--blue .sila-studio-kpi__icon, .sila-studio-kpi--green .sila-studio-kpi__icon,
+    .sila-studio-kpi--lavender .sila-studio-kpi__icon, .sila-studio-kpi--amber .sila-studio-kpi__icon,
+    .sila-studio-kpi--indigo .sila-studio-kpi__icon, .sila-studio-kpi--sky .sila-studio-kpi__icon) {
+  color: #0284c7;
+  background: #f0f9ff;
+  border-radius: 10px;
+}
+
+.rsp-page .sila-studio-kpi--rose .sila-studio-kpi__icon {
+  color: #e11d48;
+  background: #fff1f2;
+  border-radius: 10px;
+}
+
+/* ---------- Navigation: slate segmented pills, active = white with sky text ---------- */
+.rsp-page :is(.sila-studio-top-nav, .cs2-nav-tabs) {
+  gap: 0.25rem;
+  padding: 0.25rem;
+  width: fit-content;
+  max-width: 100%;
+  border-radius: 12px;
+  border: 1px solid rgba(226, 232, 240, 0.6);
+  background: rgba(241, 245, 249, 0.8);
+}
+
+.rsp-page :is(.sila-studio-nav-btn, .cs2-nav-tab) {
+  height: 32px;
+  padding: 0 0.85rem;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: #475569;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.rsp-page :is(.sila-studio-nav-btn, .cs2-nav-tab):hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.7);
+  border-color: transparent;
+  color: #0f172a;
+}
+
+.rsp-page :is(.sila-studio-nav-btn, .cs2-nav-tab).is-active {
+  background: #ffffff;
+  border-color: rgba(226, 232, 240, 0.8);
+  color: #0369a1;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+
+.rsp-page .sila-studio-subnav {
+  gap: 0.25rem;
+  padding: 0.25rem;
+  width: fit-content;
+  max-width: 100%;
+  border-radius: 12px;
+  border: 1px solid rgba(226, 232, 240, 0.6);
+  background: rgba(241, 245, 249, 0.8);
+}
+
+.rsp-page .sila-studio-subnav-btn {
+  height: 30px;
+  border-radius: 9px;
+  border: 1px solid transparent;
+  color: #475569;
+  font-weight: 600;
+}
+
+.rsp-page .sila-studio-subnav-btn:hover {
+  background: rgba(255, 255, 255, 0.7);
+  border-color: transparent;
+}
+
+.rsp-page .sila-studio-subnav-btn.is-active {
+  background: #ffffff;
+  border-color: rgba(226, 232, 240, 0.8);
+  color: #0369a1;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+
+.rsp-page .sila-studio-subnav__group-label {
+  color: #94a3b8;
+  border-right-color: #e2e8f0;
+}
+
+.rsp-page :is(.sme-tabs) {
+  gap: 0.25rem;
+  padding: 0.25rem;
+  width: fit-content;
+  max-width: 100%;
+  border-radius: 12px;
+  border: 1px solid rgba(226, 232, 240, 0.6);
+  background: rgba(241, 245, 249, 0.8);
+}
+
+.rsp-page .sme-tab {
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: #475569;
+  font-weight: 600;
+}
+
+.rsp-page .sme-tab.sme-tab--active {
+  background: #ffffff;
+  border-color: rgba(226, 232, 240, 0.8);
+  color: #0369a1;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+
+.rsp-page :is(.sila-studio-segmented, .sila-studio-view-toggle, .cs2-mode-tabs) {
+  padding: 0.25rem;
+  border-radius: 12px;
+  border: 1px solid rgba(226, 232, 240, 0.6);
+  background: rgba(241, 245, 249, 0.8);
+  gap: 0.25rem;
+  overflow: visible;
+}
+
+.rsp-page .sila-studio-segmented__btn,
+.rsp-page .sila-studio-view-toggle__btn {
+  height: 30px;
+  border: 0;
+  border-radius: 9px;
+  color: #475569;
+}
+
+.rsp-page .sila-studio-segmented__btn.is-active,
+.rsp-page .sila-studio-view-toggle__btn.is-active {
+  background: #ffffff;
+  color: #0369a1;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+
+.rsp-page .cs2-mode-btn,
+.rsp-page .sme-ai-mode-pill {
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: #475569;
+  font-weight: 600;
+}
+
+.rsp-page .cs2-mode-btn.is-active,
+.rsp-page .sme-ai-mode-pill--active {
+  background: #ffffff;
+  border-color: rgba(226, 232, 240, 0.8);
+  color: #0369a1;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+
+.rsp-page .sme-ai-mode-pills {
+  padding: 0.25rem;
+  border-radius: 12px;
+  border: 1px solid rgba(226, 232, 240, 0.6);
+  background: rgba(241, 245, 249, 0.8);
+}
+
+/* ---------- Buttons: rounded-xl glass, primary = sky gradient ---------- */
+.rsp-page :is(.sila-studio-btn, .cs2-btn, .sila-btn, .sme-ai-mini-btn) {
+  height: 36px;
+  border-radius: 12px;
+  border: 1px solid var(--rsp-glass-border);
+  background: var(--rsp-glass-bg);
+  color: #334155;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  transition: background-color 150ms ease, box-shadow 150ms ease, border-color 150ms ease;
+}
+
+.rsp-page :is(.sila-studio-btn--sm, .sila-btn--sm, .sila-btn--xs) {
+  height: 30px;
+  border-radius: 10px;
+  font-size: 0.75rem;
+}
+
+.rsp-page :is(.sila-studio-btn, .cs2-btn, .sila-btn, .sme-ai-mini-btn):hover:not(:disabled) {
+  background: #ffffff;
+  border-color: #bae6fd;
+  color: #0f172a;
+  box-shadow: 0 4px 12px -6px rgba(2, 132, 199, 0.35);
+}
+
+.rsp-page :is(.sila-studio-btn--primary, .cs2-btn-primary, .sila-btn--primary, .sme-ai-mini-btn--primary) {
+  border-color: transparent;
+  background: linear-gradient(90deg, #0284c7, #0d9488);
+  color: #ffffff;
+  box-shadow: 0 6px 16px -6px rgba(2, 132, 199, 0.55);
+}
+
+.rsp-page :is(.sila-studio-btn--primary, .cs2-btn-primary, .sila-btn--primary, .sme-ai-mini-btn--primary):hover:not(:disabled) {
+  background: linear-gradient(90deg, #0369a1, #0f766e);
+  border-color: transparent;
+  color: #ffffff;
+}
+
+.rsp-page :is(.sila-studio-btn--danger, .sila-btn--danger) {
+  background: #fff1f2;
+  border-color: #fecdd3;
+  color: #be123c;
+}
+
+.rsp-page :is(.sila-studio-btn--ghost, .sila-btn--ghost) {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  color: #64748b;
+}
+
+/* ---------- Inputs: rounded-xl, slate border, sky focus ring ---------- */
+.rsp-page :is(.sila-input, .sila-select, .sila-studio-input, .sila-studio-select, .cs2-input) {
+  min-height: 36px;
+  border-radius: 12px;
+  border: 1px solid var(--rsp-glass-border);
+  background: rgba(255, 255, 255, 0.9);
+  color: #0f172a;
+  font-size: 0.8125rem;
+}
+
+.rsp-page .cs2-field :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+  border-radius: 12px;
+  border: 1px solid var(--rsp-glass-border);
+  background: rgba(255, 255, 255, 0.9);
+  color: #0f172a;
+}
+
+.rsp-page :is(.sila-input, .sila-select, .sila-studio-input, .sila-studio-select, .cs2-input):focus,
+.rsp-page .cs2-field :is(input, select, textarea):focus {
+  outline: none;
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.18);
+}
+
+.rsp-page :is(.sila-label, .cs2-field) {
+  color: #475569;
+}
+
+.rsp-page .sila-label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.rsp-page .sila-studio-filter-bar {
+  padding: 0.75rem 1rem;
+}
+
+/* ---------- Chips and badges: pill, neutral border ---------- */
+.rsp-page :is(.cs2-chip, .cs2-filter-pill, .sme-chip, .sme-ai-chip) {
+  border: 1px solid var(--rsp-glass-border);
+  background: rgba(255, 255, 255, 0.85);
+  color: #334155;
+  font-weight: 600;
+}
+
+.rsp-page :is(.cs2-chip, .cs2-filter-pill, .sme-ai-chip):hover {
+  border-color: #bae6fd;
+  background: #f0f9ff;
+}
+
+.rsp-page :is(.cs2-chip.is-active, .cs2-filter-pill.is-active) {
+  background: #0f172a;
+  border-color: #0f172a;
+  color: #ffffff;
+}
+
+.rsp-page .sila-studio-chip {
+  border: 1px solid #bae6fd;
+  background: #f0f9ff;
+  color: #075985;
+}
+
+.rsp-page :is(.sila-studio-badge, .cs2-badge, .cs2-pill, .sme-ai-badge, .sme-ai-tag) {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.rsp-page .sila-studio-badge--info,
+.rsp-page .cs2-badge--demo {
+  background: #f0f9ff;
+  border-color: #bae6fd;
+  color: #0369a1;
+}
+
+.rsp-page .sila-studio-badge--success,
+.rsp-page .cs2-badge--live,
+.rsp-page .sme-chip--ok {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+  color: #047857;
+}
+
+.rsp-page .sila-studio-badge--warning,
+.rsp-page .sme-chip--warn {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #b45309;
+}
+
+.rsp-page .sila-studio-badge--error,
+.rsp-page .sme-chip--bad {
+  background: #fff1f2;
+  border-color: #fecdd3;
+  color: #be123c;
+}
+
+.rsp-page .sila-studio-badge--neutral {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+  color: #64748b;
+}
+
+/* ---------- Banners ---------- */
+.rsp-page .cs2-banner {
+  border-radius: 16px;
+  border: 1px solid #bae6fd;
+  background: rgba(240, 249, 255, 0.85);
+  color: #0f172a;
+}
+
+.rsp-page .cs2-banner--phase {
+  border-color: var(--rsp-glass-border);
+  background: var(--rsp-glass-bg);
+}
+
+.rsp-page .cs2-banner--warn,
+.rsp-page .sme-ai-proactive-strip {
+  border-radius: 16px;
+  border: 1px solid #fde68a;
+  background: rgba(255, 251, 235, 0.9);
+  color: #92400e;
+}
+
+/* ---------- Tables ---------- */
+.rsp-page :is(.sila-studio-table-wrap, .cs2-table-wrap) {
+  border-radius: 12px;
+  border: 1px solid var(--rsp-glass-border);
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.rsp-page :is(.sila-studio-table, .cs2-table, .sila-table) :is(th) {
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.rsp-page :is(.sila-studio-table, .cs2-table, .sila-table) td {
+  border-bottom: 1px solid #f1f5f9;
+  color: #0f172a;
+}
+
+.rsp-page :is(.sila-studio-table, .cs2-table) tbody tr:hover td,
+.rsp-page .sila-studio-table tbody tr:hover {
+  background: #f0f9ff;
+}
+
+/* ---------- Drawers ---------- */
+.rsp-page .cs2-drawer,
+.cs2-drawer {
+  border-left: 1px solid rgba(15, 23, 42, 0.07);
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.rsp-page .cs2-drawer__head {
+  background: rgba(248, 250, 252, 0.9);
+  border-bottom: 1px solid #f1f5f9;
+}
+
+/* ---------- ME specifics ---------- */
+.rsp-page .sme-quadrant--star { border-left: 4px solid #10b981; background: rgba(236, 253, 245, 0.85); }
+.rsp-page .sme-quadrant--plow { border-left: 4px solid #0ea5e9; background: rgba(240, 249, 255, 0.85); }
+.rsp-page .sme-quadrant--puzzle { border-left: 4px solid #f59e0b; background: rgba(255, 251, 235, 0.85); }
+.rsp-page .sme-quadrant--dog { border-left: 4px solid #f43f5e; background: rgba(255, 241, 242, 0.85); }
+
+.rsp-page .sme-dish-card:hover {
+  border-color: #bae6fd;
+  box-shadow: 0 10px 28px -14px rgba(2, 132, 199, 0.3);
+}
+
+.rsp-page .rsp-adornment {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.6rem;
+}
+
+.rsp-page .rsp-header__main {
+  min-width: 0;
+}
+
+/* ---------- Spacing rhythm ---------- */
+.rsp-page.rsp-stack {
+  gap: 1.25rem;
+}
+
+.rsp-page :is(.cs2-shell, .cs2-workspace-fs) {
+  gap: 1.25rem;
+}
+
+.rsp-page :is(.cs2-grid-2, .cs2-grid-3, .cs2-kpi-grid) {
+  gap: 1rem;
+}
