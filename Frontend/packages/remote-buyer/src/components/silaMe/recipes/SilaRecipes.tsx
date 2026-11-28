@@ -84,6 +84,8 @@ import {
 import "../silaMeTheme.css";
 import "./SilaRecipes.css";
 import "./SilaRecipeStudio.css";
+import "./SilaStudioProtoTheme.css";
+import "../SilaProtoSkin.css";
 
 interface SilaRecipesProps {
   canManage: boolean;
@@ -350,9 +352,11 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({
     }
   };
 
+  const withPrototypeSkin = (node: React.ReactNode) => <div className="rsp-page rsp-skin">{node}</div>;
+
   // --- Legacy Recipe Upload (isolated migration workspace) ---
   if (effectiveRoute.kind === "legacy-upload") {
-    return (
+    return withPrototypeSkin(
       <SilaRecipeLegacyUpload
         canManage={canManage}
         canApprove={canApprove}
@@ -365,7 +369,7 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({
   // --- New Recipe: Recipe Studio workspace ---
   if (effectiveRoute.kind === "new") {
     if (!canManage) {
-      return (
+      return withPrototypeSkin(
         <StudioShell className="sila-me srec-page rstudio-page">
           <EmptyState
             variant="error"
@@ -380,7 +384,7 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({
         </StudioShell>
       );
     }
-    return (
+    return withPrototypeSkin(
       <SilaRecipeWorkspaceShell
         key={`new-recipe-shell-${locationKey}-${newShellEpoch}`}
         mode="new"
@@ -393,7 +397,7 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({
   // --- Edit Recipe: Recipe Studio workspace ---
   if (effectiveRoute.kind === "edit") {
     if (!canManage) {
-      return (
+      return withPrototypeSkin(
         <StudioShell className="sila-me srec-page rstudio-page">
           <EmptyState
             variant="error"
@@ -408,7 +412,7 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({
         </StudioShell>
       );
     }
-    return (
+    return withPrototypeSkin(
       <SilaRecipeWorkspaceShell
         key={`edit-recipe-shell-${locationKey}-${effectiveRoute.recipeId}`}
         mode="edit"
@@ -420,7 +424,7 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({
 
   // --- Detail ---
   if (effectiveRoute.kind === "detail") {
-    return (
+    return withPrototypeSkin(
       <SilaRecipeDetailView
         recipeId={effectiveRoute.recipeId}
         canManage={canManage}

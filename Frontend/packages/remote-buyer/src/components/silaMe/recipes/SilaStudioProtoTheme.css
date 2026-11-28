@@ -560,16 +560,21 @@
    The gradient lives on the whole shell instead of a box around the page, so there is
    no visible tinted rectangle or edge; the page content is capped at 1440px and centred.
    ========================================================================== */
+.sila-shell:has(.rsp-page):has(.sila-studio-shell),
 .sila-shell:has(.rsp-page) {
-  background-color: #f8fafc;
+  background-color: #f8fafc !important;
   background-image:
     radial-gradient(at 0% 0%, rgba(2, 132, 199, 0.05) 0, transparent 48%),
-    radial-gradient(at 100% 0%, rgba(13, 148, 136, 0.05) 0, transparent 48%);
-  background-attachment: fixed;
+    radial-gradient(at 100% 0%, rgba(13, 148, 136, 0.05) 0, transparent 48%) !important;
+  background-attachment: fixed !important;
 }
 
-.sila-shell:has(.rsp-page) .sila-main {
-  background: transparent;
+.sila-shell:has(.rsp-page):has(.sila-studio-shell) .sila-main,
+.sila-shell:has(.rsp-page):has(.sila-studio-shell) .pud-main,
+.sila-shell:has(.rsp-page):has(.sila-studio-shell) .pud-content,
+.sila-shell:has(.rsp-page) .sila-main,
+.rsp-page.sila-studio-shell {
+  background: transparent !important;
 }
 
 html:has(.rsp-page) body {
