@@ -88,6 +88,7 @@ class BottleVisionResult(BaseModel):
     label_text: str = ""
     needs_manual_review: bool = True
     warnings: list[str] = Field(default_factory=list)
+    notices: list[str] = Field(default_factory=list, description="Informational only; never forces a manual review.")
 
 
 @dataclass
@@ -418,9 +419,9 @@ async def analyze_bottle(
                 image_bytes, mime or "image/jpeg", resolved_ml, description, provider_config)
             result.provider, result.model = provider, model
         except ProviderUnavailableError as exc:
-            result.warnings.append(f"Vision AI provider not used: {exc.message}")
+            result.notices.append(f"Vision AI provider not used: {exc.message}")
         except Exception as exc:  # noqa: BLE001 - the CV estimate is still valid when the provider call fails
-            result.warnings.append(f"Vision AI provider failed: {str(exc)[:160]}")
+            result.notices.append(f"Vision AI provider failed: {str(exc)[:160]}")
 
     if llm is not None and llm.bottle_detected:
         result.bottle_detected = True

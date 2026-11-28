@@ -172,4 +172,5 @@ def test_provider_failure_keeps_cv_result():
     cfg = ProviderRuntimeConfig(tenant_id="t1", local_enabled=False)
     result = asyncio.run(analyze_bottle(synthetic_bottle(0.5), 750, None, cfg, "image/jpeg"))
     assert result.method == "CV_HEURISTIC"
-    assert any("Vision AI provider" in w for w in result.warnings)
+    assert any("Vision AI provider" in w for w in result.notices)
+    assert not result.needs_manual_review

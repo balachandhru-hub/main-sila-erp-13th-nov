@@ -24,5 +24,6 @@ namespace Buyer.Domain.Dtos
         public string LabelText { get; set; } = string.Empty;
         public bool NeedsManualReview { get; set; } = true;
         public List<string> Warnings { get; set; } = new();
+        public List<string> Notices { get; set; } = new();
     }
 }
