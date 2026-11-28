@@ -55,6 +55,8 @@ export interface AppShellProps {
   topbarActions?: React.ReactNode;
   /** Removes page padding, for screens that manage their own layout. */
   flushContent?: boolean;
+  /** `prototype` restyles the top bar to the SILA Culinary OS prototype (glass bar, segmented menu). */
+  variant?: 'default' | 'prototype';
   children?: React.ReactNode;
 }
 
@@ -550,6 +552,7 @@ export const AppShell: React.FC<AppShellProps> = ({
   userMenuItems = [],
   topbarActions,
   flushContent = false,
+  variant = 'default',
   children,
 }) => {
   const hasNav = Boolean(navItems && navItems.length > 0);
@@ -626,7 +629,12 @@ export const AppShell: React.FC<AppShellProps> = ({
     };
   }, [hasNav, navItems, updateTopnavOverflow]);
 
-  const shellClass = ['sila-root', 'sila-shell', drawerOpen && 'sila-shell--drawer-open'].filter(Boolean).join(' ');
+  const shellClass = [
+    'sila-root',
+    'sila-shell',
+    variant === 'prototype' && 'sila-shell--proto',
+    drawerOpen && 'sila-shell--drawer-open',
+  ].filter(Boolean).join(' ');
   const displayName = userName || userFallbackName;
   const displayEmail = userEmail || userFallbackEmail;
   const showTopnavOverflow = canScrollLeft || canScrollRight;
