@@ -18,6 +18,7 @@ using Buyer.Application.Features.Queries.GetSilaLocations;
 using Buyer.Application.Features.Queries.GetSilaLocationUsers;
 using Buyer.Application.Features.Queries.GetSilaMaterials;
 using Buyer.Application.Features.Queries.GetSilaPendingOutletRequirements;
+using Buyer.Application.Features.Shared;
 using Buyer.Domain.Dtos;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
@@ -38,11 +39,27 @@ namespace Buyer.API.Controllers
     {
         private readonly IMediator _mediator;
         private readonly ILoggerManager _logger;
+        private readonly ISilaInventoryVisionService _vision;
 
-        public SilaInventoryController(IMediator mediator, ILoggerManager logger)
+        public SilaInventoryController(IMediator mediator, ILoggerManager logger, ISilaInventoryVisionService vision)
         {
             _mediator = mediator;
             _logger = logger;
+            _vision = vision;
+        }
+
+        [HttpPost]
+        [Route("api/v1/buyer/sila/inventory/vision/bottle-level")]
+        [ApiAuthorization(Name = "VIEW_SILA_INVENTORY")]
+        [SwaggerOperation("AnalyzeSilaBottleLevel")]
+        [SwaggerResponse(200, type: typeof(SilaInventoryBottleVisionDto))]
+        [RequestSizeLimit(8 * 1024 * 1024)]
+        public async Task<IActionResult> AnalyzeBottleLevel(
+            IFormFile file, [FromForm] double? nominalMl, [FromForm] string? description, CancellationToken cancellationToken)
+        {
+            SilaInventoryBottleVisionDto result = await _vision.AnalyzeBottleAsync(
+                GetOrganizationId(), GetUserId(), file, nominalMl, description, cancellationToken);
+            return Ok(result);
         }
 
         [HttpGet]
@@ -314,9 +331,10 @@ namespace Buyer.API.Controllers
             [FromQuery] Guid? locationId,
             [FromQuery] string? health = null,
             [FromQuery] int index = 0,
-            [FromQuery] int limit = 20)
+            [FromQuery] int limit = 20,
+            [FromQuery] string? productClass = null)
         {
-            _logger.LogDebug($"Searching live inventory. Search: {search}, LocationId: {locationId}, Health: {health}, Index: {index}");
+            _logger.LogDebug($"Searching live inventory. Search: {search}, LocationId: {locationId}, Health: {health}, Index: {index}, Class: {productClass}");
             List<SilaLiveInventoryRowDto> result = await _mediator.Send(new GetSilaLiveInventoryQuery
             {
                 OrganizationId = GetOrganizationId(),
@@ -325,6 +343,7 @@ namespace Buyer.API.Controllers
                 Search = search,
                 LocationId = locationId,
                 Health = health,
+                ProductClass = productClass,
                 Index = index,
                 Limit = limit
             });

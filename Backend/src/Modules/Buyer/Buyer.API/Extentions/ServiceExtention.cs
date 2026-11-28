@@ -162,6 +162,7 @@ namespace Buyer.API.Extensions
             _ = services.AddScoped<IStockInHandProvider, ErpStockInHandProvider>();
             _ = services.AddScoped<ISilaCulinaryAiProviderGateway, SilaCulinaryAiProviderGateway>();
             _ = services.AddScoped<ISilaCulinaryRecipeService, SilaCulinaryRecipeService>();
+            _ = services.AddScoped<ISilaInventoryVisionService, SilaInventoryVisionService>();
             _ = services.AddScoped<ISilaCulinaryMaterialService, SilaCulinaryMaterialService>();
             _ = services.AddScoped<ISilaCulinaryLifecycleService, SilaCulinaryLifecycleService>();
             _ = services.AddScoped<ISilaCulinaryEventMenuService, SilaCulinaryEventMenuService>();

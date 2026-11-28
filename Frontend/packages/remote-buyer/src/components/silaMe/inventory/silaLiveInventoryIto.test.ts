@@ -11,12 +11,14 @@ const dir = dirname(fileURLToPath(import.meta.url));
 const read = (rel: string) => readFileSync(join(dir, rel), "utf8");
 
 const live = read("SilaLiveInventory.tsx");
-assert.match(live, /Pending Requirements/);
+const cc = read("SilaInventoryCommandCenter.tsx");
+assert.match(cc, /Pending requirements/);
+assert.match(cc, /pending-requirements-indicator/);
 assert.match(live, /getPendingOutletRequirements/);
 assert.match(live, /SilaPendingRequirementsPanel/);
-assert.match(live, /Create ITO|New Transfer/);
+assert.match(cc, /New Transfer/);
 // New Transfer allows plant-to-plant (301); weekly-bucket panel still forces same-plant 311.
-assert.doesNotMatch(live, /createTransfer\(\{[\s\S]*?requireSamePlant:\s*true/);
+assert.doesNotMatch(live + cc, /createTransfer\(\{[\s\S]*?requireSamePlant:\s*true/);
 assert.match(live, /Quick ITO/);
 assert.match(live, /transferFromId|liv-transfer-source/);
 

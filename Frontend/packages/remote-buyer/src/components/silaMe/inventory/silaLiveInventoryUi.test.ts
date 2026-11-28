@@ -14,43 +14,59 @@ const dir = dirname(fileURLToPath(import.meta.url));
 const read = (name: string) => readFileSync(join(dir, name), "utf8");
 
 const live = read("SilaLiveInventory.tsx");
-assert.match(live, /Inventory Command Center/);
-assert.match(live, /liv-command/);
-assert.match(live, /Critical \/ Low Stock/);
-assert.match(live, /In Transit/);
-assert.match(live, /Pending Actions/);
-assert.match(live, /Stock Items/);
-assert.match(live, /Inventory Priorities/);
-assert.match(live, /liv-alert-icon/);
-assert.match(live, /Stock Count/);
-assert.match(live, /Scan barcode/);
-assert.match(live, /Take photo/);
+const cc = read("SilaInventoryCommandCenter.tsx");
+const ccCss = read("SilaInventoryCommandCenter.css");
+const vision = read("SilaVisionAiModal.tsx");
+
+// The list view is the command center; the parent keeps data, material detail and pending panels.
+assert.match(live, /SilaInventoryCommandCenter/);
 assert.match(live, /SilaLiveStockCountPanel/);
 assert.match(live, /openStockCount/);
-assert.match(live, /Search inventory/);
-assert.match(live, /New Transfer/);
-assert.match(live, /createBasketIto/);
-assert.match(live, /focusTransitPanel|panelFocus === "transit"/);
+assert.match(live, /SilaPendingRequirementsPanel/);
 assert.match(live, /focusPendingPanel|liv-pending-panel/);
-// New Transfer creates ITO for destination — must not jump to Transfer Center from that button.
-assert.doesNotMatch(live, /New Transfer[\s\S]{0,220}onNavigate\?\.\("silaTransfers"\)/);
-// Scanned / photo material goes into the main Search inventory box — no extra scan text box.
-assert.doesNotMatch(live, /liv-scan-input/);
-assert.doesNotMatch(live, /placeholder=\{scanMode === "barcode" \? "Scan barcode…"/);
-assert.doesNotMatch(live, /liv-lenses/);
-assert.doesNotMatch(live, /Day-to-day stock availability/);
-assert.doesNotMatch(live, /Cost Control/);
-assert.match(live, /optionalCols/);
 assert.match(live, /searchLiveInventory\([\s\S]*health/);
+assert.match(live, /productClass/);
 assert.match(live, /getInventoryHome/);
 assert.match(live, /getRecentAlerts/);
 assert.match(live, /Destination \(transfer \/ stock count\)|Location \(stock count\)/);
 assert.doesNotMatch(live, /PageHeader/);
 assert.doesNotMatch(live, /Your Location/);
-// Destination dropdown (transfer / stock count) must not sit on the home list permanently.
-assert.match(live, /selectedId[\s\S]*Destination \(transfer \/ stock count\)|if \(selectedId\)[\s\S]*Destination \(transfer \/ stock count\)|if \(selectedId\)[\s\S]*Location \(stock count\)/);
-assert.match(live, /New Transfer/);
+assert.doesNotMatch(live, /liv-scan-input/);
+// Destination dropdown (transfer / stock count) belongs to the material view only.
+assert.match(live, /if \(selectedId\)[\s\S]*Destination \(transfer \/ stock count\)|if \(selectedId\)[\s\S]*Location \(stock count\)/);
 assert.match(live, /Quick ITO/);
+
+// Command center: prototype layout, scan, photo, Vision AI, lenses and product classes.
+assert.match(cc, /Inventory Command Center/);
+assert.match(cc, /Store health/);
+assert.match(cc, /Supply chain/);
+assert.match(cc, /Live outlet valuation/);
+assert.match(cc, /Spatial Vault/);
+assert.match(cc, /Shelf Count Mode/);
+assert.match(cc, /Executive Ledger/);
+assert.match(cc, /Post Cycle Count/);
+assert.match(cc, /Reset to Book/);
+assert.match(cc, /Scan barcode/);
+assert.match(cc, /Take photo/);
+assert.match(cc, /Vision AI/);
+assert.match(cc, /New Transfer/);
+assert.match(cc, /Goods Issue \(Z01\)/);
+assert.match(cc, /Transfer Stock/);
+assert.match(cc, /createLiveStockCount/);
+assert.match(cc, /createTransfer/);
+assert.match(cc, /PRODUCT_CLASSES/);
+assert.match(cc, /data-testid="inventory-command-center"/);
+assert.doesNotMatch(cc, /createTransfer\(\{[\s\S]*?requireSamePlant:\s*true/);
+assert.match(vision, /analyzeBottleLevel/);
+assert.match(vision, /Apply to shelf count/);
+assert.match(read("SilaBarcodeScanDialog.tsx"), /BarcodeDetector/);
+assert.match(ccCss, /JetBrains\+Mono/);
+assert.match(ccCss, /family=Inter/);
+assert.match(ccCss, /#111827/);
+
+const inventoryApiSrc = readFileSync(join(dir, "../../../api/silaMe/silaInventoryApi.ts"), "utf8");
+assert.match(inventoryApiSrc, /inventory\/vision\/bottle-level/);
+assert.match(inventoryApiSrc, /productClass/);
 
 const css = read("SilaInventory.css");
 assert.match(css, /--liv-canvas:\s*#fafafb/i);

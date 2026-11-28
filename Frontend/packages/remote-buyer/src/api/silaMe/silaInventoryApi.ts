@@ -190,7 +190,19 @@ export interface SilaLiveInventoryRow {
   stockStatus?: string | null;
   reorderPoint?: number | null;
   lastMovementOn?: string | null;
+  materialGroup?: string | null;
+  /** BEVERAGE | FOOD | MINIBAR | TOBACCO | GENERAL */
+  productClass?: SilaProductClass;
+  barcode?: string | null;
+  unitCost?: number | null;
+  currency?: string | null;
+  parLevel?: number | null;
+  maximumStock?: number | null;
+  /** Issued quantity per day over the last 7 days, oldest first (single-location search). */
+  last7DayIssues?: number[];
 }
+
+export type SilaProductClass = "BEVERAGE" | "FOOD" | "MINIBAR" | "TOBACCO" | "GENERAL";
 
 export interface SilaLiveInventoryLocation {
   locationId: string;
@@ -233,6 +245,8 @@ export interface SilaLiveInventoryDetail {
   onHandQty: number;
   inTransitQty: number;
   locations: SilaLiveInventoryLocation[];
+  /** Codes of active recipes that use the material. */
+  linkedRecipes?: string[];
   /** The location the recommendation is for. */
   currentLocationId?: string | null;
   requiredQty?: number;
@@ -318,6 +332,9 @@ export interface SilaInventoryHome {
   lowStockItems: number;
   stockItems?: number;
   pendingActions?: number;
+  /** On hand valued at Item Master unit cost. */
+  stockValue?: number;
+  stockCurrency?: string | null;
 }
 
 /** The ledger's transaction types, for filters. */
@@ -621,6 +638,7 @@ export const searchLiveInventory = async (
   locationId: string | null,
   index = 0,
   health?: string | null,
+  productClass?: string | null,
 ): Promise<SilaLiveInventoryRow[]> => {
   try {
     const response = await axiosInstance.get<SilaLiveInventoryRow[]>(`${BASE}/inventory/live`, {
@@ -628,6 +646,7 @@ export const searchLiveInventory = async (
         search: search.trim() || undefined,
         locationId: locationId || undefined,
         health: health || undefined,
+        productClass: productClass || undefined,
         index,
         limit: SILA_LIVE_PAGE_SIZE,
       },
@@ -711,3 +730,48 @@ export const silaLabel = (code: string | null | undefined): string => {
 /** Quantity with up to 3 decimals. */
 export const formatQty = (value: number | null | undefined): string =>
   value === null || value === undefined ? "—" : Number(value).toLocaleString(undefined, { maximumFractionDigits: 3 });
+
+export interface SilaBottleVision {
+  bottleDetected: boolean;
+  /** Liquid left as a fraction of a sealed bottle (0 to 1); null when no level could be read. */
+  fillRatio: number | null;
+  remainingMl: number | null;
+  consumedMl: number | null;
+  nominalMl: number;
+  /** SEALED | OPENED | UNKNOWN */
+  sealStatus: "SEALED" | "OPENED" | "UNKNOWN";
+  isOpened: boolean | null;
+  confidence: number;
+  /** CV_HEURISTIC | LLM_VISION | LLM_VISION+CV | NONE */
+  method: string;
+  provider?: string | null;
+  model?: string | null;
+  cvFillRatio?: number | null;
+  llmFillRatio?: number | null;
+  levelLineRatio?: number | null;
+  bottleBox?: number[] | null;
+  labelText?: string;
+  needsManualReview: boolean;
+  warnings: string[];
+  notices?: string[];
+}
+
+/** Vision AI: estimates the liquid left in one photographed bottle. Posts nothing; the caller confirms a count. */
+export const analyzeBottleLevel = async (
+  file: Blob,
+  options: { nominalMl?: number | null; description?: string | null } = {},
+): Promise<SilaBottleVision> => {
+  try {
+    const form = new FormData();
+    form.append("file", file, file instanceof File ? file.name : "bottle.jpg");
+    if (options.nominalMl && options.nominalMl > 0) form.append("nominalMl", String(options.nominalMl));
+    if (options.description) form.append("description", options.description);
+    const response = await axiosInstance.post<SilaBottleVision>(`${BASE}/inventory/vision/bottle-level`, form, {
+      headers: { "Content-Type": "multipart/form-data" },
+      timeout: 60000,
+    });
+    return response.data;
+  } catch (error: unknown) {
+    throw new Error(readError(error, "Could not read the bottle photo."));
+  }
+};

@@ -37,7 +37,9 @@ namespace Buyer.Application.Features.Queries.GetSilaLiveInventory
             SilaInputRules.MaxLength(_logger, request.Search, SEARCH_LENGTH, "Search");
             string term = (request.Search ?? string.Empty).Trim();
             string? health = string.IsNullOrWhiteSpace(request.Health) ? null : request.Health.Trim().ToUpperInvariant();
+            string? productClass = SilaProductClassifier.Normalize(request.ProductClass);
             bool hasLocation = request.LocationId != null && request.LocationId != Guid.Empty;
+            InventoryLocation? scopedLocation = null;
             if (!hasLocation && term.Length < MinimumSearchLength)
             {
                 _logger.LogInfo("Live inventory search skipped: search too short and no location.");
@@ -48,7 +50,7 @@ namespace Buyer.Application.Features.Queries.GetSilaLiveInventory
             if (hasLocation)
             {
                 Guid locationId = request.LocationId!.Value;
-                await SilaAccess.GetLocationAsync(_repository, _logger, buyer.Id, locationId);
+                scopedLocation = await SilaAccess.GetLocationAsync(_repository, _logger, buyer.Id, locationId);
                 await SilaAccess.EnsureLocationAccessAsync(_repository, _logger, buyer.Id, request.UserId, request.RoleId, locationId, cancellationToken);
                 scope = new List<Guid> { locationId };
             }
@@ -61,8 +63,9 @@ namespace Buyer.Application.Features.Queries.GetSilaLiveInventory
             int limit = SilaInputRules.Limit(request.Limit, 20);
             // Health filters need status before paging; fetch a wider window then page in memory.
             bool filterHealth = hasLocation && health != null;
-            int fetchSkip = filterHealth ? 0 : index;
-            int fetchTake = filterHealth ? Math.Min(500, Math.Max(limit * 25, 100)) : limit;
+            bool filterInMemory = filterHealth || productClass != null;
+            int fetchSkip = filterInMemory ? 0 : index;
+            int fetchTake = filterInMemory ? Math.Min(500, Math.Max(limit * 25, 100)) : limit;
 
             IQueryable<MaterialEntity> query = _repository.ItemBuyerMaster.FindByCondition(x => x.BuyerId == buyer.Id && x.IsActive);
             if (hasLocation)
@@ -150,7 +153,12 @@ namespace Buyer.Application.Features.Queries.GetSilaLiveInventory
                     InTransitQty = inTransit,
                     LocationCount = rows.Count(x => x.OnHandQty != 0 || x.InTransitQty != 0),
                     AvailableQty = onHand,
-                    LastMovementOn = rows.Where(x => x.LastMovementOn != null).Select(x => x.LastMovementOn).DefaultIfEmpty().Max()
+                    LastMovementOn = rows.Where(x => x.LastMovementOn != null).Select(x => x.LastMovementOn).DefaultIfEmpty().Max(),
+                    MaterialGroup = string.IsNullOrWhiteSpace(material.MaterialGroup) ? null : material.MaterialGroup.Trim(),
+                    ProductClass = SilaProductClassifier.Infer(material, scopedLocation?.StoreCategory, scopedLocation?.LocationName),
+                    Barcode = string.IsNullOrWhiteSpace(material.Barcode) ? null : material.Barcode.Trim(),
+                    UnitCost = material.UnitCost,
+                    Currency = material.Currency
                 };
 
                 if (hasLocation)
@@ -163,6 +171,8 @@ namespace Buyer.Application.Features.Queries.GetSilaLiveInventory
                     row.StockStatus = SilaLiveStockFigures.StockStatus(onHand, level, thresholds, month);
                     if (level != null)
                     {
+                        row.ParLevel = level.ParLevel;
+                        row.MaximumStock = level.MaximumStock;
                         SilaEffectiveLevels levels = SilaStockLevels.Effective(level, thresholds, month);
                         row.ReorderPoint = levels.ReorderPoint ?? levels.MinimumStock;
                     }
@@ -171,17 +181,54 @@ namespace Buyer.Application.Features.Queries.GetSilaLiveInventory
                 return row;
             }).ToList();
 
-            if (filterHealth)
+            if (filterInMemory)
             {
-                mapped = mapped
-                    .Where(x => string.Equals(x.StockStatus, health, StringComparison.OrdinalIgnoreCase))
-                    .Skip(index)
-                    .Take(limit)
-                    .ToList();
+                IEnumerable<SilaLiveInventoryRowDto> filtered = mapped;
+                if (filterHealth)
+                {
+                    filtered = filtered.Where(x => string.Equals(x.StockStatus, health, StringComparison.OrdinalIgnoreCase));
+                }
+
+                if (productClass != null)
+                {
+                    filtered = filtered.Where(x => x.ProductClass == productClass);
+                }
+
+                mapped = filtered.Skip(index).Take(limit).ToList();
             }
+
+            await AttachIssueTrendAsync(buyer.Id, scope, mapped, cancellationToken);
 
             _logger.LogInfo($"Live inventory searched. Count: {mapped.Count}, BuyerId: {buyer.Id}");
             return mapped;
+        }
+
+        /// <summary>Issues (OUT movements) per day over the last 7 days for the listed materials, oldest day first.</summary>
+        private async Task AttachIssueTrendAsync(
+            Guid buyerId, List<Guid> scope, List<SilaLiveInventoryRowDto> rows, CancellationToken cancellationToken)
+        {
+            if (rows.Count == 0)
+            {
+                return;
+            }
+
+            DateTime today = DateTime.UtcNow.Date;
+            DateTime from = today.AddDays(-6);
+            List<Guid> ids = rows.Select(x => x.MaterialId).ToList();
+            var issues = await _repository.InventoryTransaction
+                .FindByCondition(x => x.BuyerId == buyerId && x.IsActive && scope.Contains(x.LocationId)
+                    && ids.Contains(x.MaterialId) && x.Direction == Domain.Common.Common.SILA_DIRECTION_OUT && x.BusinessDate >= from)
+                .Select(x => new { x.MaterialId, x.BusinessDate, x.Quantity })
+                .ToListAsync(cancellationToken);
+            ILookup<Guid, (DateTime Day, decimal Quantity)> byMaterial = issues
+                .ToLookup(x => x.MaterialId, x => (x.BusinessDate.Date, x.Quantity));
+            foreach (SilaLiveInventoryRowDto row in rows)
+            {
+                List<(DateTime Day, decimal Quantity)> own = byMaterial[row.MaterialId].ToList();
+                row.Last7DayIssues = Enumerable.Range(0, 7)
+                    .Select(offset => own.Where(x => x.Day == from.AddDays(offset)).Sum(x => x.Quantity))
+                    .ToList();
+            }
         }
     }
 }

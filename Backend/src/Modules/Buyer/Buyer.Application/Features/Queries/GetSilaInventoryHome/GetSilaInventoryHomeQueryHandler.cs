@@ -93,6 +93,12 @@ namespace Buyer.Application.Features.Queries.GetSilaInventoryHome
                 .Distinct()
                 .CountAsync(cancellationToken);
             int pendingActions = pendingApprovals + openCounts + openEnquiries + openAlerts;
+            decimal stockValue = await (
+                from balance in _repository.InventoryBalance.FindByCondition(x => x.LocationId == id && x.IsActive && x.OnHandQty > 0)
+                join material in _repository.ItemBuyerMaster.FindByCondition(x => x.BuyerId == buyer.Id && x.UnitCost != null)
+                    on balance.MaterialId equals material.Id
+                select (decimal?)(balance.OnHandQty * material.UnitCost!.Value))
+                .SumAsync(cancellationToken) ?? 0m;
 
             _logger.LogInfo($"Inventory home fetched. LocationId: {id}, Approvals: {pendingApprovals}, InTransit: {inTransit}, LowStock: {lowStock}, StockItems: {stockItems}");
             return new SilaInventoryHomeDto
@@ -111,7 +117,9 @@ namespace Buyer.Application.Features.Queries.GetSilaInventoryHome
                 OpenAlerts = openAlerts,
                 LowStockItems = lowStock,
                 StockItems = stockItems,
-                PendingActions = pendingActions
+                PendingActions = pendingActions,
+                StockValue = Math.Round(stockValue, 2),
+                StockCurrency = "AED"
             };
         }
     }
