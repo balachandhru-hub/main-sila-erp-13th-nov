@@ -554,3 +554,159 @@
 .rsp-page :is(.cs2-grid-2, .cs2-grid-3, .cs2-kpi-grid) {
   gap: 1rem;
 }
+
+/* ==========================================================================
+   Page canvas and layout (prototype `body` + `main.max-w-[1440px]`)
+   The gradient lives on the whole shell instead of a box around the page, so there is
+   no visible tinted rectangle or edge; the page content is capped at 1440px and centred.
+   ========================================================================== */
+.sila-shell:has(.rsp-page) {
+  background-color: #f8fafc;
+  background-image:
+    radial-gradient(at 0% 0%, rgba(2, 132, 199, 0.05) 0, transparent 48%),
+    radial-gradient(at 100% 0%, rgba(13, 148, 136, 0.05) 0, transparent 48%);
+  background-attachment: fixed;
+}
+
+.sila-shell:has(.rsp-page) .sila-main {
+  background: transparent;
+}
+
+html:has(.rsp-page) body {
+  background-color: #f8fafc;
+}
+
+/* ==========================================================================
+   Menu Engineering navigation: prototype segmented nav, not a boxed card.
+   ========================================================================== */
+.rsp-page .sila-studio-nav-panel {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.rsp-page .sila-studio-nav-panel__head {
+  order: 2;
+  flex: 0 0 auto;
+  width: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.rsp-page .sila-studio-nav-panel .sila-studio-top-nav {
+  order: 1;
+  margin: 0;
+}
+
+.rsp-page #me-options-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+.rsp-page #me-options-panel .sila-studio-subnav {
+  margin: 0;
+}
+
+/* ==========================================================================
+   Stat tiles used by the ME screens: uppercase eyebrow over a large value.
+   `.sme-kpi-box` holds a bare label span and a strong value, so stack them.
+   ========================================================================== */
+.rsp-page .sme-grid {
+  grid-template-columns: repeat(auto-fill, minmax(11.5rem, 1fr));
+  gap: 0.875rem;
+}
+
+.rsp-page .sme-kpi-box {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.25rem;
+  min-height: 5.25rem;
+  padding: 0.875rem 1.1rem;
+}
+
+.rsp-page .sme-kpi-box > span:first-child:not([class*="badge"]):not([class*="tag"]) {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  line-height: 1.3;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.rsp-page .sme-kpi-box > strong,
+.rsp-page .sme-kpi-box__val {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+
+.rsp-page .sila-studio-kpi__value {
+  font-size: 1.5rem;
+  line-height: 1.15;
+}
+
+/* ==========================================================================
+   Panels and section headings inside ME screens
+   ========================================================================== */
+.rsp-page .sme-panel {
+  gap: 1rem;
+  padding: 1.25rem;
+}
+
+.rsp-page .sme-panel__header,
+.rsp-page .sila-studio-panel__header {
+  padding-bottom: 0.75rem;
+  margin-bottom: 0;
+}
+
+.rsp-page .sme-panel__title,
+.rsp-page .sila-studio-panel__title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.rsp-page .sme-ai-tag {
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.rsp-page .sme-form {
+  gap: 0.875rem 1rem;
+}
+
+.rsp-page .sme-form label,
+.rsp-page .sme-form .sila-label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: #64748b;
+}
+
+.rsp-page .sme-form :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+  margin-top: 0.25rem;
+}
+
+.rsp-page .sila-studio-table-wrap,
+.rsp-page .sme-panel .table-wrap {
+  border-radius: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.07);
+  overflow: auto;
+}

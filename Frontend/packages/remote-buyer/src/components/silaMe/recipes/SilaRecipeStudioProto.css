@@ -18,11 +18,11 @@
   --rsp-shadow-glass: 0 4px 24px -4px rgba(15, 23, 42, 0.04), 0 1px 2px rgba(15, 23, 42, 0.03);
   --rsp-shadow-glass-hover: 0 14px 32px -8px rgba(2, 132, 199, 0.12), 0 4px 12px -2px rgba(15, 23, 42, 0.05);
   --rsp-shadow-alert: 0 0 0 1px rgba(244, 63, 94, 0.25), 0 8px 24px -6px rgba(244, 63, 94, 0.14);
-  background-color: #f8fafc;
-  background-image:
-    radial-gradient(at 0% 0%, rgba(2, 132, 199, 0.05) 0, transparent 48%),
-    radial-gradient(at 100% 0%, rgba(13, 148, 136, 0.05) 0, transparent 48%);
+  background: transparent;
   color: var(--rsp-slate);
+  width: 100%;
+  max-width: 1440px;
+  margin-inline: auto;
 }
 
 .rsp-glass {
