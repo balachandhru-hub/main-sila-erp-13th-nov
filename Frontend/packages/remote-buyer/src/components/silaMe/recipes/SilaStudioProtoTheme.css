@@ -715,3 +715,91 @@ html:has(.rsp-page) body {
   border: 1px solid rgba(15, 23, 42, 0.07);
   overflow: auto;
 }
+
+/* ==========================================================================
+   ME navigation and filter alignment: one shared row rhythm for both nav tiers,
+   labels/icons/chevrons centred on a common baseline, AI controls inline.
+   ========================================================================== */
+.rsp-page .sila-studio-nav-btn,
+.rsp-page .sila-studio-subnav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  height: 32px;
+  padding: 0 0.85rem;
+  font-size: 0.8125rem;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.rsp-page .sila-studio-nav-btn > svg,
+.rsp-page .sila-studio-subnav-btn > svg {
+  flex: 0 0 auto;
+}
+
+.rsp-page .sila-studio-top-nav,
+.rsp-page .sila-studio-subnav {
+  align-items: center;
+  flex-wrap: wrap;
+  min-height: 40px;
+  box-sizing: border-box;
+}
+
+.rsp-page .sila-studio-nav-panel {
+  align-items: center;
+}
+
+.rsp-page #me-options-panel {
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.rsp-page .sila-studio-filter-bar__row {
+  align-items: flex-end;
+  gap: 0.75rem;
+}
+
+.rsp-page .sila-studio-filter-bar .sila-field {
+  flex: 0 1 auto;
+  min-width: 9.5rem;
+}
+
+.rsp-page .sila-studio-filter-bar .sila-label {
+  margin-bottom: 0.25rem;
+}
+
+.rsp-page .sila-studio-filter-bar .sila-input {
+  height: 36px;
+  box-sizing: border-box;
+}
+
+.rsp-page .sme-ai-mode-bar {
+  flex-wrap: nowrap;
+  gap: 0.75rem;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.rsp-page .sme-ai-mode-pills {
+  min-height: 36px;
+  align-items: center;
+  box-sizing: border-box;
+}
+
+.rsp-page .sme-ai-mode-pill {
+  height: 28px;
+  padding: 0 0.7rem;
+  font-size: 0.75rem;
+}
+
+.rsp-page .sme-ai-status-meta {
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  gap: 0.6rem;
+}
