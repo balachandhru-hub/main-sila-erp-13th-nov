@@ -839,7 +839,7 @@ namespace Buyer.Application.Features.Shared.MenuEngineering
             return await BuildPurchasePlanInternalAsync(ctx, filter, ct);
         }
 
-        private async Task<MenuPurchasePlanDto> BuildPurchasePlanInternalAsync(StudioCtx ctx, SilaMenuEngineeringFilterDto filter, CancellationToken ct)
+        private async Task<MenuPurchasePlanDto> BuildPurchasePlanInternalAsync(StudioCtx ctx, SilaMenuEngineeringFilterDto filter, CancellationToken ct, bool includeExistingRecommendations = false)
         {
             DateTime from = (filter.DateFrom ?? DateTime.UtcNow.Date).Date;
             DateTime to = (filter.DateTo ?? from.AddDays(7)).Date;
@@ -938,8 +938,11 @@ namespace Buyer.Application.Features.Shared.MenuEngineering
                                 i.PurchaseOrder.Status != "CANCELLED" && i.PurchaseOrder.Status != "CLOSED")
                     .ToListAsync(ct);
 
-            SilaPurchaseRecommendationListDto existing = await SilaPurchaseRecommendation.BuildAsync(
-                _repository, ctx.Buyer.Id, ctx.Scope.Where(x => x.LocationType != Common.SILA_LOCATION_VENUE).ToList(), DateTime.UtcNow.Month, ct);
+            // The inventory-wide recommendation sweep reads every stocking row and open PO; only the draft flow needs it.
+            SilaPurchaseRecommendationListDto existing = includeExistingRecommendations
+                ? await SilaPurchaseRecommendation.BuildAsync(
+                    _repository, ctx.Buyer.Id, ctx.Scope.Where(x => x.LocationType != Common.SILA_LOCATION_VENUE).ToList(), DateTime.UtcNow.Month, ct)
+                : new SilaPurchaseRecommendationListDto();
 
             List<MenuPurchasePlanRowDto> rows = new();
             foreach (var kv in need)
@@ -1021,7 +1024,7 @@ namespace Buyer.Application.Features.Shared.MenuEngineering
             StudioCtx ctx = await BuildContextAsync(organizationId, userId, roleId, filter.PropertyId, requireFeatureEnabled: true, ct);
             MenuEngineeringPermissions.EnsureAllowed(ctx.Perms.GeneratePurchaseRecommendation, "Access denied", "Permission required to generate purchase recommendations.");
 
-            MenuPurchasePlanDto plan = await BuildPurchasePlanInternalAsync(ctx, filter, ct);
+            MenuPurchasePlanDto plan = await BuildPurchasePlanInternalAsync(ctx, filter, ct, includeExistingRecommendations: true);
             foreach (MenuPurchasePlanRowDto row in plan.Rows.Where(r => r.Shortage > 0))
             {
                 SilaPurchaseRecommendationDto? match = plan.ExistingRecommendations.Items.FirstOrDefault(x => x.MaterialId == row.MaterialId);

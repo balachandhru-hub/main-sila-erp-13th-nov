@@ -272,19 +272,32 @@ namespace Buyer.Application.Features.Shared
             CancellationToken cancellationToken)
         {
             Dictionary<(Guid LocationId, Guid MaterialId), OpenSupply> result = new Dictionary<(Guid, Guid), OpenSupply>();
-            List<PurchaseOrder> orders = await repository.PurchaseOrder
-                .FindByCondition(x => x.BuyerId == buyerId && x.IsActive
-                    && x.Status != SilaReceivingRules.PO_CANCELLED
-                    && x.Status != Common.SILA_PO_RECEIVED)
-                .ToListAsync(cancellationToken);
-            if (orders.Count == 0)
+            List<string> materialCodes = materials.Values
+                .Where(x => !string.IsNullOrWhiteSpace(x.MaterialCode))
+                .Select(x => x.MaterialCode!.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (materialCodes.Count == 0)
             {
                 return result;
             }
 
-            List<Guid> poIds = orders.Select(x => x.Id).ToList();
+            // Filter in the database: only open lines of the stocked materials, never the full PO line table.
             List<PurchaseOrderItem> items = await repository.PurchaseOrderItem
-                .FindByCondition(x => poIds.Contains(x.PurchaseOrderId) && x.IsActive)
+                .FindByCondition(x => x.IsActive
+                    && x.MaterialCode != null && materialCodes.Contains(x.MaterialCode)
+                    && x.PurchaseOrder.BuyerId == buyerId && x.PurchaseOrder.IsActive
+                    && x.PurchaseOrder.Status != SilaReceivingRules.PO_CANCELLED
+                    && x.PurchaseOrder.Status != Common.SILA_PO_RECEIVED)
+                .ToListAsync(cancellationToken);
+            if (items.Count == 0)
+            {
+                return result;
+            }
+
+            List<Guid> poIds = items.Select(x => x.PurchaseOrderId).Distinct().ToList();
+            List<PurchaseOrder> orders = await repository.PurchaseOrder
+                .FindByCondition(x => poIds.Contains(x.Id))
                 .ToListAsync(cancellationToken);
             Dictionary<Guid, PurchaseOrder> byPo = orders.ToDictionary(x => x.Id);
             Dictionary<string, ItemBuyerMaster> byCode = materials.Values
