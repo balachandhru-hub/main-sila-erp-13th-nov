@@ -25,7 +25,7 @@ assert.match(workspace, /<SilaRecipes/);
 assert.match(workspace, /folded into Recipe Studio/);
 
 const recipes = read("SilaRecipes.tsx");
-assert.match(recipes, /SILA Recipe Studio/);
+assert.match(recipes, /title="Recipe Studio"/);
 assert.match(recipes, /SilaRecipeWorkspaceShell/);
 assert.match(recipes, /getRecipeDashboard/);
 assert.match(recipes, /recipe-studio-dashboard-kpis/);

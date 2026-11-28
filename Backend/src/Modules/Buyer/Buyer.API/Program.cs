@@ -77,6 +77,7 @@ namespace Buyer.API
         Version = "v1",
         Description = "REST APIs"
     });
+    c.CustomSchemaIds(t => (t.FullName ?? t.Name).Replace('+', '.'));
 
 
     // Set the comments path for the Swagger JSON and UI.

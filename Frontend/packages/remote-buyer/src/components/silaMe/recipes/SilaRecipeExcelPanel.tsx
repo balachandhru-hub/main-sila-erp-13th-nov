@@ -1,4 +1,5 @@
 import React, { useRef, useState } from "react";
+import { Download, FileDown, Upload } from "lucide-react";
 import { Modal, toastService } from "@vosox/shared-ui";
 import type { SilaImportPreview } from "../../../api/silaMe/silaRecipeToolsApi";
 
@@ -13,6 +14,10 @@ interface SilaRecipeExcelPanelProps {
   onConfirm: (file: File) => Promise<SilaImportPreview>;
   /** Called after the import was saved. */
   onImported: () => void;
+  /** Render square icon buttons (tooltips and aria-labels keep the wording). */
+  iconOnly?: boolean;
+  /** Render dropdown menu items (role=menuitem) for an Actions menu. */
+  menu?: boolean;
 }
 
 const MAX_BYTES = 5 * 1024 * 1024;
@@ -28,6 +33,8 @@ const SilaRecipeExcelPanel: React.FC<SilaRecipeExcelPanelProps> = ({
   onPreview,
   onConfirm,
   onImported,
+  iconOnly = false,
+  menu = false,
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState<Busy>("");
@@ -78,7 +85,9 @@ const SilaRecipeExcelPanel: React.FC<SilaRecipeExcelPanelProps> = ({
     setBusy("import");
     try {
       const result = await onConfirm(file);
-      toastService.success(`Import done: ${result.newCount} new, ${result.changedCount} changed, ${result.unchangedCount} unchanged.`);
+      toastService.success(
+        `Import done: ${result.newCount} new, ${result.changedCount} changed, ${result.unchangedCount} unchanged.`,
+      );
       close();
       onImported();
     } catch (err: unknown) {
@@ -91,33 +100,106 @@ const SilaRecipeExcelPanel: React.FC<SilaRecipeExcelPanelProps> = ({
   const changes = preview ? preview.newCount + preview.changedCount : 0;
   const canConfirm = !!preview && preview.invalidRows === 0 && changes > 0;
 
+  const iconClass = "sila-studio-overview-btn";
+  const iconProps = { size: 17, strokeWidth: 2, "aria-hidden": true } as const;
+
+  const renderAction = (
+    testId: string,
+    label: string,
+    busyLabel: string,
+    isBusy: boolean,
+    Icon: typeof Upload,
+    tone: "sky" | "teal" | "emerald",
+    onClick: () => void,
+  ) => {
+    const text = isBusy ? busyLabel : label;
+    if (menu) {
+      return (
+        <button
+          type="button"
+          role="menuitem"
+          className="rsp-menu__item"
+          disabled={busy !== ""}
+          onClick={onClick}
+          aria-label={label}
+          data-testid={testId}
+        >
+          <Icon size={14} strokeWidth={2} aria-hidden="true" className={`rsp-menu__icon rsp-menu__icon--${tone}`} />
+          <span>{text}</span>
+        </button>
+      );
+    }
+    if (iconOnly) {
+      return (
+        <button
+          type="button"
+          className={iconClass}
+          disabled={busy !== ""}
+          onClick={onClick}
+          title={text}
+          aria-label={label}
+          data-testid={testId}
+        >
+          <Icon {...iconProps} />
+        </button>
+      );
+    }
+    return (
+      <button
+        type="button"
+        className="sila-studio-btn sila-studio-btn--secondary"
+        disabled={busy !== ""}
+        onClick={onClick}
+        data-testid={testId}
+      >
+        <Icon size={15} strokeWidth={1.9} aria-hidden="true" />
+        <span>{text}</span>
+      </button>
+    );
+  };
+
   return (
     <>
-      <div className="srec-actions">
-        {canImport && (
-          <button type="button" className="sila-btn sila-btn--secondary sila-btn--sm" disabled={busy !== ""} onClick={() => download("template", onTemplate)}>
-            {busy === "template" ? "Downloading..." : "Download template"}
-          </button>
+      {canImport &&
+        renderAction(
+          "recipe-download-template",
+          "Download Template",
+          "Downloading template...",
+          busy === "template",
+          FileDown,
+          "emerald",
+          () => download("template", onTemplate),
         )}
-        <button type="button" className="sila-btn sila-btn--secondary sila-btn--sm" disabled={busy !== ""} onClick={() => download("export", onExport)}>
-          {busy === "export" ? "Exporting..." : "Download Excel"}
-        </button>
-        {canImport && (
-          <>
-            <button type="button" className="sila-btn sila-btn--secondary sila-btn--sm" disabled={busy !== ""} onClick={() => inputRef.current?.click()}>
-              {busy === "preview" ? "Reading..." : "Upload Excel"}
-            </button>
-            <input
-              ref={inputRef}
-              type="file"
-              accept=".xlsx"
-              hidden
-              aria-label={`${noun} Excel file`}
-              onChange={(event) => handleFile(event.target.files?.[0])}
-            />
-          </>
-        )}
-      </div>
+      {renderAction(
+        "recipe-download-excel",
+        "Download Excel",
+        "Exporting...",
+        busy === "export",
+        Download,
+        "teal",
+        () => download("export", onExport),
+      )}
+      {canImport && (
+        <>
+          {renderAction(
+            "recipe-upload-excel",
+            "Upload Excel",
+            "Reading file...",
+            busy === "preview",
+            Upload,
+            "sky",
+            () => inputRef.current?.click(),
+          )}
+          <input
+            ref={inputRef}
+            type="file"
+            accept=".xlsx"
+            hidden
+            aria-label={`${noun} Excel file`}
+            onChange={(event) => handleFile(event.target.files?.[0])}
+          />
+        </>
+      )}
 
       {preview && (
         <Modal

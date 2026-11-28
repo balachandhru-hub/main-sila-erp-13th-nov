@@ -1,8 +1,23 @@
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  BarChart3,
+  Calculator,
+  CalendarRange,
+  ChefHat,
+  Cpu,
+  Factory,
+  PackageSearch,
+  ShieldCheck,
+} from "lucide-react";
 import type { SilaCulinaryAiFeatureFlags, SilaCulinaryAiStatus } from "../../../../api/silaMe/silaCulinaryAiApi";
 import type { SilaMePermissions } from "../../silaMePermissions";
-import type { SilaRecipeRoute } from "../silaRecipeRoutes";
-import "./CulinarySuite.css";
+import type { CulinaryWorkspaceKind, SilaRecipeRoute } from "../silaRecipeRoutes";
+import {
+  StudioSubNavigation,
+  StudioTopNavigation,
+  type StudioNavGroup,
+  type StudioSubNavItem,
+} from "../../studio";
 
 export interface SilaRecipeStudio2NavProps {
   id?: string;
@@ -10,24 +25,58 @@ export interface SilaRecipeStudio2NavProps {
   flags: SilaCulinaryAiFeatureFlags;
   aiStatus: SilaCulinaryAiStatus | null;
   permissions?: Partial<SilaMePermissions>;
-  onSelectRecipeRoute: (target: "list" | "legacy-upload" | Exclude<SilaRecipeRoute["kind"], "list" | "new" | "detail" | "edit" | "legacy-upload">) => void;
+  onSelectRecipeRoute: (target: "list" | "legacy-upload" | Exclude<CulinaryWorkspaceKind, "menus">) => void;
   onNavigateGlobal?: (navKey: string) => void;
 }
 
-interface NavItem {
+type RecipeTarget = "list" | "legacy-upload" | Exclude<CulinaryWorkspaceKind, "menus">;
+
+interface GroupedSubItem extends StudioSubNavItem {
+  routeKind?: RecipeTarget;
+  globalNavKey?: string;
+}
+
+interface RecipeNavGroupConfig {
   id: string;
   label: string;
-  badge: string;
-  badgeTone: "live" | "demo" | "planned" | "indigo";
-  routeKind?: "list" | "legacy-upload" | Exclude<SilaRecipeRoute["kind"], "list" | "new" | "detail" | "edit" | "legacy-upload">;
-  globalNavKey?: string;
-  visible: boolean;
-  disabled?: boolean;
-  tooltip?: string;
+  icon: React.ReactNode;
+  items: GroupedSubItem[];
+}
+
+function resolveGroupForRoute(route: SilaRecipeRoute): string {
+  switch (route.kind) {
+    case "list":
+    case "new":
+    case "detail":
+    case "edit":
+    case "legacy-upload":
+    case "ai-planner":
+      return "recipes";
+    case "materials":
+    case "material-requests":
+      return "materials";
+    case "events":
+    case "mrp":
+    case "procurement":
+      return "events";
+    case "production":
+      return "production";
+    case "food-cost":
+    case "event-pnl":
+      return "costing";
+    case "analytics":
+    case "reports":
+      return "analytics";
+    case "ai-setup":
+      return "ai-setup";
+    case "overview":
+    default:
+      return "";
+  }
 }
 
 const SilaRecipeStudio2Nav: React.FC<SilaRecipeStudio2NavProps> = ({
-  id,
+  id = "cs2-culinary-options-panel",
   activeRoute,
   flags,
   aiStatus,
@@ -35,6 +84,13 @@ const SilaRecipeStudio2Nav: React.FC<SilaRecipeStudio2NavProps> = ({
   onSelectRecipeRoute,
   onNavigateGlobal,
 }) => {
+  const routeGroupId = useMemo(() => resolveGroupForRoute(activeRoute), [activeRoute]);
+  const [selectedGroupId, setSelectedGroupId] = useState<string>(routeGroupId);
+
+  useEffect(() => {
+    setSelectedGroupId(routeGroupId);
+  }, [routeGroupId]);
+
   if (!flags.culinarySuiteEnabled) {
     return null;
   }
@@ -43,217 +99,251 @@ const SilaRecipeStudio2Nav: React.FC<SilaRecipeStudio2NavProps> = ({
   const canApproveRecipe = permissions?.approveRecipe ?? true;
   const canViewAudit = permissions?.viewAudit ?? true;
 
-  const items: NavItem[] = [
+  const groups: RecipeNavGroupConfig[] = [
     {
-      id: "overview",
-      label: "Overview",
-      badge: "Phase 0",
-      badgeTone: "indigo",
-      routeKind: "overview",
-      visible: flags.overviewEnabled,
-    },
-    {
-      id: "list",
-      label: "Recipe Master",
-      badge: "Live",
-      badgeTone: "live",
-      routeKind: "list",
-      visible: true,
-    },
-    {
-      id: "legacy-upload",
-      label: "Legacy Recipe Upload",
-      badge: "Live",
-      badgeTone: "live",
-      routeKind: "legacy-upload",
-      visible: true,
-    },
-    {
-      id: "ai-planner",
-      label: "AI Recipe Planner",
-      badge: "Interactive Demo",
-      badgeTone: "demo",
-      routeKind: "ai-planner",
-      visible: flags.recipePlannerPreviewEnabled,
+      id: "recipes",
+      label: "Recipes",
+      icon: <ChefHat size={15} strokeWidth={1.9} />,
+      items: [
+        { id: "list", label: "Recipe Master", routeKind: "list" },
+        { id: "legacy-upload", label: "Legacy Recipe Upload", routeKind: "legacy-upload" },
+        {
+          id: "ai-planner",
+          label: "AI Recipe Planner",
+          routeKind: "ai-planner",
+          statusBadge: flags.recipePlannerPreviewEnabled ? "Preview" : "Not Enabled",
+          statusTone: flags.recipePlannerPreviewEnabled ? "info" : "neutral",
+          disabled: !flags.recipePlannerPreviewEnabled,
+        },
+      ],
     },
     {
       id: "materials",
-      label: "Material Intelligence",
-      badge: "Phase 1B Preview",
-      badgeTone: "planned",
-      routeKind: "materials",
-      visible: flags.materialIntelligencePreviewEnabled,
-    },
-    {
-      id: "material-requests",
-      label: "Material Requests",
-      badge: "Phase 1C Live",
-      badgeTone: "live",
-      routeKind: "material-requests",
-      visible: flags.materialIntelligencePreviewEnabled,
-    },
-    {
-      id: "menus",
-      label: "Menu Studio",
-      badge: "Phase 2A Live",
-      badgeTone: "live",
-      routeKind: "menus",
-      visible: flags.menuEventPreviewEnabled,
+      label: "Materials",
+      icon: <PackageSearch size={15} strokeWidth={1.9} />,
+      items: [
+        {
+          id: "materials",
+          label: "Material Intelligence",
+          routeKind: "materials",
+          statusBadge: flags.materialIntelligencePreviewEnabled ? undefined : "Not Enabled",
+          disabled: !flags.materialIntelligencePreviewEnabled,
+        },
+        {
+          id: "material-requests",
+          label: "Material Requests",
+          routeKind: "material-requests",
+          disabled: !flags.materialIntelligencePreviewEnabled,
+        },
+      ],
     },
     {
       id: "events",
-      label: "AI Event Planner",
-      badge: "Phase 2A Live",
-      badgeTone: "live",
-      routeKind: "events",
-      visible: flags.menuEventPreviewEnabled,
-    },
-    {
-      id: "mrp",
-      label: "Event Material Req.",
-      badge: "Interactive Demo",
-      badgeTone: "demo",
-      routeKind: "mrp",
-      visible: flags.interactiveSimulatorsEnabled,
-    },
-    {
-      id: "procurement",
-      label: "Event Procurement",
-      badge: "Phase 2C Live",
-      badgeTone: "live",
-      routeKind: "procurement",
-      visible: flags.menuEventPreviewEnabled,
+      label: "Events",
+      icon: <CalendarRange size={15} strokeWidth={1.9} />,
+      items: [
+        {
+          id: "events",
+          label: "AI Event Planner",
+          routeKind: "events",
+          disabled: !flags.menuEventPreviewEnabled,
+        },
+        {
+          id: "mrp",
+          label: "Event Material Requirements",
+          routeKind: "mrp",
+          statusBadge: flags.interactiveSimulatorsEnabled ? undefined : "Not Enabled",
+          disabled: !flags.interactiveSimulatorsEnabled,
+        },
+        {
+          id: "procurement",
+          label: "Event Procurement",
+          routeKind: "procurement",
+          disabled: !flags.menuEventPreviewEnabled,
+        },
+      ],
     },
     {
       id: "production",
-      label: "Production Planner",
-      badge: "Phase 4A Live",
-      badgeTone: "live",
-      routeKind: "production",
-      visible: flags.culinaryPhase4AEnabled ?? flags.menuEventPreviewEnabled,
+      label: "Production",
+      icon: <Factory size={15} strokeWidth={1.9} />,
+      items: [
+        {
+          id: "production",
+          label: "Production Planner",
+          routeKind: "production",
+          disabled: !(flags.culinaryPhase4AEnabled ?? flags.menuEventPreviewEnabled),
+        },
+      ],
     },
     {
-      id: "food-cost",
-      label: "Food Cost Studio",
-      badge: "Phase 1C Live",
-      badgeTone: "live",
-      routeKind: "food-cost",
-      visible: flags.menuEventPreviewEnabled,
-    },
-    {
-      id: "event-pnl",
-      label: "Event P&L",
-      badge: "Phase 3A Live",
-      badgeTone: "live",
-      routeKind: "event-pnl",
-      visible: flags.interactiveSimulatorsEnabled,
+      id: "costing",
+      label: "Costing",
+      icon: <Calculator size={15} strokeWidth={1.9} />,
+      items: [
+        {
+          id: "food-cost",
+          label: "Food Cost Studio",
+          routeKind: "food-cost",
+          disabled: !flags.menuEventPreviewEnabled,
+        },
+        {
+          id: "event-pnl",
+          label: "Event P&L",
+          routeKind: "event-pnl",
+          disabled: !flags.interactiveSimulatorsEnabled,
+        },
+      ],
     },
     {
       id: "analytics",
       label: "Analytics",
-      badge: "Phase 3B Live",
-      badgeTone: "live",
-      routeKind: "analytics",
-      visible: flags.analyticsReportPreviewEnabled,
+      icon: <BarChart3 size={15} strokeWidth={1.9} />,
+      items: [
+        {
+          id: "analytics",
+          label: "Analytics",
+          routeKind: "analytics",
+          disabled: !flags.analyticsReportPreviewEnabled,
+        },
+        {
+          id: "reports",
+          label: "Report Studio",
+          routeKind: "reports",
+          disabled: !flags.analyticsReportPreviewEnabled,
+        },
+      ],
     },
     {
-      id: "reports",
-      label: "Report Studio",
-      badge: "Phase 3B Live",
-      badgeTone: "live",
-      routeKind: "reports",
-      visible: flags.analyticsReportPreviewEnabled,
-    },
-    {
-      id: "approvals",
-      label: "Approvals",
-      badge: "Live",
-      badgeTone: "live",
-      globalNavKey: "silaRecipeApprovals",
-      visible: Boolean(onNavigateGlobal),
-      disabled: !canApproveRecipe,
-      tooltip: canApproveRecipe ? "Open Recipe Approvals" : "Requires APPROVE_SILA_RECIPE permission",
-    },
-    {
-      id: "tracker",
-      label: "History & Tracker",
-      badge: "Live",
-      badgeTone: "live",
-      globalNavKey: "silaMeTracker",
-      visible: Boolean(onNavigateGlobal),
-      disabled: !canViewAudit && permissions?.manageRecipe === false,
-      tooltip: "Open SILA ME Consolidated Transaction Tracker",
+      id: "governance",
+      label: "Governance",
+      icon: <ShieldCheck size={15} strokeWidth={1.9} />,
+      items: [
+        {
+          id: "approvals",
+          label: "Approvals",
+          globalNavKey: "silaRecipeApprovals",
+          disabled: !onNavigateGlobal || !canApproveRecipe,
+          tooltip: canApproveRecipe ? "Open Recipe Approvals" : "Requires APPROVE_SILA_RECIPE permission",
+        },
+        {
+          id: "tracker",
+          label: "History & Tracker",
+          globalNavKey: "silaMeTracker",
+          disabled: !onNavigateGlobal || (!canViewAudit && permissions?.manageRecipe === false),
+          tooltip: "Open SILA ME Consolidated Transaction Tracker",
+        },
+      ],
     },
     {
       id: "ai-setup",
-      label: "Culinary AI Engine Setup",
-      badge: canManageMasterData ? "Live Setup" : "Read Only",
-      badgeTone: canManageMasterData ? "live" : "planned",
-      routeKind: "ai-setup",
-      visible: flags.aiSetupEnabled,
-      tooltip: canManageMasterData
-        ? "Configure Local / Gemini / Claude / Hybrid AI providers"
-        : "View AI Engine configuration (requires MANAGE_SILA_MASTER_DATA to edit)",
+      label: "AI Setup",
+      icon: <Cpu size={15} strokeWidth={1.9} />,
+      items: [
+        {
+          id: "ai-setup",
+          label: "Culinary AI Engine Setup",
+          routeKind: "ai-setup",
+          statusBadge: !flags.aiSetupEnabled
+            ? "Not Enabled"
+            : !aiStatus?.configured && aiStatus?.operatingMode !== "LOCAL"
+              ? "Configuration Required"
+              : !canManageMasterData
+                ? "Read Only"
+                : undefined,
+          statusTone: !aiStatus?.configured && aiStatus?.operatingMode !== "LOCAL" ? "warning" : "neutral",
+          disabled: !flags.aiSetupEnabled,
+        },
+      ],
     },
   ];
 
-  const isItemActive = (item: NavItem) => {
-    if (!item.routeKind) return false;
-    if (item.routeKind === "list") {
-      return activeRoute.kind === "list" || activeRoute.kind === "new" || activeRoute.kind === "detail" || activeRoute.kind === "edit";
+  const topGroups: StudioNavGroup[] = groups.map((group) => ({
+    id: group.id,
+    label: group.label,
+    icon: group.icon,
+    items: group.items,
+    hasDropdown: group.items.length > 1,
+    active: selectedGroupId === group.id,
+  }));
+
+  const activeGroup = groups.find((g) => g.id === selectedGroupId) ?? null;
+
+  const activeSubId = useMemo(() => {
+    if (activeRoute.kind === "new" || activeRoute.kind === "detail" || activeRoute.kind === "edit") {
+      return "list";
     }
-    return activeRoute.kind === item.routeKind;
+    return activeRoute.kind;
+  }, [activeRoute.kind]);
+
+  const handleSelectGroup = (groupId: string) => {
+    const group = groups.find((g) => g.id === groupId);
+    if (!group) return;
+    setSelectedGroupId(groupId);
+    if (group.items.length === 1) {
+      const only = group.items[0];
+      if (!only.disabled) {
+        if (only.globalNavKey && onNavigateGlobal) {
+          onNavigateGlobal(only.globalNavKey);
+        } else if (only.routeKind) {
+          onSelectRecipeRoute(only.routeKind);
+        }
+      }
+      return;
+    }
+    const firstEnabled = group.items.find((item) => !item.disabled && item.routeKind);
+    if (firstEnabled?.routeKind && groupId !== routeGroupId) {
+      onSelectRecipeRoute(firstEnabled.routeKind);
+    }
   };
 
-  return (
-    <nav id={id} className="cs2-nav-bar" aria-label="Recipe Studio 2.0 Culinary Intelligence Navigation" data-testid="culinary-studio-nav">
-      <div className="cs2-nav-top">
-        <div className="cs2-nav-brand">
-          <span className="cs2-brand-pill">Recipe Studio 2.0 · Culinary Intelligence</span>
-          <span className="cs2-brand-subtitle">
-            Phase 0 Foundation Shell · Existing Recipe Studio, Material Master, Inventory &amp; PO APIs preserved
-          </span>
-        </div>
-        <div className="cs2-nav-meta">
-          <span className="cs2-badge cs2-badge--indigo">
-            AI Mode: {aiStatus?.operatingMode ?? "LOCAL"}
-          </span>
-          <span className={`cs2-badge ${aiStatus?.allowExternalAi ? "cs2-badge--warn" : "cs2-badge--live"}`}>
-            {aiStatus?.allowExternalAi ? "External AI Consented" : "Tenant External AI Off"}
-          </span>
-        </div>
-      </div>
+  const handleSelectSubItem = (subId: string) => {
+    const item = activeGroup?.items.find((i) => i.id === subId);
+    if (!item || item.disabled) return;
+    if (item.globalNavKey && onNavigateGlobal) {
+      onNavigateGlobal(item.globalNavKey);
+    } else if (item.routeKind) {
+      onSelectRecipeRoute(item.routeKind);
+    }
+  };
 
-      <div className="cs2-nav-tabs" role="tablist" aria-label="Culinary modules">
-        {items
-          .filter((item) => item.visible)
-          .map((item) => {
-            const active = isItemActive(item);
-            return (
-              <button
-                key={item.id}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                disabled={item.disabled}
-                title={item.tooltip}
-                data-testid={`cs2-nav-${item.id}`}
-                className={`cs2-nav-tab${active ? " is-active" : ""}`}
-                onClick={() => {
-                  if (item.globalNavKey && onNavigateGlobal) {
-                    onNavigateGlobal(item.globalNavKey);
-                  } else if (item.routeKind) {
-                    onSelectRecipeRoute(item.routeKind);
-                  }
-                }}
-              >
-                <span>{item.label}</span>
-                <span className={`cs2-badge cs2-badge--${item.badgeTone}`}>{item.badge}</span>
-              </button>
-            );
-          })}
-      </div>
-    </nav>
+  const aiMode = aiStatus?.operatingMode ?? "LOCAL";
+  const externalAiEnabled = Boolean(aiStatus?.allowExternalAi);
+  const configRequired = Boolean(aiStatus && !aiStatus.configured && aiMode !== "LOCAL");
+
+  return (
+    <div id={id} data-testid="culinary-studio-nav">
+      <StudioTopNavigation
+        title="Culinary Intelligence"
+        ariaLabel="Culinary Intelligence navigation"
+        groups={topGroups}
+        onSelectGroup={(group) => handleSelectGroup(group.id)}
+        rightContent={
+          <>
+            <span className="sila-studio-status-pill sila-studio-status-pill--info">
+              AI Mode: {aiMode}
+            </span>
+            <span className={`sila-studio-status-pill ${externalAiEnabled ? "sila-studio-status-pill--success" : "sila-studio-status-pill--neutral"}`}>
+              External AI: {externalAiEnabled ? "Enabled" : "Disabled"}
+            </span>
+            {configRequired && (
+              <span className="sila-studio-status-pill sila-studio-status-pill--warning">
+                Configuration Required
+              </span>
+            )}
+          </>
+        }
+      />
+
+      {activeGroup && (
+        <StudioSubNavigation
+          ariaLabel={`${activeGroup.label} workspaces`}
+          items={activeGroup.items}
+          activeId={activeSubId}
+          onSelect={handleSelectSubItem}
+        />
+      )}
+    </div>
   );
 };
 

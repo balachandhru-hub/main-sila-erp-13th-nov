@@ -59,6 +59,7 @@ import {
   type SilaCulinaryStaffAssignment,
   type SilaCulinaryWorkstation,
 } from "../../../../api/silaMe/silaCulinaryProductionApi";
+import { CulinaryFilterToolbar, CulinaryKpis, CulinaryTabs, CulinaryWorkspaceHeader } from "./CulinaryWorkspaceKit";
 import "./CulinarySuite.css";
 
 type ProdTab =
@@ -71,6 +72,34 @@ type ProdTab =
   | "central"
   | "quality"
   | "scheduler";
+
+type ProdOrderFilter = "all" | "released" | "active" | "completed" | "delayed";
+
+const ORDER_FILTER_LABELS: Record<ProdOrderFilter, string> = {
+  all: "All planned orders",
+  released: "Released orders",
+  active: "Active batches",
+  completed: "Completed batches",
+  delayed: "Delayed batches",
+};
+
+const isDelayedBatch = (batch: SilaCulinaryProductionBatch): boolean =>
+  batch.batchStatus !== "COMPLETED" &&
+  batch.batchStatus !== "CANCELLED" &&
+  new Date(batch.plannedFinishUtc).getTime() < Date.now();
+
+const batchMatchesFilter = (batch: SilaCulinaryProductionBatch, filter: ProdOrderFilter): boolean => {
+  switch (filter) {
+    case "active":
+      return ["PREPARING", "COOKING", "PAUSED"].includes(batch.batchStatus);
+    case "completed":
+      return batch.batchStatus === "COMPLETED";
+    case "delayed":
+      return isDelayedBatch(batch);
+    default:
+      return true;
+  }
+};
 
 const KITCHEN_TYPES = [
   "MAIN_KITCHEN",
@@ -90,6 +119,7 @@ const KITCHEN_TYPES = [
 
 const CulinaryProductionStudioWorkspace: React.FC = () => {
   const [tab, setTab] = useState<ProdTab>("cockpit");
+  const [orderFilter, setOrderFilter] = useState<ProdOrderFilter>("all");
   const [loading, setLoading] = useState(false);
   const [kdsFullScreen, setKdsFullScreen] = useState(false);
   const [selectedKitchenId, setSelectedKitchenId] = useState<string>("");
@@ -214,23 +244,79 @@ const CulinaryProductionStudioWorkspace: React.FC = () => {
   }, [selectedBatchId]);
 
   const allBatches = orders.flatMap((o) => o.batches);
+  const visibleOrders = orders
+    .map((o) => ({ ...o, visibleBatches: o.batches.filter((b) => batchMatchesFilter(b, orderFilter)) }))
+    .filter((o) => {
+      if (orderFilter === "all") return true;
+      if (orderFilter === "released") return o.executionStatus !== "CREATED" && o.executionStatus !== "CANCELLED";
+      return o.visibleBatches.length > 0;
+    });
 
   return (
     <div
       className="cs2-shell"
       data-testid="culinary-production-workspace"
-      style={kdsFullScreen ? { position: "fixed", inset: 0, zIndex: 1200, overflowY: "auto", background: "#f8fafc", padding: 20 } : undefined}
+      style={kdsFullScreen ? { position: "fixed", top: "var(--sila-topbar-height, 3.75rem)", left: 0, right: 0, bottom: 0, zIndex: 950, overflowY: "auto", background: "#ffffff", padding: 20 } : undefined}
     >
-      <div className="cs2-header">
-        <div>
-          <h2 className="cs2-title">Kitchen Production Planning, Batch Scheduling &amp; Execution (Phase 4A)</h2>
-          <p className="cs2-subtitle">
-            Multi-level recipe explosion, ingredient availability, OR-Tools / HiGHS MILP scheduling, KDS, FEFO picking, food safety checkpoints &amp; QR batch traceability.
-          </p>
-        </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+      <CulinaryWorkspaceHeader
+        title="Kitchen Production Planning, Batch Scheduling & Execution"
+        subtitle="Multi-level recipe explosion, ingredient availability, scheduling optimization, KDS, FEFO picking, food safety checkpoints & QR batch traceability."
+        actions={
+          <>
+            <button type="button" className="sila-studio-btn sila-studio-btn--secondary" onClick={() => setKdsFullScreen((v) => !v)}>
+              {kdsFullScreen ? "Exit KDS Fullscreen" : "KDS Fullscreen"}
+            </button>
+            <button type="button" className="sila-studio-btn sila-studio-btn--primary" disabled={loading} onClick={() => void loadAll()}>
+              {loading ? "Refreshing..." : "Refresh Live"}
+            </button>
+          </>
+        }
+      />
+
+      <CulinaryTabs<ProdTab>
+        ariaLabel="Kitchen Production Modules"
+        testId="prod-tabs"
+        active={tab}
+        onChange={setTab}
+        tabs={[
+          { id: "cockpit", label: "1. Production Cockpit", testId: "prod-tab-cockpit" },
+          { id: "calendar", label: "2. Calendar & Reschedule", testId: "prod-tab-calendar" },
+          { id: "plans", label: "3. Demand & Plans", testId: "prod-tab-plans" },
+          { id: "orders", label: "4. Orders, Batches & Tasks", testId: "prod-tab-orders" },
+          { id: "kds", label: "5. KDS & Production Sheet", testId: "prod-tab-kds" },
+          { id: "picking", label: "6. Picking & Material Issue", testId: "prod-tab-picking" },
+          { id: "central", label: "7. Central Kitchen", testId: "prod-tab-central" },
+          { id: "quality", label: "8. Quality, QR & Exceptions", testId: "prod-tab-quality" },
+          { id: "scheduler", label: "9. AI Scheduler, Copilot & Setup", testId: "prod-tab-scheduler" },
+        ]}
+      />
+
+      <CulinaryKpis
+        ariaLabel="Kitchen production metrics"
+        testId="prod-kpis"
+        columns={6}
+        items={[
+          { id: "prod-planned-orders", label: "Planned Orders", value: dashboard?.plannedOrdersCount ?? 0, tone: "blue", drillLabel: "Show all production orders", selected: tab === "orders" && orderFilter === "all", onClick: () => { setOrderFilter("all"); setTab("orders"); } },
+          { id: "prod-released-orders", label: "Released Orders", value: dashboard?.releasedOrdersCount ?? 0, tone: "green", drillLabel: "Show released production orders", selected: tab === "orders" && orderFilter === "released", onClick: () => { setOrderFilter("released"); setTab("orders"); } },
+          { id: "prod-active-batches", label: "Active Batches", value: dashboard?.activeBatchesCount ?? 0, tone: "sky", drillLabel: "Show batches being prepared or cooked", selected: tab === "orders" && orderFilter === "active", onClick: () => { setOrderFilter("active"); setTab("orders"); } },
+          { id: "prod-completed-batches", label: "Completed Batches", value: dashboard?.completedBatchesCount ?? 0, tone: "green", drillLabel: "Show completed batches", selected: tab === "orders" && orderFilter === "completed", onClick: () => { setOrderFilter("completed"); setTab("orders"); } },
+          { id: "prod-delayed-batches", label: "Delayed Batches", value: dashboard?.delayedBatchesCount ?? 0, tone: "rose", drillLabel: "Show delayed batches", selected: tab === "orders" && orderFilter === "delayed", onClick: () => { setOrderFilter("delayed"); setTab("orders"); } },
+          { id: "prod-shortages", label: "Ingredient Shortages", value: dashboard?.ingredientShortagesCount ?? 0, tone: "amber", drillLabel: "Open picking and material issue", selected: tab === "picking", onClick: () => setTab("picking") },
+          { id: "prod-pending-quality", label: "Pending Quality", value: dashboard?.pendingQualityChecksCount ?? 0, tone: "lavender", drillLabel: "Open quality checks and exceptions", selected: tab === "quality", onClick: () => setTab("quality") },
+          { id: "prod-on-time", label: "On-Time Rate", value: `${dashboard?.onTimeProductionRatePct ?? 100}%`, tone: "green", drillLabel: "Open production calendar", selected: tab === "calendar", onClick: () => setTab("calendar") },
+          { id: "prod-equipment", label: "Equipment Util.", value: `${dashboard?.equipmentUtilizationPct ?? 0}%`, tone: "indigo", drillLabel: "Open scheduler and equipment setup", onClick: () => setTab("scheduler") },
+          { id: "prod-staff", label: "Staff Util.", value: `${dashboard?.staffUtilizationPct ?? 0}%`, tone: "indigo", drillLabel: "Open scheduler and staff setup", onClick: () => setTab("scheduler") },
+          { id: "prod-planned-output", label: "Planned Output", value: dashboard?.plannedOutputTotal ?? 0, tone: "blue", drillLabel: "Open demand and plans", selected: tab === "plans", onClick: () => setTab("plans") },
+          { id: "prod-actual-output", label: "Actual Output", value: dashboard?.actualOutputTotal ?? 0, tone: "sky", drillLabel: "Show production orders and actual output", onClick: () => { setOrderFilter("completed"); setTab("orders"); } },
+        ]}
+      />
+
+      <CulinaryFilterToolbar
+        ariaLabel="Kitchen production filters"
+        testId="prod-filter-toolbar"
+        left={
           <select
-            className="sila-select"
+            className="sila-studio-select"
             value={selectedKitchenId}
             onChange={(e) => setSelectedKitchenId(e.target.value)}
             aria-label="Filter by Kitchen"
@@ -242,71 +328,15 @@ const CulinaryProductionStudioWorkspace: React.FC = () => {
               </option>
             ))}
           </select>
-          <button type="button" className="sila-btn sila-btn--sm sila-btn--secondary" onClick={() => setKdsFullScreen((v) => !v)}>
-            {kdsFullScreen ? "Exit KDS Fullscreen" : "KDS Fullscreen"}
-          </button>
-          <button type="button" className="sila-btn sila-btn--sm sila-btn--primary" disabled={loading} onClick={() => void loadAll()}>
-            {loading ? "Refreshing..." : "Refresh Live"}
-          </button>
-        </div>
-      </div>
-
-      <div className="cs2-nav-tabs" role="tablist" aria-label="Phase 4A Kitchen Production Modules" style={{ marginBottom: 14 }}>
-        {(
-          [
-            ["cockpit", "1. Production Cockpit"],
-            ["calendar", "2. Calendar & Reschedule"],
-            ["plans", "3. Demand & Plans"],
-            ["orders", "4. Orders, Batches & Tasks"],
-            ["kds", "5. KDS & Production Sheet"],
-            ["picking", "6. Picking & Material Issue"],
-            ["central", "7. Central Kitchen"],
-            ["quality", "8. Quality, QR & Exceptions"],
-            ["scheduler", "9. AI Scheduler, Copilot & Setup"],
-          ] as [ProdTab, string][]
-        ).map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            role="tab"
-            aria-selected={tab === id}
-            data-testid={`prod-tab-${id}`}
-            className={`cs2-nav-tab${tab === id ? " is-active" : ""}`}
-            onClick={() => setTab(id)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+        }
+      />
 
       {tab === "cockpit" && (
         <div data-testid="prod-panel-cockpit">
-          <div className="cs2-kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 10, marginBottom: 16 }}>
-            {[
-              ["Planned Orders", dashboard?.plannedOrdersCount ?? 0],
-              ["Released Orders", dashboard?.releasedOrdersCount ?? 0],
-              ["Active Batches", dashboard?.activeBatchesCount ?? 0],
-              ["Completed Batches", dashboard?.completedBatchesCount ?? 0],
-              ["Delayed Batches", dashboard?.delayedBatchesCount ?? 0],
-              ["Ingredient Shortages", dashboard?.ingredientShortagesCount ?? 0],
-              ["Pending Quality", dashboard?.pendingQualityChecksCount ?? 0],
-              ["On-Time Rate", `${dashboard?.onTimeProductionRatePct ?? 100}%`],
-              ["Equipment Util.", `${dashboard?.equipmentUtilizationPct ?? 0}%`],
-              ["Staff Util.", `${dashboard?.staffUtilizationPct ?? 0}%`],
-              ["Planned Output", dashboard?.plannedOutputTotal ?? 0],
-              ["Actual Output", dashboard?.actualOutputTotal ?? 0],
-            ].map(([label, value]) => (
-              <div key={String(label)} className="cs2-card" style={{ padding: 12 }}>
-                <div className="cs2-empty-note" style={{ fontSize: 12 }}>{label}</div>
-                <div style={{ fontSize: 22, fontWeight: 700, marginTop: 4 }}>{value}</div>
-              </div>
-            ))}
-          </div>
-
           <section className="cs2-card">
             <div className="cs2-card__head">
               <h3 className="cs2-card__title">Buffet Replenishment Quick Control</h3>
-              <span className="cs2-badge cs2-badge--live">Phase 3B Buffet Sync</span>
+              <span className="cs2-badge cs2-badge--live">Buffet Analytics Sync</span>
             </div>
             <div className="cs2-form-grid">
               <div className="sila-field">
@@ -537,14 +567,27 @@ const CulinaryProductionStudioWorkspace: React.FC = () => {
             <h3 className="cs2-card__title">Production Orders, Batches &amp; Task Dependencies</h3>
             <span className="cs2-badge cs2-badge--live">{orders.length} Orders · {allBatches.length} Batches</span>
           </div>
-          {orders.map((o) => (
+          {orderFilter !== "all" && (
+            <div className="sila-studio-chips" style={{ marginBottom: 10 }} aria-label="Active order filter">
+              <span className="sila-studio-chip is-active">
+                <span>Showing: {ORDER_FILTER_LABELS[orderFilter]}</span>
+                <button type="button" aria-label="Clear order filter" onClick={() => setOrderFilter("all")}>×</button>
+              </span>
+            </div>
+          )}
+          {visibleOrders.length === 0 && (
+            <p className="cs2-empty-note" data-testid="prod-orders-empty">
+              No production orders match “{ORDER_FILTER_LABELS[orderFilter]}”.
+            </p>
+          )}
+          {visibleOrders.map((o) => (
             <div key={o.id} style={{ border: "1px solid #e2e8f0", borderRadius: 8, padding: 12, marginBottom: 10 }}>
               <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap" }}>
                 <strong>{o.orderNumber} — {o.recipeName} (v{o.recipeVersion})</strong>
                 <span className="cs2-badge cs2-badge--indigo">{o.executionStatus} · {o.plannedOutputQty} {o.outputUom}</span>
               </div>
               <div style={{ marginTop: 8, display: "flex", gap: 8, flexWrap: "wrap" }}>
-                {o.batches.map((b) => (
+                {o.visibleBatches.map((b) => (
                   <button
                     key={b.id}
                     type="button"

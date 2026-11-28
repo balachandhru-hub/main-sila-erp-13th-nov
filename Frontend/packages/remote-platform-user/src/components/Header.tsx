@@ -64,6 +64,7 @@ const Header: React.FC<HeaderProps> = ({ navItems, activeNav, onNavClick, onLogo
 
   return (
     <AppShell
+      variant="prototype"
       onLogoClick={handleLogoClick}
       navItems={navItems}
       activeNav={activeNav}

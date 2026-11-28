@@ -1,5 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { getMenuEngineering } from '../../../../remote-buyer/src/api/silaMe/silaMenuEngineeringApi';
+import { getMeMobileSummary } from '../../../../remote-buyer/src/api/silaMe/menuEngineeringStudioApi';
+import { getSilaStoreRoleIntelligence } from '../../../../remote-buyer/src/api/silaMe/menuEngineeringAiApi';
+import { approveActionItem } from '../../../../remote-buyer/src/api/silaMe/menuEngineeringAutonomousApi';
+import { getHierarchicalForecast, getWastePrediction } from '../../../../remote-buyer/src/api/silaMe/menuEngineeringTwinApi';
 import ScreenHeader from '../../components/ScreenHeader';
 import StatusBadge from '../../components/StatusBadge';
 import { Empty, ErrorNotice, Loading, OfflineBanner } from '../../components/StateViews';
@@ -10,15 +14,43 @@ import { MENU_VIEWS } from './menuViews';
 
 const today = (): string => new Date().toISOString().slice(0, 10);
 
+const ROLE_PERSONAS: { key: string; label: string }[] = [
+  { key: 'EXECUTIVE_CHEF', label: 'Executive Chef' },
+  { key: 'STOREKEEPER', label: 'Storekeeper' },
+  { key: 'COST_CONTROLLER', label: 'Cost Controller' },
+  { key: 'FB_MANAGER', label: 'F&B Manager' },
+];
+
 const MenuDashboardScreen: React.FC = () => {
   const go = useGo();
   const { can } = useAccess();
   const date = today();
+  const [rolePersona, setRolePersona] = useState('EXECUTIVE_CHEF');
   const { data, loading, error, reload } = useLoad(
     () => getMenuEngineering('dashboard', { dateFrom: date, dateTo: date }),
     can.viewMenuEngineering ? `menu-dash-${date}` : null,
   );
+  const mobile = useLoad(
+    () => getMeMobileSummary().catch(() => null),
+    can.viewMenuEngineering ? `menu-mobile-summary-${date}` : null,
+  );
+  const roleIntel = useLoad(
+    () => getSilaStoreRoleIntelligence(rolePersona).catch(() => null),
+    can.viewMenuEngineering ? `menu-role-intel-${rolePersona}-${date}` : null,
+  );
+  const twinDemand = useLoad(
+    () => getHierarchicalForecast(undefined, 3).catch(() => null),
+    can.viewMenuEngineering ? `menu-twin-demand-${date}` : null,
+  );
+  const twinWaste = useLoad(
+    () => getWastePrediction().catch(() => null),
+    can.viewMenuEngineering ? `menu-twin-waste-${date}` : null,
+  );
   const dash = data?.dashboard;
+  const summary = mobile.data;
+  const personaData = roleIntel.data;
+  const propertyForecast = twinDemand.data?.nodes.find((n) => n.level === 'PROPERTY')?.reconciledForecast?.[0];
+  const smallBatchHints = (twinWaste.data?.items || []).flatMap((i) => i.recommendations.map((r) => `${i.name}: ${r}`)).slice(0, 3);
 
   const routeFor = (kind?: string): string => {
     if (kind === 'RECIPE_MISSING' || kind === 'COST_MISSING') return 'menu/items';
@@ -31,7 +63,7 @@ const MenuDashboardScreen: React.FC = () => {
 
   return (
     <>
-      <ScreenHeader title="Menu Engineering" eyebrow="SILA ME" intro="Today's occupancy, covers, portions and attention." />
+      <ScreenHeader title="Menu Engineering" eyebrow="SILA ME & SILA STORE" intro="Today's published menus, portion instructions, ingredient readiness and operational links." />
       <div className="sm-screen">
         <OfflineBanner />
         {loading && <Loading text="Loading Menu Engineering…" />}
@@ -69,25 +101,223 @@ const MenuDashboardScreen: React.FC = () => {
             </div>
             <p className="sm-meta">
               Source {dash.occupancySource || 'MANUAL'} · {dash.occupancyFreshness || 'UNAVAILABLE'}
+              {summary ? ` · Pending Approvals: ${summary.pendingApprovals.length} · Ingredient Alerts: ${summary.ingredientReadiness.length}` : ''}
+              {propertyForecast != null ? ` · Twin Demand Forecast: ${Math.round(propertyForecast)} covers` : ''}
             </p>
+            {smallBatchHints.length > 0 && (
+              <section className="sm-section">
+                <h2>Digital Twin Kitchen &amp; Waste Guidance</h2>
+                <ul className="sm-list">
+                  {smallBatchHints.map((hint, idx) => (
+                    <li key={`twin-hint-${idx}`} className="sm-list-btn">
+                      <span className="sm-meta">{hint}</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            {/* Role-Specific AI Intelligence (SILA Store Phase ME.2) */}
+            <section className="sm-section">
+              <h2>Role Intelligence</h2>
+              <div className="sm-grid-2" style={{ marginBottom: '0.5rem' }}>
+                {ROLE_PERSONAS.map((rp) => (
+                  <button
+                    key={rp.key}
+                    type="button"
+                    className={`sm-btn ${rolePersona === rp.key ? 'sm-btn--primary' : ''}`}
+                    onClick={() => setRolePersona(rp.key)}
+                  >
+                    {rp.label}
+                  </button>
+                ))}
+              </div>
+              {personaData && (
+                <ul className="sm-list">
+                  {personaData.highlights.map((h, i) => (
+                    <li key={`hl-${i}`} className="sm-list-btn">
+                      <span className="sm-meta">{h}</span>
+                    </li>
+                  ))}
+                  {personaData.roleAlerts.slice(0, 3).map((al) => (
+                    <li key={al.id}>
+                      <button type="button" className="sm-list-btn" onClick={() => go('menu/intelligence')}>
+                        <span className="sm-row">
+                          <strong>{al.title}</strong>
+                          <StatusBadge status={al.severity} />
+                        </span>
+                        <span className="sm-meta">{al.summary}</span>
+                      </button>
+                    </li>
+                  ))}
+                  {personaData.roleRecommendations.slice(0, 3).map((rec) => (
+                    <li key={rec.id}>
+                      <button type="button" className="sm-list-btn" onClick={() => go('menu/intelligence')}>
+                        <span className="sm-row">
+                          <strong>{rec.title}</strong>
+                          <StatusBadge status={rec.priority} />
+                        </span>
+                        <span className="sm-meta">{rec.proposedChange}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+
+            {personaData?.dailyBriefing && (
+              <section className="sm-section">
+                <h2>Daily Intelligent Briefing</h2>
+                <div className="sm-list-btn">
+                  <strong>{personaData.dailyBriefing.headline}</strong>
+                  {personaData.dailyBriefing.keyHighlights.map((hl, idx) => (
+                    <span key={`db-hl-${idx}`} className="sm-meta">• {hl}</span>
+                  ))}
+                  {personaData.dailyBriefing.urgentRisks.map((rk, idx) => (
+                    <span key={`db-rk-${idx}`} className="sm-meta">Risk: {rk}</span>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {personaData?.assignedTasks && personaData.assignedTasks.length > 0 && (
+              <section className="sm-section">
+                <h2>Assigned Corrective Tasks</h2>
+                <ul className="sm-list">
+                  {personaData.assignedTasks.map((task, idx) => (
+                    <li key={`task-${idx}`} className="sm-list-btn">
+                      <span className="sm-meta">{task}</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            {personaData?.pendingApprovals && personaData.pendingApprovals.length > 0 && (
+              <section className="sm-section">
+                <h2>Autonomous Action Approvals</h2>
+                <ul className="sm-list">
+                  {personaData.pendingApprovals.map((ap) => (
+                    <li key={ap.id} className="sm-list-btn">
+                      <span className="sm-row">
+                        <strong>{ap.title}</strong>
+                        <StatusBadge status={ap.riskClassification} />
+                      </span>
+                      <span className="sm-meta">Impact: ${ap.financialImpact.toFixed(2)} · Status: {ap.approvalStatus}</span>
+                      {can.approveMenu && (
+                        <div className="sm-grid-2" style={{ marginTop: '0.35rem' }}>
+                          <button
+                            type="button"
+                            className="sm-btn sm-btn--primary"
+                            onClick={() => {
+                              if (typeof navigator !== 'undefined' && !navigator.onLine) {
+                                return;
+                              }
+                              void approveActionItem(ap.id, true, 'SILA_STORE_MOBILE').then(() => roleIntel.reload());
+                            }}
+                          >
+                            {typeof navigator !== 'undefined' && !navigator.onLine ? 'Online Required' : 'Approve'}
+                          </button>
+                          <button
+                            type="button"
+                            className="sm-btn"
+                            onClick={() => {
+                              if (typeof navigator !== 'undefined' && !navigator.onLine) {
+                                return;
+                              }
+                              void approveActionItem(ap.id, false, 'SILA_STORE_MOBILE', 'Rejected in SILA Store').then(() => roleIntel.reload());
+                            }}
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            {/* Operational SILA Store handoffs — reuses existing mobile screens without duplicating */}
+            <section className="sm-section">
+              <h2>Operational Kitchen &amp; Store Actions</h2>
+              <div className="sm-grid-2">
+                <button type="button" className="sm-btn" onClick={() => go('menu/portions')}>Portion Sampling</button>
+                <button type="button" className="sm-btn" onClick={() => go('inventory/goods-issues/new')}>Record Consumption</button>
+                <button type="button" className="sm-btn" onClick={() => go('inventory/adjustments/new')}>Record Food Waste</button>
+                <button type="button" className="sm-btn" onClick={() => go('inventory/stock')}>Ingredient Stock</button>
+                <button type="button" className="sm-btn" onClick={() => go('recipes/catalog')}>Approved Recipes</button>
+                <button type="button" className="sm-btn" onClick={() => go('purchasing/voice-po')}>SILA Voice</button>
+                {summary && summary.pendingApprovals.length > 0 && (
+                  <button type="button" className="sm-btn sm-btn--primary" onClick={() => go('tasks?tab=approvals')}>
+                    Pending Approvals ({summary.pendingApprovals.length})
+                  </button>
+                )}
+              </div>
+            </section>
+
+            {summary && summary.portionInstructions.length > 0 && (
+              <section className="sm-section">
+                <h2>Portion Instructions &amp; Readiness</h2>
+                <ul className="sm-list">
+                  {summary.portionInstructions.slice(0, 6).map((row) => (
+                    <li key={row.menuPlanLineId}>
+                      <button type="button" className="sm-list-btn" onClick={() => go('menu/portions')}>
+                        <span className="sm-row">
+                          <strong>{row.menuItemName}</strong>
+                          <StatusBadge status={row.varianceStatus} />
+                        </span>
+                        <span className="sm-meta">
+                          {row.expectedPortions} portions · {row.plannedPortion} {row.portionUom} · Usable {row.requiredUsableOutput} {row.portionUom}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
 
             <section className="sm-section">
-              <h2>Today's menus</h2>
-              {dash.todayMenus.length === 0 && <Empty text="No Menu Plan configured." description="Create a plan for this date." />}
+              <h2>Today's &amp; Published Menus</h2>
+              {dash.todayMenus.length === 0 && (summary?.todayMenus.length ?? 0) === 0 && (
+                <Empty text="No Menu Plan configured." description="Create a plan for this date." />
+              )}
               <ul className="sm-list">
-                {dash.todayMenus.map((plan) => (
+                {(summary?.todayMenus.length ? summary.todayMenus : dash.todayMenus).map((plan) => (
                   <li key={plan.id}>
                     <button type="button" className="sm-list-btn" onClick={() => go('menu/planning')}>
                       <span className="sm-row">
                         <strong>{plan.name}</strong>
                         <StatusBadge status={plan.status} />
                       </span>
-                      <span className="sm-meta">{plan.mealPeriod || 'Meal'} · {plan.lineCount} items · {plan.missingRecipes} missing recipes</span>
+                      <span className="sm-meta">
+                        {'mealPeriod' in plan ? (plan.mealPeriod || 'Meal') : 'Meal'}
+                        {'lines' in plan ? ` · ${plan.lines.length} dishes · ${plan.expectedCovers ?? plan.expectedGuests} covers` : ` · ${plan.lineCount} items`}
+                      </span>
                     </button>
                   </li>
                 ))}
               </ul>
             </section>
+
+            {summary && summary.upcomingMenus.length > 0 && (
+              <section className="sm-section">
+                <h2>Upcoming Menu Plans</h2>
+                <ul className="sm-list">
+                  {summary.upcomingMenus.slice(0, 5).map((plan) => (
+                    <li key={plan.id}>
+                      <button type="button" className="sm-list-btn" onClick={() => go('menu/planning')}>
+                        <span className="sm-row">
+                          <strong>{plan.name}</strong>
+                          <StatusBadge status={plan.status} />
+                        </span>
+                        <span className="sm-meta">{plan.businessDate.slice(0, 10)} · {plan.mealPeriod || 'Meal'} · {plan.expectedCovers ?? plan.expectedGuests} covers</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
 
             <section className="sm-section">
               <h2>Menu mix</h2>

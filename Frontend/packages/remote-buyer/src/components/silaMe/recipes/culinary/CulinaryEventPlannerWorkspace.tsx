@@ -60,6 +60,7 @@ import {
   type SilaCulinaryUpsertEventRequest,
 } from "../../../../api/silaMe/silaCulinaryEventMenuApi";
 import type { CulinaryWorkspaceKind } from "../silaRecipeRoutes";
+import { CulinaryKpis, CulinaryTabs, CulinaryWorkspaceHeader } from "./CulinaryWorkspaceKit";
 import "./CulinarySuite.css";
 
 interface CulinaryEventPlannerWorkspaceProps {
@@ -136,6 +137,7 @@ const CulinaryEventPlannerWorkspace: React.FC<CulinaryEventPlannerWorkspaceProps
   const [selectedEvent, setSelectedEvent] = useState<SilaCulinaryEvent | null>(null);
   const [statusFilter, setStatusFilter] = useState("");
   const [searchFilter, setSearchFilter] = useState("");
+  const [attentionFilter, setAttentionFilter] = useState<"over-budget" | "dietary" | null>(null);
   const [loading, setLoading] = useState(false);
 
   // Create / Edit Wizard State
@@ -284,6 +286,29 @@ const CulinaryEventPlannerWorkspace: React.FC<CulinaryEventPlannerWorkspaceProps
     refreshAll();
   }, []);
 
+  const showEvents = async (status: string, attention: "over-budget" | "dietary" | null) => {
+    setStatusFilter(status);
+    setAttentionFilter(attention);
+    setSearchFilter("");
+    setTopView("dashboard");
+    try {
+      setEvents(await listCulinaryEvents({ status: status || undefined }));
+    } catch (err: unknown) {
+      toastService.error(err instanceof Error ? err.message : "Failed to load events.");
+    }
+    window.setTimeout(() => document.getElementById("event-directory")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+  };
+
+  const visibleEvents = events.filter((ev) => {
+    if (attentionFilter === "over-budget") {
+      return ev.approvedBudget != null && (ev.totalEstimatedMenuCost ?? 0) > ev.approvedBudget;
+    }
+    if (attentionFilter === "dietary") {
+      return !ev.dietaryReviewVerified && ev.dietaryRequirements.length > 0;
+    }
+    return true;
+  });
+
   const openEvent = async (eventId: string) => {
     try {
       const detail = await getCulinaryEvent(eventId);
@@ -391,29 +416,44 @@ const CulinaryEventPlannerWorkspace: React.FC<CulinaryEventPlannerWorkspaceProps
 
   return (
     <div className="cs2-shell" data-testid="culinary-events-workspace">
-      <div className="cs2-header">
-        <div>
-          <h2 className="cs2-title">AI Event Planner &amp; Menu Studio</h2>
-          <p className="cs2-subtitle">
-            Phase 2A Hospitality Event Lifecycle: Calendar, Multi-Day Sessions, Guest Uptake, Published Recipe Selection,
-            AI Menu Generation, MILP Optimization, Dietary &amp; Allergen Review, Read-Only Stock Preview, Approvals &amp; Phase 2B Handover.
-          </p>
-        </div>
-        <div className="cs2-actions-row">
-          <button type="button" className={`sila-btn sila-btn--sm ${topView === "dashboard" ? "sila-btn--primary" : "sila-btn--secondary"}`} onClick={() => setTopView("dashboard")}>
-            Dashboard
-          </button>
-          <button type="button" className={`sila-btn sila-btn--sm ${topView === "calendar" ? "sila-btn--primary" : "sila-btn--secondary"}`} onClick={() => setTopView("calendar")}>
-            Event Calendar
-          </button>
-          <button type="button" className={`sila-btn sila-btn--sm ${topView === "workspace" ? "sila-btn--primary" : "sila-btn--secondary"}`} onClick={() => setTopView("workspace")}>
-            Event Workspace
-          </button>
-          <button type="button" className="sila-btn sila-btn--sm sila-btn--primary" onClick={() => setShowCreateModal((v) => !v)} data-testid="new-event-btn">
+      <CulinaryWorkspaceHeader
+        title="AI Event Planner"
+        subtitle="Hospitality Event Lifecycle: Calendar, Multi-Day Sessions, Guest Uptake, Published Recipe Selection, AI Event Planning, Optimization, Dietary & Allergen Review, Read-Only Stock Preview, Approvals & Material Requirements Handover."
+        actions={
+          <button type="button" className="sila-studio-btn sila-studio-btn--primary" onClick={() => setShowCreateModal((v) => !v)} data-testid="new-event-btn">
             {showCreateModal ? "Close New Event" : "+ New Event"}
           </button>
-        </div>
-      </div>
+        }
+      />
+
+      <CulinaryTabs<TopView>
+        ariaLabel="Event planner views"
+        testId="event-top-tabs"
+        active={topView}
+        onChange={setTopView}
+        tabs={[
+          { id: "dashboard", label: "Dashboard" },
+          { id: "calendar", label: "Event Calendar" },
+          { id: "workspace", label: "Event Workspace" },
+        ]}
+      />
+
+      <CulinaryKpis
+        ariaLabel="Event planning metrics"
+        testId="event-kpis"
+        columns={6}
+        items={[
+          { id: "event-upcoming", label: "Upcoming Events", value: dashboard?.upcomingEvents ?? 0, hint: `This week ${dashboard?.eventsThisWeek ?? 0} · Month ${dashboard?.eventsThisMonth ?? 0}`, tone: "blue", drillLabel: "Show all upcoming events", selected: topView === "dashboard" && !statusFilter && !attentionFilter, onClick: () => void showEvents("", null) },
+          { id: "event-week", label: "Events This Week", value: dashboard?.eventsThisWeek ?? 0, tone: "sky", drillLabel: "Open the week calendar", onClick: () => { setCalendarMode("week"); setTopView("calendar"); } },
+          { id: "event-guests", label: "Total Planned Guests", value: (dashboard?.totalPlannedGuests ?? 0).toLocaleString(), tone: "indigo", drillLabel: "Show events with planned guests", onClick: () => void showEvents("", null) },
+          { id: "event-draft", label: "Draft Events", value: dashboard?.draftEvents ?? 0, tone: "lavender", drillLabel: "Show draft events", selected: statusFilter === "DRAFT", onClick: () => void showEvents("DRAFT", null) },
+          { id: "event-pending", label: "Awaiting Approval", value: dashboard?.awaitingApprovalEvents ?? 0, tone: "amber", drillLabel: "Show events awaiting approval", selected: statusFilter === "PENDING_APPROVAL", onClick: () => void showEvents("PENDING_APPROVAL", null) },
+          { id: "event-approved", label: "Approved Events", value: dashboard?.approvedEvents ?? 0, tone: "green", drillLabel: "Show approved events", selected: statusFilter === "APPROVED" && !attentionFilter, onClick: () => void showEvents("APPROVED", null) },
+          { id: "event-mrp", label: "Ready for MRP", value: dashboard?.readyForMrpEvents ?? 0, tone: "green", drillLabel: "Show approved events ready for Event MRP", onClick: () => void showEvents("APPROVED", null) },
+          { id: "event-over-budget", label: "Over Budget", value: dashboard?.aboveBudgetEvents ?? 0, tone: "rose", drillLabel: "Show events above budget", selected: attentionFilter === "over-budget", onClick: () => void showEvents("", "over-budget") },
+          { id: "event-dietary", label: "Dietary Review Pending", value: dashboard?.dietaryReviewPendingEvents ?? 0, tone: "amber", drillLabel: "Show events with pending dietary review", selected: attentionFilter === "dietary", onClick: () => void showEvents("", "dietary") },
+        ]}
+      />
 
       {showCreateModal && (
         <form className="cs2-card" onSubmit={handleCreateEvent} data-testid="event-create-form">
@@ -492,33 +532,13 @@ const CulinaryEventPlannerWorkspace: React.FC<CulinaryEventPlannerWorkspaceProps
 
       {topView === "dashboard" && (
         <>
-          <div className="cs2-kpi-grid">
-            <div className="cs2-kpi cs2-kpi--accent">
-              <span className="cs2-kpi__label">Upcoming Events</span>
-              <span className="cs2-kpi__value">{dashboard?.upcomingEvents ?? 0}</span>
-              <span className="cs2-kpi__hint">This week: {dashboard?.eventsThisWeek ?? 0} · Month: {dashboard?.eventsThisMonth ?? 0}</span>
-            </div>
-            <div className="cs2-kpi cs2-kpi--indigo">
-              <span className="cs2-kpi__label">Total Planned Guests</span>
-              <span className="cs2-kpi__value">{(dashboard?.totalPlannedGuests ?? 0).toLocaleString()}</span>
-              <span className="cs2-kpi__hint">Draft: {dashboard?.draftEvents ?? 0} · Pending: {dashboard?.awaitingApprovalEvents ?? 0}</span>
-            </div>
-            <div className="cs2-kpi cs2-kpi--emerald">
-              <span className="cs2-kpi__label">Approved &amp; MRP Ready</span>
-              <span className="cs2-kpi__value">{dashboard?.approvedEvents ?? 0} / {dashboard?.readyForMrpEvents ?? 0}</span>
-              <span className="cs2-kpi__hint">Ready for Phase 2B MRP</span>
-            </div>
-            <div className="cs2-kpi cs2-kpi--warn">
-              <span className="cs2-kpi__label">Attention Required</span>
-              <span className="cs2-kpi__value">{(dashboard?.aboveBudgetEvents ?? 0) + (dashboard?.dietaryReviewPendingEvents ?? 0)}</span>
-              <span className="cs2-kpi__hint">Over budget: {dashboard?.aboveBudgetEvents ?? 0} · Dietary pending: {dashboard?.dietaryReviewPendingEvents ?? 0}</span>
-            </div>
-          </div>
-
           <div className="cs2-grid-2">
-            <section className="cs2-card">
+            <section className="cs2-card" id="event-directory">
               <div className="cs2-card__head">
-                <h3 className="cs2-card__title">Events Directory</h3>
+                <h3 className="cs2-card__title">
+                  Events Directory
+                  {attentionFilter ? ` · ${attentionFilter === "over-budget" ? "Over Budget" : "Dietary Review Pending"}` : statusFilter ? ` · ${statusFilter}` : ""}
+                </h3>
                 <div style={{ display: "flex", gap: 6 }}>
                   <input className="sila-input" style={{ width: 170 }} placeholder="Search code/name..." value={searchFilter} onChange={(e) => setSearchFilter(e.target.value)} />
                   <select className="sila-select" style={{ width: 130 }} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
@@ -532,10 +552,10 @@ const CulinaryEventPlannerWorkspace: React.FC<CulinaryEventPlannerWorkspaceProps
                 </div>
               </div>
               <div style={{ display: "grid", gap: 8, maxHeight: 340, overflowY: "auto" }}>
-                {events.length === 0 ? (
+                {visibleEvents.length === 0 ? (
                   <div style={{ color: "#64748b", fontSize: 13 }}>No events found. Click "+ New Event" to start planning.</div>
                 ) : (
-                  events.map((ev) => (
+                  visibleEvents.map((ev) => (
                     <div key={ev.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: 10, border: "1px solid #e2e8f0", borderRadius: 10 }}>
                       <div>
                         <div style={{ fontWeight: 600 }}>
@@ -569,7 +589,7 @@ const CulinaryEventPlannerWorkspace: React.FC<CulinaryEventPlannerWorkspaceProps
                       <YAxis />
                       <Tooltip />
                       <Legend />
-                      <Bar dataKey="budget" name="Budget" fill="#4f46e5" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="budget" name="Budget" fill="#087bb5" radius={[4, 4, 0, 0]} />
                       <Bar dataKey="estimatedCost" name="Est. Menu Cost" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
@@ -1157,7 +1177,7 @@ const CulinaryEventPlannerWorkspace: React.FC<CulinaryEventPlannerWorkspaceProps
 
                   <section className="cs2-card">
                     <div className="cs2-card__head">
-                      <h3 className="cs2-card__title">Event Reports &amp; Phase 2B Handover</h3>
+                      <h3 className="cs2-card__title">Event Reports &amp; MRP Handover</h3>
                       {handover && (
                         <span className={`cs2-badge ${handover.mrpReady ? "cs2-badge--live" : "cs2-badge--warn"}`}>
                           {handover.mrpReady ? "MRP Ready" : "Review Warnings"}
@@ -1184,7 +1204,7 @@ const CulinaryEventPlannerWorkspace: React.FC<CulinaryEventPlannerWorkspaceProps
                         )}
                         <div style={{ marginTop: 8 }}>
                           <button type="button" className="sila-btn sila-btn--sm sila-btn--primary" onClick={() => onOpenWorkspace("mrp")}>
-                            Launch Phase 2B Event MRP
+                            Launch Event MRP
                           </button>
                         </div>
                       </div>

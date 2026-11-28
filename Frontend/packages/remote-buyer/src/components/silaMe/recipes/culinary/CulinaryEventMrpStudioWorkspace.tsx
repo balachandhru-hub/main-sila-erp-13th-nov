@@ -37,6 +37,7 @@ import {
 } from "../../../../api/silaMe/silaCulinaryMrpApi";
 import type { CulinaryWorkspaceKind } from "../silaRecipeRoutes";
 import CulinaryMrpSimulatorWorkspace from "./CulinaryMrpSimulatorWorkspace";
+import { CulinaryKpis, CulinaryTabs } from "./CulinaryWorkspaceKit";
 import "./CulinarySuite.css";
 
 interface Props {
@@ -87,6 +88,11 @@ const CulinaryEventMrpStudioWorkspace: React.FC<Props> = ({ onOpenWorkspace }) =
   const [groupedView, setGroupedView] = useState<SilaCulinaryMrpGroupView | null>(null);
   const [bomSearch, setBomSearch] = useState("");
   const [bomStatusFilter, setBomStatusFilter] = useState("ALL");
+  const openBom = (status: string) => {
+    setBomStatusFilter(status);
+    setBomSearch("");
+    setTab("bom");
+  };
   const [expandedLineId, setExpandedLineId] = useState<string | null>(null);
 
   // Tree state
@@ -344,7 +350,7 @@ const CulinaryEventMrpStudioWorkspace: React.FC<Props> = ({ onOpenWorkspace }) =
         <div>
           <h2 className="cs2-title">Event MRP Studio — Material Requirement Planning Engine</h2>
           <p className="cs2-subtitle">
-            Phase 2B deterministic multi-level recipe explosion, yield &amp; buffer planning, time-phased demand, preliminary stock comparison, and Phase 2C handover.
+            Deterministic multi-level recipe explosion, yield &amp; buffer planning, time-phased demand, preliminary stock comparison, and procurement handover.
             <strong style={{ marginLeft: 6, color: "#0f766e" }}>Zero stock reservations, POs, ITOs, or SAP postings.</strong>
           </p>
         </div>
@@ -388,10 +394,10 @@ const CulinaryEventMrpStudioWorkspace: React.FC<Props> = ({ onOpenWorkspace }) =
                   void handleAction(async () => {
                     const updated = await releaseMrpForPlanning(activeRun.id);
                     setActiveRun(updated);
-                  }, `Released ${activeRun.mrpCode} for Phase 2C planning (0 POs/ITOs/reservations).`)
+                  }, `Released ${activeRun.mrpCode} for procurement planning (0 POs/ITOs/reservations).`)
                 }
               >
-                Release Phase 2C
+                Release to Procurement
               </button>
             </>
           )}
@@ -494,85 +500,65 @@ const CulinaryEventMrpStudioWorkspace: React.FC<Props> = ({ onOpenWorkspace }) =
         </div>
       </div>
 
-      {/* KPI Strip */}
-      <div className="cs2-kpi-grid" style={{ marginTop: 12 }}>
-        <div className="cs2-kpi-card">
-          <span>Active MRP Runs</span>
-          <strong>{dashboard?.activeMrpRuns ?? runs.length}</strong>
-        </div>
-        <div className="cs2-kpi-card">
-          <span>Total Recipes</span>
-          <strong>{activeRun?.totalRecipes ?? 0}</strong>
-        </div>
-        <div className="cs2-kpi-card">
-          <span>Unique Materials</span>
-          <strong>{activeRun?.totalUniqueMaterials ?? dashboard?.uniqueRequiredMaterials ?? 0}</strong>
-        </div>
-        <div className="cs2-kpi-card">
-          <span>Sufficient Stock</span>
-          <strong style={{ color: "#0f766e" }}>{activeRun?.sufficientStockCount ?? 0}</strong>
-        </div>
-        <div className="cs2-kpi-card">
-          <span>Potential Shortages</span>
-          <strong style={{ color: "#b91c1c" }}>{activeRun?.shortageCount ?? dashboard?.materialsWithShortages ?? 0}</strong>
-        </div>
-        <div className="cs2-kpi-card">
-          <span>Unknown Availability</span>
-          <strong>{activeRun?.unknownStockCount ?? 0}</strong>
-        </div>
-        <div className="cs2-kpi-card">
-          <span>Missing Mappings</span>
-          <strong style={{ color: "#b45309" }}>{activeRun?.missingMappingCount ?? dashboard?.materialsWithUnresolvedMappings ?? 0}</strong>
-        </div>
-        <div className="cs2-kpi-card">
-          <span>Est. Requirement Value</span>
-          <strong>
-            {activeRun?.costVisible && activeRun.estimatedRequirementValue != null
-              ? `${activeRun.currency} ${activeRun.estimatedRequirementValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
-              : activeRun?.costVisible === false
-                ? "Restricted"
-                : "Unknown"}
-          </strong>
-        </div>
-        <div className="cs2-kpi-card">
-          <span>Indicative Shortage Value</span>
-          <strong style={{ color: "#b91c1c" }}>
-            {activeRun?.costVisible && activeRun.indicativeShortageValue != null
-              ? `${activeRun.currency} ${activeRun.indicativeShortageValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
-              : activeRun?.costVisible === false
-                ? "Restricted"
-                : "Unknown"}
-          </strong>
-        </div>
-        <div className="cs2-kpi-card">
-          <span>Due ≤24h / ≤48h</span>
-          <strong>{dashboard?.materialsRequiredWithin24Hours ?? 0} / {dashboard?.materialsRequiredWithin48Hours ?? 0}</strong>
-        </div>
-      </div>
-
-      {/* Studio Sub-Navigation */}
-      <div className="cs2-tabs" style={{ marginTop: 14, flexWrap: "wrap" }}>
-        {[
+      <CulinaryTabs<MrpTab>
+        ariaLabel="Event MRP modules"
+        testId="mrp-tabs"
+        active={tab}
+        onChange={setTab}
+        tabs={[
           { id: "overview", label: "Dashboard & Overview" },
           { id: "bom", label: "Consolidated BOM (10 Views)" },
           { id: "tree", label: "Recipe Explosion Tree" },
           { id: "timeline", label: "Time-Phased & Stock" },
           { id: "simulator", label: "MRP Simulator & Scenarios" },
           { id: "ai", label: "AI Analysis & Optimization" },
-          { id: "governance", label: `Exceptions, Approval & Phase 2C (${activeRun?.blockingExceptionCount ?? 0})` },
+          { id: "governance", label: `Exceptions, Approval & Procurement Handover (${activeRun?.blockingExceptionCount ?? 0})` },
           { id: "reports", label: `Report Studio (${reportCatalog.length || 36})` },
           { id: "demo", label: "§32 Grand Gala Fixture" },
-        ].map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            className={`cs2-tab ${tab === t.id ? "cs2-tab--active" : ""}`}
-            onClick={() => setTab(t.id as MrpTab)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+        ]}
+      />
+
+      <CulinaryKpis
+        ariaLabel="Event MRP metrics"
+        testId="mrp-kpis"
+        columns={5}
+        items={[
+          { id: "mrp-runs", label: "Active MRP Runs", value: dashboard?.activeMrpRuns ?? runs.length, tone: "blue", drillLabel: "Show the MRP run overview", selected: tab === "overview", onClick: () => setTab("overview") },
+          { id: "mrp-recipes", label: "Total Recipes", value: activeRun?.totalRecipes ?? 0, tone: "lavender", drillLabel: "Show the recipe explosion tree", selected: tab === "tree", onClick: () => setTab("tree") },
+          { id: "mrp-materials", label: "Unique Materials", value: activeRun?.totalUniqueMaterials ?? dashboard?.uniqueRequiredMaterials ?? 0, tone: "sky", drillLabel: "Show all BOM material lines", selected: tab === "bom" && bomStatusFilter === "ALL", onClick: () => openBom("ALL") },
+          { id: "mrp-sufficient", label: "Sufficient Stock", value: activeRun?.sufficientStockCount ?? 0, tone: "green", drillLabel: "Show BOM lines with sufficient stock", selected: tab === "bom" && bomStatusFilter === "CURRENT_STOCK_SUFFICIENT", onClick: () => openBom("CURRENT_STOCK_SUFFICIENT") },
+          { id: "mrp-shortages", label: "Potential Shortages", value: activeRun?.shortageCount ?? dashboard?.materialsWithShortages ?? 0, tone: "rose", drillLabel: "Show BOM lines with potential shortages", selected: tab === "bom" && bomStatusFilter === "POTENTIAL_SHORTAGE", onClick: () => openBom("POTENTIAL_SHORTAGE") },
+          { id: "mrp-unknown", label: "Unknown Availability", value: activeRun?.unknownStockCount ?? 0, tone: "amber", drillLabel: "Show BOM lines with unknown availability", selected: tab === "bom" && bomStatusFilter === "AVAILABILITY_UNKNOWN", onClick: () => openBom("AVAILABILITY_UNKNOWN") },
+          { id: "mrp-missing", label: "Missing Mappings", value: activeRun?.missingMappingCount ?? dashboard?.materialsWithUnresolvedMappings ?? 0, tone: "amber", drillLabel: "Show BOM lines whose material is not mapped", selected: tab === "bom" && bomStatusFilter === "MATERIAL_NOT_MAPPED", onClick: () => openBom("MATERIAL_NOT_MAPPED") },
+          {
+            id: "mrp-req-value",
+            label: "Est. Requirement Value",
+            value:
+              activeRun?.costVisible && activeRun.estimatedRequirementValue != null
+                ? `${activeRun.currency} ${activeRun.estimatedRequirementValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+                : activeRun?.costVisible === false
+                  ? "Restricted"
+                  : "Unknown",
+            tone: "indigo",
+            drillLabel: "Show all BOM lines with requirement values",
+            onClick: () => openBom("ALL"),
+          },
+          {
+            id: "mrp-shortage-value",
+            label: "Indicative Shortage Value",
+            value:
+              activeRun?.costVisible && activeRun.indicativeShortageValue != null
+                ? `${activeRun.currency} ${activeRun.indicativeShortageValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+                : activeRun?.costVisible === false
+                  ? "Restricted"
+                  : "Unknown",
+            tone: "rose",
+            drillLabel: "Show shortage BOM lines",
+            onClick: () => openBom("POTENTIAL_SHORTAGE"),
+          },
+          { id: "mrp-due", label: "Due ≤24h / ≤48h", value: `${dashboard?.materialsRequiredWithin24Hours ?? 0} / ${dashboard?.materialsRequiredWithin48Hours ?? 0}`, tone: "amber", drillLabel: "Open the time-phased requirement view", selected: tab === "timeline", onClick: () => setTab("timeline") },
+        ]}
+      />
 
       {loading && <p style={{ padding: 16 }}>Loading MRP Studio...</p>}
 
@@ -1057,7 +1043,7 @@ const CulinaryEventMrpStudioWorkspace: React.FC<Props> = ({ onOpenWorkspace }) =
 
           <div className="cs2-card">
             <div className="cs2-row-between">
-              <h3 className="cs2-card-title">Approval, Impact Analysis &amp; Phase 2C Handover</h3>
+              <h3 className="cs2-card-title">Approval, Impact Analysis &amp; Procurement Handover</h3>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                 <button
                   type="button"
@@ -1081,9 +1067,9 @@ const CulinaryEventMrpStudioWorkspace: React.FC<Props> = ({ onOpenWorkspace }) =
                 <button
                   type="button"
                   className="sila-btn sila-btn--xs sila-btn--primary"
-                  onClick={() => void handleAction(async () => setHandover(await getMrpPhase2CHandover(activeRun.id)), "Phase 2C procurement handover contract generated.")}
+                  onClick={() => void handleAction(async () => setHandover(await getMrpPhase2CHandover(activeRun.id)), "Procurement handover contract generated.")}
                 >
-                  Inspect Phase 2C Handover
+                  Inspect Procurement Handover
                 </button>
               </div>
             </div>
@@ -1123,7 +1109,7 @@ const CulinaryEventMrpStudioWorkspace: React.FC<Props> = ({ onOpenWorkspace }) =
 
             {handover && (
               <div style={{ marginTop: 12, padding: 10, background: "#ecfdf5", borderRadius: 8, fontSize: 12 }}>
-                <strong>Phase 2C Handover ({handover.mrpCode} v{handover.mrpVersion})</strong> —{" "}
+                <strong>Procurement Handover ({handover.mrpCode} v{handover.mrpVersion})</strong> —{" "}
                 Zero Reservations: {String(handover.zeroReservationsCreated)} · Zero POs: {String(handover.zeroPosCreated)} · Zero ITOs: {String(handover.zeroItosCreated)} · Zero SAP Postings: {String(handover.zeroSapPostingsExecuted)} · {handover.materials.length} material line(s)
               </div>
             )}

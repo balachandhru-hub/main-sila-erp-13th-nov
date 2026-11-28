@@ -20,7 +20,7 @@ const dir = dirname(fileURLToPath(import.meta.url));
 const read = (rel: string) => readFileSync(join(dir, rel), "utf8");
 
 // 1. Existing Recipe Studio routes preserved
-assert.equal(silaRecipeCatalogPath(), "/sila-recipes");
+assert.equal(silaRecipeCatalogPath(), "/sila-recipes/master");
 assert.equal(silaRecipeNewPath(), "/sila-recipes/new");
 assert.equal(silaRecipeLegacyUploadPath(), "/sila-recipes/legacy-upload");
 
@@ -47,16 +47,14 @@ for (const kind of culinaryRoutes) {
   assert.deepEqual(parseSilaRecipePath(silaRecipeCulinaryPath(kind)), { kind });
 }
 
-// 3. Verify Contextual Nav contains all 17 capabilities + AI Setup and never fabricates live metrics
+// 3. Verify Contextual Nav contains all 16 grouped capabilities (no Overview or ME Studio inside Recipe Studio nav)
 const navSrc = read("SilaRecipeStudio2Nav.tsx");
 for (const expectedId of [
-  "overview",
   "list",
   "legacy-upload",
   "ai-planner",
   "materials",
   "material-requests",
-  "menus",
   "events",
   "mrp",
   "procurement",
@@ -71,6 +69,8 @@ for (const expectedId of [
 ]) {
   assert.match(navSrc, new RegExp(`id:\\s*"${expectedId}"`));
 }
+assert.doesNotMatch(navSrc, /id:\s*"menus"/);
+assert.doesNotMatch(navSrc, /id:\s*"overview"/);
 
 // 4. Verify AI Setup masks credentials and calls only authorized backend API
 const aiSetupSrc = read("CulinaryAiEngineSetupWorkspace.tsx");
@@ -82,13 +82,13 @@ assert.match(aiSetupSrc, /claudeKeyMasked/);
 assert.match(aiSetupSrc, /allowExternalAi/);
 assert.match(aiSetupSrc, /culinary-ai-usage-dashboard/);
 
-// 5. Verify SilaRecipes mounts SilaRecipeStudio2Workspaces without breaking existing guards,
-// and exposes the clickable RECIPE STUDIO 2.0 · CULINARY INTELLIGENCE flexi ribbon next to SILA Recipe Studio
+// 5. Verify SilaRecipes mounts SilaRecipeStudio2Workspaces with StudioHeroPanel, Overview icon, and Culinary Intelligence toggle (no 2.0 branding)
 const recipesSrc = read("../SilaRecipes.tsx");
 assert.match(recipesSrc, /SilaRecipeStudio2Workspaces/);
 assert.match(recipesSrc, /getCulinaryAiStatus/);
 assert.match(recipesSrc, /culinary-flexi-ribbon/);
-assert.match(recipesSrc, /RECIPE STUDIO 2\.0 · CULINARY INTELLIGENCE/);
+assert.match(recipesSrc, /label="Culinary Intelligence"/);
+assert.doesNotMatch(recipesSrc, /Recipe Studio 2\.0|RECIPE STUDIO 2\.0/);
 assert.match(recipesSrc, /showCulinaryOptions/);
 assert.match(recipesSrc, /showOptions=\{showCulinaryOptions\}/);
 assert.doesNotMatch(recipesSrc, /Culinary catalog/);

@@ -89,6 +89,54 @@ class SilaBuyerTools:
             ToolSpec("StartOrContinueVoicePo", "Start/continue existing Voice PO session", "requestPurchase"),
             self.start_or_continue_voice_po,
         )
+        registry.register(
+            ToolSpec("GetMenuMobileSummary", "Today's and published menus summary", "ViewMeStudio"),
+            self.get_menu_mobile_summary,
+        )
+        registry.register(
+            ToolSpec("SimulateMenuCovers", "Simulate ingredient requirements for cover counts without mutating live data", "RunMenuSimulation"),
+            self.simulate_menu_covers,
+        )
+        registry.register(
+            ToolSpec("GetMenuCostMargin", "Identify low-margin or high-food-cost menu items", "ViewMenuMargin"),
+            self.get_menu_cost_margin,
+        )
+        registry.register(
+            ToolSpec("GetMenuAiIntelligence", "Get recipe or ingredient substitution recommendations", "UseAiMenuIntelligence"),
+            self.get_menu_ai_intelligence,
+        )
+        registry.register(
+            ToolSpec("GetMenuConsumptionAnomalies", "Get top ingredient consumption variance root causes", "ViewMeStudio"),
+            self.get_menu_consumption_anomalies,
+        )
+        registry.register(
+            ToolSpec("GetMenuPurchasePlan", "Get next week ingredient purchase requirements", "GeneratePurchaseRecommendation"),
+            self.get_menu_purchase_plan,
+        )
+        registry.register(
+            ToolSpec("GetHistoricalMenus", "Get historical best-performing menus for comparison", "ViewMeStudio"),
+            self.get_historical_menus,
+        )
+        registry.register(
+            ToolSpec("RunMeStudioObjective", "Run ME Studio multi-agent menu generation or optimization (draft requires confirmation)", "UseAiMenuIntelligence"),
+            self.run_me_studio_objective,
+        )
+        registry.register(
+            ToolSpec("GetTwinDemandForecast", "Retrieve hierarchical Digital Twin demand forecast by meal period", "ViewMeStudio"),
+            self.get_twin_demand_forecast,
+        )
+        registry.register(
+            ToolSpec("GetTwinWasteRecommendations", "Retrieve Digital Twin food waste and smaller-batch prep recommendations", "ViewMeStudio"),
+            self.get_twin_waste_recommendations,
+        )
+        registry.register(
+            ToolSpec("GetAutonomousControlTower", "Retrieve autonomous control tower risks, action plans, pending approvals, and realized savings", "ViewMeStudio"),
+            self.get_autonomous_control_tower,
+        )
+        registry.register(
+            ToolSpec("PublishAutonomousEvent", "Publish a normalized business event to generate or inspect a corrective action plan", "UseAiMenuIntelligence"),
+            self.publish_autonomous_event,
+        )
 
     async def get_current_user_context(self, args: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
         return {
@@ -175,3 +223,86 @@ class SilaBuyerTools:
                 "idempotencyKey": args.get("idempotencyKey"),
             },
         )
+
+    async def get_menu_mobile_summary(self, args: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
+        meal = (args.get("mealPeriod") or "").strip()
+        qs = f"?propertyId={ctx['propertyId']}" if ctx.get("propertyId") else ""
+        res = await self._request("GET", f"/api/v1/buyer/sila/me-studio/mobile-summary{qs}", ctx)
+        if res.get("ok") and meal and isinstance(res.get("data"), dict):
+            res["requestedMealPeriod"] = meal
+        return res
+
+    async def simulate_menu_covers(self, args: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
+        covers = int(args.get("expectedCovers") or 300)
+        return await self._request(
+            "POST",
+            "/api/v1/buyer/sila/me-studio/simulate",
+            ctx,
+            {
+                "scenarioName": f"Voice {covers} covers",
+                "expectedCovers": covers,
+                "saveScenario": False,
+            },
+        )
+
+    async def get_menu_cost_margin(self, args: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
+        qs = f"?propertyId={ctx['propertyId']}" if ctx.get("propertyId") else ""
+        return await self._request("GET", f"/api/v1/buyer/sila/me-studio/cost-margin{qs}", ctx)
+
+    async def get_menu_ai_intelligence(self, args: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
+        qs = f"?propertyId={ctx['propertyId']}" if ctx.get("propertyId") else ""
+        return await self._request("GET", f"/api/v1/buyer/sila/me-studio/ai-intelligence{qs}", ctx)
+
+    async def get_menu_consumption_anomalies(self, args: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
+        qs = f"?propertyId={ctx['propertyId']}" if ctx.get("propertyId") else ""
+        return await self._request("GET", f"/api/v1/buyer/sila/me-studio/ai/consumption/root-causes{qs}", ctx)
+
+    async def get_menu_purchase_plan(self, args: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
+        qs = f"?propertyId={ctx['propertyId']}" if ctx.get("propertyId") else ""
+        return await self._request("GET", f"/api/v1/buyer/sila/me-studio/purchase-plan{qs}", ctx)
+
+    async def get_historical_menus(self, args: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
+        qs = f"?propertyId={ctx['propertyId']}" if ctx.get("propertyId") else ""
+        return await self._request("GET", f"/api/v1/buyer/sila/me-studio/historical-menus{qs}", ctx)
+
+    async def run_me_studio_objective(self, args: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
+        objective = (args.get("objective") or "").strip()
+        save_draft = bool(args.get("confirmation"))
+        return await self._request(
+            "POST",
+            "/api/v1/buyer/sila/me-studio/ai/multi-agent-run",
+            ctx,
+            {
+                "objective": objective,
+                "operatingMode": "AI_ASSISTED",
+                "propertyId": ctx.get("propertyId"),
+                "saveSelectedProposalAsDraft": save_draft,
+            },
+        )
+
+    async def get_twin_demand_forecast(self, args: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
+        qs = f"?propertyId={ctx['propertyId']}&horizonDays=3" if ctx.get("propertyId") else "?horizonDays=3"
+        return await self._request("GET", f"/api/v1/buyer/sila/me-studio/twin/forecast/hierarchical{qs}", ctx)
+
+    async def get_twin_waste_recommendations(self, args: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
+        qs = f"?propertyId={ctx['propertyId']}" if ctx.get("propertyId") else ""
+        return await self._request("GET", f"/api/v1/buyer/sila/me-studio/twin/predict/waste{qs}", ctx)
+
+    async def get_autonomous_control_tower(self, args: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
+        qs = f"?propertyId={ctx['propertyId']}" if ctx.get("propertyId") else ""
+        return await self._request("GET", f"/api/v1/buyer/sila/me-studio/autonomous/control-tower{qs}", ctx)
+
+    async def publish_autonomous_event(self, args: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
+        payload = {
+            "propertyId": ctx.get("propertyId"),
+            "eventType": args.get("eventType") or "ForecastDeviationDetected",
+            "sourceSystem": "SILA_VOICE",
+            "objectLabel": args.get("objectLabel") or "Voice Corrective Action Plan Request",
+            "materialityScore": float(args.get("materialityScore") or 15.0),
+            "payload": args.get("payload") or {},
+        }
+        pub = await self._request("POST", "/api/v1/buyer/sila/me-studio/autonomous/events", ctx, payload)
+        if not pub.get("ok"):
+            return pub
+        qs = f"?propertyId={ctx['propertyId']}" if ctx.get("propertyId") else ""
+        return await self._request("POST", f"/api/v1/buyer/sila/me-studio/autonomous/events/process{qs}", ctx, {})

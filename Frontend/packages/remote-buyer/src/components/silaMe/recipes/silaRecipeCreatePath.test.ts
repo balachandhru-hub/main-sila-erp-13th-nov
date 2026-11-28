@@ -13,7 +13,8 @@ import {
 
 const guid = "a1b2c3d4-e5f6-4789-a012-3456789abcde";
 
-assert.equal(parseSilaRecipePath("/sila-recipes").kind, "list");
+assert.equal(parseSilaRecipePath("/sila-recipes").kind, "overview");
+assert.equal(parseSilaRecipePath("/sila-recipes/master").kind, "list");
 assert.equal(parseSilaRecipePath("/sila-recipes/new").kind, "new");
 assert.equal(parseSilaRecipePath("/sila-recipes/NEW").kind, "new");
 assert.equal(parseSilaRecipePath("/sila-recipes/new/").kind, "new");
@@ -22,8 +23,8 @@ assert.deepEqual(parseSilaRecipePath(`/sila-recipes/${guid}`), { kind: "detail",
 assert.deepEqual(parseSilaRecipePath(`/sila-recipes/${guid}/edit`), { kind: "edit", recipeId: guid });
 // "new" must never be treated as a recipe id
 assert.equal(isRecipeId("new"), false);
-assert.equal(parseSilaRecipePath("/sila-recipes/undefined").kind, "list");
-assert.equal(parseSilaRecipePath("/sila-recipes/not-a-guid").kind, "list");
+assert.equal(parseSilaRecipePath("/sila-recipes/undefined").kind, "overview");
+assert.equal(parseSilaRecipePath("/sila-recipes/not-a-guid").kind, "overview");
 
 assert.equal(silaRecipeNewPath(), "/sila-recipes/new");
 assert.equal(silaRecipeEditPath(guid), `/sila-recipes/${guid}/edit`);

@@ -1,0 +1,1425 @@
+/* ==========================================================================
+   SILA WHITE & BLUE ENTERPRISE STUDIO DESIGN SYSTEM
+   Shared across Recipe Studio, Culinary Intelligence, Menu Engineering & ME Studio
+   ========================================================================== */
+
+:root {
+  --sila-studio-bg: #ffffff;
+  --sila-studio-surface: #ffffff;
+  --sila-studio-card-bg: #ffffff;
+  --sila-studio-hero-bg: #dceeff;
+  --sila-studio-hero-border: #a6cff1;
+  --sila-studio-blue: #087bb5;
+  --sila-studio-blue-hover: #066697;
+  --sila-studio-heading: #123354;
+  --sila-studio-secondary: #64748b;
+  --sila-studio-border: #c7dff4;
+  --sila-studio-border-interactive: #bbd9f2;
+  --sila-studio-divider: #e1edf8;
+  --sila-studio-nav-active-bg: #eaf5ff;
+  --sila-studio-hover-bg: #f5faff;
+  --sila-studio-success: #16865c;
+  --sila-studio-warning: #d97706;
+  --sila-studio-error: #c24141;
+}
+
+/* Pure white page & workspace surface when a Studio module is active */
+.sila-shell:has(.sila-studio-shell),
+.sila-shell:has(.sila-studio-shell) .sila-main,
+.sila-shell:has(.sila-studio-shell) .pud-main,
+.sila-shell:has(.sila-studio-shell) .pud-content {
+  background: var(--sila-studio-bg) !important;
+}
+
+.sila-shell:has(.sila-studio-shell) .sila-content {
+  padding-top: 0.95rem;
+  padding-bottom: 1.75rem;
+}
+
+.sila-studio-shell {
+  --sila-bg: #ffffff;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: 100%;
+  min-width: 0;
+  background: var(--sila-studio-bg);
+  color: var(--sila-studio-heading);
+  font-family: "DM Sans", var(--sila-font, "Inter", system-ui, sans-serif);
+}
+
+.sila-studio-shell * {
+  box-sizing: border-box;
+}
+
+/* Tabular numerals for all financial & analytical values */
+.sila-tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ==========================================================================
+   FULL-SCREEN INTELLIGENCE MODE (respects global SILA header height)
+   ========================================================================== */
+.sila-studio-shell.is-fullscreen {
+  position: fixed;
+  top: var(--sila-topbar-height, 3.75rem);
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 950;
+  background: var(--sila-studio-bg);
+  padding: 0.85rem 1.25rem 1.5rem;
+  overflow-y: auto;
+  overflow-x: hidden;
+  border-top: 1px solid var(--sila-studio-border);
+}
+
+.sila-studio-fullscreen-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.45rem 0.75rem;
+  border-radius: 10px;
+  background: var(--sila-studio-nav-active-bg);
+  border: 1px solid var(--sila-studio-hero-border);
+}
+
+.sila-studio-fullscreen-bar__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--sila-studio-heading);
+}
+
+/* ==========================================================================
+   ROW 2: PREMIUM ICE-BLUE HERO PANEL
+   ========================================================================== */
+.sila-studio-hero {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.85rem 1.15rem;
+  border-radius: 11px;
+  background: var(--sila-studio-hero-bg);
+  border: 1px solid var(--sila-studio-hero-border);
+  box-shadow: 0 1px 3px rgba(18, 51, 84, 0.04);
+}
+
+.sila-studio-hero__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.sila-studio-hero__main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.sila-studio-hero__title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.sila-studio-hero__title {
+  margin: 0;
+  font-size: clamp(1.45rem, 1.8vw, 1.7rem);
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--sila-studio-heading);
+  letter-spacing: -0.015em;
+}
+
+.sila-studio-hero__subtitle {
+  margin: 0;
+  font-size: 0.84rem;
+  line-height: 1.35;
+  color: var(--sila-studio-secondary);
+}
+
+.sila-studio-hero__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.15rem;
+}
+
+.sila-studio-hero__top-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-shrink: 0;
+}
+
+/* Overview dashboard icon button (36-40px square) */
+.sila-studio-overview-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 9px;
+  border: 1px solid var(--sila-studio-border);
+  background: #ffffff;
+  color: var(--sila-studio-blue);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease, box-shadow 140ms ease;
+}
+
+.sila-studio-overview-btn:hover {
+  background: var(--sila-studio-hover-bg);
+  border-color: var(--sila-studio-blue);
+}
+
+.sila-studio-overview-btn.is-active {
+  background: var(--sila-studio-blue);
+  border-color: var(--sila-studio-blue);
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(8, 123, 181, 0.22);
+}
+
+.sila-studio-overview-btn:focus-visible {
+  outline: 2px solid var(--sila-studio-blue);
+  outline-offset: 2px;
+}
+
+.sila-studio-overview-btn.sila-recipe-new-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: var(--sila-studio-blue);
+  border-color: var(--sila-studio-blue);
+  color: #ffffff;
+  box-shadow: 0 3px 10px rgba(8, 123, 181, 0.28);
+}
+
+.sila-studio-overview-btn.sila-recipe-new-icon:hover:not(:disabled) {
+  background: #066a9e;
+  border-color: #066a9e;
+}
+
+.sila-studio-overview-btn.sila-recipe-new-icon:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* Culinary Intelligence / AI Toggle adjacent to hero title */
+.sila-studio-intel-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+  height: 32px;
+  padding: 0 0.78rem;
+  border-radius: 8px;
+  border: 1px solid var(--sila-studio-blue);
+  background: var(--sila-studio-blue);
+  color: #ffffff;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.sila-studio-intel-toggle:hover {
+  background: var(--sila-studio-blue-hover);
+  border-color: var(--sila-studio-blue-hover);
+}
+
+.sila-studio-intel-toggle.is-expanded {
+  background: #123354;
+  border-color: #123354;
+}
+
+.sila-studio-intel-toggle:focus-visible {
+  outline: 2px solid var(--sila-studio-blue);
+  outline-offset: 2px;
+}
+
+/* Single-line Hero Action Bar */
+.sila-studio-action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  padding-bottom: 1px;
+}
+
+.sila-studio-action-bar__group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: nowrap;
+  flex-shrink: 0;
+}
+
+/* Unified Studio Buttons (32-36px height) */
+.sila-studio-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  height: 34px;
+  padding: 0 0.78rem;
+  border-radius: 8px;
+  border: 1px solid var(--sila-studio-border);
+  background: #ffffff;
+  color: var(--sila-studio-heading);
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+
+.sila-studio-btn:hover:not(:disabled) {
+  background: var(--sila-studio-hover-bg);
+  border-color: var(--sila-studio-blue);
+}
+
+.sila-studio-btn:focus-visible {
+  outline: 2px solid var(--sila-studio-blue);
+  outline-offset: 2px;
+}
+
+.sila-studio-btn:disabled {
+  opacity: 0.52;
+  cursor: not-allowed;
+}
+
+.sila-studio-btn--sm {
+  height: 30px;
+  padding: 0 0.62rem;
+  font-size: 0.76rem;
+}
+
+.sila-studio-btn--primary {
+  background: var(--sila-studio-blue);
+  border-color: var(--sila-studio-blue);
+  color: #ffffff;
+}
+
+.sila-studio-btn--primary:hover:not(:disabled) {
+  background: var(--sila-studio-blue-hover);
+  border-color: var(--sila-studio-blue-hover);
+  color: #ffffff;
+}
+
+.sila-studio-btn--danger {
+  background: #fff5f5;
+  border-color: #f3cccc;
+  color: var(--sila-studio-error);
+}
+
+.sila-studio-btn--danger:hover:not(:disabled) {
+  background: #fee2e2;
+  border-color: var(--sila-studio-error);
+}
+
+.sila-studio-btn--ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--sila-studio-secondary);
+}
+
+.sila-studio-btn--ghost:hover:not(:disabled) {
+  background: var(--sila-studio-hover-bg);
+  border-color: var(--sila-studio-border);
+  color: var(--sila-studio-heading);
+}
+
+/* ==========================================================================
+   ROW 3 & ROW 4: SINGLE-LINE TOP NAVIGATION & CONTEXTUAL SUBMENU
+   ========================================================================== */
+.sila-studio-nav-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.65rem 0.9rem;
+  border-radius: 10px;
+  background: #ffffff;
+  border: 1px solid var(--sila-studio-border);
+  box-shadow: 0 1px 3px rgba(18, 51, 84, 0.04);
+}
+
+.sila-studio-nav-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.sila-studio-nav-panel__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+  margin: 0;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--sila-studio-heading);
+}
+
+.sila-studio-nav-panel__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  font-size: 0.75rem;
+  color: var(--sila-studio-secondary);
+}
+
+.sila-studio-top-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  padding-bottom: 2px;
+}
+
+.sila-studio-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  height: 34px;
+  padding: 0 0.72rem;
+  border-radius: 8px;
+  border: 1px solid var(--sila-studio-border);
+  background: #ffffff;
+  color: var(--sila-studio-heading);
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+
+.sila-studio-nav-btn:hover {
+  background: var(--sila-studio-hover-bg);
+  border-color: var(--sila-studio-border-interactive);
+}
+
+.sila-studio-nav-btn.is-active {
+  background: var(--sila-studio-nav-active-bg);
+  border-color: var(--sila-studio-blue);
+  color: var(--sila-studio-blue);
+}
+
+.sila-studio-nav-btn:focus-visible {
+  outline: 2px solid var(--sila-studio-blue);
+  outline-offset: 2px;
+}
+
+/* Contextual Submenu */
+.sila-studio-subnav {
+  display: flex;
+  align-items: center;
+  gap: 0.38rem;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  padding: 0.38rem 0.65rem;
+  border-radius: 9px;
+  background: var(--sila-studio-hover-bg);
+  border: 1px solid var(--sila-studio-divider);
+}
+
+.sila-studio-subnav__group-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--sila-studio-secondary);
+  padding-right: 0.35rem;
+  margin-right: 0.2rem;
+  border-right: 1px solid var(--sila-studio-border);
+  white-space: nowrap;
+}
+
+.sila-studio-subnav-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  height: 30px;
+  padding: 0 0.68rem;
+  border-radius: 7px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--sila-studio-heading);
+  font-family: inherit;
+  font-size: 0.785rem;
+  font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+
+.sila-studio-subnav-btn:hover {
+  background: #ffffff;
+  border-color: var(--sila-studio-border);
+}
+
+.sila-studio-subnav-btn.is-active {
+  background: #ffffff;
+  border-color: var(--sila-studio-blue);
+  color: var(--sila-studio-blue);
+  font-weight: 600;
+}
+
+.sila-studio-subnav-btn:focus-visible {
+  outline: 2px solid var(--sila-studio-blue);
+  outline-offset: 2px;
+}
+
+/* Semantic Status Badges */
+.sila-studio-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.14rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.69rem;
+  font-weight: 600;
+  line-height: 1.25;
+  white-space: nowrap;
+  border: 1px solid var(--sila-studio-border);
+  background: #ffffff;
+  color: var(--sila-studio-heading);
+}
+
+.sila-studio-badge--info {
+  background: var(--sila-studio-nav-active-bg);
+  border-color: var(--sila-studio-hero-border);
+  color: var(--sila-studio-blue);
+}
+
+.sila-studio-badge--success {
+  background: #e9f8f0;
+  border-color: #c0e8d2;
+  color: var(--sila-studio-success);
+}
+
+.sila-studio-badge--warning {
+  background: #fff6e8;
+  border-color: #f3dbb6;
+  color: var(--sila-studio-warning);
+}
+
+.sila-studio-badge--error {
+  background: #fff1f1;
+  border-color: #f3cccc;
+  color: var(--sila-studio-error);
+}
+
+.sila-studio-badge--neutral {
+  background: #f8fafc;
+  border-color: #dce6f0;
+  color: var(--sila-studio-secondary);
+}
+
+/* ==========================================================================
+   ROW 5: COMPACT PASTEL KPI BAR (72-90px target)
+   ========================================================================== */
+.sila-studio-kpi-bar {
+  display: grid;
+  grid-template-columns: repeat(var(--kpi-cols, 7), minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+@media (max-width: 1200px) {
+  .sila-studio-kpi-bar {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .sila-studio-kpi-bar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.sila-studio-kpi {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 76px;
+  padding: 0.62rem 0.78rem;
+  border-radius: 10px;
+  border: 1px solid var(--sila-studio-border);
+  background: #eaf5ff;
+  box-shadow: 0 1px 2px rgba(18, 51, 84, 0.03);
+}
+
+.sila-studio-kpi--blue { background: #eaf5ff; border-color: #bbddf8; }
+.sila-studio-kpi--green { background: #e9f8f0; border-color: #c0e8d2; }
+.sila-studio-kpi--lavender { background: #f2eeff; border-color: #dcd1f8; }
+.sila-studio-kpi--amber { background: #fff6e8; border-color: #f3dbb6; }
+.sila-studio-kpi--rose { background: #fff1f1; border-color: #f3cccc; }
+.sila-studio-kpi--indigo { background: #eef3ff; border-color: #cedbf8; }
+.sila-studio-kpi--sky { background: #eaf4ff; border-color: #c7dff4; }
+
+.sila-studio-kpi__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+}
+
+.sila-studio-kpi__label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--sila-studio-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.sila-studio-kpi__icon {
+  color: var(--sila-studio-blue);
+  opacity: 0.85;
+  flex-shrink: 0;
+}
+
+.sila-studio-kpi--green .sila-studio-kpi__icon { color: var(--sila-studio-success); }
+.sila-studio-kpi--amber .sila-studio-kpi__icon { color: var(--sila-studio-warning); }
+.sila-studio-kpi--rose .sila-studio-kpi__icon { color: var(--sila-studio-error); }
+
+.sila-studio-kpi__value {
+  font-size: clamp(1.2rem, 1.55vw, 1.55rem);
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--sila-studio-heading);
+  font-variant-numeric: tabular-nums;
+  margin-top: 0.25rem;
+}
+
+.sila-studio-kpi__meta {
+  font-size: 0.69rem;
+  line-height: 1.25;
+  color: var(--sila-studio-secondary);
+  margin-top: 0.12rem;
+}
+
+/* ==========================================================================
+   ROW 6: COMPACT SINGLE-LINE FILTER TOOLBAR
+   ========================================================================== */
+.sila-studio-filter-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 10px;
+  background: #ffffff;
+  border: 1px solid var(--sila-studio-border);
+}
+
+.sila-studio-filter-bar__row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.sila-studio-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 220px;
+  min-width: 180px;
+}
+
+.sila-studio-search-wrap__icon {
+  position: absolute;
+  left: 0.65rem;
+  color: var(--sila-studio-secondary);
+  pointer-events: none;
+}
+
+.sila-studio-input,
+.sila-studio-select {
+  height: 34px;
+  padding: 0 0.65rem;
+  border-radius: 8px;
+  border: 1px solid var(--sila-studio-border);
+  background: #ffffff;
+  color: var(--sila-studio-heading);
+  font-family: inherit;
+  font-size: 0.8125rem;
+  line-height: 1.2;
+}
+
+.sila-studio-input--search {
+  width: 100%;
+  padding-left: 2rem;
+}
+
+.sila-studio-input:focus,
+.sila-studio-select:focus {
+  outline: none;
+  border-color: var(--sila-studio-blue);
+  box-shadow: 0 0 0 2px rgba(8, 123, 181, 0.14);
+}
+
+.sila-studio-view-toggle {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 8px;
+  border: 1px solid var(--sila-studio-border);
+  background: #ffffff;
+  padding: 2px;
+  gap: 2px;
+}
+
+.sila-studio-view-toggle__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  height: 28px;
+  padding: 0 0.55rem;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--sila-studio-secondary);
+  font-size: 0.76rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sila-studio-view-toggle__btn.is-active {
+  background: var(--sila-studio-nav-active-bg);
+  color: var(--sila-studio-blue);
+}
+
+.sila-studio-chips {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.sila-studio-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  height: 24px;
+  padding: 0 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--sila-studio-border);
+  background: var(--sila-studio-nav-active-bg);
+  color: var(--sila-studio-heading);
+  font-size: 0.73rem;
+  font-weight: 500;
+}
+
+.sila-studio-chip button {
+  display: inline-flex;
+  align-items: center;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--sila-studio-secondary);
+  cursor: pointer;
+}
+
+/* ==========================================================================
+   ROW 7: FULL-WIDTH PANELS, TABLES, CHARTS & CARDS
+   ========================================================================== */
+.sila-studio-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.9rem 1rem;
+  border-radius: 10px;
+  background: #ffffff;
+  border: 1px solid var(--sila-studio-border);
+  box-shadow: 0 1px 3px rgba(18, 51, 84, 0.03);
+}
+
+.sila-studio-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--sila-studio-divider);
+}
+
+.sila-studio-panel__title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--sila-studio-heading);
+}
+
+.sila-studio-panel__subtitle {
+  margin: 0.12rem 0 0;
+  font-size: 0.78rem;
+  color: var(--sila-studio-secondary);
+}
+
+.sila-studio-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border-radius: 9px;
+  border: 1px solid var(--sila-studio-divider);
+  background: #ffffff;
+}
+
+.sila-studio-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+  color: var(--sila-studio-heading);
+  background: #ffffff;
+}
+
+.sila-studio-table th {
+  text-align: left;
+  padding: 0.55rem 0.7rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--sila-studio-secondary);
+  background: #f5faff;
+  border-bottom: 1px solid var(--sila-studio-border);
+  white-space: nowrap;
+}
+
+.sila-studio-table td {
+  padding: 0.58rem 0.7rem;
+  border-bottom: 1px solid var(--sila-studio-divider);
+  vertical-align: middle;
+}
+
+.sila-studio-table tbody tr:hover {
+  background: var(--sila-studio-hover-bg);
+}
+
+.sila-studio-table .is-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ==========================================================================
+   FULL-WIDTH RESPONSIVE RECIPE & MENU ITEM GRIDS (6 / 5 / 4 / 3 / 2 / 1)
+   ========================================================================== */
+.sila-studio-card-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+
+@media (max-width: 1680px) {
+  .sila-studio-card-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
+@media (max-width: 1380px) {
+  .sila-studio-card-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (max-width: 1120px) {
+  .sila-studio-card-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 780px) {
+  .sila-studio-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 480px) {
+  .sila-studio-card-grid { grid-template-columns: 1fr; }
+}
+
+/* Compact catalogue: passport-size thumbnail (3:4) beside dense recipe details, so more recipes fit on one page. */
+.sila-studio-card-grid.sila-studio-card-grid--compact {
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 0.5rem;
+}
+@media (max-width: 600px) {
+  .sila-studio-card-grid.sila-studio-card-grid--compact { grid-template-columns: 1fr; }
+}
+
+.sila-studio-item-card.sila-studio-item-card--compact {
+  flex-direction: row;
+  align-items: stretch;
+  min-height: 0;
+  border-radius: 9px;
+  overflow: hidden;
+}
+.sila-studio-item-card.sila-studio-item-card--compact:hover { transform: none; }
+
+.sila-studio-item-card--compact .sila-studio-item-card__media.sila-studio-item-card__media--thumb {
+  flex: 0 0 50px;
+  width: 50px;
+  height: auto;
+  align-self: stretch;
+  margin: 0;
+  border-radius: 0;
+  background: #f5faff;
+}
+
+.sila-studio-item-card--compact .sila-studio-item-card__media--thumb .rstudio-picture,
+.sila-studio-item-card--compact .sila-studio-item-card__media--thumb .rstudio-picture__frame {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  aspect-ratio: auto;
+  border-radius: 0;
+  border: 0;
+}
+
+.sila-studio-item-card--compact .sila-studio-item-card__media--thumb .rstudio-picture {
+  gap: 0;
+}
+
+.sila-studio-item-card--compact .sila-studio-item-card__media--thumb .rstudio-cover {
+  min-height: 0;
+  height: 100%;
+  padding: 0;
+  align-items: center;
+  justify-content: center;
+}
+
+.sila-studio-item-card--compact .sila-studio-item-card__media--thumb .rstudio-cover__art {
+  width: 100%;
+  height: 100%;
+  align-self: stretch;
+}
+
+.sila-studio-item-card--compact .sila-studio-item-card__media--thumb .rstudio-cover__caption { display: none; }
+
+.sila-studio-item-card--compact .sila-studio-item-card__body--compact {
+  min-width: 0;
+  gap: 0.1rem;
+  padding: 0.3rem 0.5rem 0.3rem 0.45rem;
+}
+
+.sila-studio-item-card__compact-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.35rem;
+}
+
+.sila-studio-item-card--compact .sila-studio-item-card__title-btn {
+  display: block;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.sila-studio-item-card--compact .sila-studio-item-card__title {
+  min-width: 0;
+  font-size: 0.78rem;
+  line-height: 1.2;
+  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.sila-studio-item-card--compact .sila-studio-badge {
+  flex-shrink: 0;
+  font-size: 0.6rem;
+  padding: 0.08rem 0.4rem;
+}
+
+.sila-studio-item-card--compact .sila-studio-item-card__meta {
+  margin: 0;
+  font-size: 0.63rem;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sila-studio-item-card__compact-stats {
+  display: flex;
+  gap: 0.5rem;
+  font-size: 0.66rem;
+  color: var(--sila-studio-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.sila-studio-item-card__compact-foot {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: auto;
+  min-width: 0;
+}
+
+.sila-studio-item-card__compact-cost {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--sila-studio-heading);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.sila-studio-item-card__compact-pos {
+  min-width: 0;
+  flex: 1 1 auto;
+  font-size: 0.64rem;
+  color: var(--sila-studio-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sila-studio-item-card__compact-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-left: auto;
+}
+
+.sila-studio-item-card--compact .sila-studio-btn--sm {
+  height: 20px;
+  padding: 0 0.4rem;
+  font-size: 0.64rem;
+}
+
+.sila-studio-item-card--compact .sila-studio-overflow { margin-left: 0; }
+
+.sila-studio-item-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border-radius: 11px;
+  border: 1px solid var(--sila-studio-border);
+  background: #ffffff;
+  overflow: hidden;
+  transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+}
+
+.sila-studio-item-card:hover {
+  border-color: var(--sila-studio-blue);
+  box-shadow: 0 4px 12px rgba(8, 123, 181, 0.08);
+  transform: translateY(-1px);
+}
+
+.sila-studio-item-card__media {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  border: 0;
+  padding: 0;
+  background: #f5faff;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.sila-studio-item-card__media img,
+.sila-studio-item-card__media .rstudio-cover,
+.sila-studio-item-card__media .srec-picture {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.sila-studio-item-card__status {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+}
+
+.sila-studio-item-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.38rem;
+  padding: 0.72rem 0.82rem 0.8rem;
+  flex: 1 1 auto;
+}
+
+.sila-studio-item-card__title {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 600;
+  line-height: 1.28;
+  color: var(--sila-studio-heading);
+}
+
+.sila-studio-item-card__title-btn {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sila-studio-item-card__title-btn:hover {
+  color: var(--sila-studio-blue);
+}
+
+.sila-studio-item-card__meta {
+  margin: 0;
+  font-size: 0.73rem;
+  line-height: 1.32;
+  color: var(--sila-studio-secondary);
+}
+
+.sila-studio-item-card__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.6rem;
+  font-size: 0.73rem;
+  color: var(--sila-studio-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.sila-studio-item-card__metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem;
+  padding-top: 0.38rem;
+  border-top: 1px solid var(--sila-studio-divider);
+  margin-top: auto;
+}
+
+.sila-studio-item-card__metric em {
+  display: block;
+  font-style: normal;
+  font-size: 0.67rem;
+  color: var(--sila-studio-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.sila-studio-item-card__metric strong {
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--sila-studio-heading);
+  font-variant-numeric: tabular-nums;
+}
+
+.sila-studio-item-card__actions {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.38rem;
+  margin-top: 0.3rem;
+}
+
+/* Card Overflow Menu */
+.sila-studio-overflow {
+  position: relative;
+  margin-left: auto;
+}
+
+.sila-studio-overflow__menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 4px);
+  z-index: 40;
+  min-width: 170px;
+  padding: 0.3rem;
+  border-radius: 9px;
+  border: 1px solid var(--sila-studio-border);
+  background: #ffffff;
+  box-shadow: 0 6px 18px rgba(18, 51, 84, 0.14);
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+}
+
+.sila-studio-overflow__item {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+  padding: 0.42rem 0.6rem;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--sila-studio-heading);
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sila-studio-overflow__item:hover {
+  background: var(--sila-studio-hover-bg);
+}
+
+.sila-studio-overflow__item--danger {
+  color: var(--sila-studio-error);
+}
+
+.sila-studio-overflow__item--danger:hover {
+  background: #fff1f1;
+}
+
+/* ==========================================================================
+   TEMPORARY DRAWERS (Dish Library, Filters, AI Copilot)
+   ========================================================================== */
+.sila-studio-drawer-backdrop {
+  position: fixed;
+  top: var(--sila-topbar-height, 3.75rem);
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 955;
+  background: rgba(18, 51, 84, 0.18);
+}
+
+.sila-studio-drawer {
+  position: fixed;
+  top: var(--sila-topbar-height, 3.75rem);
+  bottom: 0;
+  z-index: 960;
+  background: #ffffff;
+  border-color: var(--sila-studio-border);
+  box-shadow: 0 8px 28px rgba(18, 51, 84, 0.14);
+  display: flex;
+  flex-direction: column;
+  max-width: 100vw;
+}
+
+.sila-studio-drawer--right {
+  right: 0;
+  border-left: 1px solid var(--sila-studio-border);
+}
+
+.sila-studio-drawer--left {
+  left: 0;
+  border-right: 1px solid var(--sila-studio-border);
+}
+
+.sila-studio-drawer__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.75rem 1rem;
+  background: var(--sila-studio-hero-bg);
+  border-bottom: 1px solid var(--sila-studio-hero-border);
+}
+
+.sila-studio-drawer__title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--sila-studio-heading);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+}
+
+.sila-studio-drawer__controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.sila-studio-drawer__body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 0.85rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* Docked-pinned layout when user pins DishLibraryDrawer */
+.sila-studio-pinned-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+  gap: 0.85rem;
+  align-items: start;
+}
+
+@media (max-width: 980px) {
+  .sila-studio-pinned-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ==========================================================================
+   AI INSIGHT / RECOMMENDATION / SCENARIO CARDS (WHITE + LIGHT-BLUE BORDER)
+   ========================================================================== */
+.sila-studio-ai-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.48rem;
+  padding: 0.82rem 0.95rem;
+  border-radius: 10px;
+  border: 1px solid var(--sila-studio-border);
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(18, 51, 84, 0.04);
+}
+
+.sila-studio-ai-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.sila-studio-ai-card__title-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+  color: var(--sila-studio-heading);
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.sila-studio-ai-card__icon {
+  color: var(--sila-studio-blue);
+  flex-shrink: 0;
+}
+
+.sila-studio-ai-card__body {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--sila-studio-heading);
+}
+
+.sila-studio-ai-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.75rem;
+  font-size: 0.74rem;
+  color: var(--sila-studio-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.sila-studio-ai-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding-top: 0.2rem;
+}
+
+/* ==========================================================================
+   ACCESSIBILITY, REDUCED MOTION & RESPONSIVE GUARDS
+   ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  .sila-studio-shell *,
+  .sila-studio-item-card,
+  .sila-studio-btn,
+  .sila-studio-nav-btn {
+    transition: none !important;
+    transform: none !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .sila-studio-hero {
+    padding: 0.75rem 0.85rem;
+  }
+  .sila-studio-hero__title {
+    font-size: 1.35rem;
+  }
+  .sila-studio-drawer {
+    width: 100vw !important;
+  }
+}
+
+
+/* ==========================================================================
+   CLICKABLE KPI BOXES (drill-down to the data behind the number)
+   ========================================================================== */
+.sila-studio-kpi--clickable {
+  cursor: pointer;
+  transition: box-shadow 140ms ease, transform 140ms ease, border-color 140ms ease;
+}
+
+.sila-studio-kpi--clickable:hover {
+  border-color: var(--sila-studio-blue);
+  box-shadow: 0 4px 12px rgba(8, 123, 181, 0.14);
+  transform: translateY(-1px);
+}
+
+.sila-studio-kpi--clickable:focus-visible {
+  outline: 2px solid var(--sila-studio-blue);
+  outline-offset: 2px;
+}
+
+.sila-studio-kpi.is-selected {
+  border-color: var(--sila-studio-blue);
+  box-shadow: 0 0 0 2px rgba(8, 123, 181, 0.25);
+}
+
+/* ==========================================================================
+   SEGMENTED CONTROL (Grid / Compact / List)
+   ========================================================================== */
+.sila-studio-segmented {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid var(--sila-studio-border);
+  border-radius: 8px;
+  background: #ffffff;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.sila-studio-segmented__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  height: 32px;
+  padding: 0 0.6rem;
+  border: 0;
+  border-right: 1px solid var(--sila-studio-divider);
+  background: transparent;
+  color: var(--sila-studio-secondary);
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.sila-studio-segmented__btn:last-child { border-right: 0; }
+.sila-studio-segmented__btn:hover { background: var(--sila-studio-hover-bg); color: var(--sila-studio-heading); }
+.sila-studio-segmented__btn.is-active { background: var(--sila-studio-blue); color: #ffffff; }
+.sila-studio-segmented__btn:focus-visible { outline: 2px solid var(--sila-studio-blue); outline-offset: -2px; }
+
+.sila-studio-link {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--sila-studio-blue);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.sila-studio-link:hover { text-decoration: underline; }

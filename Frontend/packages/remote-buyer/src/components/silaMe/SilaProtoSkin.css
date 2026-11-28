@@ -1,0 +1,468 @@
+/* ==========================================================================
+   SILA prototype skin for every SILA ME screen that is not already a Recipe Studio /
+   Menu Engineering workspace (Inventory, POS, trackers, approvals, masters, ...).
+
+   `SilaMeWorkspace` wraps those screens in `.rsp-page.rsp-skin`, so they inherit the
+   prototype glass / button / input / table theme from SilaStudioProtoTheme.css. This
+   file re-points the per-area design tokens (`--sila-*`, `--liv-*`) at the prototype
+   palette and restyles the area-specific heroes, KPI tiles, tab strips and panels
+   (`pstudio-*`, `istudio-*`, `sinv-*`, `liv-*`, `strk-*`, `srec-*`, `pud-*`).
+   Markup, handlers and test ids are untouched.
+   ========================================================================== */
+
+.rsp-skin,
+.rsp-skin .sila-me,
+.rsp-skin .sila-root,
+.rsp-skin .liv-page {
+  --sila-font: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+
+  --sila-me-blue: #0284c7;
+  --sila-me-blue-strong: #0369a1;
+  --sila-me-blue-deep: #075985;
+  --sila-me-blue-soft: #f0f9ff;
+  --sila-me-blue-tint: #e0f2fe;
+  --sila-me-blue-border: #bae6fd;
+  --sila-me-ink: #0f172a;
+  --sila-me-muted: #64748b;
+  --sila-me-label: #94a3b8;
+  --sila-me-line: rgba(15, 23, 42, 0.08);
+  --sila-me-line-soft: #f1f5f9;
+  --sila-me-line-strong: #cbd5e1;
+  --sila-me-surface: #f8fafc;
+  --sila-me-row-hover: #f8fafc;
+  --sila-me-green: #059669;
+  --sila-me-green-soft: #ecfdf5;
+  --sila-me-green-border: #a7f3d0;
+  --sila-me-amber: #d97706;
+  --sila-me-amber-soft: #fffbeb;
+  --sila-me-amber-border: #fde68a;
+  --sila-me-red: #e11d48;
+  --sila-me-red-strong: #be123c;
+  --sila-me-red-soft: #fff1f2;
+  --sila-me-red-border: #fecdd3;
+  --sila-me-shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px -12px rgba(15, 23, 42, 0.08);
+
+  --sila-text: #0f172a;
+  --sila-text-secondary: #475569;
+  --sila-text-muted: #64748b;
+  --sila-primary: #0284c7;
+  --sila-primary-hover: #0369a1;
+  --sila-primary-active: #075985;
+  --sila-primary-soft: #f0f9ff;
+  --sila-primary-soft-hover: #e0f2fe;
+  --sila-primary-border: #bae6fd;
+  --sila-primary-ring: rgba(2, 132, 199, 0.18);
+  --sila-info: #0369a1;
+  --sila-info-soft: #f0f9ff;
+  --sila-info-border: #bae6fd;
+  --sila-success: #059669;
+  --sila-success-strong: #047857;
+  --sila-success-soft: #ecfdf5;
+  --sila-success-border: #a7f3d0;
+  --sila-warning: #d97706;
+  --sila-warning-strong: #b45309;
+  --sila-warning-soft: #fffbeb;
+  --sila-warning-border: #fde68a;
+  --sila-danger: #e11d48;
+  --sila-danger-hover: #be123c;
+  --sila-danger-strong: #be123c;
+  --sila-danger-soft: #fff1f2;
+  --sila-danger-border: #fecdd3;
+  --sila-border: rgba(15, 23, 42, 0.08);
+  --sila-border-subtle: #f1f5f9;
+  --sila-border-strong: #cbd5e1;
+  --sila-surface-subtle: #f8fafc;
+  --sila-surface-hover: #f8fafc;
+  --sila-bg: transparent;
+
+  --liv-canvas: transparent;
+  --liv-card: rgba(255, 255, 255, 0.82);
+  --liv-border: rgba(15, 23, 42, 0.07);
+  --liv-primary: #0284c7;
+  --liv-secondary: #0d9488;
+  --liv-ink: #0f172a;
+  --liv-muted: #64748b;
+
+  font-family: var(--sila-font);
+  color: #0f172a;
+}
+
+.rsp-skin :is(button, input, select, textarea) {
+  font-family: inherit;
+}
+
+.rsp-skin {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.rsp-skin > * {
+  min-width: 0;
+}
+
+.rsp-skin :is(.sila-me, .pstudio-page, .istudio-inv-page, .liv-page, .sinv-page, .srec-page, .ssub-page, .strk-page) {
+  background: transparent;
+}
+
+/* ---------- Screen titles: text-3xl bold + slate-500 subtitle ---------- */
+.rsp-skin :is(.sila-page-title, .pud-page-header h1, .sinv-page > h1, .srec-page > h1, .ssub-page > h1) {
+  font-size: clamp(1.5rem, 2.2vw, 1.875rem);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+  color: #0f172a;
+}
+
+.rsp-skin :is(.sila-page-description, .pud-page-header p) {
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: #64748b;
+}
+
+/* ---------- Hero banners: borderless, transparent, like the prototype header ---------- */
+.rsp-skin :is(.pstudio-hero, .strk-me-hero, .istudio-inv-hero, .strk-me-hero--compact) {
+  padding: 0.25rem 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.rsp-skin :is(.pstudio-hero__title, .strk-me-hero__title, .istudio-inv-hero .pstudio-hero__title, .istudio-inv-hero--compact .pstudio-hero__title) {
+  font-size: clamp(1.5rem, 2.2vw, 1.875rem);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+  color: #0f172a;
+}
+
+.rsp-skin :is(.pstudio-hero__sub, .strk-me-hero__sub) {
+  margin-top: 0.15rem;
+  font-size: 0.875rem;
+  color: #64748b;
+}
+
+.rsp-skin :is(.pstudio-kicker, .strk-me-hero__eyebrow, .sinv-live-kicker) {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #0284c7;
+}
+
+/* ---------- Segmented tab strips ---------- */
+.rsp-skin :is(.pstudio-tabs) {
+  gap: 0.25rem;
+  padding: 0.25rem;
+  width: fit-content;
+  max-width: 100%;
+  border-radius: 12px;
+  border: 1px solid rgba(226, 232, 240, 0.6);
+  background: rgba(241, 245, 249, 0.8);
+}
+
+.rsp-skin .pstudio-tab {
+  height: 32px;
+  padding: 0 0.875rem;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.rsp-skin .pstudio-tab:hover:not([aria-selected="true"]) {
+  color: #0f172a;
+}
+
+.rsp-skin .pstudio-tab[aria-selected="true"] {
+  background: #ffffff;
+  color: #0369a1;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+
+.rsp-skin :is(.sila-tab) {
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+/* ---------- Glass panels (rounded-2xl, neutral border) ---------- */
+.rsp-skin :is(
+    .sila-card,
+    .pstudio-panel,
+    .istudio-inv-card,
+    .liv-panel,
+    .liv-priority,
+    .strk-studio-panel,
+    .srec-builder-panel,
+    .sinv-live-header,
+    .sinv-dialog
+  ) {
+  background: rgba(255, 255, 255, 0.82);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(15, 23, 42, 0.07);
+  border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px -12px rgba(15, 23, 42, 0.08);
+}
+
+.rsp-skin .sila-card-header,
+.rsp-skin .liv-panel__head,
+.rsp-skin .strk-studio-panel__head {
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.rsp-skin :is(.sila-card-title, .pstudio-panel__title, .liv-panel__head h2, .istudio-inv-card strong) {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #0f172a;
+}
+
+.rsp-skin :is(.sila-card-subtitle, .pstudio-panel__hint, .liv-panel__head p) {
+  font-size: 0.8125rem;
+  color: #64748b;
+}
+
+.rsp-skin .istudio-inv-card:hover {
+  border-color: #bae6fd;
+  box-shadow: 0 14px 32px -8px rgba(2, 132, 199, 0.12), 0 4px 12px -2px rgba(15, 23, 42, 0.05);
+}
+
+.rsp-skin :is(.pstudio-list__item, .liv-priority__item) {
+  border-radius: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  background: rgba(248, 250, 252, 0.85);
+}
+
+.rsp-skin .liv-priority__item--critical { border-color: #fecdd3; background: #fff1f2; }
+.rsp-skin .liv-priority__item--warning { border-color: #fde68a; background: #fffbeb; }
+.rsp-skin .liv-priority__item--info { border-color: #bae6fd; background: #f0f9ff; }
+
+/* ---------- KPI tiles: white glass, uppercase eyebrow, bold value ---------- */
+.rsp-skin :is(
+    .pstudio-kpi,
+    .strk-me-kpi,
+    .strk-kpi,
+    .sinv-kpi,
+    .liv-kpi,
+    .sila-kpi,
+    .sila-kpi-strip--cards .sila-kpi-strip-cell
+  ) {
+  background: rgba(255, 255, 255, 0.82);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(15, 23, 42, 0.07);
+  border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px -12px rgba(15, 23, 42, 0.08);
+  padding: 0.9rem 1.1rem;
+  gap: 0.25rem;
+  color: #0f172a;
+}
+
+.rsp-skin :is(.sinv-kpi, .liv-kpi):hover {
+  transform: none;
+  border-color: #bae6fd;
+  box-shadow: 0 14px 32px -8px rgba(2, 132, 199, 0.12), 0 4px 12px -2px rgba(15, 23, 42, 0.05);
+}
+
+.rsp-skin :is(.pstudio-kpi, .strk-me-kpi, .strk-kpi, .sinv-kpi, .liv-kpi, .sila-kpi-label) :is(span:first-child),
+.rsp-skin :is(.sila-kpi-label, .sila-kpi-strip-label) {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  line-height: 1.3;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.rsp-skin :is(.pstudio-kpi, .strk-me-kpi, .strk-kpi, .sinv-kpi, .liv-kpi) strong,
+.rsp-skin :is(.sila-kpi-value, .sila-kpi-strip-value) {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Accent only on the value for semantic tiles; the tile itself stays neutral glass */
+.rsp-skin :is(.pstudio-kpi--sky, .pstudio-kpi--mint, .pstudio-kpi--lavender, .pstudio-kpi--amber, .pstudio-kpi--blue, .pstudio-kpi--rose,
+    .strk-me-kpi--sky, .strk-me-kpi--mint, .strk-me-kpi--lavender, .strk-me-kpi--amber, .strk-me-kpi--blue, .strk-me-kpi--rose,
+    .sinv-kpi--blue, .sinv-kpi--amber, .sinv-kpi--lavender, .sinv-kpi--mint,
+    .liv-kpi--sky, .liv-kpi--amber, .liv-kpi--teal, .liv-kpi--rose) {
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(15, 23, 42, 0.07);
+  border-radius: 16px;
+}
+
+.rsp-skin :is(.pstudio-kpi--rose, .strk-me-kpi--rose, .liv-kpi--rose) {
+  border-color: rgba(244, 63, 94, 0.28);
+  box-shadow: 0 0 0 1px rgba(244, 63, 94, 0.06), 0 8px 24px -12px rgba(244, 63, 94, 0.3);
+}
+
+.rsp-skin :is(.pstudio-kpi--rose, .strk-me-kpi--rose, .liv-kpi--rose) strong { color: #e11d48; }
+.rsp-skin :is(.pstudio-kpi--amber, .strk-me-kpi--amber, .sinv-kpi--amber, .liv-kpi--amber) strong { color: #b45309; }
+.rsp-skin :is(.pstudio-kpi--mint, .strk-me-kpi--mint, .sinv-kpi--mint, .liv-kpi--teal) strong { color: #047857; }
+
+/* ---------- Alerts and empty states ---------- */
+.rsp-skin .sila-alert {
+  border-radius: 12px;
+  font-size: 0.8125rem;
+}
+
+.rsp-skin .sila-empty {
+  border-radius: 16px;
+  border: 1px dashed rgba(15, 23, 42, 0.12);
+  background: rgba(248, 250, 252, 0.7);
+}
+
+.rsp-skin :is(.sila-table-wrap, .liv-table-wrap) {
+  border-radius: 12px;
+}
+
+.rsp-skin .sila-card .sila-table-wrap {
+  border: 0;
+}
+
+.rsp-skin .liv-table thead th {
+  background: #f8fafc;
+  color: #94a3b8;
+  font-size: 0.6875rem;
+  letter-spacing: 0.06em;
+}
+
+/* ---------- Filter rows that had no layout of their own (e.g. `smov-filters`) ---------- */
+.rsp-skin [class*="-filters"]:not([class*="__"]):not(button) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem 1rem;
+}
+
+.rsp-skin [class*="-filters"]:not([class*="__"]) > .sila-field {
+  flex: 1 1 11rem;
+  min-width: 10rem;
+  max-width: 22rem;
+}
+
+.rsp-skin :is(.strk-me-hero__title--tracker) {
+  text-transform: none;
+  letter-spacing: -0.025em;
+}
+
+/* ==========================================================================
+   Recipe Studio create / edit / detail workspace and Legacy Recipe Upload
+   ========================================================================== */
+.rsp-skin :is(.rstudio-build__top, .rlegacy-hero) {
+  padding: 0.25rem 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.rsp-skin :is(.rstudio-build__top h1, .rlegacy-hero__title) {
+  font-size: clamp(1.5rem, 2.2vw, 1.875rem);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+  color: #0f172a;
+}
+
+.rsp-skin :is(.rstudio-kicker, .rstudio-section__label) {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #0284c7;
+}
+
+.rsp-skin .rstudio-section__label {
+  color: #94a3b8;
+}
+
+.rsp-skin :is(.rstudio-build__top-meta, .rlegacy-panel__hint, .rstudio-panel__hint, .rstudio-section__hint) {
+  font-size: 0.875rem;
+  color: #64748b;
+}
+
+.rsp-skin :is(
+    .rstudio-panel,
+    .rstudio-section,
+    .rstudio-section--sky,
+    .rstudio-section--mint,
+    .rstudio-section--lavender,
+    .rstudio-section--amber,
+    .rlegacy-panel,
+    .rlegacy-table-wrap
+  ) {
+  background: rgba(255, 255, 255, 0.82);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(15, 23, 42, 0.07);
+  border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px -12px rgba(15, 23, 42, 0.08);
+}
+
+.rsp-skin :is(.rstudio-section .rstudio-section, .rstudio-panel .rstudio-section) {
+  background: rgba(248, 250, 252, 0.7);
+  box-shadow: none;
+}
+
+.rsp-skin :is(.rstudio-panel__title, .rlegacy-panel__title) {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #0f172a;
+}
+
+.rsp-skin :is(.rstudio-cost-tile, .rlegacy-kpi) {
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(15, 23, 42, 0.07);
+  border-radius: 12px;
+}
+
+.rsp-skin :is(.rstudio-cost-tile span, .rlegacy-kpi span) {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.rsp-skin :is(.rstudio-cost-tile strong, .rlegacy-kpi strong) {
+  color: #0f172a;
+}
+
+.rsp-skin .rlegacy-tabs {
+  gap: 0.25rem;
+  padding: 0.25rem;
+  width: fit-content;
+  max-width: 100%;
+  border-radius: 12px;
+  border: 1px solid rgba(226, 232, 240, 0.6);
+  background: rgba(241, 245, 249, 0.8);
+}
+
+.rsp-skin .rlegacy-tab {
+  height: 32px;
+  padding: 0 0.875rem;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.rsp-skin .rlegacy-tab[aria-selected="true"] {
+  background: #ffffff;
+  color: #0369a1;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+
+.rsp-skin .rstudio-back {
+  color: #64748b;
+  font-weight: 600;
+}

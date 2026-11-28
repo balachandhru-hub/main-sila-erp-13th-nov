@@ -105,6 +105,56 @@ def register_default_agents(registry, tools: ToolRegistry, allowed: list[str]) -
             ),
             po,
         )
+    if "MENU_ENGINEERING_AGENT" in allowed:
+        from app.agents.menu_engineering import MenuEngineeringAgent
+
+        me = MenuEngineeringAgent(tools)
+        registry.register(
+            BusinessAgent(
+                agent_id="MENU_ENGINEERING_AGENT",
+                supported_intents=[
+                    "MENU_TODAY_MEAL",
+                    "MENU_CALC_COVERS",
+                    "MENU_LOW_MARGIN",
+                    "MENU_ALTERNATIVE",
+                    "MENU_CREATE_OBJECTIVE",
+                    "MENU_CONSUMPTION_ANOMALY",
+                    "MENU_PURCHASE_NEXT_WEEK",
+                    "MENU_COMPARE_HISTORY",
+                    "MENU_INGREDIENT_DEMAND_TOMORROW",
+                    "MENU_EXPECTED_DEMAND",
+                    "MENU_SHORTAGE_RISK",
+                    "MENU_SMALLER_BATCH_PREP",
+                    "MENU_TODAY_RISKS",
+                    "MENU_ATTENTION_REQUIRED",
+                    "MENU_FOOD_COST_DRIVER",
+                    "MENU_PENDING_APPROVALS",
+                    "MENU_PREPARE_ACTION_PLAN",
+                    "MENU_OPTIMIZE_BUFFET",
+                    "MENU_REALIZED_SAVINGS",
+                    "MENU_SUPPLIER_DELIVERY_RISK",
+                ],
+                required_permission="ViewMeStudio",
+                required_fields=[],
+                allowed_tools=[
+                    "GetMenuMobileSummary",
+                    "SimulateMenuCovers",
+                    "GetMenuCostMargin",
+                    "GetMenuAiIntelligence",
+                    "GetMenuConsumptionAnomalies",
+                    "GetMenuPurchasePlan",
+                    "GetHistoricalMenus",
+                    "RunMeStudioObjective",
+                    "GetTwinDemandForecast",
+                    "GetTwinWasteRecommendations",
+                    "GetAutonomousControlTower",
+                    "PublishAutonomousEvent",
+                ],
+                confirmation_required=True,
+                implemented=True,
+            ),
+            me,
+        )
     # Reserved future agents — registered but not implemented / not exposed as working.
     for reserved_id in (
         "INVENTORY_QUERY_AGENT",

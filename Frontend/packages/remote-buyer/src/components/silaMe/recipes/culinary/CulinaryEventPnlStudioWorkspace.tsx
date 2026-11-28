@@ -45,6 +45,7 @@ import {
   DEMO_EVENT_PNL_BASE,
   type EventPnlInput,
 } from "./culinarySimulatorsMath";
+import { CulinaryKpis, CulinaryTabs } from "./CulinaryWorkspaceKit";
 import "./CulinarySuite.css";
 
 type PnlTab =
@@ -470,22 +471,22 @@ const CulinaryEventPnlStudioWorkspace: React.FC = () => {
         <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "flex-start", gap: 14 }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-              <span className="cs2-brand-pill">Phase 3A Live</span>
-              <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>
+              <span className="cs2-brand-pill">Live Financial Engine</span>
+              <span style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>
                 Zero Live SAP Postings &middot; Zero GL/Invoice Auto-Creation &middot; Deterministic Decimal Engine
               </span>
             </div>
-            <h2 style={{ margin: "6px 0 4px", fontSize: 20, fontWeight: 700, color: "#0f172a" }}>
+            <h2 style={{ margin: "6px 0 4px", fontSize: 20, fontWeight: 700, color: "#123354" }}>
               {summary ? `${summary.eventName || summary.name} — Event P&L & Financial Intelligence` : "Event P&L & Financial Intelligence Studio"}
             </h2>
             {summary ? (
-              <div style={{ fontSize: 12.5, color: "#475569", display: "flex", flexWrap: "wrap", gap: 12 }}>
+              <div style={{ fontSize: 12.5, color: "#64748b", display: "flex", flexWrap: "wrap", gap: 12 }}>
                 <span>Plan: <strong>{summary.planCode}</strong> (v{summary.versionNumber})</span>
                 <span>Property: <strong>{summary.propertyName || "Main Property"}</strong></span>
                 <span>Venue: <strong>{summary.venueName || "Grand Ballroom"}</strong></span>
                 <span>Guests: <strong>{summary.plannedGuests}</strong> planned / <strong>{summary.billableGuests}</strong> billable</span>
                 <span>Status: <strong>{summary.status}</strong></span>
-                <span>Actuals: <strong>{summary.actualIsProvisional ? "PROVISIONAL (Phase 3A)" : "VERIFIED"}</strong></span>
+                <span>Actuals: <strong>{summary.actualIsProvisional ? "PROVISIONAL" : "VERIFIED"}</strong></span>
               </div>
             ) : (
               <div style={{ fontSize: 13, color: "#64748b" }}>
@@ -608,75 +609,33 @@ const CulinaryEventPnlStudioWorkspace: React.FC = () => {
         </div>
       )}
 
-      {/* 12 KPI Cards (§50) */}
-      <div className="cs2-kpi-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(175px, 1fr))" }}>
-        <div className="cs2-kpi">
-          <div className="cs2-kpi-label">Net Event Revenue</div>
-          <div className="cs2-kpi-value">{summary ? fmtNum(summary.netRevenue, ccy) : fmtNum(instantSim.netRevenueAed, ccy)}</div>
-        </div>
-        <div className="cs2-kpi">
-          <div className="cs2-kpi-label">Estimated Total Cost</div>
-          <div className="cs2-kpi-value">{summary ? fmtNum(summary.estimatedTotalCost, ccy) : fmtNum(instantSim.totalCostAed, ccy)}</div>
-        </div>
-        <div className="cs2-kpi">
-          <div className="cs2-kpi-label">Procurement Commitments</div>
-          <div className="cs2-kpi-value">{summary ? fmtNum(summary.attributableProcurementCommitment, ccy) : fmtNum(0, ccy)}</div>
-        </div>
-        <div className="cs2-kpi">
-          <div className="cs2-kpi-label">Forecast-at-Completion</div>
-          <div className="cs2-kpi-value">{summary ? fmtNum(summary.forecastAtCompletionCost, ccy) : fmtNum(instantSim.totalCostAed, ccy)}</div>
-        </div>
-        <div className="cs2-kpi">
-          <div className="cs2-kpi-label">Actual Verified Cost</div>
-          <div className="cs2-kpi-value">{summary ? fmtNum(summary.actualVerifiedCost, ccy) : fmtNum(0, ccy)}</div>
-        </div>
-        <div className="cs2-kpi">
-          <div className="cs2-kpi-label">Event Contribution</div>
-          <div className="cs2-kpi-value">{summary ? fmtNum(summary.contributionAfterOverhead, ccy) : fmtNum(instantSim.eventContributionAed, ccy)}</div>
-        </div>
-        <div className="cs2-kpi">
-          <div className="cs2-kpi-label">Contribution Margin</div>
-          <div className="cs2-kpi-value">{summary ? fmtPct(summary.contributionMarginPercent) : fmtPct(instantSim.contributionMarginPercent)}</div>
-        </div>
-        <div className="cs2-kpi">
-          <div className="cs2-kpi-label">Food Cost %</div>
-          <div className="cs2-kpi-value">{summary ? fmtPct(summary.foodCostPercent) : fmtPct(instantSim.foodCostPercent)}</div>
-        </div>
-        <div className="cs2-kpi">
-          <div className="cs2-kpi-label">Beverage Cost %</div>
-          <div className="cs2-kpi-value">{summary ? fmtPct(summary.beverageCostPercent) : fmtPct(instantSim.beverageCostPercent)}</div>
-        </div>
-        <div className="cs2-kpi">
-          <div className="cs2-kpi-label">Cost Per Guest</div>
-          <div className="cs2-kpi-value">{summary ? fmtNum(summary.costPerGuest, ccy) : fmtNum(instantSim.costPerGuestAed, ccy)}</div>
-        </div>
-        <div className="cs2-kpi">
-          <div className="cs2-kpi-label">Remaining Budget</div>
-          <div className="cs2-kpi-value">{summary ? fmtNum(summary.remainingBudget, ccy) : fmtNum(instantSim.costHeadroomAed, ccy)}</div>
-        </div>
-        <div className="cs2-kpi">
-          <div className="cs2-kpi-label">Target Margin Variance</div>
-          <div className="cs2-kpi-value">
-            {summary ? fmtPct(summary.targetMarginVariancePercent) : fmtPct(instantSim.contributionMarginPercent - simReq.targetContributionMarginPercent)}
-          </div>
-        </div>
-      </div>
+      <CulinaryTabs<PnlTab>
+        ariaLabel="Event P&L modules"
+        testId="pnl-tabs"
+        active={tab}
+        onChange={setTab}
+        tabs={TAB_ITEMS}
+      />
 
-      {/* 17 Contextual Tabs (§50) */}
-      <div className="cs2-nav-tabs" role="tablist">
-        {TAB_ITEMS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            role="tab"
-            aria-selected={tab === t.id}
-            className={`cs2-nav-tab ${tab === t.id ? "is-active" : ""}`}
-            onClick={() => setTab(t.id)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <CulinaryKpis
+        ariaLabel="Event P&L metrics"
+        testId="pnl-studio-kpis"
+        columns={6}
+        items={[
+          { id: "pnl-rev", label: "Net Event Revenue", value: summary ? fmtNum(summary.netRevenue, ccy) : fmtNum(instantSim.netRevenueAed, ccy), tone: "blue", drillLabel: "Open the revenue breakdown", selected: tab === "revenue", onClick: () => setTab("revenue") },
+          { id: "pnl-cost", label: "Estimated Total Cost", value: summary ? fmtNum(summary.estimatedTotalCost, ccy) : fmtNum(instantSim.totalCostAed, ccy), tone: "rose", drillLabel: "Open the estimated P&L", selected: tab === "estimated-pnl", onClick: () => setTab("estimated-pnl") },
+          { id: "pnl-proc", label: "Procurement Commitments", value: summary ? fmtNum(summary.attributableProcurementCommitment, ccy) : fmtNum(0, ccy), tone: "indigo", drillLabel: "Open procurement commitments", selected: tab === "procurement", onClick: () => setTab("procurement") },
+          { id: "pnl-fac", label: "Forecast-at-Completion", value: summary ? fmtNum(summary.forecastAtCompletionCost, ccy) : fmtNum(instantSim.totalCostAed, ccy), tone: "sky", drillLabel: "Open the forecast P&L", selected: tab === "forecast-pnl", onClick: () => setTab("forecast-pnl") },
+          { id: "pnl-actual", label: "Actual Verified Cost", value: summary ? fmtNum(summary.actualVerifiedCost, ccy) : fmtNum(0, ccy), tone: "amber", drillLabel: "Open the actual P&L", selected: tab === "actual-pnl", onClick: () => setTab("actual-pnl") },
+          { id: "pnl-contrib", label: "Event Contribution", value: summary ? fmtNum(summary.contributionAfterOverhead, ccy) : fmtNum(instantSim.eventContributionAed, ccy), tone: "green", drillLabel: "Open the estimated P&L", selected: tab === "estimated-pnl", onClick: () => setTab("estimated-pnl") },
+          { id: "pnl-margin", label: "Contribution Margin", value: summary ? fmtPct(summary.contributionMarginPercent) : fmtPct(instantSim.contributionMarginPercent), tone: "green", drillLabel: "Open the variance analysis", selected: tab === "variance", onClick: () => setTab("variance") },
+          { id: "pnl-food", label: "Food Cost %", value: summary ? fmtPct(summary.foodCostPercent) : fmtPct(instantSim.foodCostPercent), tone: "lavender", drillLabel: "Open food cost", selected: tab === "food-cost", onClick: () => setTab("food-cost") },
+          { id: "pnl-bev", label: "Beverage Cost %", value: summary ? fmtPct(summary.beverageCostPercent) : fmtPct(instantSim.beverageCostPercent), tone: "lavender", drillLabel: "Open beverage cost", selected: tab === "beverage-cost", onClick: () => setTab("beverage-cost") },
+          { id: "pnl-guest", label: "Cost Per Guest", value: summary ? fmtNum(summary.costPerGuest, ccy) : fmtNum(instantSim.costPerGuestAed, ccy), tone: "sky", drillLabel: "Open cost allocation", selected: tab === "allocation", onClick: () => setTab("allocation") },
+          { id: "pnl-budget", label: "Remaining Budget", value: summary ? fmtNum(summary.remainingBudget, ccy) : fmtNum(instantSim.costHeadroomAed, ccy), tone: "amber", drillLabel: "Open expenses", selected: tab === "expenses", onClick: () => setTab("expenses") },
+          { id: "pnl-tmv", label: "Target Margin Variance", value: summary ? fmtPct(summary.targetMarginVariancePercent) : fmtPct(instantSim.contributionMarginPercent - simReq.targetContributionMarginPercent), tone: "rose", drillLabel: "Open the variance analysis", selected: tab === "variance", onClick: () => setTab("variance") },
+        ]}
+      />
 
       {/* Tab Content */}
       {tab === "overview" && (
@@ -696,10 +655,10 @@ const CulinaryEventPnlStudioWorkspace: React.FC = () => {
                         key={`cell-${idx}`}
                         fill={
                           entry.kind === "REVENUE"
-                            ? "#4f46e5"
+                            ? "#087bb5"
                             : entry.kind === "CONTRIBUTION"
-                              ? "#059669"
-                              : "#f59e0b"
+                              ? "#16865c"
+                              : "#d97706"
                         }
                       />
                     ))}
@@ -726,9 +685,9 @@ const CulinaryEventPnlStudioWorkspace: React.FC = () => {
               <div style={{ fontSize: 13, color: "#64748b" }}>Launch or select a financial plan to inspect tenant portfolio metrics.</div>
             )}
             {detail?.phase3BHandover && (
-              <div style={{ marginTop: 12, padding: 10, borderRadius: 8, background: "#eef2ff", fontSize: 12 }}>
-                <strong>Phase 3B Analytics Handover:</strong> Ready ({String(detail.phase3BHandover.contractVersion ?? "PHASE3B-HANDOVER-1.0")}) &middot;{" "}
-                <strong>Phase 4B Reconciliation Handover:</strong> Provisional Framework Active
+              <div style={{ marginTop: 12, padding: 10, borderRadius: 8, background: "#eaf5ff", border: "1px solid #c7dff4", fontSize: 12 }}>
+                <strong>Analytics Handover:</strong> Ready ({String(detail.phase3BHandover.contractVersion ?? "HANDOVER-1.0")}) &middot;{" "}
+                <strong>Reconciliation Handover:</strong> Provisional Framework Active
               </div>
             )}
           </div>
@@ -962,7 +921,7 @@ const CulinaryEventPnlStudioWorkspace: React.FC = () => {
             </table>
           ) : (
             <div style={{ fontSize: 13, color: "#64748b" }}>
-              No linked PO allocations on this plan yet. Link an Event Procurement Plan (Phase 2C) to reconcile Purchase Expenditure vs Attributable Event Consumption vs Remaining Inventory Value.
+              No linked PO allocations on this plan yet. Link an Event Procurement Plan to reconcile Purchase Expenditure vs Attributable Event Consumption vs Remaining Inventory Value.
             </div>
           )}
         </div>
@@ -1185,7 +1144,7 @@ const CulinaryEventPnlStudioWorkspace: React.FC = () => {
           </div>
           {aiResponse && (
             <div style={{ padding: 12, borderRadius: 10, background: aiResponse.promptInjectionBlocked ? "#fef2f2" : "#f8fafc", border: "1px solid #e2e8f0" }}>
-              <div style={{ fontSize: 11.5, fontWeight: 700, color: "#4f46e5", marginBottom: 6 }}>Provider: {aiResponse.providerUsed}</div>
+              <div style={{ fontSize: 11.5, fontWeight: 700, color: "#087BB5", marginBottom: 6 }}>Provider: {aiResponse.providerUsed}</div>
               <div style={{ fontSize: 13.5, marginBottom: 8 }}>{aiResponse.answer}</div>
               {aiResponse.groundedFacts.length > 0 && (
                 <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: "#475569" }}>
@@ -1305,7 +1264,7 @@ const CulinaryEventPnlStudioWorkspace: React.FC = () => {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))", gap: 10, marginBottom: 14 }}>
             {filteredCatalog.map((r) => (
               <div key={r.reportCode} style={{ border: "1px solid #e2e8f0", borderRadius: 10, padding: 10, background: "#ffffff" }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: "#4f46e5" }}>{r.category}</div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#087BB5" }}>{r.category}</div>
                 <div style={{ fontSize: 13, fontWeight: 700, margin: "4px 0" }}>{r.title}</div>
                 <button type="button" className="cs2-btn cs2-btn-secondary" disabled={busy || !detail} onClick={() => void handleExportReport(r.reportCode)}>
                   Preview &amp; Export CSV

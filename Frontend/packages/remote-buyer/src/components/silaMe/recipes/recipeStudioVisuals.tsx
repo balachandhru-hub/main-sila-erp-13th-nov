@@ -98,12 +98,12 @@ export const StudioCover: React.FC<{
 
 export const VIEW_PREF_KEY = "sila.recipeStudio.viewMode";
 
-export type StudioViewMode = "grid" | "list";
+export type StudioViewMode = "grid" | "compact" | "list";
 
 export const loadStudioViewMode = (): StudioViewMode => {
   try {
     const value = localStorage.getItem(VIEW_PREF_KEY);
-    return value === "list" ? "list" : "grid";
+    return value === "list" || value === "compact" ? value : "grid";
   } catch {
     return "grid";
   }

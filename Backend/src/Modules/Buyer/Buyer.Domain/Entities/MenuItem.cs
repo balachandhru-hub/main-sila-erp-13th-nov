@@ -81,5 +81,31 @@ namespace Buyer.Domain.Entities
 
         [Required]
         public string RecipeLinkStatus { get; set; } = "MENU_ITEM_ONLY";
+
+        public string? AlternativeName { get; set; }
+
+        public string? ServiceFormat { get; set; }
+
+        public int? ApprovedRecipeVersion { get; set; }
+
+        public string? RecipeCombinationJson { get; set; }
+
+        [Precision(9, 4)]
+        public decimal? TaxRatePercent { get; set; }
+
+        public bool TaxInclusive { get; set; }
+
+        public string? PosItemReference { get; set; }
+
+        public int? PrepTimeMinutes { get; set; }
+
+        public bool IsAvailable { get; set; } = true;
+
+        public string? SeasonalAvailability { get; set; }
+
+        [Required]
+        public string ApprovalStatus { get; set; } = "DRAFT";
+
+        public int VersionNumber { get; set; } = 1;
     }
 }

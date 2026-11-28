@@ -97,7 +97,9 @@ for (const token of [
 
 // 3. Nav & Shell wiring preserve existing procurement & food-cost previews while activating Phase 2A
 const navSrc = read("SilaRecipeStudio2Nav.tsx");
-assert.ok(navSrc.includes('badge: "Phase 2A Live"'));
+assert.ok(navSrc.includes('id: "events"'));
+assert.ok(navSrc.includes('id: "procurement"'));
+assert.ok(!navSrc.includes('id: "menus"'));
 const wrapperSrc = read("CulinaryMenuEventWorkspaces.tsx");
 assert.ok(wrapperSrc.includes("<CulinaryMenuStudioWorkspace"));
 assert.ok(wrapperSrc.includes("<CulinaryEventPlannerWorkspace"));

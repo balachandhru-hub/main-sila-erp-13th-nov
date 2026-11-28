@@ -36,6 +36,7 @@ import {
 } from "../../../../api/silaMe/silaCulinaryMaterialsApi";
 import { triggerBlobDownload } from "./culinaryRecipePlannerHelpers";
 import type { CulinaryWorkspaceKind } from "../silaRecipeRoutes";
+import { CulinaryKpis } from "./CulinaryWorkspaceKit";
 import "./CulinarySuite.css";
 
 interface CulinaryMaterialIntelligenceWorkspaceProps {
@@ -158,6 +159,11 @@ const CulinaryMaterialIntelligenceWorkspace: React.FC<
   const [subTab, setSubTab] = useState<MaterialSubTab>("table");
   const [filterKey, setFilterKey] = useState<FilterKey>("ALL");
   const [searchText, setSearchText] = useState("");
+  const openMappingRows = (key: FilterKey) => {
+    setFilterKey(key);
+    setSearchText("");
+    setSubTab("table");
+  };
   const [sortKey, setSortKey] = useState<SortKey>("REF");
   const [groupByStatus, setGroupByStatus] = useState(false);
 
@@ -614,20 +620,20 @@ const CulinaryMaterialIntelligenceWorkspace: React.FC<
             <h2 className="cs2-title">
               {mode === "materials" ? "Material Intelligence Engine" : "Material Creation Requests"}
             </h2>
-            <p className="cs2-subtitle">Illustrative Phase 0 demonstration mode (sample data only).</p>
+            <p className="cs2-subtitle">Illustrative demonstration mode (sample data only).</p>
           </div>
           <button
             type="button"
             className="sila-btn sila-btn--sm sila-btn--primary"
             onClick={() => setPreviewMode(false)}
           >
-            Return to Live Phase 1B Workspace
+            Return to Live Material Intelligence
           </button>
         </div>
         <div className="cs2-banner cs2-banner--phase" role="status">
           <div>
             <strong>ILLUSTRATIVE PREVIEW MODE — NON-PRODUCTION SAMPLE</strong>
-            <div>Zero production writes. Toggle back to Live Phase 1B Workspace to match real drafts.</div>
+            <div>Zero production writes. Toggle back to Live Material Intelligence to match real drafts.</div>
           </div>
           <span className="cs2-badge cs2-badge--demo">Demo Only</span>
         </div>
@@ -676,13 +682,13 @@ const CulinaryMaterialIntelligenceWorkspace: React.FC<
         <div>
           <h2 className="cs2-title">
             {mode === "materials"
-              ? "Material Intelligence Engine (Phase 1B)"
-              : "Material Request Drafts & Phase 1C Handover"}
+              ? "Material Intelligence Engine"
+              : "Material Request Drafts & Master Data Handover"}
           </h2>
           <p className="cs2-subtitle">
             {mode === "materials"
               ? "Local-first multi-stage ingredient matching against authorized SILA Material Master, UOM conversions, Live Inventory, and authorized prices."
-              : "Prepared missing material, plant extension, and UOM maintenance drafts ready for Phase 1C Master Data approval (read-only in Phase 1B)."}
+              : "Prepared missing material, plant extension, and UOM maintenance drafts ready for Master Data approval."}
           </p>
         </div>
         <div className="cs2-actions-row">
@@ -733,7 +739,7 @@ const CulinaryMaterialIntelligenceWorkspace: React.FC<
       ) : !workspace ? (
         <EmptyState
           title="No AI Recipe Draft Selected"
-          description="Generate or open an AI recipe draft in Phase 1A AI Recipe Planner, then continue to Material Mapping."
+          description="Generate or open an AI recipe draft in AI Recipe Planner, then continue to Material Mapping."
           action={
             onOpenWorkspace && (
               <button
@@ -762,14 +768,14 @@ const CulinaryMaterialIntelligenceWorkspace: React.FC<
                 handover?.readyForPhase1C ? "cs2-badge--live" : "cs2-badge--warn"
               }`}
             >
-              {handover?.readyForPhase1C ? "Ready for Phase 1C" : "Review / Requests Required"}
+              {handover?.readyForPhase1C ? "Ready for Costing & Publishing" : "Review / Requests Required"}
             </span>
           </div>
 
           {handover && handover.outstandingValidationIssues.length > 0 && (
             <section className="cs2-card">
               <div className="cs2-card__head">
-                <h3 className="cs2-card__title">Outstanding Validation Issues Blocking Phase 1C</h3>
+                <h3 className="cs2-card__title">Outstanding Validation Issues Blocking Next Step</h3>
                 <span className="cs2-badge cs2-badge--danger">
                   {handover.outstandingValidationIssues.length} Issues
                 </span>
@@ -846,10 +852,10 @@ const CulinaryMaterialIntelligenceWorkspace: React.FC<
 
             <div className="cs2-actions-row" style={{ marginTop: 14 }}>
               <button type="button" className="sila-btn sila-btn--sm sila-btn--primary" disabled>
-                Submit Material Request (Activates in Phase 1C)
+                Submit Material Request
               </button>
               <span className="cs2-empty-note">
-                Approval routing, production Material Master creation, and SAP material sync activate in Phase 1C.
+                Approval routing, production Material Master creation, and SAP material sync happen via authorized Material Requests.
               </span>
             </div>
           </section>
@@ -918,50 +924,23 @@ const CulinaryMaterialIntelligenceWorkspace: React.FC<
           </section>
 
           {/* 10 Live KPI Cards (§28) */}
-          <div className="cs2-kpi-grid" data-testid="p1b-kpi-grid">
-            <div className="cs2-kpi">
-              <span className="cs2-kpi__label">Total Ingredients</span>
-              <span className="cs2-kpi__value">{workspace.kpis.totalIngredients}</span>
-            </div>
-            <div className="cs2-kpi">
-              <span className="cs2-kpi__label">Exact Matches</span>
-              <span className="cs2-kpi__value">{workspace.kpis.exactMatches}</span>
-            </div>
-            <div className="cs2-kpi">
-              <span className="cs2-kpi__label">Suggested Matches</span>
-              <span className="cs2-kpi__value">{workspace.kpis.suggestedMatches}</span>
-            </div>
-            <div className="cs2-kpi">
-              <span className="cs2-kpi__label">Confirmed Mappings</span>
-              <span className="cs2-kpi__value">{workspace.kpis.confirmedMappings}</span>
-            </div>
-            <div className="cs2-kpi">
-              <span className="cs2-kpi__label">Pending Review</span>
-              <span className="cs2-kpi__value">{workspace.kpis.pendingReview}</span>
-            </div>
-            <div className="cs2-kpi">
-              <span className="cs2-kpi__label">Missing Materials</span>
-              <span className="cs2-kpi__value">{workspace.kpis.missingMaterials}</span>
-            </div>
-            <div className="cs2-kpi">
-              <span className="cs2-kpi__label">UOM Conflicts</span>
-              <span className="cs2-kpi__value">{workspace.kpis.uomConflicts}</span>
-            </div>
-            <div className="cs2-kpi">
-              <span className="cs2-kpi__label">Spec Conflicts</span>
-              <span className="cs2-kpi__value">{workspace.kpis.specificationConflicts}</span>
-            </div>
-            <div className="cs2-kpi">
-              <span className="cs2-kpi__label">Stock Shortages</span>
-              <span className="cs2-kpi__value">{workspace.kpis.stockShortages}</span>
-            </div>
-            <div className="cs2-kpi">
-              <span className="cs2-kpi__label">Missing Prices</span>
-              <span className="cs2-kpi__value">
-                {workspace.canViewCost ? workspace.kpis.missingPrices : "Restricted"}
-              </span>
-            </div>
-          </div>
+          <CulinaryKpis
+            ariaLabel="Material intelligence metrics"
+            testId="p1b-kpi-grid"
+            columns={5}
+            items={[
+            { id: "mi-total", label: "Total Ingredients", value: workspace.kpis.totalIngredients, tone: "blue", drillLabel: "Show all ingredients", selected: subTab === "table" && filterKey === "ALL", onClick: () => openMappingRows("ALL") },
+            { id: "mi-exact", label: "Exact Matches", value: workspace.kpis.exactMatches, tone: "green", drillLabel: "Show exact matches", selected: subTab === "table" && filterKey === "EXACT", onClick: () => openMappingRows("EXACT") },
+            { id: "mi-suggested", label: "Suggested Matches", value: workspace.kpis.suggestedMatches, tone: "sky", drillLabel: "Show suggested matches", selected: subTab === "table" && filterKey === "SUGGESTED", onClick: () => openMappingRows("SUGGESTED") },
+            { id: "mi-confirmed", label: "Confirmed Mappings", value: workspace.kpis.confirmedMappings, tone: "green", drillLabel: "Show confirmed mappings", selected: subTab === "table" && filterKey === "CONFIRMED", onClick: () => openMappingRows("CONFIRMED") },
+            { id: "mi-pending", label: "Pending Review", value: workspace.kpis.pendingReview, tone: "amber", drillLabel: "Show ingredients pending review", selected: subTab === "table" && filterKey === "PENDING_REVIEW", onClick: () => openMappingRows("PENDING_REVIEW") },
+            { id: "mi-missing", label: "Missing Materials", value: workspace.kpis.missingMaterials, tone: "rose", drillLabel: "Show ingredients with no material", selected: subTab === "table" && filterKey === "MISSING", onClick: () => openMappingRows("MISSING") },
+            { id: "mi-uom", label: "UOM Conflicts", value: workspace.kpis.uomConflicts, tone: "amber", drillLabel: "Show UOM conflicts", selected: subTab === "table" && filterKey === "UOM_CONFLICT", onClick: () => openMappingRows("UOM_CONFLICT") },
+            { id: "mi-spec", label: "Spec Conflicts", value: workspace.kpis.specificationConflicts, tone: "lavender", drillLabel: "Show specification conflicts", selected: subTab === "table" && filterKey === "SPEC_CONFLICT", onClick: () => openMappingRows("SPEC_CONFLICT") },
+            { id: "mi-shortage", label: "Stock Shortages", value: workspace.kpis.stockShortages, tone: "rose", drillLabel: "Show stock shortages", selected: subTab === "table" && filterKey === "STOCK_SHORTAGE", onClick: () => openMappingRows("STOCK_SHORTAGE") },
+            { id: "mi-price", label: "Missing Prices", value: workspace.canViewCost ? workspace.kpis.missingPrices : "Restricted", tone: "indigo", drillLabel: "Show ingredients with missing prices", selected: subTab === "table" && filterKey === "MISSING_PRICE", onClick: () => openMappingRows("MISSING_PRICE") },
+            ]}
+          />
 
           {/* Sub-Tabs & Bulk Action Toolbar (§31, §39, §40) */}
           <div className="cs2-card">
@@ -1055,7 +1034,7 @@ const CulinaryMaterialIntelligenceWorkspace: React.FC<
                     className="sila-btn sila-btn--sm sila-btn--secondary"
                     onClick={() => onOpenWorkspace("material-requests")}
                   >
-                    Phase 1C Handover ({workspace.kpis.missingMaterials})
+                    Material Requests Handover ({workspace.kpis.missingMaterials})
                   </button>
                 )}
               </div>
@@ -1838,7 +1817,7 @@ const CulinaryMaterialIntelligenceWorkspace: React.FC<
 
               {/* Reject & Prepare Phase 1C Request Draft (§32-34) */}
               <section className="cs2-step-card">
-                <strong>Reject Candidate or Prepare Missing Material Request (Phase 1C Handover)</strong>
+                <strong>Reject Candidate or Prepare Missing Material Request</strong>
                 <div className="cs2-actions-row">
                   <input
                     className="sila-input"
@@ -1915,7 +1894,7 @@ const CulinaryMaterialIntelligenceWorkspace: React.FC<
                     disabled={drawerBusy || !reqDesc.trim()}
                     onClick={() => handlePrepareRequestDraft(drawerLine)}
                   >
-                    Save Phase 1C Request Draft
+                    Save Material Request Draft
                   </button>
                 </div>
               </section>

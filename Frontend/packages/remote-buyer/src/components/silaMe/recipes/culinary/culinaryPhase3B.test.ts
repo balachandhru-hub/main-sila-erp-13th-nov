@@ -90,7 +90,7 @@ for (const rep of [
 }
 
 const navSrc = read("SilaRecipeStudio2Nav.tsx");
-assert.ok(navSrc.includes("Phase 3B Live"));
+assert.ok(navSrc.includes('id: "analytics"'));
 
 // 4. Mobile screen exposes Daily Culinary Ops with cost-masking, idempotent waste logging, and zero admin secret exposure
 const mobileSrc = read("../../../../../../remote-mobile/src/screens/recipes/CulinarySuitePreviewScreen.tsx");

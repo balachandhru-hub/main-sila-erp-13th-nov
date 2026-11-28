@@ -144,3 +144,169 @@ def test_session_requires_auth():
     client = TestClient(app)
     denied = client.post("/api/v1/sila-voice/sessions", json={"language": "en"})
     assert denied.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_menu_engineering_voice_intents_and_agent():
+    from app.agents.menu_engineering import MenuEngineeringAgent
+    from app.tools.registry import ToolRegistry, ToolSpec
+
+    llm = RulesLlm()
+    for phrase, expected in [
+        ("Show today's breakfast menu.", "MENU_TODAY_MEAL"),
+        ("Calculate ingredient requirements for 300 covers.", "MENU_CALC_COVERS"),
+        ("Which menu items have low margins?", "MENU_LOW_MARGIN"),
+        ("Suggest an alternative to salmon.", "MENU_ALTERNATIVE"),
+    ]:
+        res = await llm.interpret(transcript=phrase, session_state={}, allowed_intents=[expected])
+        assert res.intent == expected
+        assert res.agent_id == "MENU_ENGINEERING_AGENT"
+
+    reg = ToolRegistry()
+    reg.register(
+        ToolSpec("GetMenuMobileSummary", "summary"),
+        lambda a, c: _async_val({"ok": True, "data": {"todayMenus": [{"name": "Sunrise Buffet", "mealPeriod": "Breakfast"}]}}),
+    )
+    reg.register(
+        ToolSpec("SimulateMenuCovers", "sim"),
+        lambda a, c: _async_val({"ok": True, "data": {"ingredientRequirement": 420.0, "shortage": 12.0}}),
+    )
+    reg.register(
+        ToolSpec("GetMenuCostMargin", "margin"),
+        lambda a, c: _async_val({"ok": False, "status": 403}),
+    )
+    reg.register(
+        ToolSpec("GetMenuAiIntelligence", "ai"),
+        lambda a, c: _async_val({"ok": True, "data": {"recommendations": [{"proposedChange": "Arctic Char Fillet"}]}}),
+    )
+
+    agent = MenuEngineeringAgent(reg)
+    r1 = await agent.handle("MENU_TODAY_MEAL", {"transcript": "Show today's breakfast menu."}, {})
+    assert r1["ok"] and "Sunrise Buffet" in r1["spoken"]
+    r2 = await agent.handle("MENU_CALC_COVERS", {"transcript": "Calculate ingredient requirements for 300 covers."}, {})
+    assert r2["ok"] and "300 covers" in r2["spoken"] and "420" in r2["spoken"]
+    r3 = await agent.handle("MENU_LOW_MARGIN", {"transcript": "Which menu items have low margins?"}, {})
+    assert not r3["ok"] and "denied" in r3["spoken"].lower()
+    r4 = await agent.handle("MENU_ALTERNATIVE", {"transcript": "Suggest an alternative to salmon."}, {})
+    assert r4["ok"] and "Arctic Char" in r4["spoken"] and "approval" in r4["spoken"].lower()
+
+    for phrase, expected in [
+        ("Create a breakfast menu for 300 guests.", "MENU_CREATE_OBJECTIVE"),
+        ("Which dishes are consuming more ingredients than expected?", "MENU_CONSUMPTION_ANOMALY"),
+        ("Show all ingredients we need to purchase for next week.", "MENU_PURCHASE_NEXT_WEEK"),
+        ("Compare this menu with last month's best-performing menu.", "MENU_COMPARE_HISTORY"),
+        ("Reduce food cost to 28%.", "MENU_CREATE_OBJECTIVE"),
+    ]:
+        res = await llm.interpret(transcript=phrase, session_state={}, allowed_intents=[expected])
+        assert res.intent == expected
+        assert res.agent_id == "MENU_ENGINEERING_AGENT"
+
+    reg.register(
+        ToolSpec("GetMenuConsumptionAnomalies", "anomalies"),
+        lambda a, c: _async_val({"ok": True, "data": {"anomalies": [{"materialName": "Salmon", "varianceQty": 8.5, "rankedCauses": [{"description": "Over-portioning"}]}]}}),
+    )
+    reg.register(
+        ToolSpec("GetMenuPurchasePlan", "purchase"),
+        lambda a, c: _async_val({"ok": True, "data": {"rows": [{"materialName": "Basmati Rice", "shortage": 25.0}]}}),
+    )
+    reg.register(
+        ToolSpec("GetHistoricalMenus", "history"),
+        lambda a, c: _async_val({"ok": True, "data": [{"name": "March Gala", "actualSales": 42000, "historicalFoodCostPercent": 27.5}]}),
+    )
+    reg.register(
+        ToolSpec("RunMeStudioObjective", "objective"),
+        lambda a, c: _async_val({"ok": True, "data": {"explanation": "Generated 300-guest breakfast at 28.0% food cost."}}),
+    )
+
+    r5 = await agent.handle("MENU_CONSUMPTION_ANOMALY", {"transcript": "Which dishes are consuming more ingredients than expected?"}, {})
+    assert r5["ok"] and "Salmon" in r5["spoken"]
+    r6 = await agent.handle("MENU_PURCHASE_NEXT_WEEK", {"transcript": "Show all ingredients we need to purchase for next week."}, {})
+    assert r6["ok"] and "Basmati Rice" in r6["spoken"]
+    r7 = await agent.handle("MENU_COMPARE_HISTORY", {"transcript": "Compare this menu with last month's best-performing menu."}, {})
+    assert r7["ok"] and "March Gala" in r7["spoken"]
+    r8 = await agent.handle("MENU_CREATE_OBJECTIVE", {"transcript": "Create a breakfast menu for 300 guests."}, {})
+    assert r8["ok"] and "confirm" in r8["spoken"].lower()
+
+    # Phase ME.3 Section 38 SILA Voice questions
+    for phrase, expected in [
+        ("How much chicken do we need tomorrow?", "MENU_INGREDIENT_DEMAND_TOMORROW"),
+        ("What is the expected breakfast demand?", "MENU_EXPECTED_DEMAND"),
+        ("Which ingredients may run out?", "MENU_SHORTAGE_RISK"),
+        ("Which dishes should we prepare in smaller batches?", "MENU_SMALLER_BATCH_PREP"),
+    ]:
+        res = await llm.interpret(transcript=phrase, session_state={}, allowed_intents=[expected])
+        assert res.intent == expected
+        assert res.agent_id == "MENU_ENGINEERING_AGENT"
+
+    reg.register(
+        ToolSpec("GetMenuPurchasePlan", "purchase2"),
+        lambda a, c: _async_val({"ok": True, "data": {"rows": [{"materialName": "Chicken Breast", "grossRequirement": 45.0, "uom": "KG", "shortage": 12.0}]}}),
+    )
+    reg.register(
+        ToolSpec("GetTwinDemandForecast", "demand"),
+        lambda a, c: _async_val({"ok": True, "data": {"selectedModel": "EXP_SMOOTHING", "nodes": [{"level": "MEAL_PERIOD", "nodeName": "Breakfast", "tomorrowForecast": 310}]}}),
+    )
+    reg.register(
+        ToolSpec("GetTwinWasteRecommendations", "waste"),
+        lambda a, c: _async_val({"ok": True, "data": {"recommendations": ["Prepare Creamy Pasta in smaller batches"]}}),
+    )
+
+    v1 = await agent.handle("MENU_INGREDIENT_DEMAND_TOMORROW", {"transcript": "How much chicken do we need tomorrow?"}, {})
+    assert v1["ok"] and "Chicken Breast" in v1["spoken"] and "45.0" in v1["spoken"]
+    v2 = await agent.handle("MENU_EXPECTED_DEMAND", {"transcript": "What is the expected breakfast demand?"}, {})
+    assert v2["ok"] and "310" in v2["spoken"]
+    v3 = await agent.handle("MENU_SHORTAGE_RISK", {"transcript": "Which ingredients may run out?"}, {})
+    assert v3["ok"] and "Chicken Breast" in v3["spoken"]
+    v4 = await agent.handle("MENU_SMALLER_BATCH_PREP", {"transcript": "Which dishes should we prepare in smaller batches?"}, {})
+    assert v4["ok"] and "smaller batches" in v4["spoken"].lower()
+
+    # Phase ME.4 Section 40 SILA Voice proactive intelligence commands
+    for phrase, expected in [
+        ("What are today's major culinary risks?", "MENU_TODAY_RISKS"),
+        ("Which menus require my attention?", "MENU_ATTENTION_REQUIRED"),
+        ("Why is breakfast food cost increasing?", "MENU_FOOD_COST_DRIVER"),
+        ("Show recommendations awaiting approval.", "MENU_PENDING_APPROVALS"),
+        ("Prepare a corrective action plan.", "MENU_PREPARE_ACTION_PLAN"),
+        ("Optimize tomorrow's buffet.", "MENU_OPTIMIZE_BUFFET"),
+        ("Show savings realized this month.", "MENU_REALIZED_SAVINGS"),
+        ("Explain the supplier delivery risk.", "MENU_SUPPLIER_DELIVERY_RISK"),
+    ]:
+        res = await llm.interpret(transcript=phrase, session_state={}, allowed_intents=[expected])
+        assert res.intent == expected
+        assert res.agent_id == "MENU_ENGINEERING_AGENT"
+
+    reg.register(
+        ToolSpec("GetAutonomousControlTower", "ct"),
+        lambda a, c: _async_val({
+            "ok": True,
+            "data": {
+                "criticalRisks": [{"title": "Supplier Tomato Delay", "summary": "Tomato price rose 15%"}],
+                "estimatedFinancialExposure": 1240.0,
+                "pendingApprovalsCount": 3,
+                "validatedRealizedSavings": 4850.0,
+                "potentialSavings": 1900.0,
+                "integrations": [{"integrationKey": "SUPPLIER", "status": "DEGRADED"}],
+            },
+        }),
+    )
+    reg.register(
+        ToolSpec("PublishAutonomousEvent", "pub"),
+        lambda a, c: _async_val({"ok": True, "data": {"processedCount": 1}}),
+    )
+
+    p1 = await agent.handle("MENU_TODAY_RISKS", {"transcript": "What are today's major culinary risks?"}, {})
+    assert p1["ok"] and "Supplier Tomato Delay" in p1["spoken"]
+    p2 = await agent.handle("MENU_PENDING_APPROVALS", {"transcript": "Show recommendations awaiting approval."}, {})
+    assert p2["ok"] and "3" in p2["spoken"] and "cannot auto-approve" in p2["spoken"].lower()
+    p3 = await agent.handle("MENU_PREPARE_ACTION_PLAN", {"transcript": "Prepare a corrective action plan."}, {})
+    assert p3["ok"] and p3.get("requiresConfirmation") is True
+    p4 = await agent.handle("MENU_PREPARE_ACTION_PLAN", {"transcript": "yes, confirm prepare a corrective action plan"}, {})
+    assert p4["ok"] and "approval" in p4["spoken"].lower()
+    p5 = await agent.handle("MENU_REALIZED_SAVINGS", {"transcript": "Show savings realized this month."}, {})
+    assert p5["ok"] and "4850.00" in p5["spoken"]
+    p6 = await agent.handle("MENU_SUPPLIER_DELIVERY_RISK", {"transcript": "Explain the supplier delivery risk."}, {})
+    assert p6["ok"] and "supplier risk" in p6["spoken"].lower()
+
+
+async def _async_val(val):
+    return val

@@ -110,7 +110,7 @@ const MenuPlanningScreen: React.FC<Props> = ({ portions = false }) => {
                   const id = e.target.value;
                   if (!id || lines.some((line) => line.menuItemId === id)) return;
                   const found = data?.items?.items.find((row) => row.id === id);
-                  setLines([...lines, { menuItemId: id, recommendedPortions: 0, menuItemName: found?.name, recipeLinkStatus: found?.recipeLinkStatus }]);
+                  setLines([...lines, { menuItemId: id, recommendedPortions: 0, menuItemName: found?.name, recipeLinkStatus: found?.recipeLinkStatus ?? undefined }]);
                 }}
               >
                 <option value="">Select</option>

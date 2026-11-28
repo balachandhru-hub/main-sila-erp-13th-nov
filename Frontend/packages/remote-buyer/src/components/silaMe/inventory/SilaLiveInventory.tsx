@@ -103,6 +103,10 @@ const SilaLiveInventory: React.FC<SilaLiveInventoryProps> = ({
       manageErpPosting: false, viewAudit: false, viewInvoice: false, processInvoice: false, approveInvoice: false,
       viewCreditMemo: false, processCreditMemo: false, approveCreditMemo: false,
       viewMenuEngineering: false, manageMenuEngineering: false,
+      viewMeStudio: false, createMenu: false, editDraftMenu: false, manageMenuItems: false,
+      managePortionPlans: false, manageDemandPlans: false, viewPosSales: false, managePosMapping: false,
+      viewMenuPerformance: false, viewMenuCost: false, viewMenuMargin: false, generateMenuPurchaseRec: false,
+      useAiMenuIntelligence: false, runMenuSimulation: false, approveMenu: false, publishMenu: false, manageMenuSetup: false,
     })),
     [permissions, canTransfer, canPostGoodsIssue, canManageCount, canRequestPurchase],
   );

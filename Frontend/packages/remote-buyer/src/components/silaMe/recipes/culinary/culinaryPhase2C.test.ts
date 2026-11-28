@@ -72,7 +72,7 @@ for (const token of [
 
 // 3. Recipe Studio 2 nav & menu/event switcher wire Phase 2C Live
 const navSrc = read("SilaRecipeStudio2Nav.tsx");
-assert.ok(navSrc.includes("Phase 2C Live"));
+assert.ok(navSrc.includes('id: "procurement"'));
 const switcherSrc = read("CulinaryMenuEventWorkspaces.tsx");
 assert.ok(switcherSrc.includes("<CulinaryProcurementStudioWorkspace"));
 

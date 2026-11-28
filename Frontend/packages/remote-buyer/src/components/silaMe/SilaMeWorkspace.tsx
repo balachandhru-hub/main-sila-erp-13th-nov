@@ -36,7 +36,10 @@ import SilaApprovalFlows from "./setup/SilaApprovalFlows";
 import SilaUserPoDefaults from "./setup/SilaUserPoDefaults";
 import SilaPriceApprovals from "./materials/SilaPriceApprovals";
 import SilaMenuEngineeringApp from "./menuEngineering/SilaMenuEngineeringApp";
+import "./recipes/SilaRecipeStudioProto.css";
+import "./recipes/SilaStudioProtoTheme.css";
 import "./SilaMeWorkspace.css";
+import "./SilaProtoSkin.css";
 
 interface SilaMeWorkspaceProps {
   navKey: SilaMeNavKey;
@@ -251,6 +254,7 @@ const SilaMeWorkspace: React.FC<SilaMeWorkspaceProps> = ({ navKey, role, permiss
         return <SilaOcrSettings canManage={can.manageMasterData} />;
       case "silaApprovalFlows":
         return <SilaApprovalFlows />;
+      case "silaMenuStudio":
       case "silaMenuDashboard":
       case "silaMenuItems":
       case "silaMenuPlanning":
@@ -268,8 +272,9 @@ const SilaMeWorkspace: React.FC<SilaMeWorkspaceProps> = ({ navKey, role, permiss
         return (
           <SilaMenuEngineeringApp
             navKey={navKey}
-            canManage={can.manageMenuEngineering}
-            canRequestPurchase={can.requestPurchase}
+            permissions={can}
+            canManage={can.manageMenuEngineering || can.editDraftMenu || can.createMenu}
+            canRequestPurchase={can.generateMenuPurchaseRec || can.requestPurchase}
             canManageRecipe={can.manageRecipe}
             onNavigate={onNavigate}
           />
@@ -282,9 +287,14 @@ const SilaMeWorkspace: React.FC<SilaMeWorkspaceProps> = ({ navKey, role, permiss
   const content = renderContent();
   if (!content) return null;
 
+  const hasOwnPrototypeShell =
+    navKey === "silaRecipes" || navKey === "silaRecipeDashboard" || navKey.startsWith("silaMenu");
+
   return (
     <div className="sila-workspace-container">
-      <div className="sila-workspace-body">{content}</div>
+      <div className="sila-workspace-body">
+        {hasOwnPrototypeShell ? content : <div className="rsp-page rsp-skin">{content}</div>}
+      </div>
     </div>
   );
 };

@@ -17,9 +17,9 @@ assert.match(presentation, /searchIngredients/);
 assert.match(presentation, /quantityForUomChange/);
 assert.match(presentation, /recommendMaterials/);
 assert.match(presentation, /lineCost/);
-assert.match(presentation, /Submit — Available in Step 6/);
+assert.match(presentation, /Submit for approval/);
 assert.match(presentation, /COST PENDING/);
-assert.match(presentation, /Select outlet to view stock/);
+assert.match(presentation, /Select outlet for stock/);
 
 const formatSrc = read("recipeFormat.ts");
 assert.match(formatSrc, /export const fromBaseQuantity/);

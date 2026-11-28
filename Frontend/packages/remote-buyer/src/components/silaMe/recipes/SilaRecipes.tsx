@@ -1,7 +1,13 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { EmptyState, Loader, Modal, Pagination, toastService } from "@vosox/shared-ui";
-import { deleteInactiveRecipe, deleteRecipeDraft, getRecipes, type SilaRecipeListItem } from "../../../api/silaMe/silaRecipeApi";
+import { BookOpen, FileSpreadsheet, LayoutGrid, Plus, Sparkles } from "lucide-react";
+import { EmptyState, Loader, Modal, toastService } from "@vosox/shared-ui";
+import {
+  deleteInactiveRecipe,
+  deleteRecipeDraft,
+  getRecipes,
+  type SilaRecipeListItem,
+} from "../../../api/silaMe/silaRecipeApi";
 import {
   DELETE_DRAFT_BODY,
   DELETE_DRAFT_CONFIRM_LABEL,
@@ -25,11 +31,10 @@ import {
   type SilaRecipeDashboard,
   type SilaRecipeMaster,
 } from "../../../api/silaMe/silaRecipeToolsApi";
-import SilaRecipeCatalogGrid from "./SilaRecipeCatalogGrid";
 import SilaRecipeDetailView from "./SilaRecipeDetailView";
 import SilaRecipeExcelPanel from "./SilaRecipeExcelPanel";
 import SilaRecipeLegacyUpload from "./SilaRecipeLegacyUpload";
-import SilaRecipeTable from "./SilaRecipeTable";
+import SilaRecipePosPanel, { type SilaRecipePosPanelMode } from "./SilaRecipePosPanel";
 import SilaRecipeWorkspaceShell from "./SilaRecipeWorkspaceShell";
 import { RECIPE_STATUSES, formatCost, recipeLabel } from "./recipeFormat";
 import { PRODUCT_CLASSES } from "./recipeHospitality";
@@ -41,6 +46,7 @@ import {
   silaRecipeEditPath,
   silaRecipeLegacyUploadPath,
   silaRecipeNewPath,
+  silaRecipeOverviewPath,
   type CulinaryWorkspaceKind,
 } from "./silaRecipeRoutes";
 import {
@@ -52,26 +58,56 @@ import type { SilaMePermissions } from "../silaMePermissions";
 import SilaRecipeStudio2Workspaces, {
   isCulinaryWorkspaceRoute,
 } from "./culinary/SilaRecipeStudio2Workspaces";
-import { loadStudioViewMode, resolveStudioKind, saveStudioViewMode, StudioCover, type StudioViewMode } from "./recipeStudioVisuals";
+import {
+  loadStudioViewMode,
+  resolveStudioKind,
+  saveStudioViewMode,
+  StudioCover,
+} from "./recipeStudioVisuals";
+import { StudioDrawer, StudioShell } from "../studio";
+import {
+  RspActionsMenu,
+  RspButton,
+  RspCatalog,
+  RspCommandBar,
+  RspEmpty,
+  RspFilterBanner,
+  RspFooter,
+  RspHeader,
+  RspIconButton,
+  RspKpiRibbon,
+  RspMenuItem,
+  RspQuickView,
+  type RspChip,
+  type RspKpiKey,
+} from "./SilaRecipeStudioProto";
 import "../silaMeTheme.css";
 import "./SilaRecipes.css";
 import "./SilaRecipeStudio.css";
+import "./SilaStudioProtoTheme.css";
+import "../SilaProtoSkin.css";
 
 interface SilaRecipesProps {
   canManage: boolean;
   /** Approvers can decide legacy migration batches and publish. */
   canApprove?: boolean;
-  /** Reserved for later rebuild steps (Material price requests). Unused in Step 1 shell. */
   canRequestPrice?: boolean;
   permissions?: Partial<SilaMePermissions>;
   onNavigate?: (key: string) => void;
 }
 
 const PAGE_SIZE = 48;
+const COMPACT_PAGE_SIZE = 96;
+const ACTIVE_FILTER = "ACTIVE";
+const titleLabel = (value: string) => value.charAt(0) + value.slice(1).toLowerCase();
+
+type CatalogViewOption = "grid" | "compact" | "list";
+type CatalogSortOption = "default" | "name-asc" | "cost-desc" | "cost-asc";
 
 /**
- * Recipe Studio — catalog/detail + New/Edit workspace shell (Steps 1–6) + Recipe Studio 2.0 Phase 0 shell.
- * Canonical URLs under /sila-recipes; SilaRecipeEditor is not mounted.
+ * Recipe Studio — Unified SILA White & Blue workspace with Overview landing screen,
+ * expandable 8-group Culinary Intelligence navigation, 7 pastel KPI boxes,
+ * single-line filter toolbar, responsive 6/5/4/3/2/1 card catalogue, and detail/editor shells.
  */
 const SilaRecipes: React.FC<SilaRecipesProps> = ({
   canManage,
@@ -80,7 +116,7 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({
   permissions,
   onNavigate,
 }) => {
-  const { pathname, key: locationKey } = useLocation();
+  const { pathname, search: locationSearch, key: locationKey } = useLocation();
   const navigate = useNavigate();
   const route = useMemo(() => parseSilaRecipePath(pathname), [pathname]);
 
@@ -89,6 +125,7 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({
   const [categoryId, setCategoryId] = useState("");
   const [productClass, setProductClass] = useState("");
   const [itemMode, setItemMode] = useState("");
+  const [sortBy, setSortBy] = useState<CatalogSortOption>("default");
   const [search, setSearch] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -99,15 +136,27 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({
   const [dashboard, setDashboard] = useState<SilaRecipeDashboard | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<StudioViewMode>(() => loadStudioViewMode());
-  /** Categories / subcategories chip rows stay hidden until Filters is pressed. */
-  const [showCategoryFilters, setShowCategoryFilters] = useState(false);
+  const [viewMode, setViewMode] = useState<CatalogViewOption>(() => loadStudioViewMode());
+  const [showFiltersDrawer, setShowFiltersDrawer] = useState(false);
+  const [quickRow, setQuickRow] = useState<SilaRecipeListItem | null>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const closeQuickView = useCallback(() => setQuickRow(null), []);
   const [deleteTarget, setDeleteTarget] = useState<SilaRecipeListItem | null>(null);
   const [deleting, setDeleting] = useState(false);
-  /** Remount New shell when New is clicked again while already on /sila-recipes/new. */
   const [newShellEpoch, setNewShellEpoch] = useState(0);
   const [aiStatus, setAiStatus] = useState<SilaCulinaryAiStatus | null>(null);
-  const [showCulinaryOptions, setShowCulinaryOptions] = useState<boolean>(() => isCulinaryWorkspaceRoute(route));
+  const [panelView, setPanelView] = useState<SilaRecipePosPanelMode | "recipes">("recipes");
+  const [showCulinaryOptions, setShowCulinaryOptions] = useState<boolean>(() =>
+    route.kind !== "overview" && isCulinaryWorkspaceRoute(route),
+  );
+
+  const culinaryFlags = aiStatus?.featureFlags ?? DEFAULT_CULINARY_FEATURE_FLAGS;
+  const effectiveRoute = useMemo(() => {
+    if (route.kind === "overview" && !culinaryFlags.overviewEnabled) {
+      return { kind: "list" as const };
+    }
+    return route;
+  }, [route, culinaryFlags.overviewEnabled]);
 
   const refreshAiStatus = useCallback(() => {
     getCulinaryAiStatus()
@@ -115,19 +164,22 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({
       .catch(() => undefined);
   }, []);
 
+  const pageSize = viewMode === "compact" ? COMPACT_PAGE_SIZE : PAGE_SIZE;
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const result = await getRecipes({
-        status,
+        status: status === ACTIVE_FILTER ? "" : status,
+        active: status === ACTIVE_FILTER ? true : undefined,
         familyId,
         categoryId,
         productClass: productClass || undefined,
         itemMode: itemMode || undefined,
         search: appliedSearch,
         index: page - 1,
-        limit: PAGE_SIZE,
+        limit: pageSize,
       });
       setRows(result.items);
       setTotal(result.total);
@@ -137,11 +189,22 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [status, familyId, categoryId, productClass, itemMode, appliedSearch, page]);
+  }, [status, familyId, categoryId, productClass, itemMode, appliedSearch, page, pageSize]);
 
   useEffect(() => {
-    if (route.kind === "list") load();
-  }, [load, route.kind]);
+    if (effectiveRoute.kind === "list" && panelView === "recipes") load();
+  }, [load, effectiveRoute.kind, panelView]);
+
+  useEffect(() => {
+    if (route.kind !== "list") return;
+    const query = new URLSearchParams(locationSearch);
+    const view = query.get("view");
+    setPanelView(view === "failed-pos" || view === "posted-consumption" ? view : "recipes");
+    if (query.has("status")) {
+      setStatus(query.get("status") ?? "");
+      setPage(1);
+    }
+  }, [locationSearch, route.kind]);
 
   useEffect(() => {
     Promise.all([getRecipeMasters("families"), getRecipeMasters("categories"), getRecipeDashboard()])
@@ -162,21 +225,69 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({
     return () => window.clearTimeout(timer);
   }, [search]);
 
+  const sortedRows = useMemo(() => {
+    if (sortBy === "default") return rows;
+    const copy = rows.slice();
+    if (sortBy === "name-asc") {
+      copy.sort((a, b) => a.name.localeCompare(b.name));
+    } else if (sortBy === "cost-desc") {
+      copy.sort((a, b) => (b.costPerServing ?? b.totalCost) - (a.costPerServing ?? a.totalCost));
+    } else if (sortBy === "cost-asc") {
+      copy.sort((a, b) => (a.costPerServing ?? a.totalCost) - (b.costPerServing ?? b.totalCost));
+    }
+    return copy;
+  }, [rows, sortBy]);
+
   const avgCost = useMemo(() => {
     const priced = rows.filter((row) => row.costComplete && row.totalCost > 0);
     if (priced.length === 0) return null;
     return priced.reduce((sum, row) => sum + row.totalCost, 0) / priced.length;
   }, [rows]);
 
+  const goOverview = () => navigate(silaRecipeOverviewPath());
   const goCatalog = () => navigate(silaRecipeCatalogPath());
+  const clearRecipeFilters = () => {
+    setStatus("");
+    setFamilyId("");
+    setItemMode("");
+    setProductClass("");
+    setCategoryId("");
+    setSearch("");
+    setAppliedSearch("");
+    setPage(1);
+  };
+  const openRecipesWithStatus = (nextStatus: string) => {
+    setPanelView("recipes");
+    setStatus(nextStatus);
+    setPage(1);
+    if (route.kind !== "list" || locationSearch) {
+      navigate(silaRecipeCatalogPath(nextStatus ? { status: nextStatus } : undefined), { replace: route.kind === "list" });
+    }
+  };
+  const openTotalRecipes = () => {
+    clearRecipeFilters();
+    setSortBy("default");
+    setPanelView("recipes");
+    if (route.kind !== "list" || locationSearch) navigate(silaRecipeCatalogPath(), { replace: route.kind === "list" });
+  };
+  const openPosPanel = (view: SilaRecipePosPanelMode) => {
+    setPanelView(view);
+    navigate(silaRecipeCatalogPath({ view }), { replace: route.kind === "list" });
+  };
+  const openCostRanking = () => {
+    setPanelView("recipes");
+    setSortBy("cost-desc");
+    setMode("list");
+    if (route.kind !== "list" || locationSearch) navigate(silaRecipeCatalogPath(), { replace: route.kind === "list" });
+  };
+  const toggleOverview = () => (route.kind === "overview" ? goCatalog() : goOverview());
   const goDetail = (recipeId: string) => navigate(silaRecipeDetailPath(recipeId));
   const goNew = () => {
     if (!canManage) {
       toastService.error("You do not have permission to create or edit recipes.");
       return;
     }
-    // Already on New: remount shell — do not blank, do not invent a recipe id, do not enter Edit.
-    if (route.kind === "new") {
+    if (effectiveRoute.kind === "new") {
       setNewShellEpoch((epoch) => epoch + 1);
       return;
     }
@@ -195,9 +306,10 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({
     navigate(silaRecipeEditPath(id));
   };
 
-  const setMode = (mode: StudioViewMode) => {
+  const setMode = (mode: CatalogViewOption) => {
     setViewMode(mode);
     saveStudioViewMode(mode);
+    setPage(1);
   };
 
   const deletingInactive = canDeleteInactiveRecipe(deleteTarget?.status);
@@ -214,7 +326,7 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({
       }
       setDeleteTarget(null);
       await load();
-      if (route.kind !== "list") goCatalog();
+      if (effectiveRoute.kind !== "list") goCatalog();
     } catch (err: unknown) {
       toastService.error(
         err instanceof Error
@@ -228,9 +340,10 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({
     }
   };
 
-  const culinaryFlags = aiStatus?.featureFlags ?? DEFAULT_CULINARY_FEATURE_FLAGS;
   const selectCulinaryRoute = (target: "list" | "legacy-upload" | CulinaryWorkspaceKind) => {
-    if (target === "list") {
+    if (target === "menus") {
+      onNavigate?.("silaMenuStudio");
+    } else if (target === "list") {
       goCatalog();
     } else if (target === "legacy-upload") {
       navigate(silaRecipeLegacyUploadPath());
@@ -239,72 +352,11 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({
     }
   };
 
-  const renderCulinaryRibbon = () => {
-    if (!culinaryFlags.culinarySuiteEnabled) return null;
-    return (
-      <button
-        type="button"
-        className={`cs2-flexi-ribbon${showCulinaryOptions ? " is-open" : ""}`}
-        aria-expanded={showCulinaryOptions}
-        aria-controls="cs2-culinary-options-panel"
-        data-testid="culinary-flexi-ribbon"
-        onClick={() => setShowCulinaryOptions((open) => !open)}
-        title={
-          showCulinaryOptions
-            ? "Hide Recipe Studio 2.0 · Culinary Intelligence options"
-            : "Show Recipe Studio 2.0 · Culinary Intelligence options"
-        }
-      >
-        <span className="cs2-flexi-ribbon__badge" aria-hidden="true">2.0</span>
-        <span className="cs2-flexi-ribbon__text">RECIPE STUDIO 2.0 · CULINARY INTELLIGENCE</span>
-        <span className="cs2-flexi-ribbon__chevron" aria-hidden="true">
-          {showCulinaryOptions ? "▴" : "▾"}
-        </span>
-      </button>
-    );
-  };
-
-  // --- Recipe Studio 2.0 Phase 0 Culinary Intelligence Workspaces ---
-  if (isCulinaryWorkspaceRoute(route)) {
-    return (
-      <div className="sila-me srec-page rstudio-page">
-        <header className="rstudio-hero rstudio-hero--compact">
-          <div className="rstudio-hero__copy">
-            <div className="rstudio-hero__title-row">
-              <h1 className="rstudio-hero__title">SILA Recipe Studio</h1>
-              {renderCulinaryRibbon()}
-            </div>
-          </div>
-          <div className="rstudio-hero__actions">
-            <button
-              type="button"
-              className="sila-btn sila-btn--secondary"
-              onClick={goCatalog}
-            >
-              Back to Recipe Catalog
-            </button>
-          </div>
-        </header>
-
-        <SilaRecipeStudio2Workspaces
-          route={route}
-          flags={culinaryFlags}
-          aiStatus={aiStatus}
-          dashboard={dashboard}
-          totalCatalogCount={total}
-          permissions={permissions}
-          showOptions={showCulinaryOptions}
-          onSelectRecipeRoute={selectCulinaryRoute}
-          onNavigateGlobal={onNavigate}
-          onRefreshAiStatus={refreshAiStatus}
-        />
-      </div>
-    );
-  }
+  const withPrototypeSkin = (node: React.ReactNode) => <div className="rsp-page rsp-skin">{node}</div>;
 
   // --- Legacy Recipe Upload (isolated migration workspace) ---
-  if (route.kind === "legacy-upload") {
-    return (
+  if (effectiveRoute.kind === "legacy-upload") {
+    return withPrototypeSkin(
       <SilaRecipeLegacyUpload
         canManage={canManage}
         canApprove={canApprove}
@@ -314,21 +366,25 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({
     );
   }
 
-  // --- New Recipe: Recipe Studio workspace (SilaRecipeEditor not mounted) ---
-  if (route.kind === "new") {
+  // --- New Recipe: Recipe Studio workspace ---
+  if (effectiveRoute.kind === "new") {
     if (!canManage) {
-      return (
-        <div className="sila-me srec-page rstudio-page">
+      return withPrototypeSkin(
+        <StudioShell className="sila-me srec-page rstudio-page">
           <EmptyState
             variant="error"
             title="Cannot create recipe"
             description="You do not have permission to create recipes."
-            action={<button type="button" className="sila-btn sila-btn--secondary" onClick={goCatalog}>Back to Recipe Catalog</button>}
+            action={
+              <button type="button" className="sila-studio-btn sila-studio-btn--secondary" onClick={goCatalog}>
+                Back to Recipe Master
+              </button>
+            }
           />
-        </div>
+        </StudioShell>
       );
     }
-    return (
+    return withPrototypeSkin(
       <SilaRecipeWorkspaceShell
         key={`new-recipe-shell-${locationKey}-${newShellEpoch}`}
         mode="new"
@@ -338,35 +394,39 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({
     );
   }
 
-  // --- Edit Recipe: Recipe Studio workspace (load/update/revision/submit in presentation) ---
-  if (route.kind === "edit") {
+  // --- Edit Recipe: Recipe Studio workspace ---
+  if (effectiveRoute.kind === "edit") {
     if (!canManage) {
-      return (
-        <div className="sila-me srec-page rstudio-page">
+      return withPrototypeSkin(
+        <StudioShell className="sila-me srec-page rstudio-page">
           <EmptyState
             variant="error"
             title="Cannot edit recipe"
             description="You do not have permission to edit recipes."
-            action={<button type="button" className="sila-btn sila-btn--secondary" onClick={goCatalog}>Back to Recipe Catalog</button>}
+            action={
+              <button type="button" className="sila-studio-btn sila-studio-btn--secondary" onClick={goCatalog}>
+                Back to Recipe Master
+              </button>
+            }
           />
-        </div>
+        </StudioShell>
       );
     }
-    return (
+    return withPrototypeSkin(
       <SilaRecipeWorkspaceShell
-        key={`edit-recipe-shell-${locationKey}-${route.recipeId}`}
+        key={`edit-recipe-shell-${locationKey}-${effectiveRoute.recipeId}`}
         mode="edit"
-        recipeId={route.recipeId}
+        recipeId={effectiveRoute.recipeId}
         onBackToCatalog={goCatalog}
       />
     );
   }
 
   // --- Detail ---
-  if (route.kind === "detail") {
-    return (
+  if (effectiveRoute.kind === "detail") {
+    return withPrototypeSkin(
       <SilaRecipeDetailView
-        recipeId={route.recipeId}
+        recipeId={effectiveRoute.recipeId}
         canManage={canManage}
         onBack={goCatalog}
         onEdit={(recipe) => goEdit(recipe.id)}
@@ -375,50 +435,195 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({
     );
   }
 
-  // --- Catalog ---
+  const isOverview = effectiveRoute.kind === "overview";
+  const isCulinaryRoute = isCulinaryWorkspaceRoute(effectiveRoute);
+
+  const heroSection = (
+    <RspHeader
+      title="Recipe Studio"
+      subtitle="Intelligent Culinary Workspace"
+      actions={
+        <>
+          <RspIconButton
+            label={isOverview ? "Show Recipes" : "Show Overview"}
+            active={isOverview}
+            testId="recipe-studio-overview-btn"
+            onClick={toggleOverview}
+          >
+            {isOverview ? (
+              <BookOpen size={17} strokeWidth={2} aria-hidden="true" />
+            ) : (
+              <LayoutGrid size={17} strokeWidth={2} aria-hidden="true" />
+            )}
+          </RspIconButton>
+          {culinaryFlags.culinarySuiteEnabled && (
+            <RspIconButton
+              label="Culinary Intelligence"
+              active={showCulinaryOptions}
+              expanded={showCulinaryOptions}
+              controlsId="cs2-culinary-options-panel"
+              testId="culinary-flexi-ribbon"
+              onClick={() => setShowCulinaryOptions((open) => !open)}
+            >
+              <Sparkles size={17} strokeWidth={2} aria-hidden="true" />
+            </RspIconButton>
+          )}
+          <RspActionsMenu>
+            <SilaRecipeExcelPanel
+              noun="recipe"
+              canImport={canManage}
+              menu
+              onTemplate={downloadRecipeTemplate}
+              onExport={exportRecipes}
+              onPreview={previewRecipeImport}
+              onConfirm={confirmRecipeImport}
+              onImported={load}
+            />
+            <hr className="rsp-menu__divider" />
+            <RspMenuItem
+              testId="recipe-legacy-upload-entry"
+              tone="slate"
+              icon={<FileSpreadsheet size={14} strokeWidth={2} />}
+              onClick={() => navigate(silaRecipeLegacyUploadPath())}
+            >
+              Legacy Recipe Upload
+            </RspMenuItem>
+          </RspActionsMenu>
+          {culinaryFlags.culinarySuiteEnabled && (
+            <RspButton tone="ai" testId="recipe-ai-builder-btn" onClick={() => navigate(silaRecipeCulinaryPath("ai-planner"))}>
+              <Sparkles size={14} aria-hidden="true" />
+              <span>AI Recipe Builder</span>
+            </RspButton>
+          )}
+          <RspButton
+            tone="primary"
+            testId="recipe-new-btn"
+            disabled={!canManage}
+            title={canManage ? "Create Recipe" : "Requires MANAGE_SILA_RECIPE permission"}
+            onClick={goNew}
+          >
+            <Plus size={15} strokeWidth={2.4} aria-hidden="true" />
+            <span>Create Recipe</span>
+          </RspButton>
+        </>
+      }
+    />
+  );
+
+  // --- Culinary Intelligence Workspaces (including default Overview landing screen) ---
+  if (isCulinaryRoute) {
+    return (
+      <StudioShell className="sila-me srec-page rstudio-page rsp-page rsp-stack">
+        {heroSection}
+        <SilaRecipeStudio2Workspaces
+          route={effectiveRoute}
+          flags={culinaryFlags}
+          aiStatus={aiStatus}
+          dashboard={dashboard}
+          totalCatalogCount={total}
+          permissions={permissions}
+          showOptions={showCulinaryOptions}
+          onSelectRecipeRoute={selectCulinaryRoute}
+          onNavigateGlobal={onNavigate}
+          onOpenRecipeView={(query) => navigate(silaRecipeCatalogPath(query))}
+          onRefreshAiStatus={refreshAiStatus}
+        />
+      </StudioShell>
+    );
+  }
+
+  // --- Recipe Master Catalog ---
   const filtered = Boolean(status || familyId || categoryId || productClass || itemMode || appliedSearch);
+  const activeProductClassLabel = PRODUCT_CLASSES.find((cls) => cls.id === productClass)?.label;
+  const activeCategoryName = categories.find((cat) => cat.id === categoryId)?.name;
+
+  const toggleFilter = (setter: (value: string) => void, current: string, value: string) => {
+    setter(current === value ? "" : value);
+    setPage(1);
+  };
+  const filterChips: RspChip[] = [
+    {
+      id: "all",
+      label: "All",
+      group: "all",
+      active: !status && !familyId && !itemMode && !productClass && !categoryId,
+      onClick: () => {
+        setStatus("");
+        setFamilyId("");
+        setItemMode("");
+        setProductClass("");
+        setCategoryId("");
+        setPage(1);
+      },
+    },
+    {
+      id: "status-active",
+      label: "Active",
+      group: "status",
+      active: status === ACTIVE_FILTER,
+      onClick: () => toggleFilter(setStatus, status, ACTIVE_FILTER),
+    },
+    ...RECIPE_STATUSES.filter((code) => code !== ACTIVE_FILTER).map((code) => ({
+      id: `status-${code}`,
+      label: recipeLabel(code),
+      group: "status",
+      active: status === code,
+      onClick: () => toggleFilter(setStatus, status, code),
+    })),
+    ...[
+      { code: "RECIPE", label: "Recipe" },
+      { code: "DIRECT", label: "Direct Item" },
+      { code: "BATCH", label: "Batch" },
+    ].map(({ code, label }) => ({
+      id: `type-${code}`,
+      label,
+      group: "type",
+      active: itemMode === code,
+      onClick: () => toggleFilter(setItemMode, itemMode, code),
+    })),
+    ...families.map((family) => ({
+      id: `family-${family.id}`,
+      label: family.name,
+      group: "family",
+      active: familyId === family.id,
+      onClick: () => toggleFilter(setFamilyId, familyId, family.id),
+    })),
+  ];
+  const filterSummary = `Filtered by ${[
+    status ? (status === ACTIVE_FILTER ? "Active (selling)" : recipeLabel(status)) : "",
+    itemMode ? titleLabel(itemMode) : "",
+    familyId ? (families.find((family) => family.id === familyId)?.name ?? "Family") : "",
+    activeProductClassLabel ?? "",
+    activeCategoryName ?? "",
+    appliedSearch ? `"${appliedSearch}"` : "",
+  ]
+    .filter(Boolean)
+    .join(" • ")}`;
+  const selectKpi = (key: RspKpiKey) => {
+    switch (key) {
+      case "total":
+        return openTotalRecipes();
+      case "active":
+        return openRecipesWithStatus(ACTIVE_FILTER);
+      case "draft":
+        return openRecipesWithStatus("DRAFT");
+      case "pending":
+        return openRecipesWithStatus("PENDING_APPROVAL");
+      case "failedPos":
+        return openPosPanel("failed-pos");
+      case "consumption":
+        return openPosPanel("posted-consumption");
+      default:
+        return openCostRanking();
+    }
+  };
 
   return (
-    <div className="sila-me srec-page rstudio-page">
-      <header className="rstudio-hero">
-        <div className="rstudio-hero__copy">
-          <div className="rstudio-hero__title-row">
-            <h1 className="rstudio-hero__title">SILA Recipe Studio</h1>
-            {renderCulinaryRibbon()}
-          </div>
-        </div>
-        <div className="rstudio-hero__actions">
-          <SilaRecipeExcelPanel
-            noun="recipe"
-            canImport={canManage}
-            onTemplate={downloadRecipeTemplate}
-            onExport={exportRecipes}
-            onPreview={previewRecipeImport}
-            onConfirm={confirmRecipeImport}
-            onImported={load}
-          />
-          <button
-            type="button"
-            className="sila-btn sila-btn--secondary"
-            onClick={() => navigate(silaRecipeLegacyUploadPath())}
-            data-testid="recipe-legacy-upload-entry"
-          >
-            Legacy Recipe Upload
-          </button>
-          <button
-            type="button"
-            className="sila-btn sila-btn--primary"
-            onClick={goNew}
-            disabled={!canManage}
-            title={canManage ? undefined : "Requires MANAGE_SILA_RECIPE permission"}
-          >
-            New recipe
-          </button>
-        </div>
-      </header>
+    <StudioShell className="sila-me srec-page rstudio-page rsp-page rsp-stack">
+      {heroSection}
 
       <SilaRecipeStudio2Workspaces
-        route={route}
+        route={effectiveRoute}
         flags={culinaryFlags}
         aiStatus={aiStatus}
         dashboard={dashboard}
@@ -427,193 +632,250 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({
         showOptions={showCulinaryOptions}
         onSelectRecipeRoute={selectCulinaryRoute}
         onNavigateGlobal={onNavigate}
+        onOpenRecipeView={(query) => navigate(silaRecipeCatalogPath(query))}
         onRefreshAiStatus={refreshAiStatus}
       />
 
-      <div className="rstudio-kpis" data-testid="recipe-studio-dashboard-kpis" aria-label="Recipe Studio overview">
-        <div className="rstudio-kpi rstudio-kpi--sky">
-          <span>Total recipes</span>
-          <strong>{dashboard?.totalRecipes ?? total}</strong>
-        </div>
-        <div className="rstudio-kpi rstudio-kpi--mint">
-          <span>Active</span>
-          <strong>{dashboard?.activeRecipes ?? "—"}</strong>
-        </div>
-        <div className="rstudio-kpi rstudio-kpi--lavender">
-          <span>Draft</span>
-          <strong>{dashboard?.draftRecipes ?? "—"}</strong>
-        </div>
-        <div className="rstudio-kpi rstudio-kpi--amber">
-          <span>Pending approval</span>
-          <strong>{dashboard?.pendingApprovalTotal ?? "—"}</strong>
-        </div>
-        <div className="rstudio-kpi rstudio-kpi--rose">
-          <span>Failed POS sales</span>
-          <strong>{dashboard?.failedPosSales ?? "—"}</strong>
-        </div>
-        <div className="rstudio-kpi rstudio-kpi--blue">
-          <span>Posted consumption today</span>
-          <strong>{dashboard?.consumptionPostedToday ?? "—"}</strong>
-        </div>
-        <div className="rstudio-kpi rstudio-kpi--blue">
-          <span>Avg recipe cost (page)</span>
-          <strong>{avgCost == null ? "—" : formatCost(avgCost)}</strong>
-        </div>
-      </div>
+      <RspKpiRibbon
+        values={{
+          total: String(dashboard?.totalRecipes ?? total),
+          active: String(dashboard?.activeRecipes ?? "—"),
+          draft: String(dashboard?.draftRecipes ?? "—"),
+          pending: String(dashboard?.pendingApprovalTotal ?? "—"),
+          failedPos: String(dashboard?.failedPosSales ?? "—"),
+          consumption: String(dashboard?.consumptionPostedToday ?? "—"),
+          avgCost: avgCost == null ? "—" : formatCost(avgCost),
+        }}
+        hints={{
+          total: "Click to show every recipe",
+          failedPos: "Review failed sale lines",
+          consumption: "Review posted consumption",
+          avgCost: "Current page · ranks by cost",
+        }}
+        selected={{
+          total: panelView === "recipes" && !status && sortBy === "default",
+          active: panelView === "recipes" && status === ACTIVE_FILTER,
+          draft: panelView === "recipes" && status === "DRAFT",
+          pending: panelView === "recipes" && status === "PENDING_APPROVAL",
+          failedPos: panelView === "failed-pos",
+          consumption: panelView === "posted-consumption",
+          avgCost: panelView === "recipes" && sortBy === "cost-desc",
+        }}
+        failedPosCount={Number(dashboard?.failedPosSales ?? 0) || 0}
+        testId="recipe-studio-dashboard-kpis"
+        onSelect={selectKpi}
+      />
 
-      <section className="rstudio-toolbar sila-card">
-        <div className="srec-filters srec-filters--flush">
-          <div className="sila-field srec-grow">
-            <label className="sila-label" htmlFor="srec-search">Search recipes</label>
-            <input
-              id="srec-search"
-              className="sila-input"
-              type="search"
-              placeholder="Name, code or POS"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-          <div className="sila-field">
-            <label className="sila-label" htmlFor="srec-status">Status</label>
-            <select id="srec-status" className="sila-select" value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }}>
-              <option value="">All</option>
-              {RECIPE_STATUSES.map((code) => (
-                <option key={code} value={code}>{recipeLabel(code)}</option>
-              ))}
-            </select>
-          </div>
-          <div className="sila-field">
-            <label className="sila-label" htmlFor="srec-family-filter">Family / cuisine</label>
-            <select id="srec-family-filter" className="sila-select" value={familyId} onChange={(e) => { setFamilyId(e.target.value); setPage(1); }}>
-              <option value="">All</option>
-              {families.map((family) => (
-                <option key={family.id} value={family.id}>{family.name}</option>
-              ))}
-            </select>
-          </div>
-          <div className="sila-field">
-            <label className="sila-label" htmlFor="srec-mode-filter">Recipe type</label>
-            <select id="srec-mode-filter" className="sila-select" value={itemMode} onChange={(e) => { setItemMode(e.target.value); setPage(1); }}>
-              <option value="">All</option>
-              <option value="RECIPE">Recipe</option>
-              <option value="DIRECT">Direct item</option>
-              <option value="BATCH">Batch</option>
-            </select>
-          </div>
-          <button
-            type="button"
-            className="sila-btn sila-btn--secondary"
-            data-testid="recipe-category-filters-toggle"
-            aria-expanded={showCategoryFilters}
-            aria-controls="recipe-category-filters"
-            onClick={() => setShowCategoryFilters((open) => !open)}
-          >
-            {showCategoryFilters ? "Hide filters" : "Filters"}
-          </button>
-          <div className="rstudio-view-toggle" role="group" aria-label="Catalog view">
-            <button type="button" className={`sila-btn sila-btn--sm ${viewMode === "grid" ? "sila-btn--primary" : "sila-btn--secondary"}`} onClick={() => setMode("grid")}>Grid</button>
-            <button type="button" className={`sila-btn sila-btn--sm ${viewMode === "list" ? "sila-btn--primary" : "sila-btn--secondary"}`} onClick={() => setMode("list")}>List</button>
-          </div>
-        </div>
-      </section>
-
-      {showCategoryFilters && (
-        <div id="recipe-category-filters" data-testid="recipe-category-filters">
-          <nav className="rstudio-cats" aria-label="Hospitality product classes" data-testid="recipe-product-class-tabs">
-            <button
-              type="button"
-              className={`rstudio-chip${!productClass ? " is-active" : ""}`}
-              onClick={() => { setProductClass(""); setCategoryId(""); setPage(1); }}
-            >
-              <StudioCover kind="other" compact title="All" />
-              All
-            </button>
-            {PRODUCT_CLASSES.map((cls) => (
-              <button
-                key={cls.id}
-                type="button"
-                className={`rstudio-chip${productClass === cls.id ? " is-active" : ""}`}
-                onClick={() => { setProductClass(cls.id); setCategoryId(""); setPage(1); }}
-              >
-                <StudioCover kind={resolveStudioKind(cls.label, cls.id)} compact title={cls.label} />
-                {cls.label}
-              </button>
-            ))}
-          </nav>
-
-          <nav className="rstudio-cats rstudio-cats--sub" aria-label="Recipe subcategories">
-            <button
-              type="button"
-              className={`rstudio-chip${!categoryId ? " is-active" : ""}`}
-              onClick={() => { setCategoryId(""); setPage(1); }}
-            >
-              All subcategories
-            </button>
-            {categories
-              .filter((category) => !productClass || !category.productClass || category.productClass === productClass)
-              .map((category) => {
-                const kind = resolveStudioKind(category.name, category.code);
-                return (
-                  <button
-                    key={category.id}
-                    type="button"
-                    className={`rstudio-chip${categoryId === category.id ? " is-active" : ""}`}
-                    onClick={() => { setCategoryId(category.id); setPage(1); }}
-                  >
-                    <StudioCover kind={kind} compact title={category.name} />
-                    {category.name}
-                  </button>
-                );
-              })}
-          </nav>
-        </div>
+      {panelView !== "recipes" && (
+        <SilaRecipePosPanel
+          mode={panelView}
+          onBackToRecipes={openTotalRecipes}
+          onOpenPosStudio={onNavigate ? () => onNavigate("silaPos") : undefined}
+          onOpenRecipe={goDetail}
+        />
       )}
 
-      {loading ? (
-        <Loader size={24} message="Loading Recipe Studio..." />
-      ) : error ? (
-        <EmptyState
-          variant="error"
-          title="Couldn't load recipes"
-          description={error}
-          action={<button type="button" className="sila-btn sila-btn--secondary" onClick={load}>Try again</button>}
-        />
-      ) : rows.length === 0 && page === 1 ? (
-        <EmptyState title={filtered ? "No recipe matches" : "No recipes yet"} description="Create a recipe to start building your culinary catalog." />
-      ) : (
+      {panelView === "recipes" && (
         <>
-          {viewMode === "grid" ? (
-            <SilaRecipeCatalogGrid
-              rows={rows}
-              canManage={canManage}
-              onOpen={goDetail}
-              onEdit={canManage ? goEdit : undefined}
-              onDelete={canManage ? setDeleteTarget : undefined}
+          <RspCommandBar
+            search={search}
+            onSearch={setSearch}
+            searchRef={searchRef}
+            sort={sortBy}
+            sortOptions={[
+              { value: "default", label: "Sort: Default" },
+              { value: "name-asc", label: "Sort: Name (A–Z)" },
+              { value: "cost-desc", label: "Sort: Cost (High–Low)" },
+              { value: "cost-asc", label: "Sort: Cost (Low–High)" },
+            ]}
+            onSort={(value) => setSortBy(value as CatalogSortOption)}
+            viewMode={viewMode}
+            onViewMode={setMode}
+            chips={filterChips}
+            advancedCount={[productClass, categoryId].filter(Boolean).length}
+            testId="recipe-filter-toolbar"
+            advancedTestId="recipe-category-filters-toggle"
+            advancedExpanded={showFiltersDrawer}
+            onAdvanced={() => setShowFiltersDrawer(true)}
+          />
+
+          {filtered && <RspFilterBanner text={filterSummary} onReset={clearRecipeFilters} />}
+
+          <StudioDrawer
+            open={showFiltersDrawer}
+            onClose={() => setShowFiltersDrawer(false)}
+            title="Advanced Recipe Filters"
+            subtitle="Filter recipes by hospitality class and culinary category"
+            testId="recipe-category-filters"
+            width="md"
+            footer={
+              <div style={{ display: "flex", justifyContent: "space-between", gap: "0.5rem" }}>
+                <button
+                  type="button"
+                  className="sila-studio-btn sila-studio-btn--secondary"
+                  onClick={() => {
+                    setProductClass("");
+                    setCategoryId("");
+                    setPage(1);
+                  }}
+                >
+                  Reset Class &amp; Category
+                </button>
+                <button
+                  type="button"
+                  className="sila-studio-btn sila-studio-btn--primary"
+                  onClick={() => setShowFiltersDrawer(false)}
+                >
+                  Apply Filters
+                </button>
+              </div>
+            }
+          >
+            <div id="recipe-advanced-filters-drawer" className="srec-stack">
+              <div>
+                <h4 className="sila-studio-card__title" style={{ marginBottom: "0.5rem" }}>
+                  Hospitality Product Class
+                </h4>
+                <div className="sila-studio-chip-row" data-testid="recipe-product-class-tabs">
+                  <button
+                    type="button"
+                    className={`sila-studio-chip${!productClass ? " is-active" : ""}`}
+                    onClick={() => {
+                      setProductClass("");
+                      setCategoryId("");
+                      setPage(1);
+                    }}
+                  >
+                    <StudioCover kind="other" compact title="All" />
+                    <span>All</span>
+                  </button>
+                  {PRODUCT_CLASSES.map((cls) => (
+                    <button
+                      key={cls.id}
+                      type="button"
+                      className={`sila-studio-chip${productClass === cls.id ? " is-active" : ""}`}
+                      onClick={() => {
+                        setProductClass(cls.id);
+                        setCategoryId("");
+                        setPage(1);
+                      }}
+                    >
+                      <StudioCover kind={resolveStudioKind(cls.label, cls.id)} compact title={cls.label} />
+                      <span>{cls.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <h4 className="sila-studio-card__title" style={{ marginBottom: "0.5rem" }}>
+                  Recipe Category / Subcategory
+                </h4>
+                <div className="sila-studio-chip-row">
+                  <button
+                    type="button"
+                    className={`sila-studio-chip${!categoryId ? " is-active" : ""}`}
+                    onClick={() => {
+                      setCategoryId("");
+                      setPage(1);
+                    }}
+                  >
+                    All subcategories
+                  </button>
+                  {categories
+                    .filter((category) => !productClass || !category.productClass || category.productClass === productClass)
+                    .map((category) => {
+                      const kind = resolveStudioKind(category.name, category.code);
+                      return (
+                        <button
+                          key={category.id}
+                          type="button"
+                          className={`sila-studio-chip${categoryId === category.id ? " is-active" : ""}`}
+                          onClick={() => {
+                            setCategoryId(category.id);
+                            setPage(1);
+                          }}
+                        >
+                          <StudioCover kind={kind} compact title={category.name} />
+                          <span>{category.name}</span>
+                        </button>
+                      );
+                    })}
+                </div>
+              </div>
+            </div>
+          </StudioDrawer>
+
+          {loading ? (
+            <Loader size={24} message="Loading Recipe Studio..." />
+          ) : error ? (
+            <EmptyState
+              variant="error"
+              title="Couldn't load recipes"
+              description={error}
+              action={
+                <button type="button" className="sila-studio-btn sila-studio-btn--secondary" onClick={load}>
+                  Try again
+                </button>
+              }
+            />
+          ) : sortedRows.length === 0 && page === 1 ? (
+            <RspEmpty
+              title={filtered ? "No recipe matches" : "No recipes yet"}
+              hint="Create a recipe or adjust your search criteria to view your culinary catalogue."
+              action={
+                filtered ? (
+                  <RspButton tone="glass" onClick={clearRecipeFilters}>
+                    Reset filters
+                  </RspButton>
+                ) : undefined
+              }
             />
           ) : (
-            <section className="sila-card">
-              <SilaRecipeTable
-                rows={rows}
-                onOpen={goDetail}
-                onEdit={canManage ? goEdit : undefined}
-                onDelete={canManage ? setDeleteTarget : undefined}
+            <>
+              <RspCatalog
+                rows={sortedRows}
+                viewMode={viewMode}
+                canManage={canManage}
+                onOpen={setQuickRow}
+                onEdit={(row) => goEdit(row.id)}
+                onDelete={setDeleteTarget}
               />
-            </section>
+              <RspFooter
+                shown={sortedRows.length}
+                total={total}
+                page={page}
+                pageCount={Math.max(1, Math.ceil(total / pageSize))}
+                onPage={(next) => !loading && setPage(Math.max(1, next))}
+              />
+            </>
           )}
-          <Pagination
-            page={page}
-            hasNext={page * PAGE_SIZE < total}
-            onPrevious={() => setPage((current) => Math.max(1, current - 1))}
-            onNext={() => setPage((current) => current + 1)}
-            disabled={loading}
-          />
         </>
       )}
 
+      <RspQuickView
+        row={quickRow}
+        canManage={canManage}
+        onClose={closeQuickView}
+        onOpenFull={(row) => {
+          setQuickRow(null);
+          goDetail(row.id);
+        }}
+        onEdit={(row) => {
+          setQuickRow(null);
+          goEdit(row.id);
+        }}
+        onOpenPos={() => {
+          setQuickRow(null);
+          openPosPanel("failed-pos");
+        }}
+      />
+
       <Modal
         isOpen={Boolean(deleteTarget)}
-        onClose={() => { if (!deleting) setDeleteTarget(null); }}
+        onClose={() => {
+          if (!deleting) setDeleteTarget(null);
+        }}
         variant="danger"
         headerProps={{ heading: deletingInactive ? DELETE_INACTIVE_TITLE : DELETE_DRAFT_TITLE }}
         footerProps={{
@@ -633,7 +895,7 @@ const SilaRecipes: React.FC<SilaRecipesProps> = ({
           {deleteTarget?.recipeCode || "—"}
         </p>
       </Modal>
-    </div>
+    </StudioShell>
   );
 };
 

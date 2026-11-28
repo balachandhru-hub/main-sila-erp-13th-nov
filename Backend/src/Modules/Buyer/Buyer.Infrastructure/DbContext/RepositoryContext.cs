@@ -145,6 +145,27 @@ namespace Buyer.Infrastructure.DbContext
         public DbSet<MenuPosMapping> MenuPosMapping { get; set; }
         public DbSet<PmsDemandSnapshot> PmsDemandSnapshot { get; set; }
         public DbSet<MenuEngineeringSettings> MenuEngineeringSettings { get; set; }
+        public DbSet<MenuItemVersion> MenuItemVersion { get; set; }
+        public DbSet<MenuEngineeringScenario> MenuEngineeringScenario { get; set; }
+        public DbSet<MenuEngineeringApprovalHistory> MenuEngineeringApprovalHistory { get; set; }
+        public DbSet<MenuDemandOverride> MenuDemandOverride { get; set; }
+        public DbSet<MenuEngineeringConfigHistory> MenuEngineeringConfigHistory { get; set; }
+        public DbSet<MenuEngineeringAgentRun> MenuEngineeringAgentRun { get; set; }
+        public DbSet<MenuEngineeringRecommendation> MenuEngineeringRecommendation { get; set; }
+        public DbSet<MenuEngineeringProactiveAlert> MenuEngineeringProactiveAlert { get; set; }
+        public DbSet<MenuEngineeringLearningOutcome> MenuEngineeringLearningOutcome { get; set; }
+        public DbSet<MenuEngineeringModelEvaluation> MenuEngineeringModelEvaluation { get; set; }
+        public DbSet<MenuEngineeringAiFeedback> MenuEngineeringAiFeedback { get; set; }
+        public DbSet<MenuEngineeringTwinSnapshot> MenuEngineeringTwinSnapshot { get; set; }
+        public DbSet<MenuEngineeringTwinSimulationRun> MenuEngineeringTwinSimulationRun { get; set; }
+        public DbSet<MenuEngineeringModelDriftEvent> MenuEngineeringModelDriftEvent { get; set; }
+        public DbSet<MenuEngineeringBusinessEvent> MenuEngineeringBusinessEvent { get; set; }
+        public DbSet<MenuEngineeringAgentAutonomyPolicy> MenuEngineeringAgentAutonomyPolicy { get; set; }
+        public DbSet<MenuEngineeringActionPlan> MenuEngineeringActionPlan { get; set; }
+        public DbSet<MenuEngineeringActionItem> MenuEngineeringActionItem { get; set; }
+        public DbSet<MenuEngineeringRealizedBenefit> MenuEngineeringRealizedBenefit { get; set; }
+        public DbSet<MenuEngineeringExecutiveBriefing> MenuEngineeringExecutiveBriefing { get; set; }
+        public DbSet<MenuEngineeringIntegrationMonitorEvent> MenuEngineeringIntegrationMonitorEvent { get; set; }
         public DbSet<RecipeLegacyBatch> RecipeLegacyBatch { get; set; }
         public DbSet<RecipeLegacyRecipe> RecipeLegacyRecipe { get; set; }
         public DbSet<RecipeLegacyMaterialMap> RecipeLegacyMaterialMap { get; set; }
@@ -624,6 +645,32 @@ namespace Buyer.Infrastructure.DbContext
             _ = modelBuilder.Entity<SilaCulinaryErpReconciliationRef>().HasIndex(a => new { a.BuyerId, a.IdempotencyKey }).IsUnique();
             _ = modelBuilder.Entity<SilaCulinaryHistoricalLearningSnapshot>().HasIndex(a => new { a.BuyerId, a.SnapshotNumber }).IsUnique();
             _ = modelBuilder.Entity<SilaCulinaryReconciliationAudit>().HasIndex(a => new { a.BuyerId, a.ExecutedAtUtc });
+            _ = modelBuilder.Entity<MenuItemVersion>().HasIndex(a => new { a.BuyerId, a.MenuItemId, a.VersionNumber });
+            _ = modelBuilder.Entity<MenuEngineeringScenario>().HasIndex(a => new { a.BuyerId, a.MenuPlanId });
+            _ = modelBuilder.Entity<MenuEngineeringApprovalHistory>().HasIndex(a => new { a.BuyerId, a.EntityType, a.EntityId, a.ActionAtUtc });
+            _ = modelBuilder.Entity<MenuDemandOverride>().HasIndex(a => new { a.BuyerId, a.BusinessDate, a.OutletLocationId });
+            _ = modelBuilder.Entity<MenuEngineeringConfigHistory>().HasIndex(a => new { a.BuyerId, a.PropertyId, a.ConfigVersion });
+            _ = modelBuilder.Entity<MenuEngineeringAgentRun>().HasIndex(a => new { a.BuyerId, a.IdempotencyKey }).IsUnique();
+            _ = modelBuilder.Entity<MenuEngineeringRecommendation>().HasIndex(a => new { a.BuyerId, a.Status, a.Priority });
+            _ = modelBuilder.Entity<MenuEngineeringProactiveAlert>().HasIndex(a => new { a.BuyerId, a.DeduplicationKey });
+            _ = modelBuilder.Entity<MenuEngineeringLearningOutcome>().HasIndex(a => new { a.BuyerId, a.DatasetVersion, a.CapturedAtUtc });
+            _ = modelBuilder.Entity<MenuEngineeringModelEvaluation>().HasIndex(a => new { a.BuyerId, a.ModelName, a.EvaluatedAtUtc });
+            _ = modelBuilder.Entity<MenuEngineeringAiFeedback>().HasIndex(a => new { a.BuyerId, a.AgentId, a.SubmittedAtUtc });
+            _ = modelBuilder.Entity<MenuEngineeringTwinSnapshot>().HasIndex(a => new { a.BuyerId, a.SnapshotType, a.CapturedAtUtc });
+            _ = modelBuilder.Entity<MenuEngineeringTwinSnapshot>().HasIndex(a => new { a.BuyerId, a.MenuPlanId, a.VersionNumber });
+            _ = modelBuilder.Entity<MenuEngineeringTwinSimulationRun>().HasIndex(a => new { a.BuyerId, a.IdempotencyKey }).IsUnique();
+            _ = modelBuilder.Entity<MenuEngineeringTwinSimulationRun>().HasIndex(a => new { a.BuyerId, a.RunType, a.Status });
+            _ = modelBuilder.Entity<MenuEngineeringModelDriftEvent>().HasIndex(a => new { a.BuyerId, a.ModelName, a.DetectedAtUtc });
+            _ = modelBuilder.Entity<MenuEngineeringBusinessEvent>().HasIndex(a => new { a.BuyerId, a.IdempotencyKey }).IsUnique();
+            _ = modelBuilder.Entity<MenuEngineeringBusinessEvent>().HasIndex(a => new { a.BuyerId, a.ProcessingStatus, a.EffectiveAtUtc });
+            _ = modelBuilder.Entity<MenuEngineeringAgentAutonomyPolicy>().HasIndex(a => new { a.BuyerId, a.PropertyId, a.AgentId, a.ActionType }).IsUnique();
+            _ = modelBuilder.Entity<MenuEngineeringActionPlan>().HasIndex(a => new { a.BuyerId, a.DeduplicationKey }).IsUnique();
+            _ = modelBuilder.Entity<MenuEngineeringActionPlan>().HasIndex(a => new { a.BuyerId, a.Status });
+            _ = modelBuilder.Entity<MenuEngineeringActionItem>().HasIndex(a => new { a.BuyerId, a.IdempotencyKey }).IsUnique();
+            _ = modelBuilder.Entity<MenuEngineeringActionItem>().HasIndex(a => new { a.ActionPlanId, a.SequenceOrder });
+            _ = modelBuilder.Entity<MenuEngineeringRealizedBenefit>().HasIndex(a => new { a.BuyerId, a.DeduplicationKey }).IsUnique();
+            _ = modelBuilder.Entity<MenuEngineeringExecutiveBriefing>().HasIndex(a => new { a.BuyerId, a.DeduplicationKey }).IsUnique();
+            _ = modelBuilder.Entity<MenuEngineeringIntegrationMonitorEvent>().HasIndex(a => new { a.BuyerId, a.IntegrationType, a.CheckedAtUtc });
 
             base.OnModelCreating(modelBuilder);
 

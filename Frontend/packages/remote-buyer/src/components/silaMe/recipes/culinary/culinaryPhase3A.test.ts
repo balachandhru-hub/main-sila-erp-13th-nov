@@ -75,7 +75,7 @@ for (const token of [
 
 // 3. Recipe Studio 2 nav & workspace router wire Phase 3A Live
 const navSrc = read("SilaRecipeStudio2Nav.tsx");
-assert.ok(navSrc.includes("Phase 3A Live"));
+assert.ok(navSrc.includes('id: "event-pnl"'));
 const routerSrc = read("SilaRecipeStudio2Workspaces.tsx");
 assert.ok(routerSrc.includes("<CulinaryEventPnlStudioWorkspace"));
 

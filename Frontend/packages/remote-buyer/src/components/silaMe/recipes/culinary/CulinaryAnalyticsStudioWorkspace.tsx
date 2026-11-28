@@ -57,6 +57,7 @@ import {
   type SilaCulinarySubstitutionResponse,
   type SilaCulinaryWasteIntelligence,
 } from "../../../../api/silaMe/silaCulinaryAnalyticsApi";
+import { CulinaryKpis, CulinaryTabs, CulinaryWorkspaceHeader } from "./CulinaryWorkspaceKit";
 import "./CulinarySuite.css";
 
 export type AnalyticsSubTab =
@@ -193,20 +194,26 @@ const CulinaryAnalyticsStudioWorkspace: React.FC = () => {
 
   return (
     <div className="cs2-shell" data-testid="culinary-analytics-workspace">
-      <div className="cs2-header">
-        <div>
-          <h2 className="cs2-title">Culinary Intelligence Studio — Phase 3B Live</h2>
-          <p className="cs2-subtitle">
-            Enterprise Menu Engineering, Consumption Variance, Isolated What-If Simulation, Python MILP Optimization, Demand Forecasting, Benchmarking &amp; Grounded Copilot.
-          </p>
-        </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <span className="cs2-badge cs2-badge--live">Phase 3B Live</span>
-          <button type="button" className="sila-btn sila-btn--sm sila-btn--primary" disabled={loading} onClick={() => void loadExecutive()}>
-            {loading ? "Refreshing..." : "Refresh Analytics"}
-          </button>
-        </div>
-      </div>
+      <CulinaryWorkspaceHeader
+        title="Culinary Intelligence Analytics"
+        subtitle="Enterprise Menu Engineering, Consumption Variance, Isolated What-If Simulation, Optimization, Demand Forecasting, Benchmarking & Grounded Copilot."
+        actions={
+          <>
+            <span className="cs2-badge cs2-badge--live">Live Analytics</span>
+            <button type="button" className="sila-studio-btn sila-studio-btn--primary" disabled={loading} onClick={() => void loadExecutive()}>
+              {loading ? "Refreshing..." : "Refresh Analytics"}
+            </button>
+          </>
+        }
+      />
+
+      <CulinaryTabs<AnalyticsSubTab>
+        ariaLabel="Analytics modules"
+        testId="analytics-tabs"
+        active={subTab}
+        onChange={setSubTab}
+        tabs={ANALYTICS_SUBTABS}
+      />
 
       {/* Global Filters */}
       <section className="cs2-card" style={{ padding: "12px 16px" }}>
@@ -260,20 +267,6 @@ const CulinaryAnalyticsStudioWorkspace: React.FC = () => {
         </div>
       </section>
 
-      {/* Sub-navigation */}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
-        {ANALYTICS_SUBTABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            className={`sila-btn sila-btn--sm ${subTab === t.id ? "sila-btn--primary" : "sila-btn--secondary"}`}
-            onClick={() => setSubTab(t.id)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
       {errorMsg && (
         <div className="cs2-banner" role="alert" style={{ borderColor: "#ef4444", background: "#fef2f2" }}>
           <div><strong>Notice:</strong> {errorMsg}</div>
@@ -283,46 +276,21 @@ const CulinaryAnalyticsStudioWorkspace: React.FC = () => {
       {/* 1. EXECUTIVE DASHBOARD */}
       {subTab === "executive" && (
         <>
-          <div className="cs2-kpi-grid">
-            <div className="cs2-kpi cs2-kpi--accent">
-              <span className="cs2-kpi__label">Total F&amp;B Revenue</span>
-              <span className="cs2-kpi__value">{ccy} {(dashboard?.totalFbRevenue ?? 0).toLocaleString()}</span>
-            </div>
-            <div className="cs2-kpi cs2-kpi--cyan">
-              <span className="cs2-kpi__label">Total Food Cost</span>
-              <span className="cs2-kpi__value">{ccy} {(dashboard?.totalFoodCost ?? 0).toLocaleString()}</span>
-            </div>
-            <div className="cs2-kpi cs2-kpi--emerald">
-              <span className="cs2-kpi__label">Food Cost % vs Target</span>
-              <span className="cs2-kpi__value">{dashboard?.foodCostPercent != null ? `${dashboard.foodCostPercent}%` : "No POS Data"}</span>
-              <span className="cs2-kpi__hint">Target: {dashboard?.targetFoodCostPercent ?? 28}%</span>
-            </div>
-            <div className="cs2-kpi cs2-kpi--emerald">
-              <span className="cs2-kpi__label">Contribution Margin</span>
-              <span className="cs2-kpi__value">{ccy} {(dashboard?.contributionMargin ?? 0).toLocaleString()}</span>
-            </div>
-            <div className="cs2-kpi">
-              <span className="cs2-kpi__label">Cost / Revenue per Cover</span>
-              <span className="cs2-kpi__value">
-                {dashboard?.costPerCover != null ? `${ccy} ${dashboard.costPerCover}` : "—"} / {dashboard?.revenuePerCover != null ? `${ccy} ${dashboard.revenuePerCover}` : "—"}
-              </span>
-            </div>
-            <div className="cs2-kpi">
-              <span className="cs2-kpi__label">Waste Cost &amp; %</span>
-              <span className="cs2-kpi__value">{ccy} {(dashboard?.wasteCost ?? 0).toLocaleString()}</span>
-              <span className="cs2-kpi__hint">{dashboard?.wastePercent != null ? `${dashboard.wastePercent}% of food cost` : "No waste logged"}</span>
-            </div>
-            <div className="cs2-kpi">
-              <span className="cs2-kpi__label">Event Profitability &amp; Forecast (7d)</span>
-              <span className="cs2-kpi__value">{ccy} {(dashboard?.eventProfitability ?? 0).toLocaleString()}</span>
-              <span className="cs2-kpi__hint">Forecast covers: {(dashboard?.forecastDemandCovers ?? 0).toLocaleString()}</span>
-            </div>
-            <div className="cs2-kpi cs2-kpi--accent">
-              <span className="cs2-kpi__label">Savings Pipeline / Realized</span>
-              <span className="cs2-kpi__value">{ccy} {(dashboard?.potentialSavingsPipeline ?? 0).toLocaleString()}</span>
-              <span className="cs2-kpi__hint">Realized: {ccy} {(dashboard?.realizedSavings ?? 0).toLocaleString()}</span>
-            </div>
-          </div>
+          <CulinaryKpis
+            ariaLabel="Executive culinary analytics metrics"
+            testId="analytics-kpis"
+            columns={4}
+            items={[
+              { id: "an-revenue", label: "Total F&B Revenue", value: `${ccy} ${(dashboard?.totalFbRevenue ?? 0).toLocaleString()}`, tone: "blue", drillLabel: "Open menu engineering and profitability", onClick: () => setSubTab("menu-engineering") },
+              { id: "an-food-cost", label: "Total Food Cost", value: `${ccy} ${(dashboard?.totalFoodCost ?? 0).toLocaleString()}`, tone: "sky", drillLabel: "Open consumption variance and price impact", onClick: () => setSubTab("variance") },
+              { id: "an-food-cost-pct", label: "Food Cost % vs Target", value: dashboard?.foodCostPercent != null ? `${dashboard.foodCostPercent}%` : "No POS Data", hint: `Target: ${dashboard?.targetFoodCostPercent ?? 28}%`, tone: "green", drillLabel: "Open consumption variance", onClick: () => setSubTab("variance") },
+              { id: "an-margin", label: "Contribution Margin", value: `${ccy} ${(dashboard?.contributionMargin ?? 0).toLocaleString()}`, tone: "green", drillLabel: "Open menu engineering and profitability", onClick: () => setSubTab("menu-engineering") },
+              { id: "an-cover", label: "Cost / Revenue per Cover", value: `${dashboard?.costPerCover != null ? `${ccy} ${dashboard.costPerCover}` : "—"} / ${dashboard?.revenuePerCover != null ? `${ccy} ${dashboard.revenuePerCover}` : "—"}`, tone: "lavender", drillLabel: "Open menu engineering and profitability", onClick: () => setSubTab("menu-engineering") },
+              { id: "an-waste", label: "Waste Cost & %", value: `${ccy} ${(dashboard?.wasteCost ?? 0).toLocaleString()}`, hint: dashboard?.wastePercent != null ? `${dashboard.wastePercent}% of food cost` : "No waste logged", tone: "amber", drillLabel: "Open forecasting and waste", onClick: () => setSubTab("forecasting") },
+              { id: "an-event", label: "Event Profitability (7d)", value: `${ccy} ${(dashboard?.eventProfitability ?? 0).toLocaleString()}`, hint: `Forecast covers: ${(dashboard?.forecastDemandCovers ?? 0).toLocaleString()}`, tone: "indigo", drillLabel: "Open optimization, buffet and events", onClick: () => setSubTab("optimization") },
+              { id: "an-savings", label: "Savings Pipeline", value: `${ccy} ${(dashboard?.potentialSavingsPipeline ?? 0).toLocaleString()}`, hint: `Realized: ${ccy} ${(dashboard?.realizedSavings ?? 0).toLocaleString()}`, tone: "rose", drillLabel: "Open recommendation cockpit", onClick: () => setSubTab("cockpit") },
+            ]}
+          />
 
           {dashboard?.dataAvailabilityNotes && dashboard.dataAvailabilityNotes.length > 0 && (
             <div className="cs2-banner" role="status">
@@ -812,7 +780,7 @@ const CulinaryAnalyticsStudioWorkspace: React.FC = () => {
                   <YAxis />
                   <Tooltip />
                   <Area type="monotone" dataKey="upperBound80" stroke="#93c5fd" fill="#dbeafe" name="80% Upper" />
-                  <Area type="monotone" dataKey="forecastCovers" stroke="#4f46e5" fill="#c7d2fe" name="Forecast Covers" />
+                  <Area type="monotone" dataKey="forecastCovers" stroke="#087bb5" fill="#dceeff" name="Forecast Covers" />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -1001,7 +969,7 @@ const CulinaryAnalyticsStudioWorkspace: React.FC = () => {
       {subTab === "config" && config && (
         <section className="cs2-card">
           <div className="cs2-card__head">
-            <h3 className="cs2-card__title">Phase 3B Intelligence Configuration (v{config.configVersion})</h3>
+            <h3 className="cs2-card__title">Culinary Intelligence Configuration (v{config.configVersion})</h3>
           </div>
           <div className="cs2-form-grid">
             <div className="sila-field">
@@ -1034,7 +1002,7 @@ const CulinaryAnalyticsStudioWorkspace: React.FC = () => {
               onClick={async () => {
                 const updated = await saveCulinaryAnalyticsConfig(config);
                 setConfig(updated);
-                toastService.success(`Saved Phase 3B Config v${updated.configVersion}`);
+                toastService.success(`Saved Intelligence Config v${updated.configVersion}`);
               }}
             >
               Save Configuration

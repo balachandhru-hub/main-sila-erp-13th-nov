@@ -1,18 +1,34 @@
-/* Scoped Culinary Intelligence Suite (Recipe Studio 2.0) styles — bright hospitality enterprise surface.
-   Does NOT modify global SILA theme tokens. */
+/* Scoped Culinary Intelligence Suite styles — SILA White & Blue Enterprise Design System */
 
 .cs2-shell {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
+}
+
+.cs2-workspace-fs {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.cs2-workspace-fs.is-fullscreen {
+  position: fixed;
+  top: var(--sila-topbar-height, 3.75rem);
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 950;
+  background: #ffffff;
+  overflow: auto;
+  padding: 16px 20px 24px;
 }
 
 .cs2-nav-bar {
-  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-  border: 1px solid #e2e8f0;
-  border-radius: 14px;
+  background: #ffffff;
+  border: 1px solid #c7dff4;
+  border-radius: 12px;
   padding: 12px 14px;
-  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -42,14 +58,14 @@
   font-weight: 700;
   letter-spacing: 0.03em;
   text-transform: uppercase;
-  color: #3730a3;
-  background: #eef2ff;
-  border: 1px solid #c7d2fe;
+  color: #087bb5;
+  background: #eaf5ff;
+  border: 1px solid #a6cff1;
 }
 
 .cs2-brand-subtitle {
   font-size: 12.5px;
-  color: #475569;
+  color: #64748b;
   font-weight: 500;
 }
 
@@ -70,27 +86,27 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 7px 11px;
-  border-radius: 9px;
-  border: 1px solid #e2e8f0;
+  min-height: 32px;
+  padding: 5px 11px;
+  border-radius: 8px;
+  border: 1px solid #c7dff4;
   background: #ffffff;
-  color: #1e293b;
+  color: #123354;
   font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
-  transition: border-color 120ms ease, background 120ms ease, box-shadow 120ms ease;
+  transition: border-color 120ms ease, background 120ms ease, color 120ms ease;
 }
 
 .cs2-nav-tab:hover:not(:disabled) {
-  border-color: #818cf8;
-  background: #f5f7ff;
+  border-color: #087bb5;
+  background: #f5faff;
 }
 
 .cs2-nav-tab.is-active {
-  border-color: #4f46e5;
-  background: #eef2ff;
-  color: #312e81;
-  box-shadow: 0 1px 4px rgba(79, 70, 229, 0.14);
+  border-color: #087bb5;
+  background: #eaf5ff;
+  color: #087bb5;
 }
 
 .cs2-nav-tab:disabled {
@@ -102,48 +118,48 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 2px 7px;
+  padding: 2px 8px;
   border-radius: 999px;
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
   white-space: nowrap;
 }
 
 .cs2-badge--live {
-  background: #ecfdf5;
-  color: #047857;
-  border: 1px solid #a7f3d0;
+  background: #e9f8f0;
+  color: #16865c;
+  border: 1px solid #c0e8d2;
 }
 
 .cs2-badge--demo {
-  background: #e0f2fe;
-  color: #0369a1;
-  border: 1px solid #bae6fd;
+  background: #eaf5ff;
+  color: #087bb5;
+  border: 1px solid #a6cff1;
 }
 
 .cs2-badge--planned {
-  background: #f1f5f9;
-  color: #475569;
+  background: #f8fafc;
+  color: #64748b;
   border: 1px solid #cbd5e1;
 }
 
 .cs2-badge--warn {
-  background: #fffbeb;
-  color: #b45309;
-  border: 1px solid #fde68a;
+  background: #fff6e8;
+  color: #d97706;
+  border: 1px solid #f3dbb6;
 }
 
 .cs2-badge--danger {
-  background: #fef2f2;
-  color: #b91c1c;
-  border: 1px solid #fecaca;
+  background: #fff1f1;
+  color: #c24141;
+  border: 1px solid #f3cccc;
 }
 
 .cs2-badge--indigo {
-  background: #eef2ff;
-  color: #4338ca;
-  border: 1px solid #c7d2fe;
+  background: #eef3ff;
+  color: #087bb5;
+  border: 1px solid #cedbf8;
 }
 
 .cs2-banner {
@@ -152,23 +168,23 @@
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
-  padding: 12px 16px;
-  border-radius: 12px;
-  border: 1px solid #bae6fd;
-  background: #f0f9ff;
-  color: #0c4a6e;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid #a6cff1;
+  background: #f5faff;
+  color: #123354;
   font-size: 13px;
 }
 
 .cs2-banner--phase {
-  border-color: #c7d2fe;
-  background: #f5f7ff;
-  color: #312e81;
+  border-color: #c7dff4;
+  background: #eaf5ff;
+  color: #123354;
 }
 
 .cs2-banner--warn {
-  border-color: #fde68a;
-  background: #fffbeb;
+  border-color: #f3dbb6;
+  background: #fff6e8;
   color: #92400e;
 }
 
@@ -183,55 +199,62 @@
 .cs2-title {
   margin: 0;
   font-size: 20px;
-  font-weight: 700;
-  color: #0f172a;
+  font-weight: 600;
+  color: #123354;
+  line-height: 1.25;
 }
 
 .cs2-subtitle {
   margin: 4px 0 0;
   font-size: 13px;
-  color: #475569;
-  max-width: 78ch;
+  color: #64748b;
+  max-width: 82ch;
 }
 
 .cs2-kpi-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
-  gap: 12px;
+  gap: 10px;
 }
 
 .cs2-kpi {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 13px 15px;
+  background: #eaf5ff;
+  border: 1px solid #bbddf8;
+  border-radius: 10px;
+  padding: 11px 13px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
+  min-height: 76px;
 }
 
 .cs2-kpi--accent {
-  border-left: 4px solid #4f46e5;
+  background: #eaf5ff;
+  border-color: #bbddf8;
 }
 
 .cs2-kpi--cyan {
-  border-left: 4px solid #0284c7;
+  background: #eef3ff;
+  border-color: #cedbf8;
 }
 
 .cs2-kpi--emerald {
-  border-left: 4px solid #059669;
+  background: #e9f8f0;
+  border-color: #c0e8d2;
 }
 
 .cs2-kpi--amber {
-  border-left: 4px solid #d97706;
+  background: #fff6e8;
+  border-color: #f3dbb6;
 }
 
 .cs2-kpi--rose {
-  border-left: 4px solid #dc2626;
+  background: #fff1f1;
+  border-color: #f3cccc;
 }
 
 .cs2-kpi__label {
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 600;
   color: #64748b;
   text-transform: uppercase;
@@ -241,8 +264,9 @@
 .cs2-kpi__value {
   font-size: 21px;
   font-weight: 700;
-  color: #0f172a;
+  color: #123354;
   line-height: 1.2;
+  font-variant-numeric: tabular-nums;
 }
 
 .cs2-kpi__hint {
@@ -253,13 +277,13 @@
 .cs2-grid-2 {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+  gap: 14px;
 }
 
 .cs2-grid-3 {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
+  gap: 14px;
 }
 
 @media (max-width: 1024px) {
@@ -271,10 +295,9 @@
 
 .cs2-card {
   background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 14px;
-  padding: 16px;
-  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.03);
+  border: 1px solid #c7dff4;
+  border-radius: 10px;
+  padding: 14px 16px;
 }
 
 .cs2-card__head {
@@ -283,14 +306,16 @@
   justify-content: space-between;
   gap: 10px;
   flex-wrap: wrap;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e1edf8;
 }
 
 .cs2-card__title {
   margin: 0;
   font-size: 15px;
-  font-weight: 700;
-  color: #0f172a;
+  font-weight: 600;
+  color: #123354;
 }
 
 .cs2-form-grid {
@@ -302,6 +327,8 @@
 .cs2-table-wrap {
   width: 100%;
   overflow-x: auto;
+  border: 1px solid #e1edf8;
+  border-radius: 8px;
 }
 
 .cs2-table {
@@ -313,25 +340,25 @@
 .cs2-table th {
   text-align: left;
   padding: 9px 10px;
-  background: #f8fafc;
-  color: #475569;
+  background: #f5faff;
+  color: #123354;
   font-size: 11.5px;
-  font-weight: 700;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid #c7dff4;
   white-space: nowrap;
 }
 
 .cs2-table td {
   padding: 9px 10px;
-  border-bottom: 1px solid #f1f5f9;
-  color: #0f172a;
+  border-bottom: 1px solid #e1edf8;
+  color: #123354;
   vertical-align: middle;
 }
 
 .cs2-table tr:hover td {
-  background: #f8fafc;
+  background: #f5faff;
 }
 
 .cs2-num {
@@ -347,7 +374,7 @@
 
 .cs2-slider-row input[type="range"] {
   width: 100%;
-  accent-color: #4f46e5;
+  accent-color: #087bb5;
 }
 
 .cs2-timeline {
@@ -363,7 +390,7 @@
   align-items: center;
   padding: 10px 12px;
   border-radius: 10px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #c7dff4;
   background: #ffffff;
 }
 
@@ -374,8 +401,8 @@
 }
 
 .cs2-timeline-bar-track {
-  height: 14px;
-  background: #f1f5f9;
+  height: 12px;
+  background: #eaf5ff;
   border-radius: 999px;
   position: relative;
   overflow: hidden;
@@ -386,7 +413,7 @@
   top: 0;
   bottom: 0;
   border-radius: 999px;
-  background: linear-gradient(90deg, #4f46e5 0%, #0ea5e9 100%);
+  background: #087bb5;
 }
 
 .cs2-checkbox-row {
@@ -394,7 +421,7 @@
   align-items: center;
   gap: 8px;
   font-size: 13px;
-  color: #0f172a;
+  color: #123354;
   cursor: pointer;
 }
 
@@ -411,17 +438,17 @@
   margin: 0;
 }
 
-/* Phase 1A AI Recipe Planner 3-Column Workspace */
+/* AI Recipe Planner Responsive Workspace */
 .cs2-planner-grid {
   display: grid;
-  grid-template-columns: 320px minmax(0, 1fr) 340px;
-  gap: 16px;
+  grid-template-columns: 310px minmax(0, 1fr) 330px;
+  gap: 14px;
   align-items: start;
 }
 
 @media (max-width: 1320px) {
   .cs2-planner-grid {
-    grid-template-columns: 290px minmax(0, 1fr);
+    grid-template-columns: 280px minmax(0, 1fr);
   }
   .cs2-planner-assistant {
     grid-column: 1 / -1;
@@ -443,19 +470,23 @@
 .cs2-mode-btn {
   padding: 6px 8px;
   border-radius: 8px;
-  border: 1px solid #e2e8f0;
-  background: #f8fafc;
-  color: #1e293b;
+  border: 1px solid #c7dff4;
+  background: #ffffff;
+  color: #123354;
   font-size: 11.5px;
   font-weight: 600;
   cursor: pointer;
   text-align: left;
 }
 
+.cs2-mode-btn:hover {
+  background: #f5faff;
+}
+
 .cs2-mode-btn.is-active {
-  border-color: #4f46e5;
-  background: #eef2ff;
-  color: #312e81;
+  border-color: #087bb5;
+  background: #eaf5ff;
+  color: #087bb5;
 }
 
 .cs2-progress-list {
@@ -470,16 +501,16 @@
   align-items: center;
   gap: 8px;
   font-size: 12px;
-  color: #475569;
+  color: #64748b;
 }
 
 .cs2-progress-step.is-active {
-  color: #312e81;
-  font-weight: 700;
+  color: #087bb5;
+  font-weight: 600;
 }
 
 .cs2-progress-step.is-done {
-  color: #047857;
+  color: #16865c;
 }
 
 .cs2-chat-log {
@@ -499,15 +530,15 @@
 }
 
 .cs2-chat-turn--chef {
-  background: #eef2ff;
-  color: #1e1b4b;
-  border: 1px solid #c7d2fe;
+  background: #eaf5ff;
+  color: #123354;
+  border: 1px solid #a6cff1;
 }
 
 .cs2-chat-turn--ai {
-  background: #f8fafc;
-  color: #0f172a;
-  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #123354;
+  border: 1px solid #c7dff4;
 }
 
 .cs2-chip-row {
@@ -517,25 +548,25 @@
 }
 
 .cs2-chip {
-  padding: 4px 9px;
+  padding: 4px 10px;
   border-radius: 999px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid #bbd9f2;
   background: #ffffff;
-  color: #334155;
+  color: #123354;
   font-size: 11.5px;
   font-weight: 600;
   cursor: pointer;
 }
 
 .cs2-chip:hover {
-  border-color: #6366f1;
-  background: #eef2ff;
-  color: #312e81;
+  border-color: #087bb5;
+  background: #eaf5ff;
+  color: #087bb5;
 }
 
 .cs2-diff-box {
-  border: 1px solid #c7d2fe;
-  background: #f5f7ff;
+  border: 1px solid #a6cff1;
+  background: #f5faff;
   border-radius: 10px;
   padding: 10px;
   display: flex;
@@ -544,10 +575,10 @@
 }
 
 .cs2-step-card {
-  border: 1px solid #e2e8f0;
+  border: 1px solid #c7dff4;
   border-radius: 10px;
   padding: 10px 12px;
-  background: #fcfdff;
+  background: #ffffff;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -557,26 +588,24 @@
   position: sticky;
   bottom: 8px;
   z-index: 10;
-  background: rgba(255, 255, 255, 0.96);
-  backdrop-filter: blur(6px);
-  border: 1px solid #cbd5e1;
-  border-radius: 12px;
+  background: #ffffff;
+  border: 1px solid #c7dff4;
+  border-radius: 10px;
   padding: 10px 14px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
   flex-wrap: wrap;
-  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 2px 8px rgba(18, 51, 84, 0.08);
 }
 
-/* Phase 1B Material Intelligence Thumbnails, Drawer & Charts */
 .cs2-thumb {
   width: 36px;
   height: 36px;
   border-radius: 8px;
-  border: 1px solid #e2e8f0;
-  background: #f8fafc;
+  border: 1px solid #c7dff4;
+  background: #f5faff;
   color: #64748b;
   display: inline-flex;
   align-items: center;
@@ -595,9 +624,12 @@
 
 .cs2-drawer-backdrop {
   position: fixed;
-  inset: 0;
-  z-index: 60;
-  background: rgba(15, 23, 42, 0.42);
+  top: var(--sila-topbar-height, 3.75rem);
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 960;
+  background: rgba(18, 53, 91, 0.25);
   display: flex;
   justify-content: flex-end;
 }
@@ -606,24 +638,24 @@
   width: min(640px, 100vw);
   height: 100%;
   background: #ffffff;
-  border-left: 1px solid #cbd5e1;
-  box-shadow: -12px 0 32px rgba(15, 23, 42, 0.16);
+  border-left: 1px solid #c7dff4;
+  box-shadow: -8px 0 24px rgba(18, 51, 84, 0.12);
   display: flex;
   flex-direction: column;
 }
 
 .cs2-drawer__head {
-  padding: 16px 20px;
-  border-bottom: 1px solid #e2e8f0;
+  padding: 14px 18px;
+  border-bottom: 1px solid #e1edf8;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  background: #f8fafc;
+  background: #f5faff;
 }
 
 .cs2-drawer__body {
-  padding: 18px 20px;
+  padding: 16px 18px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -642,29 +674,227 @@
 .cs2-bar-track {
   height: 9px;
   border-radius: 999px;
-  background: #f1f5f9;
+  background: #eaf5ff;
   overflow: hidden;
 }
 
 .cs2-bar-fill {
   height: 100%;
   border-radius: 999px;
-  background: linear-gradient(90deg, #4f46e5, #0ea5e9);
+  background: #087bb5;
 }
 
 .cs2-filter-pill {
   padding: 5px 10px;
   border-radius: 999px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid #bbd9f2;
   background: #ffffff;
-  color: #334155;
+  color: #123354;
   font-size: 11.5px;
   font-weight: 600;
   cursor: pointer;
 }
 
 .cs2-filter-pill.is-active {
-  border-color: #4f46e5;
-  background: #eef2ff;
-  color: #312e81;
+  border-color: #087bb5;
+  background: #eaf5ff;
+  color: #087bb5;
+}
+
+/* ==========================================================================
+   Studio alignment: every workspace shares the Recipe Studio look & feel
+   ========================================================================== */
+.cs2-shell > .cs2-header,
+.cs2-shell > [data-testid] > .cs2-header:first-child {
+  padding: 14px 18px;
+  border: 1px solid var(--sila-studio-border, #c7dff4);
+  border-radius: 12px;
+  background: linear-gradient(180deg, #ffffff 0%, #f5faff 100%);
+}
+
+.cs2-header__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cs2-shell .sila-studio-subnav {
+  margin: 0;
+}
+
+.cs2-card-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #123354;
+}
+
+.cs2-row-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.cs2-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #123354;
+}
+
+.cs2-input,
+.cs2-field input:not([type="checkbox"]):not([type="radio"]),
+.cs2-field select,
+.cs2-field textarea {
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid #c7dff4;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #123354;
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.cs2-input:focus,
+.cs2-field input:focus,
+.cs2-field select:focus {
+  outline: none;
+  border-color: #087bb5;
+  box-shadow: 0 0 0 3px rgba(8, 123, 181, 0.14);
+}
+
+.cs2-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 13px;
+  border-radius: 8px;
+  border: 1px solid #c7dff4;
+  background: #ffffff;
+  color: #123354;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.cs2-btn:hover:not(:disabled) {
+  border-color: #087bb5;
+  background: #f5faff;
+}
+
+.cs2-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.cs2-btn-primary {
+  border-color: #087bb5;
+  background: #087bb5;
+  color: #ffffff;
+}
+
+.cs2-btn-primary:hover:not(:disabled) {
+  background: #066a9c;
+  border-color: #066a9c;
+}
+
+.cs2-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: 999px;
+  border: 1px solid #bbddf8;
+  background: #eaf5ff;
+  color: #087bb5;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.cs2-pill--warn {
+  border-color: #f3dbb6;
+  background: #fff6e8;
+  color: #b45309;
+}
+
+.cs2-alert {
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid #bbddf8;
+  background: #eaf5ff;
+  color: #123354;
+  font-size: 13px;
+}
+
+.cs2-alert--danger {
+  border-color: #f3cccc;
+  background: #fff1f1;
+  color: #b42318;
+}
+
+.cs2-alert--info {
+  border-color: #bbddf8;
+  background: #eaf5ff;
+}
+
+.cs2-kpi-card {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-height: 76px;
+  padding: 11px 13px;
+  border: 1px solid #bbddf8;
+  border-radius: 10px;
+  background: #eaf5ff;
+}
+
+.cs2-kpi-card > span {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #64748b;
+}
+
+.cs2-kpi-card > strong {
+  font-size: 21px;
+  font-weight: 700;
+  color: #123354;
+}
+
+.cs2-kpi-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.cs2-kpi-value {
+  font-size: 21px;
+  font-weight: 700;
+  color: #123354;
+}
+
+.cs2-empty-note[data-testid="prod-orders-empty"] {
+  padding: 18px;
+  border: 1px dashed #bbddf8;
+  border-radius: 10px;
+  text-align: center;
+}
+
+.cs2-card {
+  box-shadow: 0 1px 2px rgba(18, 51, 84, 0.04);
+}
+
+.cs2-overview-actions {
+  justify-content: flex-end;
+  margin-bottom: 12px;
 }

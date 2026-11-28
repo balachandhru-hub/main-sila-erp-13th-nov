@@ -47,6 +47,7 @@ const Header: React.FC<HeaderProps> = ({ navItems, activeNav, onNavClick, onLogo
 
   return (
     <AppShell
+      variant="prototype"
       onLogoClick={() => (onNavClick ? onNavClick('dashboard') : navigate('/dashboard'))}
       navItems={navItems}
       activeNav={activeNav}

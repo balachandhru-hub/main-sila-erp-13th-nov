@@ -91,7 +91,7 @@ const SilaRecipePicture: React.FC<SilaRecipePictureProps> = ({
     <div className={`rstudio-picture rstudio-picture--${variant}`} data-testid="recipe-picture">
       <div className="rstudio-picture__frame" aria-label="Recipe picture">
         {preview ? (
-          <img src={preview} alt={placeholderTitle} className="rstudio-picture__img" />
+          <img src={preview} alt={placeholderTitle} className="rstudio-picture__img" loading="lazy" />
         ) : (
           <StudioCover
             kind={kind}

@@ -465,11 +465,11 @@ const CulinaryAiEngineSetupWorkspace: React.FC<CulinaryAiEngineSetupWorkspacePro
         <div className="cs2-shell">
           <section className="cs2-card">
             <div className="cs2-card__head">
-              <h3 className="cs2-card__title">Recipe Studio 2.0 Feature Flags</h3>
+              <h3 className="cs2-card__title">Culinary Intelligence Feature Flags</h3>
             </div>
             {(
               [
-                ["culinarySuiteEnabled", "Master Recipe Studio 2.0 Contextual Navigation"],
+                ["culinarySuiteEnabled", "Culinary Intelligence Contextual Navigation"],
                 ["overviewEnabled", "Culinary Intelligence Overview"],
                 ["recipePlannerPreviewEnabled", "AI Recipe Planner & Scaling Simulator"],
                 ["materialIntelligencePreviewEnabled", "Material Intelligence & Requests Preview"],
@@ -535,7 +535,7 @@ const CulinaryAiEngineSetupWorkspace: React.FC<CulinaryAiEngineSetupWorkspacePro
       <div className="cs2-grid-2" data-testid="culinary-material-intelligence-setup">
         <section className="cs2-card">
           <div className="cs2-card__head">
-            <h3 className="cs2-card__title">Material Intelligence Matching &amp; Local Models (Phase 1B)</h3>
+            <h3 className="cs2-card__title">Material Intelligence Matching &amp; Local Models</h3>
             <span className="cs2-badge cs2-badge--live">Local-First Engine</span>
           </div>
 
@@ -775,7 +775,7 @@ const CulinaryAiEngineSetupWorkspace: React.FC<CulinaryAiEngineSetupWorkspacePro
       {/* Phase 1C Costing Source Policy & Lifecycle Governance */}
       <section className="cs2-card" data-testid="culinary-costing-policy-setup">
         <div className="cs2-card__head">
-          <h3 className="cs2-card__title">Phase 1C Costing Policy, Price Sources &amp; Lifecycle Governance</h3>
+          <h3 className="cs2-card__title">Costing Policy, Price Sources &amp; Lifecycle Governance</h3>
           <span className="cs2-badge cs2-badge--live">Deterministic Decimal Engine</span>
         </div>
         <div className="cs2-form-grid">

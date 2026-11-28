@@ -1,11 +1,8 @@
 /* SILA Recipe Studio — premium culinary visual identity */
 
 .rstudio-page {
-  gap: 1.25rem;
-  background:
-    radial-gradient(circle at top right, rgba(77, 163, 255, 0.08), transparent 28%),
-    radial-gradient(circle at 10% 20%, rgba(120, 210, 170, 0.1), transparent 26%),
-    #ffffff;
+  gap: 0.85rem;
+  background: #ffffff;
 }
 
 .rstudio-kicker {
@@ -83,14 +80,14 @@
 }
 
 .cs2-flexi-ribbon.is-open {
-  border-color: #4f46e5;
-  background: linear-gradient(135deg, #4f46e5 0%, #2563eb 100%);
+  border-color: #087BB5;
+  background: #087BB5;
   color: #ffffff;
   box-shadow: 0 4px 14px rgba(79, 70, 229, 0.28);
 }
 
 .cs2-flexi-ribbon:focus-visible {
-  outline: 2px solid #4f46e5;
+  outline: 2px solid #087BB5;
   outline-offset: 2px;
 }
 
@@ -100,7 +97,7 @@
   justify-content: center;
   padding: 0.14rem 0.45rem;
   border-radius: 999px;
-  background: #4f46e5;
+  background: #087BB5;
   color: #ffffff;
   font-size: 0.68rem;
   font-weight: 800;
@@ -377,13 +374,12 @@
 
 .rstudio-detail-hero {
   display: grid;
-  grid-template-columns: minmax(12rem, 18rem) 1fr;
-  gap: 1.25rem;
-  padding: 1rem;
-  border-radius: 1.35rem;
-  background: linear-gradient(140deg, #f5faff, #ffffff 55%, #f8fff9);
-  border: 0.0625rem solid #d9e8f7;
-  box-shadow: 0 0.55rem 1.5rem rgba(24, 72, 120, 0.07);
+  grid-template-columns: minmax(12rem, 17.5rem) 1fr;
+  gap: 1.1rem;
+  padding: 1rem 1.15rem;
+  border-radius: 12px;
+  background: #dceeff;
+  border: 1px solid #a6cff1;
 }
 
 .rstudio-detail-hero__cover {
@@ -601,7 +597,7 @@
 .rstudio-review {
   position: fixed;
   inset: 0;
-  z-index: 40;
+  z-index: var(--sila-z-modal, 1200);
   display: grid;
   place-items: center;
   background: rgba(18, 53, 91, 0.35);
